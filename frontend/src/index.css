@@ -1,92 +1,341 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-body {
-    margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+:root {
+    /* Public (Organic & Earthy, Light) */
+    --bg-public: 42 30% 94%;          /* #F5F2EB */
+    --surface-public: 60 17% 97%;     /* #FAFAF7 */
+    --ink-public: 162 36% 16%;        /* #1A3A32 */
+    --ink-secondary-public: 159 13% 34%;/* #4A615A */
+    --moss: 96 12% 46%;               /* #708265 */
+    --terracotta: 14 56% 56%;         /* #D06D4F */
+    --terracotta-deep: 14 50% 48%;
+    --line: 39 27% 86%;               /* #E5DFD3 */
+    --trust-verified: 162 36% 26%;
+    --trust-warn: 30 56% 53%;
+
+    /* Admin (Operations Cockpit, Dark) */
+    --admin-bg: 162 22% 7%;           /* #0D1412 */
+    --admin-surface: 162 16% 11%;     /* #15201D */
+    --admin-surface-hover: 162 16% 14%;
+    --admin-line: 162 16% 17%;
+    --admin-ink: 42 30% 94%;
+    --admin-ink-dim: 159 13% 58%;
+
+    /* shadcn tokens (rebound to public theme) */
+    --background: var(--bg-public);
+    --foreground: var(--ink-public);
+    --card: var(--surface-public);
+    --card-foreground: var(--ink-public);
+    --popover: var(--surface-public);
+    --popover-foreground: var(--ink-public);
+    --primary: var(--ink-public);
+    --primary-foreground: var(--bg-public);
+    --secondary: 39 27% 86%;
+    --secondary-foreground: var(--ink-public);
+    --muted: 39 27% 92%;
+    --muted-foreground: var(--ink-secondary-public);
+    --accent: var(--terracotta);
+    --accent-foreground: var(--bg-public);
+    --destructive: 0 64% 47%;
+    --destructive-foreground: var(--bg-public);
+    --border: var(--line);
+    --input: var(--line);
+    --ring: var(--moss);
+    --radius: 0.75rem;
 }
 
-code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
-}
-
-@layer base {
-    :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
-    }
+/* When the admin shell is mounted, override tokens with the dark cockpit set */
+[data-theme="admin"] {
+    --background: var(--admin-bg);
+    --foreground: var(--admin-ink);
+    --card: var(--admin-surface);
+    --card-foreground: var(--admin-ink);
+    --popover: var(--admin-surface);
+    --popover-foreground: var(--admin-ink);
+    --primary: 42 30% 94%;
+    --primary-foreground: var(--admin-bg);
+    --secondary: 162 16% 14%;
+    --secondary-foreground: var(--admin-ink);
+    --muted: 162 16% 12%;
+    --muted-foreground: var(--admin-ink-dim);
+    --accent: var(--terracotta);
+    --accent-foreground: var(--admin-bg);
+    --border: var(--admin-line);
+    --input: var(--admin-line);
+    --ring: var(--terracotta);
+    color-scheme: dark;
 }
 
 @layer base {
     * {
         @apply border-border;
     }
-    body {
-        @apply bg-background text-foreground;
+    html, body, #root {
+        background: hsl(var(--background));
+        color: hsl(var(--foreground));
     }
+    body {
+        margin: 0;
+        font-family: "Outfit", ui-sans-serif, system-ui, sans-serif;
+        font-feature-settings: "ss01", "cv11";
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    .font-serif {
+        font-family: "Cormorant Garamond", "Times New Roman", serif;
+        font-feature-settings: "lnum";
+    }
+    .font-mono {
+        font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    ::selection {
+        background: hsl(var(--terracotta) / 0.25);
+        color: hsl(var(--ink-public));
+    }
+    [data-theme="admin"] ::selection {
+        background: hsl(var(--terracotta) / 0.4);
+        color: hsl(var(--admin-ink));
+    }
+}
+
+@layer components {
+    .editorial-h1 {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        line-height: 0.95;
+    }
+    .editorial-h2 {
+        font-family: "Cormorant Garamond", serif;
+        font-weight: 500;
+        letter-spacing: -0.015em;
+    }
+    .small-caps {
+        font-family: "Outfit", sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: hsl(var(--moss));
+    }
+    .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.375rem 0.875rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-family: "Outfit", sans-serif;
+    }
+    .pill-verified {
+        background: #E8F2EE;
+        color: #1F4A3D;
+        border: 1px solid #BDE0D2;
+    }
+    .pill-unverified {
+        background: #FFF4E6;
+        color: #8C5A2A;
+        border: 1px solid #FAD9B3;
+    }
+    .pill-featured {
+        background: #1A3A32;
+        color: #F5F2EB;
+        border: 1px solid #1A3A32;
+    }
+    .pill-premium {
+        background: #D06D4F;
+        color: #F5F2EB;
+        border: 1px solid #D06D4F;
+    }
+
+    .card-public {
+        background: hsl(var(--surface-public));
+        border: 1px solid hsl(var(--line));
+        border-radius: 1rem;
+        transition:
+            transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+            box-shadow 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .card-public:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 24px 60px -28px rgba(26, 58, 50, 0.3);
+    }
+
+    .input-public {
+        width: 100%;
+        background: hsl(var(--surface-public));
+        border: 1px solid hsl(var(--line));
+        border-radius: 0.75rem;
+        padding: 0.85rem 1rem;
+        color: hsl(var(--ink-public));
+        font-family: "Outfit", sans-serif;
+        font-size: 0.95rem;
+        transition: border-color 150ms, box-shadow 150ms;
+    }
+    .input-public:focus {
+        outline: none;
+        border-color: hsl(var(--moss));
+        box-shadow: 0 0 0 3px hsl(var(--moss) / 0.15);
+    }
+    .input-public::placeholder {
+        color: hsl(var(--moss));
+        opacity: 0.7;
+    }
+
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        background: hsl(var(--ink-public));
+        color: hsl(var(--bg-public));
+        padding: 0.85rem 1.6rem;
+        border-radius: 999px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: background 150ms, transform 150ms;
+    }
+    .btn-primary:hover {
+        background: #2A5A4A;
+        transform: translateY(-1px);
+    }
+    .btn-accent {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        background: hsl(var(--terracotta));
+        color: #F5F2EB;
+        padding: 0.85rem 1.6rem;
+        border-radius: 999px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: background 150ms, transform 150ms;
+    }
+    .btn-accent:hover {
+        background: hsl(var(--terracotta-deep));
+        transform: translateY(-1px);
+    }
+    .btn-ghost {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: hsl(var(--ink-public));
+        padding: 0.6rem 1rem;
+        border-radius: 999px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: background 150ms;
+    }
+    .btn-ghost:hover {
+        background: hsl(var(--line) / 0.7);
+    }
+
+    /* Admin */
+    .admin-card {
+        background: hsl(var(--admin-surface));
+        border: 1px solid hsl(var(--admin-line));
+        border-radius: 0.75rem;
+    }
+    .admin-input {
+        width: 100%;
+        background: hsl(var(--admin-bg));
+        border: 1px solid hsl(var(--admin-line));
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.75rem;
+        color: hsl(var(--admin-ink));
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+    }
+    .admin-input:focus {
+        outline: none;
+        border-color: hsl(var(--terracotta));
+    }
+    .admin-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: hsl(var(--admin-line));
+        color: hsl(var(--admin-ink));
+        border: 1px solid #2C413B;
+        padding: 0.45rem 0.85rem;
+        border-radius: 0.5rem;
+        font-size: 0.825rem;
+        font-weight: 500;
+        transition: background 120ms, border-color 120ms;
+    }
+    .admin-btn:hover { background: #2A3D38; }
+    .admin-btn-accent {
+        background: hsl(var(--terracotta));
+        color: #F5F2EB;
+        border-color: hsl(var(--terracotta));
+    }
+    .admin-btn-accent:hover { background: hsl(var(--terracotta-deep)); }
+    .admin-tag {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .admin-tag-green { color: #34D399; border-color: #1F5C4A; background: rgba(16,185,129,0.08); }
+    .admin-tag-amber { color: #FBBF24; border-color: #6E4F1A; background: rgba(245,158,11,0.08); }
+    .admin-tag-red   { color: #F87171; border-color: #6E2A2A; background: rgba(239,68,68,0.08); }
+    .admin-tag-mute  { color: #93A39D; border-color: #243631; background: rgba(255,255,255,0.03); }
+
+    .grain-overlay {
+        position: relative;
+    }
+    .grain-overlay::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
+        opacity: 0.07;
+        mix-blend-mode: multiply;
+        pointer-events: none;
+    }
+
+    .ticker {
+        display: flex;
+        gap: 3rem;
+        animation: ticker 50s linear infinite;
+        white-space: nowrap;
+    }
+    @keyframes ticker {
+        from { transform: translateX(0); }
+        to { transform: translateX(-50%); }
+    }
+}
+
+@layer utilities {
+    .anim-fade-up {
+        animation: fade-up 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+    @keyframes fade-up {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .delay-100 { animation-delay: 100ms; }
+    .delay-200 { animation-delay: 200ms; }
+    .delay-300 { animation-delay: 300ms; }
+    .delay-400 { animation-delay: 400ms; }
 }
 
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;
     }
-
     [data-debug-wrapper="true"] > * {
         margin-left: inherit;
         margin-right: inherit;
