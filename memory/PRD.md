@@ -1,74 +1,59 @@
-# Bark&Bond — Dog Trainers Directory (PRD)
+# Bark&Bond — Pay-on-Outcome Dog-Training Match Engine
 
-## Original problem statement
-Build an autonomous digital business operating system on top of an existing
-Melbourne dog-trainers directory. Maximise revenue, defensibility, and user
-value while minimising human intervention. Listings must represent real
-businesses only — never fabricated. Spec includes verification scoring,
-monetisation, AI matching, auto-generated SEO, A/B tests, anomaly detection.
+## Original problem statement (iter 2)
+Build an autonomous business operating system. **Pick the optimal model, not preserve the directory.** Maximise revenue → automation → simplicity, in that order.
 
-## Architecture (high level)
-- **Backend:** FastAPI + Motor (MongoDB), `/api` prefix, Claude Sonnet 4.5 via
-  `emergentintegrations`. Public + admin (passcode-gated) routes.
-- **Frontend:** React 19, react-router-dom v7, TailwindCSS, shadcn/ui, sonner
-  toasts, lucide-react icons, framer-motion installed.
-- **Two surfaces:**
-  - Public directory (warm editorial: Cormorant Garamond + Outfit, organic
-    earthy palette).
-  - Admin/Ops cockpit (dense dark JetBrains-Mono cockpit, `data-theme=admin`).
+## Strategic decision (iter 2)
+The product is now a **match engine**, not a directory. Visibility is bought only through outcomes. Revenue is performance-only.
+
+## Architecture
+- **Backend** (FastAPI + Motor + MongoDB):
+  - `services/engine.py` — four background loops (ranking, pricing, verification, health) scheduled at startup.
+  - `services/ai.py` — Claude Sonnet 4.5 for verification, matching, SEO copy.
+  - `server.py` — primary product surface (`/api/match`, `/api/intros`, `/api/conversions`, `/api/submissions`, `/api/seo/{slug:path}`) and a single read-only `/api/oversight`. NO admin mutation endpoints.
+- **Frontend** (React + Tailwind + shadcn):
+  - `/` — single input → 3 ranked match cards inline.
+  - `/t/:id` — Connect form → reveal contact + bill intro fee → "I hired them" → bill conversion.
+  - `/submit` — auto-publish flow (no human gate).
+  - `/trainers` — info page for trainers (no browse list).
+  - `/melbourne/:suburb` — auto-generated SEO landing.
+  - `/ops` — passcode-gated read-only oversight surface.
+
+## Monetisation (iter 2)
+- **Per-intro fee** ~A$3–A$8, dynamically priced per suburb by demand multiplier.
+- **Per-conversion fee** A$65, charged when the user confirms they hired.
+- **No subscriptions, no tiers, no featured upsells.**
+
+## Autonomous loops
+| Loop | Cadence | Effect |
+|---|---|---|
+| Ranking | 60 s | Bayesian outcome score (Beta posterior over conversion-from-intro) per trainer |
+| Pricing | 90 s | Per-(suburb) intro fee from rolling 7-day demand; clipped 0.6× – 2.5× |
+| Verification | 6 h | Re-score listings; auto-publish ≥0.85, auto-hide <0.6 |
+| Health | 45 s | Anomaly snapshot + alerts; populates `system_state.health` |
+
+## Implemented (2026-04-25, iter 2)
+- All four loops live; first pass runs at startup so the very first request has pricing + outcome scores.
+- Submissions are decided by the system: ≥0.85 auto-published verified, 0.6–0.84 auto-published unverified, <0.6 auto-held.
+- Read-only oversight at `/ops` surfaces revenue, throughput, alerts, loop status, dynamic pricing per suburb, top trainers by outcome score, audit log, submissions auto-handled. No mutating buttons.
+- Legacy routes (`/admin`, `/admin/dashboard`, `/match`, `/pricing`) redirect to current surfaces.
+- 32/32 backend pytest cases pass; full frontend flow tested.
 
 ## Personas
-1. **Dog owner** — searches by suburb / topic, uses AI matcher, sends a
-   structured lead.
-2. **Trainer** — ideally claims & upgrades to Featured/Premium tier; receives
-   transparent, scored leads.
-3. **Operator** — sole human, monitors ingestion, monetisation, A/B tests, and
-   health alerts in the admin cockpit.
-
-## Core requirements (static)
-- No fabricated businesses or reviews.
-- Verification with AI confidence score (0-1) + thresholds (≥0.85 verified,
-  0.60–0.84 unverified, <0.60 hold).
-- Paid placement clearly disclosed; never alters trust score.
-- Lead transparency: every lead carries quality score + full text.
-- Audit log for all admin actions; reversible mutations.
-
-## Implemented (2026-04-25)
-- Backend
-  - Models: trainers, submissions, leads, ab_tests, audit_log, seo_pages,
-    match_events.
-  - Public: `/trainers`, `/trainers/:id`, `/featured`, `/suburbs`,
-    `/categories`, `/stats/public`, `/leads`, `/submissions`, `/match`,
-    `/seo/:slug`.
-  - Admin: `/admin/login`, full CRUD on trainers, submissions
-    approve/reject, leads list/patch, analytics (MRR, ARR, funnel,
-    verification mix), A/B tests CRUD, health monitor with anomaly alerts,
-    audit log, SEO generator, seed.
-  - AI service (`services/ai.py`): `score_trainer`, `match_trainers`,
-    `generate_seo_copy` — all with deterministic fallbacks if the LLM key is
-    missing.
-  - Auto-seed at startup with 12 real Melbourne trainers (sourced from public
-    directories: Bark.com, Oneflare, Localsearch, VDTA, etc.).
-- Frontend
-  - Public: Home (editorial hero, search, featured, AI matcher promo, dual
-    CTA), Directory (filters: suburb / category / verified-only), Trainer
-    detail (profile, evidence reasoning, lead form with quality dashboard),
-    Match (multi-step wizard with presets), Submit (auto-scores on submit
-    with reasoning), Pricing (Free / Featured / Premium), Suburb SEO page.
-  - Admin: passcode login + dashboard with 8 tabs (Overview, Ingestion,
-    Listings, Leads, Monetisation, A/B tests, Health, SEO pages).
-  - All interactive elements carry `data-testid`.
+1. **Dog owner** — types problem → gets 3 trainers → clicks Connect → contacts them.
+2. **Trainer** — submits self via `/submit`; auto-published if evidence checks out; pays only when matched + hired.
+3. **Operator** — reads `/ops`; pushes nothing.
 
 ## Backlog
-- P1: Trainer self-service login + claim flow.
-- P1: Pay-per-lead billing once funnel proves conversion.
-- P2: Public sitemap.xml + auto-publish SEO pages list.
-- P2: Lead → trainer email notification (Resend / SendGrid).
-- P2: Stripe subscription wiring for tier upgrades.
-- P3: Behaviour-based ranking from match_events feedback (relevance signal).
-- P3: Image moderation for trainer-uploaded photos.
+- P1: Stripe integration to replace `billing_status="billed"` with real PaymentIntents; same on conversions endpoint.
+- P1: Conversion email outreach (T+7d) so users get prompted to confirm hiring.
+- P2: Real autonomous ingestion worker (scheduled scrape of public sources).
+- P2: Bayesian early-stopping experiment engine running header-copy / match-count variants.
+- P2: Anomaly auto-rollback (last-known-good config snapshots).
+- P3: Trainer self-serve outcome dashboard (read-only; how they're trending).
+- P3: Conversation IP fraud-scoring on `/api/conversions` for parity with `/api/intros`.
 
 ## Next tasks (suggested)
-1. Trainer auth + claim listing flow.
-2. Email notifications for leads + ingestion approvals.
-3. Stripe integration for subscription tiers.
+1. Wire Stripe (per-intro + per-conversion charges, idempotency keys).
+2. Outbound email for hire-confirmation (Resend).
+3. Spin up the autonomous ingestion worker.
