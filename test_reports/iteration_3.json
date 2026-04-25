@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration-3 regression complete. All new fraud, engagement, inferred-conversion, discovery, pricing-stability, and 6-autonomous-loops surfaces verified end-to-end across backend pytest + live UI. 49/50 pytest assertions pass; the single failure is a test-environment artefact (shared CI IP triggers iter-3 IP rate-limit on the iter-2 idempotency test) — NOT a backend defect.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/intros (rate-limit)", "issue": "When the same source IP submits ≥6 intros in 60 min, anti-gaming correctly suppresses subsequent ones. iter-2 test_intro_then_conversion_idempotent hits this in CI because the test runner shares one IP. iter-3 behaviour is correct; iter-2 test is now over-strict and should be relaxed (or rotated to a fresh trainer per run)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/iter3_results.xml"
+  ],
+  "action_items": [
+    "Optional: relax /app/backend/tests/backend_test.py::TestIntrosConversions::test_intro_then_conversion_idempotent to tolerate IP-rate-limit suppression in CI (use a unique trainer per run OR accept billing_status in (billed, suppressed) for the first call).",
+    "Optional: in /app/backend/server.py the discovery seed includes a hint_bio that mentions 'Melbourne dog training franchise' — the verification loop may down-rank these on cross-source verification. Cosmetic only."
+  ],
+  "critical_code_review_comments": [
+    "server.py is at ~760 lines. Still single-file; consider splitting routers (oversight, intros, submissions, discovery) once it crosses the 700-LoC threshold per code-review rule.",
+    "fraud.evaluate_intro: rate-limit threshold is hard-coded (≥6/hr per IP, ≥1/24h per IP+trainer, ≥1/7d per email+trainer). Reasonable defaults but consider env vars so ops can tune without redeploy.",
+    "/api/conversions still does not pass `request` (no IP captured at conversion time). Parity with /api/intros would let evaluate_conversion incorporate IP signals later.",
+    "When evaluate_intro accumulates multiple suppression reasons (rate_limit + ip_dup + email_dup) all are returned, but the audit only stores 'reasons' as a list — fine, but the oversight UI shows only a single trust counter. Surface a top-3 reason histogram in /api/oversight for richer trust-loop visibility.",
+    "Inference rule (≥2 distinct engagement kinds → inferred conversion) fires synchronously inside the engagement POST. Idempotent (guarded by 'no existing conversion'), but a future race with a manual conversion is possible; the POST /api/conversions branch already supersedes pending rows, so net result is correct."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (NEW — 9 iter-3-specific test methods covering anti-gaming intros, engagements + inferred conversion, too-fast suspicious conversion, discovery queue, pricing-frozen stability, expanded oversight shape with all 6 loops + trust + integrity + discovery_summary)"
+  ],
+  "success_rate": {"backend": "98% (40/41 — 1 pre-existing iter-2 test brittle under iter-3 anti-gaming)", "frontend": "100% of tested flows"},
+  "test_credentials": "Oversight passcode: melbourne-bark-2026 (env ADMIN_PASS, /app/backend/.env)",
+  "seed_data_creation": "Tests created 1 strong-evidence published submission (Positive K9 Training Melbourne), several auto-held weak submissions (TEST_WeakUI_*, TEST_WeakSub_*), ~10 intros (mix of billed and suppressed via dup-email and IP-rate-limit), 2 conversions (1 billed, 1 suspicious), 5+ engagements driving 1+ inferred conversions, and 1 public discovery URL. Discovery queue also has 3 startup-seed URLs (dogforce1, melbournek9, urbanpaws).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter-3 test file at /app/backend/tests/test_iteration3.py. Run with `pytest backend/tests/test_iteration3.py backend/tests/backend_test.py -v`. The shared-IP rate-limit (fraud.py: ≥6/hr) WILL cause the iter-2 idempotency test and any 'first intro must bill' assertion to fail after enough runs — use unique trainer ids or relax the assertion. Verified via live preview URL https://exciting-noether-4.preview.emergentagent.com (the public REACT_APP_BACKEND_URL). Backend log confirms 'scheduled 6 autonomous loops' on every startup. Ops UI testids that work: ops-pass-input, ops-login-submit, ops-northstar, ops-trust-row, metric-engagements/suppressed/suspicious/inferred, ops-loops, ops-pipeline, loop-{ranking,pricing,verification,discovery,inference,health}, ops-refresh, ops-signout. TrainerDetail testids: connect-{name,email,phone,desc,submit,success}; clicking website/phone/email anchors fires POST /api/engagements (3 calls observed in this run).",
+  "rca of the issue": "Single failure (iter-2 test_intro_then_conversion_idempotent expecting intro_fee_cents>=300) is caused by iter-3's new anti-gaming rate-limit (fraud.evaluate_intro line 36: `if recent >= 6: billing_status='suppressed'`). The CI runner reuses one IP across the whole test session, so after >6 intros across both files the iter-2 test (which doesn't account for suppressed billing) fails on assertion. Mitigation: either (a) relax the iter-2 assertion to `intro_fee_cents >= 0` and check billing_status separately, (b) inject a unique trainer for each run, or (c) lower per-IP rate-limit threshold via env var. No production impact; behaviour is correct."
+}

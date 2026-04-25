@@ -66,6 +66,11 @@ export default function TrainerDetail() {
         }
     };
 
+    const trackEngagement = (kind) => {
+        if (!introId) return;
+        api.post("/engagements", { intro_id: introId, kind }).catch(() => {});
+    };
+
     if (loading) return <div className="max-w-3xl mx-auto px-6 py-24 text-[#708265]">Loading…</div>;
     if (!trainer)
         return (
@@ -149,22 +154,22 @@ export default function TrainerDetail() {
                         <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">{contact.name}</h2>
                         <div className="grid sm:grid-cols-2 gap-3 mt-5">
                             {contact.website && (
-                                <a href={contact.website} target="_blank" rel="noreferrer" className="card-public p-4 flex items-center gap-3" data-testid="contact-website">
+                                <a href={contact.website} target="_blank" rel="noreferrer" onClick={() => trackEngagement("website_click")} className="card-public p-4 flex items-center gap-3" data-testid="contact-website">
                                     <Globe className="h-4 w-4 text-[#708265]" />
                                     <span className="truncate text-sm text-[#1A3A32]">{contact.website.replace(/^https?:\/\//, "")}</span>
                                 </a>
                             )}
                             {contact.phone && (
-                                <div className="card-public p-4 flex items-center gap-3" data-testid="contact-phone">
+                                <a href={`tel:${contact.phone}`} onClick={() => trackEngagement("phone_click")} className="card-public p-4 flex items-center gap-3" data-testid="contact-phone">
                                     <Phone className="h-4 w-4 text-[#708265]" />
                                     <span className="text-sm text-[#1A3A32]">{contact.phone}</span>
-                                </div>
+                                </a>
                             )}
                             {contact.email && (
-                                <div className="card-public p-4 flex items-center gap-3" data-testid="contact-email">
+                                <a href={`mailto:${contact.email}`} onClick={() => trackEngagement("email_click")} className="card-public p-4 flex items-center gap-3" data-testid="contact-email">
                                     <Mail className="h-4 w-4 text-[#708265]" />
                                     <span className="text-sm text-[#1A3A32]">{contact.email}</span>
-                                </div>
+                                </a>
                             )}
                             {!contact.website && !contact.phone && !contact.email && (
                                 <div className="text-sm text-[#4A615A]">

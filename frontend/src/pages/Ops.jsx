@@ -121,6 +121,15 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                     <Metric label="Live listings" value={integrity.live_total ?? 0} sub={`${integrity.verified ?? 0} verified · ${integrity.hidden ?? 0} held`} testid="metric-listings" />
                 </div>
 
+                {/* Trust + signals row */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-trust-row">
+                    <Metric label="Engagement events" value={tp.engagements_total ?? 0} sub="signals feeding ranking" testid="metric-engagements" />
+                    <Metric label="Suppressed intros" value={(snap.trust || {}).intros_suppressed ?? 0} sub="anti-gaming filter" testid="metric-suppressed" />
+                    <Metric label="Suspicious conversions" value={(snap.trust || {}).conversions_suspicious ?? 0} sub="too-fast / dup" testid="metric-suspicious" />
+                    <Metric label="Inferred pending" value={(snap.trust || {}).inferred_pending ?? 0} sub="awaiting 48h promote" testid="metric-inferred" />
+                </div>
+
+
                 {/* Alerts */}
                 <Section title="Alerts" testid="ops-alerts">
                     {(snap.alerts || []).length === 0 ? (
@@ -145,18 +154,28 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                             <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" />
                             <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" />
                             <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" />
+                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" />
+                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" />
                             <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" />
                         </div>
                     </Section>
 
-                    {/* Submissions */}
-                    <Section title="Submissions · auto-handled" testid="ops-submissions">
+                    {/* Discovery + Submissions */}
+                    <Section title="Pipeline · auto-handled" testid="ops-pipeline">
+                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Submissions</div>
                         <div className="grid grid-cols-3 gap-3">
                             <Tile label="Auto-published" value={submissions.auto_published ?? 0} accent="green" />
                             <Tile label="Auto-held" value={submissions.auto_held ?? 0} accent="amber" />
                             <Tile label="Pending" value={submissions.pending ?? 0} accent="mute" />
                         </div>
-                        <div className="text-xs font-mono text-[#8B9E98] mt-3">No approve / reject buttons — the system decides on score.</div>
+                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mt-4 mb-2">Discovery queue</div>
+                        <div className="grid grid-cols-4 gap-3">
+                            <Tile label="Pending" value={(snap.discovery_summary || {}).pending ?? 0} accent="mute" />
+                            <Tile label="Promoted" value={(snap.discovery_summary || {}).promoted ?? 0} accent="green" />
+                            <Tile label="Duplicate" value={(snap.discovery_summary || {}).duplicate ?? 0} accent="mute" />
+                            <Tile label="Discarded" value={(snap.discovery_summary || {}).discarded ?? 0} accent="amber" />
+                        </div>
+                        <div className="text-xs font-mono text-[#8B9E98] mt-3">No buttons — the system decides on score and source.</div>
                     </Section>
                 </div>
 

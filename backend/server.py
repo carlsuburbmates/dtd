@@ -36,6 +36,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
 from services import engine as autonomy
+from services import fraud as fraud_service
 from services.seed import MELBOURNE_TRAINERS
 
 ROOT_DIR = Path(__file__).parent
@@ -119,6 +120,22 @@ class ConversionIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     intro_id: str
     confirmed: bool = True
+
+
+class EngagementIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    intro_id: str
+    kind: str  # website_click | phone_click | email_click | return_visit
+    trainer_id: Optional[str] = None
+
+
+class DiscoveryIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    url: str
+    hint_name: Optional[str] = ""
+    hint_suburb: Optional[str] = ""
+    hint_bio: Optional[str] = ""
+    source: Optional[str] = ""
 
 
 class SubmissionIn(BaseModel):
@@ -255,6 +272,11 @@ async def create_intro(payload: IntroIn, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Trainer not found")
 
     fee = await autonomy.get_intro_fee(db, trainer.get("suburb"))
+    ip = (request.client.host if request.client else "") or ""
+
+    # Anti-gaming evaluation. Always record; sometimes mark suppressed.
+    fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email or "")
+
     intro = {
         "id": new_id(),
         "trainer_id": trainer["id"],
@@ -265,14 +287,16 @@ async def create_intro(payload: IntroIn, request: Request) -> Dict[str, Any]:
         "user_email": payload.user_email or "",
         "user_phone": payload.user_phone or "",
         "suburb": trainer.get("suburb"),
-        "intro_fee_cents": fee,
-        "billing_status": "billed",  # in production: integrates with Stripe
-        "ip": (request.client.host if request.client else "") or "",
+        "intro_fee_cents": fee if fraud["billing_status"] == "billed" else 0,
+        "billing_status": fraud["billing_status"],
+        "fraud_reasons": fraud["reasons"],
+        "ip": ip,
+        "user_agent": request.headers.get("user-agent", "")[:200],
         "created_at": now_iso(),
     }
     await db.intros.insert_one(intro.copy())
-    await _audit("intro", trainer["id"], after={"fee_cents": fee, "intro_id": intro["id"]}, actor="user")
-    # Reveal contact info to the user — that is what they paid for.
+    await _audit("intro", trainer["id"], after={"intro_id": intro["id"], "billing_status": fraud["billing_status"], "reasons": fraud["reasons"]}, actor="user")
+
     contact = {
         "name": trainer.get("name"),
         "website": trainer.get("website"),
@@ -283,6 +307,45 @@ async def create_intro(payload: IntroIn, request: Request) -> Dict[str, Any]:
     return _scrub({**intro, "contact": contact})
 
 
+@api.post("/engagements")
+async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
+    """Record a user signal after a connection (website click, phone click,
+    return visit).  Drives both ranking (response/engagement) and inferred
+    conversion confidence.
+    """
+    intro = await db.intros.find_one({"id": payload.intro_id}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="intro not found")
+    ev = {
+        "id": new_id(),
+        "intro_id": payload.intro_id,
+        "trainer_id": intro["trainer_id"],
+        "kind": payload.kind,
+        "created_at": now_iso(),
+    }
+    await db.engagements.insert_one(ev.copy())
+
+    # Lightweight inference: ≥2 distinct engagement kinds within 48h → inferred conversion (0.7-0.85 confidence).
+    distinct_kinds = await db.engagements.distinct("kind", {"intro_id": payload.intro_id})
+    if len(distinct_kinds) >= 2 and not await db.conversions.find_one({"intro_id": payload.intro_id}):
+        confidence = min(0.85, 0.55 + 0.10 * len(distinct_kinds))
+        await db.conversions.insert_one(
+            {
+                "id": new_id(),
+                "intro_id": payload.intro_id,
+                "trainer_id": intro["trainer_id"],
+                "fee_cents": autonomy.BASE_CONVERSION_FEE,
+                "billing_status": "pending",
+                "inferred": True,
+                "confidence": round(confidence, 2),
+                "source": "engagement_inference",
+                "created_at": now_iso(),
+            }
+        )
+        await _audit("inferred_conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "confidence": confidence}, actor="system")
+    return _scrub(ev)
+
+
 @api.post("/conversions")
 async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
     intro = await db.intros.find_one({"id": payload.intro_id}, {"_id": 0})
@@ -290,20 +353,56 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Intro not found")
     if not payload.confirmed:
         return {"ok": True, "billed": False}
-    existing = await db.conversions.find_one({"intro_id": payload.intro_id}, {"_id": 0})
+    existing = await db.conversions.find_one(
+        {"intro_id": payload.intro_id, "billing_status": {"$in": ["billed", "suspicious"]}},
+        {"_id": 0},
+    )
     if existing:
-        return {"ok": True, "billed": False, "existing": True}
+        return {"ok": True, "billed": False, "existing": True, "billing_status": existing.get("billing_status")}
+
+    decision = await fraud_service.evaluate_conversion(db, intro)
     conv = {
         "id": new_id(),
         "intro_id": payload.intro_id,
         "trainer_id": intro["trainer_id"],
-        "fee_cents": autonomy.BASE_CONVERSION_FEE,
-        "billing_status": "billed",
+        "fee_cents": autonomy.BASE_CONVERSION_FEE if decision["billing_status"] == "billed" else 0,
+        "billing_status": decision["billing_status"],
+        "fraud_reason": decision["reason"],
+        "inferred": False,
+        "confidence": 1.0,
+        "source": "manual_confirm",
+        "created_at": now_iso(),
+        "billed_at": now_iso() if decision["billing_status"] == "billed" else None,
+    }
+    # If a prior pending inferred conversion exists, supersede it.
+    await db.conversions.update_many(
+        {"intro_id": payload.intro_id, "billing_status": "pending"},
+        {"$set": {"billing_status": "superseded"}},
+    )
+    await db.conversions.insert_one(conv.copy())
+    await _audit("conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "billing_status": conv["billing_status"]}, actor="user")
+    return _scrub({**conv, "billed": decision["billing_status"] == "billed"})
+
+
+@api.post("/discovery")
+async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
+    """Public endpoint to feed the autonomous ingestion queue.
+
+    Anyone (or any external scraper) can post candidate URLs.  The discovery
+    loop deduplicates, scores, and decides — no human review.
+    """
+    doc = {
+        "id": new_id(),
+        "url": payload.url,
+        "hint_name": payload.hint_name or "",
+        "hint_suburb": payload.hint_suburb or "",
+        "hint_bio": payload.hint_bio or "",
+        "source": payload.source or "public",
+        "status": "pending",
         "created_at": now_iso(),
     }
-    await db.conversions.insert_one(conv.copy())
-    await _audit("conversion", intro["trainer_id"], after=conv["id"], actor="user")
-    return _scrub({**conv, "billed": True})
+    await db.discovery_queue.insert_one(doc.copy())
+    return _scrub(doc)
 
 
 @api.post("/submissions")
@@ -421,13 +520,17 @@ async def oversight_login(payload: OversightLogin) -> Dict[str, Any]:
 @api.get("/oversight")
 async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     """Single read-only snapshot. No buttons. No actions. Just the truth."""
-    intros_24 = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}})
-    intros_7d = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}})
-    conv_24 = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}})
-    conv_7d = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}})
+    intros_24 = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
+    intros_7d = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
+    conv_24 = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
+    conv_7d = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
 
-    intros = await db.intros.find({}, {"_id": 0}).to_list(2000)
-    conversions = await db.conversions.find({}, {"_id": 0}).to_list(2000)
+    intros = await db.intros.find({"billing_status": "billed"}, {"_id": 0}).to_list(2000)
+    conversions = await db.conversions.find({"billing_status": "billed"}, {"_id": 0}).to_list(2000)
+    suppressed = await db.intros.count_documents({"billing_status": "suppressed"})
+    suspicious_conv = await db.conversions.count_documents({"billing_status": "suspicious"})
+    inferred_pending = await db.conversions.count_documents({"inferred": True, "billing_status": "pending"})
+    engagements_total = await db.engagements.count_documents({})
 
     revenue_intro_cents = sum(i.get("intro_fee_cents", 0) for i in intros)
     revenue_conv_cents = sum(c.get("fee_cents", 0) for c in conversions)
@@ -440,11 +543,16 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     ranking = await db.system_state.find_one({"key": "ranking"}, {"_id": 0}) or {}
     pricing = await db.system_state.find_one({"key": "pricing"}, {"_id": 0}) or {}
     verification = await db.system_state.find_one({"key": "verification"}, {"_id": 0}) or {}
+    discovery = await db.system_state.find_one({"key": "discovery"}, {"_id": 0}) or {}
+    inference = await db.system_state.find_one({"key": "inference"}, {"_id": 0}) or {}
 
-    pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("multiplier", -1).to_list(20)
+    pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("multiplier", -1).to_list(40)
 
     top_trainers = await db.trainers.find(
-        {"published": True}, {"_id": 0, "id": 1, "name": 1, "suburb": 1, "outcome_score": 1, "intros_30d": 1, "conversions_30d": 1, "confidence_score": 1, "verification_status": 1}
+        {"published": True},
+        {"_id": 0, "id": 1, "name": 1, "suburb": 1, "outcome_score": 1, "outcome_breakdown": 1,
+         "intros_30d": 1, "conversions_30d": 1, "engagements_30d": 1, "confidence_score": 1,
+         "verification_status": 1},
     ).sort("outcome_score", -1).limit(10).to_list(10)
 
     audit_recent = await db.audit_log.find({}, {"_id": 0}).sort("ts", -1).to_list(20)
@@ -455,12 +563,23 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "pending": await db.submissions.count_documents({"status": "pending"}),
     }
 
+    discovery_summary = {
+        "pending": await db.discovery_queue.count_documents({"status": "pending"}),
+        "promoted": await db.discovery_queue.count_documents({"status": "promoted"}),
+        "duplicate": await db.discovery_queue.count_documents({"status": "duplicate"}),
+        "discarded": await db.discovery_queue.count_documents({"status": "discarded"}),
+    }
+
     integrity = {
         "verified": await db.trainers.count_documents({"published": True, "verification_status": "verified"}),
         "unverified": await db.trainers.count_documents({"published": True, "verification_status": "unverified"}),
         "hidden": await db.trainers.count_documents({"published": False}),
         "live_total": await db.trainers.count_documents({"published": True}),
     }
+
+    rollback_recent = await db.config_snapshots.find(
+        {"rolled_back": True}, {"_id": 0}
+    ).sort("rolled_back_at", -1).to_list(5)
 
     return {
         "revenue": {
@@ -474,18 +593,28 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "conversions_24h": conv_24,
             "conversions_7d": conv_7d,
             "intro_to_conversion_rate": intro_to_conv,
+            "engagements_total": engagements_total,
+        },
+        "trust": {
+            "intros_suppressed": suppressed,
+            "conversions_suspicious": suspicious_conv,
+            "inferred_pending": inferred_pending,
         },
         "loops": {
             "ranking": ranking,
             "pricing": pricing,
             "verification": verification,
+            "discovery": discovery,
+            "inference": inference,
             "health": health,
         },
         "alerts": health.get("alerts", []),
+        "rollback_recent": rollback_recent,
         "pricing_state": pricing_state,
         "top_trainers": top_trainers,
         "audit_recent": audit_recent,
         "submissions_summary": submissions_summary,
+        "discovery_summary": discovery_summary,
         "integrity": integrity,
         "ts": now_iso(),
     }
@@ -554,17 +683,58 @@ async def _seed_if_empty() -> None:
             logger.exception("seed verify failed for %s", entry.get("name"))
 
 
+async def _seed_discovery_if_empty() -> None:
+    """Seed a small starter set of public discovery URLs so the autonomous
+    ingestion loop has something to crank on out-of-the-box.
+    """
+    if await db.discovery_queue.count_documents({}) > 0:
+        return
+    candidates = [
+        {
+            "url": "https://urbanpawsmelbourne.com.au",
+            "hint_name": "Urban Paws Melbourne",
+            "hint_suburb": "Melbourne",
+            "hint_bio": "Melbourne dog training and behaviour services.",
+            "source": "discovery_seed",
+        },
+        {
+            "url": "https://www.dogforce1.com.au",
+            "hint_name": "Dog Force 1",
+            "hint_suburb": "Melbourne",
+            "hint_bio": "Melbourne dog training franchise focusing on behaviour.",
+            "source": "discovery_seed",
+        },
+        {
+            "url": "https://www.melbournek9.com.au",
+            "hint_name": "Melbourne K9 Force",
+            "hint_suburb": "Melbourne",
+            "hint_bio": "Specialist behaviour modification and obedience training in Melbourne.",
+            "source": "discovery_seed",
+        },
+    ]
+    for c in candidates:
+        await db.discovery_queue.insert_one(
+            {"id": new_id(), "status": "pending", "created_at": now_iso(), **c}
+        )
+    logger.info("seeded %s discovery URLs", len(candidates))
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     await db.trainers.create_index("id", unique=True, sparse=True)
     await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
-    await db.conversions.create_index([("intro_id", 1)], unique=True)
+    await db.intros.create_index("ip")
+    await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
+    await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
     await db.submissions.create_index("status")
     await db.audit_log.create_index("ts")
     await db.pricing_state.create_index("suburb", unique=True)
     await db.system_state.create_index("key", unique=True)
+    await db.discovery_queue.create_index("status")
+    await db.config_snapshots.create_index("applied_at")
 
     await _seed_if_empty()
+    await _seed_discovery_if_empty()
 
     # Run an immediate ranking + pricing pass so the first request has data.
     try:
