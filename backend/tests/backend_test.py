@@ -1,17 +1,19 @@
-"""Backend regression tests for the Dog Trainers Directory autonomous OS.
+"""Bark&Bond — pay-on-outcome match engine regression tests.
 
-Covers:
-- Public endpoints (trainers, featured, suburbs, categories, stats, leads,
-  submissions, AI match, SEO autogen)
-- Admin auth gate (passcode + X-Admin-Pass header)
-- Admin CRUD: trainers patch/delete/verify, submissions approve/reject,
-  leads patch, analytics, A/B tests, health, audit log, SEO, seed
-- _id scrubbing assertion across all responses
+Covers (per redesign iteration 2):
+  * /api/config + root health
+  * Instant /match (single input → up to 3 results) and per-trainer detail
+  * /intros (records intro, returns contact, charges intro fee)
+  * /conversions (idempotent, charges A$65)
+  * /submissions auto-publish (≥0.85) and auto-hold (<0.6)
+  * /seo/{slug:path} including nested slugs
+  * /oversight login + read-only oversight surface (X-Admin-Pass)
+  * Mongo `_id` scrub everywhere
+  * Legacy admin mutation endpoints removed (404)
 """
 from __future__ import annotations
 
 import os
-import time
 import uuid
 
 import pytest
@@ -28,7 +30,7 @@ HDR = {"X-Admin-Pass": ADMIN_PASS}
 
 def assert_no_id(obj):
     if isinstance(obj, dict):
-        assert "_id" not in obj, f"_id leaked: {list(obj.keys())[:6]}"
+        assert "_id" not in obj, f"_id leaked: {list(obj.keys())[:8]}"
         for v in obj.values():
             assert_no_id(v)
     elif isinstance(obj, list):
@@ -43,321 +45,264 @@ def session():
     return s
 
 
-# --- Public ----------------------------------------------------------------
+# --- Config / health -------------------------------------------------------
 
-class TestPublic:
+class TestConfig:
     def test_root(self, session):
         r = session.get(f"{API}/")
         assert r.status_code == 200
         assert r.json()["ok"] is True
 
-    def test_list_trainers(self, session):
-        r = session.get(f"{API}/trainers")
-        assert r.status_code == 200
-        data = r.json()
-        assert isinstance(data, list)
-        assert len(data) >= 1
-        first = data[0]
-        for key in ("id", "name", "suburb", "verification_status", "placement", "tier"):
-            assert key in first, f"missing {key}"
-        assert first["placement"] in ("paid", "organic")
-        assert_no_id(data)
-
-    def test_trainer_detail(self, session):
-        listing = session.get(f"{API}/trainers").json()
-        tid = listing[0]["id"]
-        r = session.get(f"{API}/trainers/{tid}")
-        assert r.status_code == 200
-        assert r.json()["id"] == tid
-        assert_no_id(r.json())
-
-    def test_trainer_detail_404(self, session):
-        r = session.get(f"{API}/trainers/{uuid.uuid4()}")
-        assert r.status_code == 404
-
-    def test_featured(self, session):
-        r = session.get(f"{API}/featured")
-        assert r.status_code == 200
-        for t in r.json():
-            assert t["tier"] in ("featured", "premium")
-        assert_no_id(r.json())
-
-    def test_suburbs(self, session):
-        r = session.get(f"{API}/suburbs")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
-        assert all(isinstance(x, str) for x in r.json())
-
-    def test_categories(self, session):
-        r = session.get(f"{API}/categories")
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
-
-    def test_stats(self, session):
-        r = session.get(f"{API}/stats/public")
+    def test_config(self, session):
+        r = session.get(f"{API}/config")
         assert r.status_code == 200
         d = r.json()
-        for k in ("trainers", "verified", "suburbs"):
-            assert k in d
-            assert isinstance(d[k], int)
-
-    def test_filter_only_verified(self, session):
-        r = session.get(f"{API}/trainers", params={"only_verified": "true"})
-        assert r.status_code == 200
-        for t in r.json():
-            assert t["verification_status"] == "verified"
+        assert d["base_intro_fee_cents"] == 500
+        assert d["base_conversion_fee_cents"] == 6500
+        assert isinstance(d["suburbs"], list)
+        assert all(isinstance(x, str) for x in d["suburbs"])
+        assert_no_id(d)
 
 
-# --- Leads -----------------------------------------------------------------
+# --- Match (the product) --------------------------------------------------
 
-class TestLeads:
-    def test_create_lead_and_persist(self, session):
-        trainers = session.get(f"{API}/trainers").json()
-        tid = trainers[0]["id"]
-        payload = {
-            "trainer_id": tid,
-            "user_name": "TEST_Lead User",
-            "user_email": "TEST_lead@example.com",
-            "user_phone": "0411222333",
-            "dog_description": "TEST_ Two-year-old kelpie cross with mild reactivity on lead in busy suburbs.",
-            "goals": "Loose-lead walking and calm greetings",
-        }
-        r = session.post(f"{API}/leads", json=payload)
+class TestMatch:
+    def test_match_returns_up_to_three(self, session):
+        r = session.post(
+            f"{API}/match",
+            json={"description": "Reactive 6-month border collie pup that pulls hard on lead in Fitzroy."},
+            timeout=120,
+        )
         assert r.status_code == 200, r.text
-        lead = r.json()
-        assert lead["trainer_id"] == tid
-        assert lead["user_email"] == payload["user_email"]
-        assert lead["status"] == "new"
-        assert 0.0 <= lead["quality_score"] <= 1.0
-        assert lead["quality_score"] >= 0.8  # phone + long desc + goals
-        assert "id" in lead
-        assert_no_id(lead)
-        # ensure persisted via admin endpoint
-        adm = session.get(f"{API}/admin/leads", headers=HDR).json()
-        assert any(x["id"] == lead["id"] for x in adm)
-        pytest.lead_id = lead["id"]
+        body = r.json()
+        assert "match_id" in body
+        assert "matches" in body
+        ms = body["matches"]
+        assert isinstance(ms, list)
+        assert 1 <= len(ms) <= 3
+        for m in ms:
+            assert "id" in m
+            assert "match_score" in m
+            assert "match_reasoning" in m
+            assert "intro_fee_cents" in m
+            assert isinstance(m["intro_fee_cents"], int) and m["intro_fee_cents"] >= 300
+            assert "outcome_score" in m
+            assert "demand_multiplier" in m
+        assert_no_id(body)
+        pytest.last_match_id = body["match_id"]
+        pytest.last_trainer_id = ms[0]["id"]
 
-    def test_create_lead_invalid_trainer(self, session):
-        r = session.post(f"{API}/leads", json={
-            "trainer_id": str(uuid.uuid4()),
-            "user_name": "x",
-            "user_email": "x@example.com",
-            "dog_description": "d",
-        })
-        assert r.status_code == 404
-
-    def test_create_lead_invalid_email(self, session):
-        trainers = session.get(f"{API}/trainers").json()
-        r = session.post(f"{API}/leads", json={
-            "trainer_id": trainers[0]["id"],
-            "user_name": "x",
-            "user_email": "not-an-email",
-            "dog_description": "d",
-        })
+    def test_match_short_description_validation(self, session):
+        r = session.post(f"{API}/match", json={"description": "x"})
         assert r.status_code == 422
 
 
-# --- Submissions ----------------------------------------------------------
+# --- Trainer detail -------------------------------------------------------
+
+class TestTrainerDetail:
+    def test_get_published(self, session):
+        # use trainer from prior match; otherwise pick from oversight top trainers
+        tid = getattr(pytest, "last_trainer_id", None)
+        if not tid:
+            ov = session.get(f"{API}/oversight", headers=HDR).json()
+            tid = ov["top_trainers"][0]["id"]
+        r = session.get(f"{API}/trainers/{tid}")
+        assert r.status_code == 200
+        d = r.json()
+        assert d["id"] == tid
+        assert "intro_fee_cents" in d
+        assert "demand_multiplier" in d
+        assert_no_id(d)
+
+    def test_404_for_unknown(self, session):
+        r = session.get(f"{API}/trainers/{uuid.uuid4()}")
+        assert r.status_code == 404
+
+
+# --- Intros + conversions -------------------------------------------------
+
+class TestIntrosConversions:
+    def test_intro_then_conversion_idempotent(self, session):
+        tid = getattr(pytest, "last_trainer_id", None)
+        match_id = getattr(pytest, "last_match_id", None)
+        assert tid, "match must have produced a trainer id"
+        intro_payload = {
+            "trainer_id": tid,
+            "description": "TEST_ Need force-free help with reactive collie pup",
+            "user_email": "TEST_user@example.com",
+            "user_name": "TEST_User",
+            "user_phone": "0411222333",
+            "match_id": match_id,
+        }
+        r = session.post(f"{API}/intros", json=intro_payload)
+        assert r.status_code == 200, r.text
+        intro = r.json()
+        assert intro["trainer_id"] == tid
+        assert intro["intro_fee_cents"] >= 300
+        assert intro["billing_status"] == "billed"
+        contact = intro.get("contact", {})
+        assert contact.get("name")  # contact info revealed
+        assert_no_id(intro)
+        intro_id = intro["id"]
+
+        # Conversion 1 — bills
+        r1 = session.post(f"{API}/conversions", json={"intro_id": intro_id, "confirmed": True})
+        assert r1.status_code == 200, r1.text
+        c = r1.json()
+        assert c.get("billed") is True
+        assert c.get("fee_cents") == 6500
+        assert_no_id(c)
+
+        # Conversion 2 — same intro_id, must NOT double-bill
+        r2 = session.post(f"{API}/conversions", json={"intro_id": intro_id, "confirmed": True})
+        assert r2.status_code == 200
+        c2 = r2.json()
+        assert c2.get("existing") is True
+        assert c2.get("billed") is False
+
+    def test_intro_for_unknown_trainer_404(self, session):
+        r = session.post(
+            f"{API}/intros",
+            json={"trainer_id": str(uuid.uuid4()), "description": "x"},
+        )
+        assert r.status_code == 404
+
+    def test_conversion_for_unknown_intro_404(self, session):
+        r = session.post(f"{API}/conversions", json={"intro_id": str(uuid.uuid4())})
+        assert r.status_code == 404
+
+
+# --- Submissions: auto-publish vs auto-hold -------------------------------
 
 class TestSubmissions:
-    def test_create_submission(self, session):
+    def test_strong_evidence_auto_publishes(self, session):
+        # Use a real Melbourne dog-training business so AI verification clears 0.6.
+        # Source: publicly listed business with operating website.
         payload = {
-            "name": f"TEST_Submission {uuid.uuid4().hex[:6]}",
-            "suburb": "Fitzroy",
-            "website": "https://example.com",
-            "phone": "0411223344",
-            "email": "TEST_sub@example.com",
-            "categories": ["puppy"],
-            "services": ["group classes"],
-            "bio": "TEST_ Force-free puppy school in Fitzroy with weekly cohorts.",
-            "source_evidence_url": "https://example.com/about",
+            "name": "Positive K9 Training Melbourne",
+            "suburb": "Eastern Suburbs",
+            "region": "Melbourne East",
+            "website": "https://positivek9training.com.au",
+            "phone": "0411 234 567",
+            "email": "info@positivek9training.com.au",
+            "categories": ["obedience", "puppy", "behaviour"],
+            "services": ["In-home training", "Group classes", "One-on-one"],
+            "bio": "Certified force-free trainers offering in-home and group sessions across Melbourne's Eastern Suburbs, the Dandenongs and Mornington Peninsula. Top-rated on Google and Facebook with 8+ years experience.",
+            "source_evidence_url": "https://positivek9training.com.au",
         }
-        r = session.post(f"{API}/submissions", json=payload)
+        r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
         sub = r.json()
-        assert sub["status"] == "pending"
-        assert "confidence_score" in sub
+        assert sub["status"] in ("published", "held"), sub
+        # Strong evidence should publish (≥0.6) — not held
+        assert sub["status"] == "published", f"expected published, got {sub}"
+        assert sub.get("trainer_id"), "trainer_id required when published"
         assert isinstance(sub["confidence_score"], (int, float))
-        assert "verification_signals" in sub
         assert_no_id(sub)
-        pytest.submission_id = sub["id"]
 
-
-# --- AI Match -------------------------------------------------------------
-
-class TestMatch:
-    def test_match_returns_results(self, session):
-        r = session.post(f"{API}/match", json={
-            "description": "I have a 6 month old reactive border collie pup in Fitzroy that pulls on the lead.",
-        }, timeout=90)
+    def test_weak_evidence_auto_holds(self, session):
+        payload = {
+            "name": f"TEST_WeakSub {uuid.uuid4().hex[:6]}",
+            "suburb": "Carlton",
+        }
+        r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
-        body = r.json()
-        assert "matches" in body
-        assert isinstance(body["matches"], list)
-        assert 1 <= len(body["matches"]) <= 5
-        for m in body["matches"]:
-            assert "id" in m and "match_score" in m and "match_reasoning" in m
-        assert_no_id(body)
+        sub = r.json()
+        # heuristic for name+suburb only is ~0.35 → held
+        assert sub["status"] == "held", f"expected held, got {sub}"
+        assert sub.get("trainer_id") in (None, "")
+        assert_no_id(sub)
 
 
-# --- SEO ------------------------------------------------------------------
+# --- SEO autogen with nested slug ----------------------------------------
 
 class TestSEO:
-    def test_seo_autogen(self, session):
-        slug = f"fitzroy/puppy-school"
+    def test_nested_slug(self, session):
+        slug = "fitzroy/puppy-school"
         r = session.get(f"{API}/seo/{slug}", timeout=90)
         assert r.status_code == 200
         d = r.json()
         assert d["slug"] == slug
         assert "copy" in d
         assert_no_id(d)
-        # second call must hit cache (same id)
+        # cache hit on 2nd call
         r2 = session.get(f"{API}/seo/{slug}", timeout=30)
+        assert r2.status_code == 200
         assert r2.json()["id"] == d["id"]
 
 
-# --- Admin auth -----------------------------------------------------------
+# --- Oversight (read-only) ------------------------------------------------
 
-class TestAdminAuth:
+class TestOversight:
     def test_login_invalid(self, session):
-        r = session.post(f"{API}/admin/login", json={"passcode": "wrong"})
+        r = session.post(f"{API}/oversight/login", json={"passcode": "wrong"})
         assert r.status_code == 401
 
     def test_login_valid(self, session):
-        r = session.post(f"{API}/admin/login", json={"passcode": ADMIN_PASS})
+        r = session.post(f"{API}/oversight/login", json={"passcode": ADMIN_PASS})
         assert r.status_code == 200
         assert r.json()["ok"] is True
 
-    def test_protected_requires_header(self, session):
-        for path in ["/admin/trainers", "/admin/leads", "/admin/submissions",
-                     "/admin/analytics", "/admin/health", "/admin/audit-log",
-                     "/admin/ab-tests", "/admin/seo"]:
-            r = session.get(f"{API}{path}")
-            assert r.status_code == 401, path
+    def test_oversight_requires_header(self, session):
+        r = session.get(f"{API}/oversight")
+        assert r.status_code == 401
 
-    def test_protected_with_header(self, session):
-        for path in ["/admin/trainers", "/admin/leads", "/admin/submissions",
-                     "/admin/analytics", "/admin/health", "/admin/audit-log",
-                     "/admin/ab-tests", "/admin/seo"]:
-            r = session.get(f"{API}{path}", headers=HDR)
-            assert r.status_code == 200, f"{path}: {r.text[:200]}"
-
-
-# --- Admin operations -----------------------------------------------------
-
-class TestAdminOps:
-    def test_patch_trainer_tier_and_publish(self, session):
-        trainers = session.get(f"{API}/admin/trainers", headers=HDR).json()
-        tid = trainers[0]["id"]
-        r = session.patch(f"{API}/admin/trainers/{tid}", headers=HDR,
-                          json={"tier": "featured", "published": True})
-        assert r.status_code == 200
-        assert r.json()["tier"] == "featured"
-        assert r.json()["published"] is True
-
-    def test_verify_trainer(self, session):
-        trainers = session.get(f"{API}/admin/trainers", headers=HDR).json()
-        tid = trainers[0]["id"]
-        r = session.post(f"{API}/admin/verify/{tid}", headers=HDR, timeout=60)
-        assert r.status_code == 200
+    def test_oversight_with_header(self, session):
+        r = session.get(f"{API}/oversight", headers=HDR)
+        assert r.status_code == 200, r.text
         d = r.json()
-        assert d["verification_status"] in ("verified", "unverified", "hold")
-        assert "confidence_score" in d
+        for k in (
+            "revenue",
+            "throughput",
+            "loops",
+            "alerts",
+            "pricing_state",
+            "top_trainers",
+            "audit_recent",
+            "submissions_summary",
+            "integrity",
+        ):
+            assert k in d, f"missing {k}"
+        # loops
+        for loop_key in ("ranking", "pricing", "verification", "health"):
+            assert loop_key in d["loops"]
+        # ranking ran at startup
+        assert d["loops"]["ranking"].get("trainers_scored", 0) >= 1
+        # at least one suburb priced after startup pass
+        assert isinstance(d["pricing_state"], list)
+        assert len(d["pricing_state"]) >= 1
+        ps = d["pricing_state"][0]
+        assert "intro_fee_cents" in ps and "multiplier" in ps
+        # top trainers populated with outcome_score
+        assert len(d["top_trainers"]) >= 1
+        assert "outcome_score" in d["top_trainers"][0]
+        assert_no_id(d)
 
-    def test_lead_patch(self, session):
-        lead_id = getattr(pytest, "lead_id", None)
-        if not lead_id:
-            pytest.skip("no lead created")
-        r = session.patch(f"{API}/admin/leads/{lead_id}", headers=HDR,
-                          json={"status": "contacted"})
-        assert r.status_code == 200
-        assert r.json()["status"] == "contacted"
 
-    def test_submission_approve(self, session):
-        sid = getattr(pytest, "submission_id", None)
-        if not sid:
-            pytest.skip("no submission created")
-        r = session.post(f"{API}/admin/submissions/{sid}/approve", headers=HDR)
-        assert r.status_code == 200
-        new_trainer = r.json()
-        assert new_trainer["published"] is True
-        # cleanup
-        session.delete(f"{API}/admin/trainers/{new_trainer['id']}", headers=HDR)
+# --- Removed legacy admin mutation endpoints ------------------------------
 
-    def test_submission_reject(self, session):
-        # create another submission
-        payload = {
-            "name": f"TEST_Reject {uuid.uuid4().hex[:6]}",
-            "suburb": "Carlton",
-            "categories": ["obedience"],
-            "bio": "TEST_ to be rejected",
-        }
-        sub = session.post(f"{API}/submissions", json=payload).json()
-        r = session.post(f"{API}/admin/submissions/{sub['id']}/reject", headers=HDR)
-        assert r.status_code == 200
-        assert r.json()["ok"] is True
-
-    def test_analytics(self, session):
-        r = session.get(f"{API}/admin/analytics", headers=HDR)
-        assert r.status_code == 200
-        d = r.json()
-        for key in ("total_trainers", "by_tier", "mrr", "arr",
-                    "lead_funnel", "verification_mix", "leads_timeseries"):
-            assert key in d
-        assert d["arr"] == d["mrr"] * 12
-
-    def test_health(self, session):
-        r = session.get(f"{API}/admin/health", headers=HDR)
-        assert r.status_code == 200
-        d = r.json()
-        assert "alerts" in d and isinstance(d["alerts"], list)
-        assert "audit_recent" in d
-
-    def test_audit_log(self, session):
-        r = session.get(f"{API}/admin/audit-log", headers=HDR)
-        assert r.status_code == 200
-        assert isinstance(r.json(), list)
-
-    def test_ab_test_create(self, session):
-        r = session.post(f"{API}/admin/ab-tests", headers=HDR, json={
-            "name": "TEST_AB experiment",
-            "metric": "lead_conversions",
-            "variants": ["control", "variant"],
-            "allocation": [0.5, 0.5],
-            "status": "running",
-        })
-        assert r.status_code == 200
-        assert r.json()["name"] == "TEST_AB experiment"
-
-    def test_seo_generate(self, session):
-        r = session.post(f"{API}/admin/seo/generate", headers=HDR,
-                         json={"suburb": "Carlton", "category": "obedience"}, timeout=90)
-        assert r.status_code == 200
-        d = r.json()
-        assert d["slug"] == "carlton/obedience"
-        assert "copy" in d
-
-    def test_seed_idempotent(self, session):
-        r = session.post(f"{API}/admin/seed", headers=HDR, timeout=120)
-        assert r.status_code == 200
-        d = r.json()
-        # should be 0 inserts after auto-seed at startup (idempotent by name)
-        assert d["inserted"] == 0
-        assert d["total"] >= 1
-
-    def test_delete_trainer(self, session):
-        # Use approved test submission flow - create then delete
-        payload = {
-            "name": f"TEST_Delete {uuid.uuid4().hex[:6]}",
-            "suburb": "Carlton",
-            "categories": ["obedience"],
-            "bio": "TEST_",
-        }
-        sub = session.post(f"{API}/submissions", json=payload).json()
-        approved = session.post(f"{API}/admin/submissions/{sub['id']}/approve", headers=HDR).json()
-        tid = approved["id"]
-        r = session.delete(f"{API}/admin/trainers/{tid}", headers=HDR)
-        assert r.status_code == 200
-        # verify gone
-        r2 = session.get(f"{API}/trainers/{tid}")
-        assert r2.status_code == 404
+class TestLegacyRemoved:
+    @pytest.mark.parametrize("path,method", [
+        ("/admin/login", "POST"),
+        ("/admin/trainers", "GET"),
+        ("/admin/leads", "GET"),
+        ("/admin/submissions", "GET"),
+        ("/admin/analytics", "GET"),
+        ("/admin/health", "GET"),
+        ("/admin/audit-log", "GET"),
+        ("/admin/seed", "POST"),
+        ("/admin/ab-tests", "GET"),
+        ("/admin/seo", "GET"),
+        ("/featured", "GET"),
+        ("/trainers", "GET"),  # list endpoint intentionally removed
+        ("/leads", "POST"),
+        ("/suburbs", "GET"),
+        ("/categories", "GET"),
+        ("/stats/public", "GET"),
+    ])
+    def test_endpoint_gone(self, session, path, method):
+        url = f"{API}{path}"
+        r = session.request(method, url, json={} if method == "POST" else None,
+                            headers=HDR if "/admin" in path else None)
+        # Acceptable: 404 (route absent) or 405 (path collision but no method)
+        assert r.status_code in (404, 405), f"{method} {path} → {r.status_code}: should be removed"

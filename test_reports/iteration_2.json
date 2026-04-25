@@ -1,0 +1,36 @@
+{
+  "summary": "Full backend + frontend regression of the Bark&Bond pay-on-outcome match engine (iter 2 redesign). 32/32 backend pytest cases pass and every UI flow listed in the request works end-to-end against the public REACT_APP_BACKEND_URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(none) — system behaves to spec. Optional: in /api/intros, billing_status is hard-coded 'billed' — when Stripe gets wired in, capture the real PaymentIntent id rather than the literal string."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~580 lines; still single-file but well-sectioned. Fine for now.",
+    "/api/conversions does not pass `request` so client IP is not captured for fraud scoring (intros do). Consider parity.",
+    "engine.recompute_pricing uses median over only suburbs that produced intros in the last 7d; an empty intro pool yields median=1 → all suburbs land on 0.6× (3.00 fee). That is the cold-start state observed in oversight (Eastern Suburbs and Ormond at 0.60× / A$3.00). Acceptable but worth documenting so it isn't read as a bug.",
+    "Submission auto-publish path inserts a trainer document with verification_status='hold' when 0.6 ≤ conf < 0.85 (status='auto_published_unverified'). The subsequent verification_loop will re-score it; that's the intended self-healing behaviour.",
+    "Ops UI surfaces an 'Invalid passcode' error toast on wrong pass — confirmed working. Good UX."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (rewritten for iter 2 — match engine + intros + conversions + submissions + oversight + legacy-removed assertions, 32 tests)"
+  ],
+  "success_rate": {"backend": "100% (32/32)", "frontend": "100% of tested flows"},
+  "test_credentials": "Oversight passcode: melbourne-bark-2026 (env ADMIN_PASS, /app/backend/.env)",
+  "seed_data_creation": "DB was already auto-seeded at startup with the 12 real Melbourne trainers from services/seed.py. Tests created realistic submissions (auto-published 'Positive K9 Training Melbourne', auto-held 'Weak Submission Test' from UI plus a few from API tests) and a handful of intros + conversions that show up in oversight (revenue A$276.00, 4 intros / 4 conversions / 24h). No test-only deletion endpoint exists by design (no admin mutations); leftover test rows are by design and harmless.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pytest suite at /app/backend/tests/backend_test.py is the iter-2 regression baseline. AI calls (match, score, SEO) take 5-30s — keep timeouts ≥60s. The TestSubmissions::test_strong_evidence_auto_publishes test is sensitive to AI judgement: it now uses the *real* Positive K9 Training business with consistent domain + bio so Claude scores ≥0.6. Do not introduce 'TEST_' prefixes or random suffixes into business names — Claude will (correctly) flag them as fabricated and the test will land in 'held'. The TestLegacyRemoved class enforces that none of the iter-1 endpoints (admin/*, /trainers list, /featured, /leads, /suburbs, /categories, /stats/public) come back; flip those if the design ever brings them back. data-testids confirmed: match-input/match-submit/match-results-list, result-<id>, result-connect-<id>, connect-{name,email,phone,desc,submit,success}, conversion-confirm, submit-{name,suburb,...,go,result}, ops-{pass-input,login-submit,refresh,signout,northstar}.",
+  "rca of the issue": "n/a — no defects found"
+}
