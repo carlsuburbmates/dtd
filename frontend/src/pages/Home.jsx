@@ -125,14 +125,13 @@ export default function Home() {
                                     </span>
                                 </div>
                                 <div className="mt-2 font-serif text-2xl text-[#F5F2EB] leading-tight">
-                                    {stats.verified} of {stats.trainers} listings carry a verified
-                                    confidence score.
+                                    Every listing scored on public evidence in real time.
                                 </div>
                             </div>
                         </div>
-                        <div className="absolute -bottom-6 -left-6 hidden md:block card-public p-4 max-w-[220px]">
+                        <div className="hidden md:block card-public p-4 mt-5 max-w-[280px] ml-auto md:mr-2 bg-[#FAFAF7]">
                             <div className="small-caps mb-1">Operating principle</div>
-                            <div className="font-serif text-[18px] leading-tight text-[#1A3A32]">
+                            <div className="font-serif text-[18px] leading-snug text-[#1A3A32]">
                                 observe → analyse → decide → adapt
                             </div>
                         </div>
@@ -141,7 +140,7 @@ export default function Home() {
             </section>
 
             {/* Stats strip */}
-            <section className="border-y border-[#E5DFD3] bg-[#FAFAF7]">
+            <section className="border-y border-[#E5DFD3] bg-[#FAFAF7] mt-12">
                 <div className="max-w-7xl mx-auto px-6 md:px-10 py-8 grid grid-cols-3 gap-6 md:gap-12">
                     <Stat label="Real businesses" value={stats.trainers} />
                     <Stat label="Verified by AI evidence" value={stats.verified} />

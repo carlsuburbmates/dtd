@@ -407,7 +407,7 @@ async def admin_login(payload: AdminLogin) -> Dict[str, Any]:
     expected = os.environ.get("ADMIN_PASS")
     if not expected or payload.passcode != expected:
         raise HTTPException(status_code=401, detail="Invalid passcode")
-    return {"ok": True, "passcode": expected}
+    return {"ok": True}
 
 
 @api.get("/admin/trainers")
