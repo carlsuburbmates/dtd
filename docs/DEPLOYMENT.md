@@ -1,6 +1,6 @@
 # Deployment & migration
 
-The system is intentionally portable. The current build runs on the Emergent platform but contains nothing that locks it there.
+The system is intentionally portable and vendor-neutral.
 
 ## 1. Run on the current preview environment
 
@@ -34,7 +34,7 @@ The included `docker-compose.yml` starts MongoDB, the FastAPI backend, and the R
 docker compose up --build
 ```
 
-Open `http://localhost:3000`. The compose file passes through `EMERGENT_LLM_KEY` and `ADMIN_PASS` from your shell environment.
+Open `http://localhost:3000`. The compose file passes through `ADMIN_PASS` from your shell environment.
 
 ## 4. Run locally — bare metal
 
@@ -44,7 +44,7 @@ docker run -d -p 27017:27017 --name barkbond-mongo mongo:6
 
 # Backend
 cd backend && cp .env.example .env
-# edit .env — set MONGO_URL=mongodb://localhost:27017, EMERGENT_LLM_KEY, ADMIN_PASS
+# edit .env — set MONGO_URL=mongodb://localhost:27017, ADMIN_PASS
 pip install -r requirements.txt
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
@@ -77,9 +77,9 @@ yarn start
 - **Atlas** (recommended for prod). Replace `MONGO_URL` with the Atlas SRV URI.
 - A standalone Mongo instance also works.
 
-### LLM
+### Matching and verification
 
-`EMERGENT_LLM_KEY` works with Claude Sonnet 4.5 via the bundled `emergentintegrations` package. To swap the provider, edit `services/ai.py` (`MODEL_PROVIDER`, `MODEL_NAME`, and the `LlmChat` import).
+Current matching and verification run through deterministic heuristics in `services/ai.py` with no external model key requirement.
 
 ## 6. Connecting required services in production
 

@@ -116,5 +116,5 @@ The system *reacts* to signals, it doesn't sit in static rules:
 
 - **Frontend → backend**: REST only, all under `/api`.
 - **Backend → MongoDB**: Motor (async).
-- **Backend → LLM**: `emergentintegrations.llm.chat.LlmChat` configured for Claude Sonnet 4.5; deterministic fallbacks if the LLM is unreachable.
+- **Backend → inference**: deterministic heuristics in `services/ai.py` (no external model dependency at runtime).
 - **Backend ↔ frontend**: cookies are not used. The oversight passcode travels as `X-Admin-Pass` only on `/api/oversight*` routes.

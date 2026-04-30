@@ -63,7 +63,7 @@ No action is required — these intros never billed and never affected ranking. 
 
 ### E. Discovery queue not draining
 
-Loop runs every 10 min. Check `system_state.discovery.last_run`. If stale, see (A). If fresh but pending count is high, the AI scoring is rate-limited or `EMERGENT_LLM_KEY` is missing — the heuristic fallback still fires, so items will resolve, just with conservative confidence (most go to `discarded`).
+Loop runs every 10 min. Check `system_state.discovery.last_run`. If stale, see (A). If fresh but pending count is high, the queue may be backlogged; heuristic verification still resolves items conservatively (many go to `discarded`).
 
 ### F. Pricing whiplash
 

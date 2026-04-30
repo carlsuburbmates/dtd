@@ -7,7 +7,7 @@
 
 Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
 - accepts a one-line problem from a dog owner (`/`),
-- returns 3 ranked trainer matches (Claude Sonnet 4.5 + outcome score),
+- returns 3 ranked trainer matches (deterministic relevance + outcome score),
 - charges a per-intro fee on **Connect** and a per-conversion fee on **hire**,
 - ingests new trainers, re-verifies them, prices them, and detects fraud — all without a human in the loop.
 
@@ -25,7 +25,7 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 ├── backend/            FastAPI app + autonomous engine
 │   ├── server.py       HTTP surface (/api/*)
 │   ├── services/
-│   │   ├── ai.py       Claude Sonnet 4.5 wrapper (verification, matching, SEO)
+│   │   ├── ai.py       Deterministic verifier/matcher/copy generator
 │   │   ├── engine.py   Six autonomous loops (ranking, pricing, …)
 │   │   ├── fraud.py    Anti-gaming / suppression rules
 │   │   └── seed.py     Real Melbourne seed listings
@@ -43,7 +43,7 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 ```bash
 # 1. Backend
 cd backend
-cp .env.example .env                # then edit MONGO_URL / EMERGENT_LLM_KEY / ADMIN_PASS
+cp .env.example .env                # then edit MONGO_URL / ADMIN_PASS
 pip install -r requirements.txt
 uvicorn server:app --host 0.0.0.0 --port 8001 --reload
 
@@ -69,7 +69,6 @@ docker compose up --build
 |---|---|---|
 | `MONGO_URL` | backend | MongoDB connection string |
 | `DB_NAME` | backend | Database name |
-| `EMERGENT_LLM_KEY` | backend | LLM key (Claude Sonnet 4.5 via emergentintegrations) |
 | `ADMIN_PASS` | backend | Passcode for `/api/oversight/login` |
 | `REACT_APP_BACKEND_URL` | frontend | Public URL of the backend (`/api` is appended client-side) |
 
