@@ -79,7 +79,7 @@ def _heuristic_score(payload: Dict[str, Any]) -> Dict[str, Any]:
     score = max(0.0, min(1.0, score))
     return {
         "confidence": round(score, 2),
-        "reasoning": "Heuristic score (no AI key available).",
+        "reasoning": "Deterministic heuristic score based on submitted business evidence.",
         "signals": signals,
         "model": "heuristic",
     }
@@ -128,7 +128,7 @@ def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[st
             {
                 "trainer_id": t.get("id"),
                 "score": min(1.0, 0.4 + 0.1 * hits),
-                "reasoning": "Keyword overlap heuristic (AI unavailable).",
+                "reasoning": "Deterministic keyword-overlap heuristic match for the user request.",
             }
         )
     scored.sort(key=lambda x: x["score"], reverse=True)

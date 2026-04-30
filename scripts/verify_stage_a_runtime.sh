@@ -9,16 +9,29 @@ if [ -f .env ]; then
     python3 - <<'PY'
 import shlex
 from pathlib import Path
-for line in Path('.env').read_text().splitlines():
-    if not line or line.lstrip().startswith('#') or '=' not in line:
+for raw_line in Path('.env').read_text().splitlines():
+    line = raw_line.strip()
+    if not line or line.startswith('#') or '=' not in line:
         continue
     k, v = line.split('=', 1)
+    k = k.strip()
+    v = v.strip()
+    if k.startswith('export '):
+        k = k[len('export '):].strip()
+    if not k:
+        continue
     print(f"export {k}={shlex.quote(v)}")
 PY
   )"
 fi
 
 fail=0
+
+if command -v rg >/dev/null 2>&1; then
+  LOG_GREP="rg -q"
+else
+  LOG_GREP="grep -Eq"
+fi
 
 echo "[stage-a] verify runtime baseline"
 stage_a_mode="${STAGE_A_MODE:-local}"
@@ -63,7 +76,11 @@ else
   python3 - <<'PY'
 import json
 from pathlib import Path
-data=json.loads(Path('/tmp/stagea_render_services.json').read_text() or "[]")
+try:
+    data=json.loads(Path('/tmp/stagea_render_services.json').read_text() or "[]")
+except Exception:
+    print("  render_parse_error=true")
+    raise
 rows=data if isinstance(data,list) else data.get("items",[])
 services=[]
 for row in rows:
@@ -79,7 +96,10 @@ PY
   if ! python3 - <<'PY'
 import json,sys
 from pathlib import Path
-data=json.loads(Path('/tmp/stagea_render_services.json').read_text() or "[]")
+try:
+    data=json.loads(Path('/tmp/stagea_render_services.json').read_text() or "[]")
+except Exception:
+    sys.exit(1)
 rows=data if isinstance(data,list) else data.get("items",[])
 services=[]
 for row in rows:
@@ -166,7 +186,7 @@ print(f"  atlas_has_0_0_0_0_0={ok}")
 sys.exit(0 if ok else 1)
 PY
   then
-    echo "  WARN: 0.0.0.0/0 Atlas access rule missing"
+    echo "  FAIL: 0.0.0.0/0 Atlas access rule missing"
     fail=1
   fi
 fi
@@ -188,7 +208,7 @@ if [ "$stage_a_mode" = "local" ]; then
   echo "  api_config_http=$config_http"
   if [ "$config_http" != "200" ]; then
     echo "  FAIL: /api/config unavailable"
-    if docker compose logs backend --tail=120 | rg -q "SSL handshake failed: .*UNEXPECTED_EOF_WHILE_READING"; then
+    if docker compose logs backend --tail=120 | sh -c "$LOG_GREP 'SSL handshake failed: .*UNEXPECTED_EOF_WHILE_READING'"; then
       echo "  HINT: Atlas TLS handshake is failing from runtime environment."
     fi
     fail=1
@@ -196,7 +216,7 @@ if [ "$stage_a_mode" = "local" ]; then
 
   worker_log_ok=0
   for _ in {1..20}; do
-    if docker compose logs worker --tail=400 | rg -q "scheduled [0-9]+ autonomous loops"; then
+    if docker compose logs worker --tail=400 | sh -c "$LOG_GREP 'scheduled [0-9]+ autonomous loops'"; then
       worker_log_ok=1
       break
     fi
@@ -229,10 +249,20 @@ else
     fi
   fi
 
-  if python3 - <<'PY'
+  if [ "${render_http:-000}" = "200" ] && python3 - <<'PY'
 import json,sys
 from pathlib import Path
-obj=json.loads(Path('/tmp/stagea_render_services.json').read_text() or "[]")
+try:
+    raw = Path('/tmp/stagea_render_services.json').read_text()
+except FileNotFoundError:
+    print("  render_runtime_health_error=missing Render services response file")
+    sys.exit(1)
+
+try:
+    obj=json.loads(raw) if raw.strip() else []
+except json.JSONDecodeError:
+    print("  render_runtime_health_error=Render services response was not valid JSON")
+    sys.exit(1)
 rows=obj if isinstance(obj,list) else obj.get("items",[])
 services=[]
 for row in rows:

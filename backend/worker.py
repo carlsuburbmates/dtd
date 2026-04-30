@@ -30,43 +30,21 @@ db = server.db
 mongo_client = server.mongo_client
 
 
-async def ensure_indexes() -> None:
-    await db.trainers.create_index("id", unique=True, sparse=True)
-    await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
-    await db.intros.create_index("ip")
-    await db.intros.create_index(
-        [("trainer_id", 1), ("idempotency_key", 1)],
-        unique=True,
-        partialFilterExpression={"idempotency_key": {"$exists": True, "$type": "string", "$gt": ""}},
-        name="uniq_intro_idempotency_per_trainer",
-    )
-    await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
-    await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
-    await db.credit_state.create_index("trainer_id", unique=True, name="uniq_credit_state_trainer")
-    await db.credit_ledger.create_index("id", unique=True, name="uniq_credit_ledger_id")
-    await db.credit_ledger.create_index("source_intro_id", unique=True, name="uniq_credit_ledger_source_intro")
-    await db.submissions.create_index("status")
-    await db.audit_log.create_index("ts")
-    await db.pricing_state.create_index("suburb", unique=True)
-    await db.system_state.create_index("key", unique=True)
-    await db.discovery_queue.create_index("status")
-    await db.config_snapshots.create_index("applied_at")
+async def ensure_runtime_baseline() -> None:
+    # Worker is the only process that should own autonomy loops in hosted mode.
+    run_loops_in_api = (os.environ.get("RUN_AUTONOMY_IN_API") or "0").strip() == "1"
+    if run_loops_in_api:
+        raise RuntimeError("RUN_AUTONOMY_IN_API must be 0 when running worker process.")
+    await server.on_startup()
 
 
 async def main() -> None:
-    await ensure_indexes()
-    await server._seed_if_empty()  # pylint: disable=protected-access
-    await server._seed_discovery_if_empty()  # pylint: disable=protected-access
-
-    try:
-        await autonomy.recompute_ranking(db)
-        await autonomy.recompute_pricing(db)
-        await autonomy.update_health(db)
-    except Exception:  # noqa: BLE001
-        logger.exception("initial loop pass failed in worker")
+    await ensure_runtime_baseline()
 
     tasks = autonomy.schedule_all(db, ai_service)
     logger.info("worker scheduled %s autonomous loops", len(tasks))
+    if not tasks:
+        raise RuntimeError("No autonomous loops scheduled; check worker configuration.")
     try:
         await asyncio.gather(*tasks)
     finally:
