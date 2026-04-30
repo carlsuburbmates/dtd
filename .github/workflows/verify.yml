@@ -1,0 +1,37 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+jobs:
+  verify:
+    name: Verify / verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Backend checks
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          python -m py_compile backend/server.py backend/worker.py backend/services/*.py
+
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          npm --version
+          node -e "const p=require('./package.json'); if(!p.name){process.exit(1)}; console.log('package', p.name, p.version || '0.0.0')"
