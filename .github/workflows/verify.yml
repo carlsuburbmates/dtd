@@ -32,5 +32,5 @@ jobs:
       - name: Frontend build
         working-directory: frontend
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
           npm run build
