@@ -608,6 +608,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     verification = await db.system_state.find_one({"key": "verification"}, {"_id": 0}) or {}
     discovery = await db.system_state.find_one({"key": "discovery"}, {"_id": 0}) or {}
     inference = await db.system_state.find_one({"key": "inference"}, {"_id": 0}) or {}
+    source_ingestion = await db.system_state.find_one({"key": "source_ingestion"}, {"_id": 0}) or {}
+    outreach = await db.system_state.find_one({"key": "outreach"}, {"_id": 0}) or {}
 
     pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("multiplier", -1).to_list(40)
 
@@ -670,6 +672,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "verification": verification,
             "discovery": discovery,
             "inference": inference,
+            "source_ingestion": source_ingestion,
+            "outreach": outreach,
             "health": health,
         },
         "alerts": health.get("alerts", []),
@@ -796,7 +800,9 @@ async def on_startup() -> None:
     await db.pricing_state.create_index("suburb", unique=True)
     await db.system_state.create_index("key", unique=True)
     await db.discovery_queue.create_index("status")
+    await db.discovery_queue.create_index("url")
     await db.config_snapshots.create_index("applied_at")
+    await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
 
     await _seed_if_empty()
     await _seed_discovery_if_empty()

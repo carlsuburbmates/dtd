@@ -59,6 +59,8 @@
 | `reverify_listings` | 6 h | AI re-score on staleness-prioritised batch + cross-source bonus | `trainers.confidence_score`, `published`, `verification_history[]` |
 | `process_discovery_queue` | 10 min | `discovery_queue` items | new trainer documents (auto-published / discarded / duplicates) |
 | `promote_inferred_conversions` | 15 min | `conversions` with `inferred=true, confidence ≥0.8`, age ≥48 h | flips to `billing_status="tracked"` (`"billed"` in bill-mode) |
+| `ingest_sources` | 6 h | `DISCOVERY_SOURCE_URLS` pages | queues new candidate URLs into `discovery_queue` |
+| `send_outreach` | 1 h | intros older than 7d with no conversion + Resend | sends T+7 conversion prompt and records `outreach_events` |
 | `update_health` | 45 s | rolling intro/conv counts + suppressed counts | `system_state.health` + alerts + auto-rollback of last config snapshot if conversion rate drops ≥50 % |
 
 Loop ownership is explicit via env:
@@ -77,6 +79,7 @@ Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 | `conversions` | manual ("I hired them") and inferred (multi-signal, T+48 h), primarily tracked for outcome quality at launch |
 | `match_events` | each `/api/match` invocation (description + result IDs) |
 | `discovery_queue` | candidate URLs awaiting autonomous processing |
+| `outreach_events` | T+7 email sends/failures for intro follow-up |
 | `pricing_state` | per-suburb dynamic intro fee + EWMA multiplier + `frozen` |
 | `system_state` | last-run summary per loop (`key` ∈ {ranking, pricing, …}) |
 | `audit_log` | every state-mutating action with before/after |

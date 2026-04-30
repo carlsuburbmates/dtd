@@ -82,6 +82,8 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 9. `MONGODB_ATLAS_PRIVATE_KEY`
 10. `MONGODB_ATLAS_PROJECT_ID`
 11. `REMOTE_BACKEND_URL`
+12. `DISCOVERY_SOURCE_URLS`
+13. `RESEND_FROM`
 
 ### Frontend
 1. `REACT_APP_BACKEND_URL`
@@ -97,6 +99,11 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 
 ### Stage C outbound communications baseline
 1. Resend controlled send and delivery-state check.
+2. Validate `system_state.outreach` updates after loop run.
+
+### Discovery source baseline
+1. Set `DISCOVERY_SOURCE_URLS` with at least one source page.
+2. Validate `system_state.source_ingestion.queued` increments and `discovery_queue` receives pending rows.
 
 ### Stage D/E (open)
 1. Record exact command outputs for Vercel edge/domain setup.

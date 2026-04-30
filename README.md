@@ -41,8 +41,9 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 │   ├── server.py       HTTP surface (/api/*)
 │   ├── services/
 │   │   ├── ai.py       Deterministic verifier/matcher/copy generator
-│   │   ├── engine.py   Six autonomous loops (ranking, pricing, …)
+│   │   ├── engine.py   Autonomous loops (ranking, pricing, discovery, outreach, …)
 │   │   ├── fraud.py    Anti-gaming / suppression rules
+│   │   ├── automation.py Discovery source ingestion + T+7 outreach mailer
 │   │   └── seed.py     Real Melbourne seed listings
 │   ├── .env.example    Required env keys
 │   └── requirements.txt
@@ -89,6 +90,9 @@ docker compose up --build
 | `ACTIVE_REGIONS` | backend | Comma-separated allowed regions |
 | `RUN_AUTONOMY_IN_API` | backend | `1` = API owns loops, `0` = worker owns loops |
 | `CONVERSION_BILLING_MODE` | backend | `track_only` (default) or `bill` |
+| `DISCOVERY_SOURCE_URLS` | backend | Comma-separated source pages scanned for candidate trainer links |
+| `RESEND_API_KEY` | backend | Required for T+7 outreach delivery |
+| `RESEND_FROM` | backend | From-address for outreach emails |
 | `REACT_APP_BACKEND_URL` | frontend | Public URL of the backend (`/api` is appended client-side) |
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for service-by-service setup.
@@ -108,8 +112,8 @@ The latest iteration's report lives at `/app/test_reports/iteration_<n>.json`.
 ## Production checklist
 
 1. Keep `CONVERSION_BILLING_MODE=track_only` during soft-live while validating intro quality and fraud suppression behavior.
-2. Connect an outbound email service (Resend / SendGrid) for the **T+7d hire-confirmation** email — this improves conversion signal capture.
-3. Replace the seeded `discovery_queue` entries with a real **autonomous scraper** (worker that walks public Melbourne sources and pushes to `POST /api/discovery`).
+2. Set `DISCOVERY_SOURCE_URLS` so the autonomous source-ingestion loop continuously feeds real candidates into `discovery_queue`.
+3. Configure `RESEND_API_KEY` + `RESEND_FROM` for automated **T+7d hire-confirmation** outreach.
 4. Configure `CORS_ORIGINS` to your real domain(s).
 5. Front the API with HTTPS at the platform layer.
 

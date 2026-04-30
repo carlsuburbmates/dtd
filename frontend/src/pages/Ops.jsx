@@ -156,6 +156,8 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                             <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" />
                             <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" />
                             <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" />
+                            <LoopCard name="SourceIngest" loop={loops.source_ingestion} unit="queued urls" countKey="queued" />
+                            <LoopCard name="Outreach" loop={loops.outreach} unit="emails sent" countKey="sent" />
                             <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" />
                         </div>
                     </Section>

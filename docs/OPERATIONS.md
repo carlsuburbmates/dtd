@@ -22,7 +22,7 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 
 ## 2. Healthy state checklist
 
-- All six loops show `last_run` ≤ 2 × their interval (e.g. ranking ≤ 120 s, health ≤ 90 s).
+- All active loops show `last_run` ≤ 2 × their interval (e.g. ranking ≤ 120 s, health ≤ 90 s).
 - `integrity_ratio` ≥ 0.5.
 - No `severity:high` alerts older than the last loop run.
 - `discovery.pending` trends down over time (queue is being processed).

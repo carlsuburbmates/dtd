@@ -5,7 +5,9 @@ Loops (asyncio background tasks scheduled by ``schedule_all``):
   - pricing_loop      (90 s)  EWMA-smoothed, threshold-gated dynamic intro fee.
   - verification_loop (6 h)   age-weighted re-score; cross-source bonus.
   - discovery_loop    (10 min) processes the discovery_queue (ingestion).
-  - inference_loop    (15 min) promotes inferred conversions to billable.
+  - inference_loop    (15 min) promotes inferred conversions to tracked/billed.
+  - source_ingestion  (6 h)   scans configured source pages and queues candidates.
+  - outreach_loop     (1 h)   sends T+7 follow-up emails via Resend.
   - health_loop       (45 s)  anomaly detection + auto-rollback last-good config.
 
 The functions in this module are unit-testable and idempotent.  Each writes
@@ -19,6 +21,8 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+from . import automation as automation_service
 
 logger = logging.getLogger("dtd.engine")
 
@@ -34,6 +38,8 @@ VERIFICATION_INTERVAL_S = 60 * 60 * 6
 DISCOVERY_INTERVAL_S = 60 * 10
 INFERENCE_INTERVAL_S = 60 * 15
 HEALTH_INTERVAL_S = 45
+SOURCE_INGEST_INTERVAL_S = 60 * 60 * 6
+OUTREACH_INTERVAL_S = 60 * 60
 
 # Pricing only goes dynamic after a suburb has enough demand data.  Below
 # this threshold, price is frozen at BASE_INTRO_FEE so we never sticker-shock
@@ -589,6 +595,31 @@ async def update_health(db) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Source ingestion + outreach loops
+# ---------------------------------------------------------------------------
+
+
+async def ingest_sources(db) -> Dict[str, Any]:
+    result = await automation_service.ingest_discovery_sources(db)
+    await db.system_state.update_one(
+        {"key": "source_ingestion"},
+        {"$set": {"key": "source_ingestion", "last_run": now_iso(), **result}},
+        upsert=True,
+    )
+    return result
+
+
+async def send_outreach(db) -> Dict[str, Any]:
+    result = await automation_service.send_t7_outreach(db)
+    await db.system_state.update_one(
+        {"key": "outreach"},
+        {"$set": {"key": "outreach", "last_run": now_iso(), **result}},
+        upsert=True,
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Loop runner
 # ---------------------------------------------------------------------------
 
@@ -613,5 +644,7 @@ def schedule_all(db, ai_service) -> List[asyncio.Task]:
         asyncio.create_task(_run_loop("discovery", lambda: process_discovery_queue(db, ai_service), DISCOVERY_INTERVAL_S)),
         asyncio.create_task(_run_loop("inference", lambda: promote_inferred_conversions(db), INFERENCE_INTERVAL_S)),
         asyncio.create_task(_run_loop("health", lambda: update_health(db), HEALTH_INTERVAL_S)),
+        asyncio.create_task(_run_loop("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S)),
+        asyncio.create_task(_run_loop("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S)),
     ]
     return tasks

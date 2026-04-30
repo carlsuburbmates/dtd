@@ -31,7 +31,8 @@ Launch Bark&Bond in Greater Melbourne with:
 5. Intro idempotency is enforced via `Idempotency-Key` / `client_token`.
 6. Conversion billing defaults to `CONVERSION_BILLING_MODE=track_only` (bill-mode is feature-flagged).
 7. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
-8. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
+8. Source-ingestion loop and T+7 outreach loop are implemented in `backend/services/automation.py` and scheduled by engine.
+9. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
 
 ### Infrastructure reality
 
@@ -71,6 +72,8 @@ Done when:
 
 ### P3 - Website completion (public + trainer UX)
 
+Status: completed (baseline IA + routes + build verification complete).
+
 1. Public information architecture must be complete and navigable:
 - `/` (match flow + product pillars)
 - `/how-it-works`
@@ -101,13 +104,14 @@ Done when:
 
 1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
 2. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-3. Add real discovery ingestion worker input source (currently seeded queue + public endpoint only).
-4. Add outbound T+7d conversion-prompt workflow (Resend pipeline).
+3. Configure and validate `DISCOVERY_SOURCE_URLS` against production sources (capture evidence in runbook).
+4. Configure and validate `RESEND_API_KEY`/`RESEND_FROM` for live T+7 outreach sends (capture evidence in runbook).
 5. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
 
 ## Gate Rule
 
 No launch gate advancement claims unless the required evidence for the current stage is documented in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+Current lock snapshot must also be reflected in `LOCK_STATE.md`.
 
 ## Verification Requirements
 

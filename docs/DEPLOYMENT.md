@@ -86,8 +86,8 @@ Current matching and verification run through deterministic heuristics in `servi
 | Service | What to wire | Where |
 |---|---|---|
 | **Stripe** | Optional for later conversion billing. Keep launch mode on `CONVERSION_BILLING_MODE=track_only` first, then enable `bill` mode when ready. | `backend/server.py` |
-| **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email`. Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | New worker (background task) |
-| **Real ingestion** | Replace the seeded `discovery_queue` rows with a scheduled crawler that calls `POST /api/discovery` for each candidate URL. | New worker; the engine will handle dedup, scoring, and publishing. |
+| **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email` is implemented via `send_outreach` loop. Provide `RESEND_API_KEY` and `RESEND_FROM`. Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | `backend/services/automation.py` |
+| **Real ingestion** | Source-page ingestion is implemented via `ingest_sources` loop. Provide `DISCOVERY_SOURCE_URLS` and monitor `system_state.source_ingestion`. | `backend/services/automation.py` + `engine.py` |
 
 ## 7. CORS / domains
 
@@ -100,7 +100,7 @@ Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-
 3. Keep conversion billing disabled during launch (`CONVERSION_BILLING_MODE=track_only`), and only enable bill-mode after intro quality metrics are stable.
 4. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
 5. Bump `ADMIN_PASS` to a strong secret; document it only in the password manager.
-6. Verify all six loops surface in `/ops` after deploy.
+6. Verify all configured loops surface in `/ops` after deploy.
 
 ## 9. Code ownership / portability
 
