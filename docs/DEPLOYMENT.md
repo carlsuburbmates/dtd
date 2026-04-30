@@ -85,7 +85,7 @@ Current matching and verification run through deterministic heuristics in `servi
 
 | Service | What to wire | Where |
 |---|---|---|
-| **Stripe** | Replace `billing_status="billed"` placeholder in `POST /api/intros` and `POST /api/conversions` with `PaymentIntent.create(...)` (idempotency key = intro_id). | `backend/server.py` |
+| **Stripe** | Optional for later conversion billing. Keep launch mode on `CONVERSION_BILLING_MODE=track_only` first, then enable `bill` mode when ready. | `backend/server.py` |
 | **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email`. Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | New worker (background task) |
 | **Real ingestion** | Replace the seeded `discovery_queue` rows with a scheduled crawler that calls `POST /api/discovery` for each candidate URL. | New worker; the engine will handle dedup, scoring, and publishing. |
 
@@ -97,7 +97,7 @@ Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-
 
 1. Provision Atlas; copy the SRV URI into `MONGO_URL`.
 2. Provision domain + HTTPS at the platform layer (Cloudflare, Vercel, etc.).
-3. Stripe: create products *Per-intro* and *Per-conversion*; wire webhooks for refunds → flip `billing_status` to `refunded`.
+3. Keep conversion billing disabled during launch (`CONVERSION_BILLING_MODE=track_only`), and only enable bill-mode after intro quality metrics are stable.
 4. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
 5. Bump `ADMIN_PASS` to a strong secret; document it only in the password manager.
 6. Verify all six loops surface in `/ops` after deploy.

@@ -6,7 +6,7 @@
 |---|---|---|
 | Product surface | One input → 3 ranked trainers → Connect → contact reveal → hire | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
 | Match decision | Claude Sonnet 4.5 relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
-| Monetisation | Per-intro fee (dynamic by suburb), per-conversion fee | `POST /api/intros`, `POST /api/conversions` |
+| Monetisation | Intro-first (dynamic per-intro fee), conversion tracking by default | `POST /api/intros`, `POST /api/conversions` |
 | Trust | Bayesian outcome score; multi-signal conversion inference | `engine.py` |
 | Anti-gaming | IP/email duplicate suppression, conversion velocity check | `services/fraud.py` |
 | Ingestion | Public `POST /api/discovery` → autonomous discovery loop | `engine.process_discovery_queue` |
@@ -43,7 +43,7 @@
                                            ▼                   │
                           ┌────────────────────────────────────┐
                           │  POST /api/conversions (manual)    │
-                          │  → bills A$65 unless suspicious    │
+                          │  → tracked by default (or billed in bill-mode) │
                           └────────────────┬───────────────────┘
                                            ▼
                                  ranking_loop incorporates
@@ -58,10 +58,13 @@
 | `recompute_pricing` | 90 s | billed intros over 7 d per suburb | `pricing_state.intro_fee_cents`, `frozen` flag if below min-data threshold |
 | `reverify_listings` | 6 h | AI re-score on staleness-prioritised batch + cross-source bonus | `trainers.confidence_score`, `published`, `verification_history[]` |
 | `process_discovery_queue` | 10 min | `discovery_queue` items | new trainer documents (auto-published / discarded / duplicates) |
-| `promote_inferred_conversions` | 15 min | `conversions` with `inferred=true, confidence ≥0.8`, age ≥48 h | flips to `billing_status="billed"` |
+| `promote_inferred_conversions` | 15 min | `conversions` with `inferred=true, confidence ≥0.8`, age ≥48 h | flips to `billing_status="tracked"` (`"billed"` in bill-mode) |
 | `update_health` | 45 s | rolling intro/conv counts + suppressed counts | `system_state.health` + alerts + auto-rollback of last config snapshot if conversion rate drops ≥50 % |
 
-All loops are scheduled by `engine.schedule_all` from FastAPI startup. Set `DISABLE_AUTONOMY=1` to suppress them (useful in tests).
+Loop ownership is explicit via env:
+- `RUN_AUTONOMY_IN_API=1` → API process schedules loops.
+- `RUN_AUTONOMY_IN_API=0` → worker process owns loops.
+Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 
 ## 4. Data model (collections)
 
@@ -71,7 +74,7 @@ All loops are scheduled by `engine.schedule_all` from FastAPI startup. Set `DISA
 | `submissions` | public submissions (auto-published / auto-held by score) |
 | `intros` | every Connect click; `billing_status ∈ {billed, suppressed}` |
 | `engagements` | website / phone / email / return-visit signals on an intro |
-| `conversions` | both manual ("I hired them") and inferred (multi-signal, T+48 h) |
+| `conversions` | manual ("I hired them") and inferred (multi-signal, T+48 h), primarily tracked for outcome quality at launch |
 | `match_events` | each `/api/match` invocation (description + result IDs) |
 | `discovery_queue` | candidate URLs awaiting autonomous processing |
 | `pricing_state` | per-suburb dynamic intro fee + EWMA multiplier + `frozen` |

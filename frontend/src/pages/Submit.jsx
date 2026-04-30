@@ -8,6 +8,7 @@ export default function Submit() {
     const [form, setForm] = useState({
         name: "",
         suburb: "",
+        region: "",
         website: "",
         phone: "",
         email: "",
@@ -15,6 +16,8 @@ export default function Submit() {
         services: "",
         categories: "",
         source_evidence_url: "",
+        consent_public_listing: false,
+        consent_information_accuracy: false,
     });
     const [result, setResult] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -25,6 +28,10 @@ export default function Submit() {
         e.preventDefault();
         if (!form.name || !form.suburb) {
             toast.error("Name and suburb are required.");
+            return;
+        }
+        if (!form.consent_public_listing || !form.consent_information_accuracy) {
+            toast.error("Consent is required before submitting.");
             return;
         }
         setBusy(true);
@@ -59,6 +66,7 @@ export default function Submit() {
                 <form onSubmit={submit} className="card-public p-7 mt-10 grid sm:grid-cols-2 gap-3" data-testid="submit-form">
                     <Field label="Business name *"><input data-testid="submit-name" className="input-public" value={form.name} onChange={change("name")} /></Field>
                     <Field label="Suburb *"><input data-testid="submit-suburb" className="input-public" value={form.suburb} onChange={change("suburb")} /></Field>
+                    <Field label="Region (optional override)"><input data-testid="submit-region" className="input-public" value={form.region} onChange={change("region")} placeholder="Greater Melbourne" /></Field>
                     <Field label="Website" full><input data-testid="submit-website" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
                     <Field label="Phone"><input data-testid="submit-phone" className="input-public" value={form.phone} onChange={change("phone")} /></Field>
                     <Field label="Email"><input data-testid="submit-email" className="input-public" value={form.email} onChange={change("email")} /></Field>
@@ -66,6 +74,26 @@ export default function Submit() {
                     <Field label="Categories (comma)" full><input data-testid="submit-categories" className="input-public" value={form.categories} onChange={change("categories")} placeholder="puppy, behaviour" /></Field>
                     <Field label="Short description" full><textarea data-testid="submit-bio" rows={3} className="input-public" value={form.bio} onChange={change("bio")} /></Field>
                     <Field label="Source URL (proves the business is real)" full><input data-testid="submit-evidence" className="input-public" value={form.source_evidence_url} onChange={change("source_evidence_url")} /></Field>
+                    <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A] mt-1">
+                        <input
+                            type="checkbox"
+                            checked={form.consent_public_listing}
+                            onChange={(e) => setForm({ ...form, consent_public_listing: e.target.checked })}
+                            className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                            data-testid="submit-consent-public"
+                        />
+                        <span>I consent to publishing this listing if quality checks pass.</span>
+                    </label>
+                    <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A]">
+                        <input
+                            type="checkbox"
+                            checked={form.consent_information_accuracy}
+                            onChange={(e) => setForm({ ...form, consent_information_accuracy: e.target.checked })}
+                            className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                            data-testid="submit-consent-accuracy"
+                        />
+                        <span>I confirm the submitted business information is accurate and lawful to publish.</span>
+                    </label>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
                         <span className="text-xs font-mono text-[#708265]">Auto-published if confidence is high enough. No human review.</span>

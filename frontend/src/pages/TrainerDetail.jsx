@@ -21,6 +21,8 @@ export default function TrainerDetail() {
         user_email: "",
         user_phone: "",
         description: initialDesc,
+        consent_contact_release: false,
+        consent_outcome_tracking: false,
     });
 
     useEffect(() => {
@@ -37,6 +39,10 @@ export default function TrainerDetail() {
             toast.error("Add your name and email so the trainer can reach you.");
             return;
         }
+        if (!form.consent_contact_release || !form.consent_outcome_tracking) {
+            toast.error("Consent is required before contact is revealed.");
+            return;
+        }
         setBusy(true);
         try {
             const r = await api.post("/intros", {
@@ -47,6 +53,8 @@ export default function TrainerDetail() {
                 user_phone: form.user_phone,
                 suburb: trainer?.suburb,
                 match_id: matchId,
+                consent_contact_release: form.consent_contact_release,
+                consent_outcome_tracking: form.consent_outcome_tracking,
             });
             setContact(r.data.contact);
             setIntroId(r.data.id);
@@ -138,6 +146,28 @@ export default function TrainerDetail() {
                             <input data-testid="connect-email" type="email" className="input-public" placeholder="Email" value={form.user_email} onChange={(e) => setForm({ ...form, user_email: e.target.value })} />
                             <input data-testid="connect-phone" className="input-public" placeholder="Phone (optional)" value={form.user_phone} onChange={(e) => setForm({ ...form, user_phone: e.target.value })} />
                             <input data-testid="connect-desc" className="input-public" placeholder="One-line context" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                        </div>
+                        <div className="mt-4 space-y-2">
+                            <label className="flex items-start gap-2 text-xs text-[#4A615A]">
+                                <input
+                                    type="checkbox"
+                                    checked={form.consent_contact_release}
+                                    onChange={(e) => setForm({ ...form, consent_contact_release: e.target.checked })}
+                                    className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                                    data-testid="connect-consent-contact"
+                                />
+                                <span>I consent to sharing my contact request with this trainer.</span>
+                            </label>
+                            <label className="flex items-start gap-2 text-xs text-[#4A615A]">
+                                <input
+                                    type="checkbox"
+                                    checked={form.consent_outcome_tracking}
+                                    onChange={(e) => setForm({ ...form, consent_outcome_tracking: e.target.checked })}
+                                    className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                                    data-testid="connect-consent-outcome"
+                                />
+                                <span>I consent to anonymous outcome tracking for product quality and fraud prevention.</span>
+                            </label>
                         </div>
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <span className="text-xs font-mono text-[#708265]">

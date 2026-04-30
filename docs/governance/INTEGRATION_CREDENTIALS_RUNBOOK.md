@@ -65,7 +65,10 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 1. `MONGO_URL`
 2. `DB_NAME`
 3. `ADMIN_PASS`
-4. `RUN_AUTONOMY_IN_API` (important when running worker)
+4. `ACTIVE_REGION`
+5. `ACTIVE_REGIONS`
+6. `RUN_AUTONOMY_IN_API` (important when running worker)
+7. `CONVERSION_BILLING_MODE` (`track_only` for launch)
 
 ### Optional monitoring/email vars currently used by supporting workflows
 1. `SENTRY_DSN`

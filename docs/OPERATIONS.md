@@ -8,13 +8,13 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 
 | Tile | Means |
 |---|---|
-| **Revenue · billed** | All-time billed intro + conversion cents. Suspicious / suppressed rows do **not** count. |
+| **Revenue · billed** | All-time billed intro + conversion cents. In launch `track_only` mode, conversion revenue is expected to stay at 0. |
 | **Intros 24 h / 7 d** | Billed intros only. |
-| **Conversions 24 h** | Billed only (manual confirmed + inferred-and-promoted). |
+| **Conversions 24 h** | Confirmed outcomes (`tracked` + `billed`). |
 | **Engagement events** | website/phone/email/return-visit clicks since launch. |
 | **Suppressed intros** | Anti-gaming filter rejected billing for these. Ranking unaffected by them. |
 | **Suspicious conversions** | Manual confirms inside 5 min of intro. Stored, not billed. |
-| **Inferred pending** | Multi-signal conversions awaiting the 48 h + ≥0.8 confidence promotion. |
+| **Inferred pending** | Multi-signal conversions awaiting the 48 h + ≥0.8 confidence promotion to `tracked` (or `billed` in bill-mode). |
 | **Loop cards** | Last-run timestamp + key counter per loop. |
 | **Pricing state** | Per suburb. `frozen=true` means below the 10 intros / 7 d threshold; price is locked at A$5. |
 | **Top trainers** | Sorted by `outcome_score`. Breakdown is on the trainer doc. |

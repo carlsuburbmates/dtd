@@ -33,7 +33,7 @@ def trainer_id(session):
     """Pick a published trainer id via match (preferred) or oversight."""
     r = session.post(
         f"{API}/match",
-        json={"description": "Reactive collie pup pulling on lead in Fitzroy."},
+        json={"description": "Reactive collie pup pulling on lead in Fitzroy.", "consent_match_processing": True},
         timeout=120,
     )
     if r.status_code == 200 and r.json().get("matches"):
@@ -59,6 +59,8 @@ class TestAntiGamingIntros:
             "description": "TEST_ first intro",
             "user_email": unique_email,
             "user_name": "TEST_DupCheck",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
         })
         assert a.status_code == 200, a.text
         first = a.json()
@@ -78,6 +80,8 @@ class TestAntiGamingIntros:
             "description": "TEST_ same email same trainer",
             "user_email": unique_email,
             "user_name": "TEST_DupCheck",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
         })
         assert b.status_code == 200, b.text
         second = b.json()
@@ -107,6 +111,8 @@ class TestEngagementsInferredConversion:
             "trainer_id": trainer_id,
             "description": "TEST_ for engagement",
             "user_email": f"TEST_eng_{uuid.uuid4().hex[:8]}@example.com",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
         })
         assert intro_resp.status_code == 200
         intro_id = intro_resp.json()["id"]
@@ -158,6 +164,8 @@ class TestConversionFraud:
             "trainer_id": trainer_id,
             "description": "TEST_ too-fast conversion",
             "user_email": f"TEST_fast_{uuid.uuid4().hex[:8]}@example.com",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
         }).json()
         intro_id = intro["id"]
 

@@ -8,7 +8,8 @@
 Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
 - accepts a one-line problem from a dog owner (`/`),
 - returns 3 ranked trainer matches (deterministic relevance + outcome score),
-- charges a per-intro fee on **Connect** and a per-conversion fee on **hire**,
+- charges a per-intro fee on **Connect**,
+- tracks conversions as quality signals by default (billing mode can be enabled later),
 - ingests new trainers, re-verifies them, prices them, and detects fraud — all without a human in the loop.
 
 There is **no admin panel** to operate the business. There is `/ops`, a read-only oversight surface.
@@ -70,6 +71,10 @@ docker compose up --build
 | `MONGO_URL` | backend | MongoDB connection string |
 | `DB_NAME` | backend | Database name |
 | `ADMIN_PASS` | backend | Passcode for `/api/oversight/login` |
+| `ACTIVE_REGION` | backend | Launch scope region (default `Greater Melbourne`) |
+| `ACTIVE_REGIONS` | backend | Comma-separated allowed regions |
+| `RUN_AUTONOMY_IN_API` | backend | `1` = API owns loops, `0` = worker owns loops |
+| `CONVERSION_BILLING_MODE` | backend | `track_only` (default) or `bill` |
 | `REACT_APP_BACKEND_URL` | frontend | Public URL of the backend (`/api` is appended client-side) |
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for service-by-service setup.
@@ -88,8 +93,8 @@ The latest iteration's report lives at `/app/test_reports/iteration_<n>.json`.
 
 ## Production checklist
 
-1. Replace `billing_status="billed"` placeholder by wiring **Stripe** PaymentIntents (per intro + per conversion). Idempotency key = intro_id.
-2. Connect an outbound email service (Resend / SendGrid) for the **T+7d hire-confirmation** email — without it, the per-conversion stream depends only on engagement-inference.
+1. Keep `CONVERSION_BILLING_MODE=track_only` during soft-live while validating intro quality and fraud suppression behavior.
+2. Connect an outbound email service (Resend / SendGrid) for the **T+7d hire-confirmation** email — this improves conversion signal capture.
 3. Replace the seeded `discovery_queue` entries with a real **autonomous scraper** (worker that walks public Melbourne sources and pushes to `POST /api/discovery`).
 4. Configure `CORS_ORIGINS` to your real domain(s).
 5. Front the API with HTTPS at the platform layer.

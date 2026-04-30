@@ -12,13 +12,21 @@ export default function Home() {
     const [desc, setDesc] = useState("");
     const [suburb, setSuburb] = useState("");
     const [suburbs, setSuburbs] = useState([]);
+    const [activeRegion, setActiveRegion] = useState("Greater Melbourne");
+    const [consent, setConsent] = useState(false);
     const [results, setResults] = useState(null);
     const [matchId, setMatchId] = useState(null);
     const [loading, setLoading] = useState(false);
     const inputRef = useRef(null);
 
     useEffect(() => {
-        api.get("/config").then((r) => setSuburbs(r.data.suburbs || [])).catch(() => {});
+        api
+            .get("/config")
+            .then((r) => {
+                setSuburbs(r.data.suburbs || []);
+                setActiveRegion(r.data.active_region_default || "Greater Melbourne");
+            })
+            .catch(() => {});
     }, []);
 
     const submit = async (e) => {
@@ -28,9 +36,17 @@ export default function Home() {
             inputRef.current?.focus();
             return;
         }
+        if (!consent) {
+            toast.error("Please accept consent so we can process your request.");
+            return;
+        }
         setLoading(true);
         try {
-            const r = await api.post("/match", { description: desc, suburb: suburb || undefined });
+            const r = await api.post("/match", {
+                description: desc,
+                suburb: suburb || undefined,
+                consent_match_processing: consent,
+            });
             setResults(r.data.matches || []);
             setMatchId(r.data.match_id);
         } catch (err) {
@@ -75,7 +91,7 @@ export default function Home() {
                                     with your dog?
                                 </h1>
                                 <p className="text-[#4A615A] mt-5 text-lg max-w-lg">
-                                    One sentence is enough.
+                                    One sentence is enough. Active region: {activeRegion}.
                                 </p>
 
                                 <form onSubmit={submit} className="mt-10" data-testid="match-form">
@@ -126,6 +142,16 @@ export default function Home() {
                                             ))}
                                         </select>
                                     </div>
+                                    <label className="mt-4 flex items-start gap-2 text-xs text-[#4A615A]">
+                                        <input
+                                            type="checkbox"
+                                            checked={consent}
+                                            onChange={(e) => setConsent(e.target.checked)}
+                                            className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                                            data-testid="match-consent"
+                                        />
+                                        <span>I consent to processing this request to generate trainer matches and outcome analytics.</span>
+                                    </label>
                                 </form>
 
                                 <div className="mt-10 flex flex-wrap gap-2" data-testid="match-presets">

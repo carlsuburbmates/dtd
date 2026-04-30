@@ -26,6 +26,7 @@ logger = logging.getLogger("dtd.engine")
 
 BASE_INTRO_FEE = 500            # cents AUD (A$5)
 BASE_CONVERSION_FEE = 6500      # cents AUD (A$65)
+CONVERSION_BILLING_MODE = (os.environ.get("CONVERSION_BILLING_MODE") or "track_only").strip().lower()
 
 RANKING_INTERVAL_S = 60
 PRICING_INTERVAL_S = 90
@@ -49,6 +50,15 @@ W_RECENCY = 0.10
 # Anti-gaming.
 INTRO_RATE_LIMIT_PER_IP_HOUR = 6
 CONVERSION_MIN_AGE_MINUTES = 5      # below this we treat as suspicious / not billed
+ACTIVE_REGION = (os.environ.get("ACTIVE_REGION") or "Greater Melbourne").strip()
+
+
+def confirmed_conversion_statuses() -> List[str]:
+    # Intro-first launch default: conversions are tracked for quality, not billed.
+    # Keep `billed` included so legacy rows still participate in scoring/health.
+    if CONVERSION_BILLING_MODE == "bill":
+        return ["billed"]
+    return ["tracked", "billed"]
 
 
 # ---- Time helpers ---------------------------------------------------------
@@ -126,12 +136,13 @@ async def recompute_ranking(db) -> Dict[str, Any]:
     cutoff = _iso_ago(days=30)
     trainers = await db.trainers.find({}, {"_id": 0, "id": 1, "created_at": 1}).to_list(2000)
     scored = 0
+    conv_statuses = confirmed_conversion_statuses()
     for t in trainers:
         intros = await db.intros.count_documents(
             {"trainer_id": t["id"], "created_at": {"$gte": cutoff}, "billing_status": "billed"}
         )
         conversions = await db.conversions.count_documents(
-            {"trainer_id": t["id"], "created_at": {"$gte": cutoff}, "billing_status": "billed"}
+            {"trainer_id": t["id"], "created_at": {"$gte": cutoff}, "billing_status": {"$in": conv_statuses}}
         )
         engagements = await _engagement_count(db, t["id"], cutoff)
 
@@ -417,7 +428,7 @@ async def process_discovery_queue(db, ai_service, batch: int = 3) -> Dict[str, A
                 "id": trainer_id,
                 "name": name or "Unknown",
                 "suburb": entry.get("hint_suburb", ""),
-                "region": "",
+                "region": ACTIVE_REGION,
                 "website": entry.get("url", ""),
                 "phone": "",
                 "email": "",
@@ -471,7 +482,7 @@ async def process_discovery_queue(db, ai_service, batch: int = 3) -> Dict[str, A
 async def promote_inferred_conversions(db) -> Dict[str, Any]:
     """Inferred conversions live as `conversions` rows with `inferred=True` and
     a confidence in (0,1).  Once they age past 48h and confidence is ≥0.8, we
-    flip ``billing_status`` to ``billed``.  This is the multi-signal path.
+    flip ``billing_status`` to ``tracked`` in launch mode or ``billed`` in bill mode.
     """
     cutoff = _iso_ago(hours=48)
     cursor = db.conversions.find(
@@ -479,10 +490,11 @@ async def promote_inferred_conversions(db) -> Dict[str, Any]:
         {"_id": 0},
     )
     promoted = 0
+    target_status = "billed" if CONVERSION_BILLING_MODE == "bill" else "tracked"
     async for conv in cursor:
         await db.conversions.update_one(
             {"id": conv["id"]},
-            {"$set": {"billing_status": "billed", "billed_at": now_iso()}},
+            {"$set": {"billing_status": target_status, "billed_at": now_iso(), "fee_cents": BASE_CONVERSION_FEE if target_status == "billed" else 0}},
         )
         promoted += 1
     await db.system_state.update_one(
@@ -499,6 +511,7 @@ async def promote_inferred_conversions(db) -> Dict[str, Any]:
 
 
 async def update_health(db) -> Dict[str, Any]:
+    conv_statuses = confirmed_conversion_statuses()
     intros_24 = await db.intros.count_documents(
         {"created_at": {"$gte": _iso_ago(hours=24)}, "billing_status": "billed"}
     )
@@ -507,11 +520,11 @@ async def update_health(db) -> Dict[str, Any]:
          "billing_status": "billed"}
     )
     conv_24 = await db.conversions.count_documents(
-        {"created_at": {"$gte": _iso_ago(hours=24)}, "billing_status": "billed"}
+        {"created_at": {"$gte": _iso_ago(hours=24)}, "billing_status": {"$in": conv_statuses}}
     )
     conv_prev = await db.conversions.count_documents(
         {"created_at": {"$gte": _iso_ago(hours=48), "$lt": _iso_ago(hours=24)},
-         "billing_status": "billed"}
+         "billing_status": {"$in": conv_statuses}}
     )
 
     intro_drop = (intros_prev - intros_24) / intros_prev if intros_prev > 4 else 0.0

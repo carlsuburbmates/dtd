@@ -2,12 +2,12 @@
 
 Design intent:
   - The product is the match, not the directory. There is no browse view.
-  - Visibility is earned only through outcome signals (intros + conversions)
+  - Visibility is earned only through outcome signals (billed intros + tracked outcomes)
     via a Bayesian outcome score recomputed every minute by services.engine.
   - There are no manual approvals. Submissions auto-publish when score ≥ 0.85
     and auto-hold when < 0.6.
-  - Monetisation is purely performance-based: per-intro fee (dynamically
-    priced by suburb demand) + per-conversion fee.
+  - Launch monetisation is intro-first: per-intro fee only.
+    Conversions are tracked signals by default (bill mode is feature-flagged).
   - The "admin panel" is a single read-only oversight surface; no endpoint in
     here mutates data on a human's behalf.
 
@@ -54,6 +54,9 @@ logger = logging.getLogger("dtd")
 
 PUBLISH_THRESHOLD = 0.85
 HOLD_THRESHOLD = 0.60
+ACTIVE_REGION = (os.environ.get("ACTIVE_REGION") or "Greater Melbourne").strip()
+ACTIVE_REGIONS = [r.strip() for r in os.environ.get("ACTIVE_REGIONS", ACTIVE_REGION).split(",") if r.strip()]
+ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
 
 
 def now_iso() -> str:
@@ -103,6 +106,7 @@ class InstantMatchIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     description: str = Field(min_length=3)
     suburb: Optional[str] = None
+    consent_match_processing: bool = False
 
 
 class IntroIn(BaseModel):
@@ -114,6 +118,9 @@ class IntroIn(BaseModel):
     user_phone: Optional[str] = None
     suburb: Optional[str] = None
     match_id: Optional[str] = None
+    client_token: Optional[str] = None
+    consent_contact_release: bool = False
+    consent_outcome_tracking: bool = False
 
 
 class ConversionIn(BaseModel):
@@ -152,6 +159,8 @@ class SubmissionIn(BaseModel):
     image_url: Optional[str] = ""
     source_evidence_url: Optional[str] = ""
     submitter_email: Optional[EmailStr] = None
+    consent_public_listing: bool = False
+    consent_information_accuracy: bool = False
 
 
 class OversightLogin(BaseModel):
@@ -181,6 +190,18 @@ def _verification_payload(t: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _region_allowed(region: Optional[str]) -> bool:
+    if not region:
+        return False
+    return region.strip().lower() in ACTIVE_REGION_SET
+
+
+def _require_region(region: Optional[str]) -> None:
+    if not _region_allowed(region):
+        allowed = ", ".join(ACTIVE_REGIONS)
+        raise HTTPException(status_code=403, detail=f"Region not in active scope. Active region(s): {allowed}.")
+
+
 async def _decorate_with_pricing(trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Attach the dynamic intro fee for each trainer's suburb."""
     suburbs = list({t.get("suburb") for t in trainers if t.get("suburb")})
@@ -206,10 +227,13 @@ async def root() -> Dict[str, Any]:
 @api.get("/config")
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
-    suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True}) if s])
+    suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
     return {
         "base_intro_fee_cents": autonomy.BASE_INTRO_FEE,
         "base_conversion_fee_cents": autonomy.BASE_CONVERSION_FEE,
+        "active_regions": ACTIVE_REGIONS,
+        "active_region_default": ACTIVE_REGION,
+        "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
         "suburbs": suburbs,
     }
 
@@ -217,12 +241,15 @@ async def config() -> Dict[str, Any]:
 @api.post("/match")
 async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
     """Single input → 3 trainers. The only product surface for end users."""
-    pool_query: Dict[str, Any] = {"published": True}
+    if not payload.consent_match_processing:
+        raise HTTPException(status_code=400, detail="Consent required to process match request.")
+
+    pool_query: Dict[str, Any] = {"published": True, "region": {"$in": ACTIVE_REGIONS}}
     if payload.suburb:
         pool_query["suburb"] = {"$regex": f"^{payload.suburb}$", "$options": "i"}
     pool = await db.trainers.find(pool_query, {"_id": 0}).to_list(60)
     if not pool:
-        pool = await db.trainers.find({"published": True}, {"_id": 0}).to_list(60)
+        pool = await db.trainers.find({"published": True, "region": {"$in": ACTIVE_REGIONS}}, {"_id": 0}).to_list(60)
 
     matches = await ai_service.match_trainers(payload.description, pool)
     by_id = {t["id"]: t for t in pool}
@@ -258,7 +285,7 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
 
 @api.get("/trainers/{trainer_id}")
 async def get_trainer(trainer_id: str) -> Dict[str, Any]:
-    doc = await db.trainers.find_one({"id": trainer_id, "published": True}, {"_id": 0})
+    doc = await db.trainers.find_one({"id": trainer_id, "published": True, "region": {"$in": ACTIVE_REGIONS}}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     decorated = await _decorate_with_pricing([doc])
@@ -266,10 +293,31 @@ async def get_trainer(trainer_id: str) -> Dict[str, Any]:
 
 
 @api.post("/intros")
-async def create_intro(payload: IntroIn, request: Request) -> Dict[str, Any]:
+async def create_intro(
+    payload: IntroIn,
+    request: Request,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+) -> Dict[str, Any]:
+    if not payload.consent_contact_release or not payload.consent_outcome_tracking:
+        raise HTTPException(status_code=400, detail="Consent required before contact release.")
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer not found")
+    _require_region(trainer.get("region"))
+
+    idem = (idempotency_key or payload.client_token or "").strip()
+    if idem:
+        existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
+        if existing:
+            existing_trainer = await db.trainers.find_one({"id": existing["trainer_id"]}, {"_id": 0})
+            contact_existing = {
+                "name": existing_trainer.get("name") if existing_trainer else existing.get("trainer_name"),
+                "website": existing_trainer.get("website") if existing_trainer else None,
+                "phone": existing_trainer.get("phone") if existing_trainer else None,
+                "email": existing_trainer.get("email") if existing_trainer else None,
+                "suburb": existing_trainer.get("suburb") if existing_trainer else existing.get("suburb"),
+            }
+            return _scrub({**existing, "contact": contact_existing})
 
     fee = await autonomy.get_intro_fee(db, trainer.get("suburb"))
     ip = (request.client.host if request.client else "") or ""
@@ -292,6 +340,7 @@ async def create_intro(payload: IntroIn, request: Request) -> Dict[str, Any]:
         "fraud_reasons": fraud["reasons"],
         "ip": ip,
         "user_agent": request.headers.get("user-agent", "")[:200],
+        "idempotency_key": idem or None,
         "created_at": now_iso(),
     }
     await db.intros.insert_one(intro.copy())
@@ -329,13 +378,14 @@ async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
     distinct_kinds = await db.engagements.distinct("kind", {"intro_id": payload.intro_id})
     if len(distinct_kinds) >= 2 and not await db.conversions.find_one({"intro_id": payload.intro_id}):
         confidence = min(0.85, 0.55 + 0.10 * len(distinct_kinds))
+        target_status = "billed" if autonomy.CONVERSION_BILLING_MODE == "bill" else "pending"
         await db.conversions.insert_one(
             {
                 "id": new_id(),
                 "intro_id": payload.intro_id,
                 "trainer_id": intro["trainer_id"],
-                "fee_cents": autonomy.BASE_CONVERSION_FEE,
-                "billing_status": "pending",
+                "fee_cents": autonomy.BASE_CONVERSION_FEE if target_status == "billed" else 0,
+                "billing_status": target_status,
                 "inferred": True,
                 "confidence": round(confidence, 2),
                 "source": "engagement_inference",
@@ -354,25 +404,32 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
     if not payload.confirmed:
         return {"ok": True, "billed": False}
     existing = await db.conversions.find_one(
-        {"intro_id": payload.intro_id, "billing_status": {"$in": ["billed", "suspicious"]}},
+        {"intro_id": payload.intro_id, "billing_status": {"$in": ["tracked", "billed", "suspicious"]}},
         {"_id": 0},
     )
     if existing:
         return {"ok": True, "billed": False, "existing": True, "billing_status": existing.get("billing_status")}
 
     decision = await fraud_service.evaluate_conversion(db, intro)
+    if decision["billing_status"] == "suspicious":
+        status = "suspicious"
+    elif autonomy.CONVERSION_BILLING_MODE == "bill":
+        status = "billed"
+    else:
+        status = "tracked"
+
     conv = {
         "id": new_id(),
         "intro_id": payload.intro_id,
         "trainer_id": intro["trainer_id"],
-        "fee_cents": autonomy.BASE_CONVERSION_FEE if decision["billing_status"] == "billed" else 0,
-        "billing_status": decision["billing_status"],
+        "fee_cents": autonomy.BASE_CONVERSION_FEE if status == "billed" else 0,
+        "billing_status": status,
         "fraud_reason": decision["reason"],
         "inferred": False,
         "confidence": 1.0,
         "source": "manual_confirm",
         "created_at": now_iso(),
-        "billed_at": now_iso() if decision["billing_status"] == "billed" else None,
+        "billed_at": now_iso() if status == "billed" else None,
     }
     # If a prior pending inferred conversion exists, supersede it.
     await db.conversions.update_many(
@@ -381,7 +438,7 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
     )
     await db.conversions.insert_one(conv.copy())
     await _audit("conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "billing_status": conv["billing_status"]}, actor="user")
-    return _scrub({**conv, "billed": decision["billing_status"] == "billed"})
+    return _scrub({**conv, "billed": status == "billed"})
 
 
 @api.post("/discovery")
@@ -408,7 +465,12 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     """Submit a real Melbourne trainer. Auto-publishes if AI score ≥ 0.85."""
+    if not payload.consent_public_listing or not payload.consent_information_accuracy:
+        raise HTTPException(status_code=400, detail="Consent required for public listing.")
+
     sub = payload.model_dump()
+    sub["region"] = (sub.get("region") or ACTIVE_REGION).strip() or ACTIVE_REGION
+    _require_region(sub["region"])
     score = await ai_service.score_trainer(_verification_payload(sub))
     conf = float(score["confidence"])
     status = ai_service.status_for_score(conf)
@@ -520,13 +582,14 @@ async def oversight_login(payload: OversightLogin) -> Dict[str, Any]:
 @api.get("/oversight")
 async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     """Single read-only snapshot. No buttons. No actions. Just the truth."""
+    conversion_statuses = autonomy.confirmed_conversion_statuses()
     intros_24 = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
     intros_7d = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
-    conv_24 = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
-    conv_7d = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
+    conv_24 = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": {"$in": conversion_statuses}})
+    conv_7d = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": {"$in": conversion_statuses}})
 
     intros = await db.intros.find({"billing_status": "billed"}, {"_id": 0}).to_list(2000)
-    conversions = await db.conversions.find({"billing_status": "billed"}, {"_id": 0}).to_list(2000)
+    conversions = await db.conversions.find({"billing_status": {"$in": conversion_statuses}}, {"_id": 0}).to_list(2000)
     suppressed = await db.intros.count_documents({"billing_status": "suppressed"})
     suspicious_conv = await db.conversions.count_documents({"billing_status": "suspicious"})
     inferred_pending = await db.conversions.count_documents({"inferred": True, "billing_status": "pending"})
@@ -586,6 +649,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "intro_cents": revenue_intro_cents,
             "conversion_cents": revenue_conv_cents,
             "total_cents": revenue_total_cents,
+            "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
         },
         "throughput": {
             "intros_24h": intros_24,
@@ -724,6 +788,7 @@ async def on_startup() -> None:
     await db.trainers.create_index("id", unique=True, sparse=True)
     await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
     await db.intros.create_index("ip")
+    await db.intros.create_index("idempotency_key", unique=True, sparse=True)
     await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
     await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
     await db.submissions.create_index("status")
@@ -744,9 +809,13 @@ async def on_startup() -> None:
     except Exception:  # noqa: BLE001
         logger.exception("initial loop pass failed")
 
-    # Schedule continuous loops.
-    _BG_TASKS.extend(autonomy.schedule_all(db, ai_service))
-    logger.info("scheduled %s autonomous loops", len(_BG_TASKS))
+    # Schedule continuous loops when API owns loop execution.
+    run_loops_in_api = (os.environ.get("RUN_AUTONOMY_IN_API") or "1").strip() == "1"
+    if run_loops_in_api:
+        _BG_TASKS.extend(autonomy.schedule_all(db, ai_service))
+        logger.info("scheduled %s autonomous loops in API process", len(_BG_TASKS))
+    else:
+        logger.info("API loop scheduling disabled (RUN_AUTONOMY_IN_API=0); worker process should own loops")
 
 
 @app.on_event("shutdown")

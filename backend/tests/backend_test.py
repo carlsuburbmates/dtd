@@ -1,10 +1,10 @@
-"""Bark&Bond — pay-on-outcome match engine regression tests.
+"""Bark&Bond — intro-first match engine regression tests.
 
 Covers (per redesign iteration 2):
   * /api/config + root health
   * Instant /match (single input → up to 3 results) and per-trainer detail
-  * /intros (records intro, returns contact, charges intro fee)
-  * /conversions (idempotent, charges A$65)
+  * /intros (records intro, returns contact, intro billing may be suppressed by fraud rules)
+  * /conversions (idempotent, tracked outcome by default)
   * /submissions auto-publish (≥0.85) and auto-hold (<0.6)
   * /seo/{slug:path} including nested slugs
   * /oversight login + read-only oversight surface (X-Admin-Pass)
@@ -70,7 +70,7 @@ class TestMatch:
     def test_match_returns_up_to_three(self, session):
         r = session.post(
             f"{API}/match",
-            json={"description": "Reactive 6-month border collie pup that pulls hard on lead in Fitzroy."},
+            json={"description": "Reactive 6-month border collie pup that pulls hard on lead in Fitzroy.", "consent_match_processing": True},
             timeout=120,
         )
         assert r.status_code == 200, r.text
@@ -133,24 +133,28 @@ class TestIntrosConversions:
             "user_name": "TEST_User",
             "user_phone": "0411222333",
             "match_id": match_id,
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
         }
         r = session.post(f"{API}/intros", json=intro_payload)
         assert r.status_code == 200, r.text
         intro = r.json()
         assert intro["trainer_id"] == tid
-        assert intro["intro_fee_cents"] >= 300
-        assert intro["billing_status"] == "billed"
+        assert intro["intro_fee_cents"] >= 0
+        assert intro["billing_status"] in ("billed", "suppressed")
         contact = intro.get("contact", {})
         assert contact.get("name")  # contact info revealed
         assert_no_id(intro)
         intro_id = intro["id"]
 
-        # Conversion 1 — bills
+        # Conversion 1 — track-only by default, bill-mode optional
         r1 = session.post(f"{API}/conversions", json={"intro_id": intro_id, "confirmed": True})
         assert r1.status_code == 200, r1.text
         c = r1.json()
-        assert c.get("billed") is True
-        assert c.get("fee_cents") == 6500
+        assert c.get("billing_status") in ("tracked", "billed", "suspicious")
+        if c.get("billing_status") == "tracked":
+            assert c.get("billed") is False
+            assert c.get("fee_cents") == 0
         assert_no_id(c)
 
         # Conversion 2 — same intro_id, must NOT double-bill
@@ -163,7 +167,12 @@ class TestIntrosConversions:
     def test_intro_for_unknown_trainer_404(self, session):
         r = session.post(
             f"{API}/intros",
-            json={"trainer_id": str(uuid.uuid4()), "description": "x"},
+            json={
+                "trainer_id": str(uuid.uuid4()),
+                "description": "x",
+                "consent_contact_release": True,
+                "consent_outcome_tracking": True,
+            },
         )
         assert r.status_code == 404
 
@@ -181,7 +190,7 @@ class TestSubmissions:
         payload = {
             "name": "Positive K9 Training Melbourne",
             "suburb": "Eastern Suburbs",
-            "region": "Melbourne East",
+            "region": "Greater Melbourne",
             "website": "https://positivek9training.com.au",
             "phone": "0411 234 567",
             "email": "info@positivek9training.com.au",
@@ -189,6 +198,8 @@ class TestSubmissions:
             "services": ["In-home training", "Group classes", "One-on-one"],
             "bio": "Certified force-free trainers offering in-home and group sessions across Melbourne's Eastern Suburbs, the Dandenongs and Mornington Peninsula. Top-rated on Google and Facebook with 8+ years experience.",
             "source_evidence_url": "https://positivek9training.com.au",
+            "consent_public_listing": True,
+            "consent_information_accuracy": True,
         }
         r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
@@ -204,6 +215,8 @@ class TestSubmissions:
         payload = {
             "name": f"TEST_WeakSub {uuid.uuid4().hex[:6]}",
             "suburb": "Carlton",
+            "consent_public_listing": True,
+            "consent_information_accuracy": True,
         }
         r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text

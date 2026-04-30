@@ -21,7 +21,7 @@ The product is now a **match engine**, not a directory. Visibility is bought onl
 
 ## Monetisation (iter 2)
 - **Per-intro fee** ~A$3–A$8, dynamically priced per suburb by demand multiplier.
-- **Per-conversion fee** A$65, charged when the user confirms they hired.
+- **Conversion tracking** at launch (confirmations are tracked outcomes, not billed by default).
 - **No subscriptions, no tiers, no featured upsells.**
 
 ## Autonomous loops
@@ -54,6 +54,6 @@ The product is now a **match engine**, not a directory. Visibility is bought onl
 - P3: Conversation IP fraud-scoring on `/api/conversions` for parity with `/api/intros`.
 
 ## Next tasks (suggested)
-1. Wire Stripe (per-intro + per-conversion charges, idempotency keys).
+1. Keep launch in intro-first mode (`track_only` conversions), then enable conversion bill mode when fraud and signal quality are stable.
 2. Outbound email for hire-confirmation (Resend).
 3. Spin up the autonomous ingestion worker.

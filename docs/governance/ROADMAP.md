@@ -23,10 +23,15 @@ Launch Bark&Bond in Greater Melbourne with:
 ### Code reality
 
 1. Backend oversight auth currently uses `ADMIN_PASS` (`X-Admin-Pass`) in `backend/server.py`.
-2. API process currently schedules autonomy loops at startup in `backend/server.py`.
-3. Dedicated worker exists in `backend/worker.py`.
-4. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
-5. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
+2. Loop ownership is explicit:
+- `RUN_AUTONOMY_IN_API=1` = API owns loops.
+- `RUN_AUTONOMY_IN_API=0` = worker owns loops.
+3. Active scope is region-gated via `ACTIVE_REGION` / `ACTIVE_REGIONS`.
+4. Consent checkpoints are enforced on `/match`, `/intros`, and `/submissions`.
+5. Intro idempotency is enforced via `Idempotency-Key` / `client_token`.
+6. Conversion billing defaults to `CONVERSION_BILLING_MODE=track_only` (bill-mode is feature-flagged).
+7. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
+8. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
 
 ### Infrastructure reality
 
@@ -38,23 +43,14 @@ Launch Bark&Bond in Greater Melbourne with:
 
 ### P0 - Governance and architecture alignment
 
-1. Confirm auth target for launch:
-- Option A: keep passcode-only oversight for launch.
-- Option B: migrate to Clerk-backed oversight before launch.
+Status: completed.
 
-2. Confirm loop ownership model:
-- Option A: API-only loop ownership.
-- Option B: worker-only loop ownership.
-- Option C: dual process with explicit partitioning.
-
-3. Lock launch billing behavior in code:
-- Intro-first billing behavior only.
-- Conversion billing remains disabled or track-only unless explicitly enabled.
-
-Done when:
-1. Docs and code describe the same auth model.
-2. Docs and code describe the same loop ownership model.
-3. Billing behavior is explicit and test-verified.
+Locked decisions now implemented:
+1. Launch auth: passcode-only oversight (`ADMIN_PASS`), no Clerk enforcement on backend.
+2. Loop ownership: explicit env-controlled ownership to prevent duplicate loop scheduling.
+3. Launch billing: intro-first; conversions tracked by default.
+4. Scope: region-based enforcement with one active region set.
+5. Consent: required before matching, contact reveal, and submission publish path.
 
 ### P1 - Launch-readiness evidence completion
 
@@ -72,6 +68,13 @@ Done when:
 1. Run production in intro-first mode with conservative safeguards.
 2. Observe intro event quality, suppression patterns, and incident trends.
 3. Tune thresholds/policies only with explicit evidence updates in docs.
+
+## Repo Task Backlog (codebase-derived)
+
+1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+2. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+3. Add real discovery ingestion worker input source (currently seeded queue + public endpoint only).
+4. Add outbound T+7d conversion-prompt workflow (Resend pipeline).
 
 ## Gate Rule
 
