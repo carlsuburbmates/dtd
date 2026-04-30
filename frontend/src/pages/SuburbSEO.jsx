@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, MapPin, ArrowRight } from "lucide-react";
-import { api, audCents } from "@/lib/api";
+import { MapPin, ArrowRight } from "lucide-react";
+import { api } from "@/lib/api";
+import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 export default function SuburbSEO() {
     const { suburb } = useParams();
@@ -19,12 +20,7 @@ export default function SuburbSEO() {
 
     return (
         <div className="App min-h-screen">
-            <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#F5F2EB]/85 border-b border-[#E5DFD3]/60">
-                <div className="max-w-4xl mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
-                    <Link to="/" className="font-serif text-xl text-[#1A3A32]">Bark&amp;Bond</Link>
-                    <Link to="/" data-testid="seo-back" className="btn-ghost text-sm"><ArrowLeft className="h-4 w-4" /> Match my dog</Link>
-                </div>
-            </header>
+            <PublicHeader />
 
             <div className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
                 <div className="small-caps flex items-center gap-2"><MapPin className="h-3 w-3" /> {page.suburb} · {page.category}</div>
@@ -61,6 +57,7 @@ export default function SuburbSEO() {
                     </section>
                 )}
             </div>
+            <PublicFooter />
         </div>
     );
 }

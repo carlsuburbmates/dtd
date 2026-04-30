@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Mail, Phone, Globe, MapPin, Sparkles, ShieldCheck, ArrowRight } from "lucide-react";
 import { api, audCents } from "@/lib/api";
 import { toast } from "sonner";
+import { PublicFooter } from "@/components/PublicChrome";
 
 export default function TrainerDetail() {
     const { id } = useParams();
@@ -231,6 +232,7 @@ export default function TrainerDetail() {
                     </details>
                 )}
             </div>
+            <PublicFooter />
         </div>
     );
 }

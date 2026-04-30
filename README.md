@@ -19,6 +19,20 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 - **Operations / troubleshooting** → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - **Deployment + portability** → [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 
+## Public website routes
+
+- `/` match flow
+- `/how-it-works`
+- `/about`
+- `/pricing`
+- `/trust`
+- `/faq`
+- `/contact`
+- `/privacy`
+- `/terms`
+- `/trainers` trainer model page
+- `/submit` trainer submission
+
 ## Repo layout
 
 ```

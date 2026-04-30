@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Send, MapPin, Sparkles, Loader2 } from "lucide-react";
 import { api, audCents } from "@/lib/api";
 import { toast } from "sonner";
+import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 const HERO_IMG =
     "https://images.unsplash.com/photo-1762077815792-ab25f29834c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwxfHxkb2clMjB0cmFpbmluZyUyMG91dGRvb3JzfGVufDB8fHx8MTc3NzExNTUzOHww&ixlib=rb-4.1.0&q=85";
@@ -65,19 +66,7 @@ export default function Home() {
 
     return (
         <div className="App min-h-screen flex flex-col">
-            {/* Minimal header */}
-            <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#F5F2EB]/85 border-b border-[#E5DFD3]/60">
-                <div className="max-w-6xl mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
-                    <Link to="/" data-testid="brand-link" className="flex items-center gap-2 text-[#1A3A32]">
-                        <span className="font-serif text-xl tracking-tight">Bark&amp;Bond</span>
-                        <span className="hidden sm:inline-block text-[10px] font-mono uppercase tracking-[0.25em] text-[#708265] mt-0.5">Melbourne</span>
-                    </Link>
-                    <nav className="flex items-center gap-4 text-sm text-[#4A615A]">
-                        <Link to="/trainers" data-testid="nav-trainers-info" className="hover:text-[#1A3A32]">Trainers</Link>
-                        <Link to="/submit" data-testid="nav-submit" className="hover:text-[#1A3A32]">Submit</Link>
-                    </nav>
-                </div>
-            </header>
+            <PublicHeader />
 
             {/* The product surface — one screen */}
             <main className="flex-1 grid lg:grid-cols-12 gap-0">
@@ -203,14 +192,36 @@ export default function Home() {
                     </div>
                 </aside>
             </main>
-
-            <footer className="border-t border-[#E5DFD3] bg-[#FAFAF7]">
-                <div className="max-w-6xl mx-auto px-6 md:px-10 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-[#708265] font-mono">
-                    <span>© {new Date().getFullYear()} Bark&amp;Bond. Real Melbourne trainers, scored on outcomes.</span>
-                    <Link to="/ops" data-testid="footer-ops" className="hover:text-[#1A3A32]">ops</Link>
-                </div>
-            </footer>
+            {!results && <HomepageSections />}
+            <PublicFooter />
         </div>
+    );
+}
+
+function HomepageSections() {
+    return (
+        <section className="max-w-6xl mx-auto px-6 md:px-10 pb-10">
+            <div className="grid md:grid-cols-3 gap-4" data-testid="home-pillars">
+                <article className="card-public p-6">
+                    <div className="small-caps">Owner journey</div>
+                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Fast matching</h2>
+                    <p className="text-[#4A615A] mt-2">Describe one issue and get 3 ranked trainers instantly.</p>
+                    <Link to="/how-it-works" data-testid="home-how-link" className="btn-ghost mt-4 inline-flex">How it works</Link>
+                </article>
+                <article className="card-public p-6">
+                    <div className="small-caps">Trainer journey</div>
+                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Outcome-based</h2>
+                    <p className="text-[#4A615A] mt-2">No monthly listing rent. Ranking is earned with outcomes.</p>
+                    <Link to="/trainers" data-testid="home-trainers-link" className="btn-ghost mt-4 inline-flex">For trainers</Link>
+                </article>
+                <article className="card-public p-6">
+                    <div className="small-caps">Launch policy</div>
+                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Consent first</h2>
+                    <p className="text-[#4A615A] mt-2">Matching, contact release, and submissions require explicit consent.</p>
+                    <Link to="/trust" data-testid="home-trust-link" className="btn-ghost mt-4 inline-flex">Trust &amp; safety</Link>
+                </article>
+            </div>
+        </section>
     );
 }
 

@@ -69,12 +69,41 @@ Done when:
 2. Observe intro event quality, suppression patterns, and incident trends.
 3. Tune thresholds/policies only with explicit evidence updates in docs.
 
+### P3 - Website completion (public + trainer UX)
+
+1. Public information architecture must be complete and navigable:
+- `/` (match flow + product pillars)
+- `/how-it-works`
+- `/about`
+- `/pricing`
+- `/trust`
+- `/faq`
+- `/contact`
+- `/privacy`
+- `/terms`
+
+2. Trainer-facing architecture must be complete:
+- `/trainers` (model, economics, process)
+- `/submit` (consented submission flow)
+- `/t/:id` (consented contact-release flow)
+
+3. Cross-surface UX consistency:
+- Shared public header/footer/nav and legal links.
+- Readable mobile + desktop layout.
+- Data-testids present for key interactive controls.
+
+Done when:
+1. All listed routes exist and render.
+2. Primary CTAs are wired and non-dead.
+3. Frontend build passes in CI/local.
+
 ## Repo Task Backlog (codebase-derived)
 
 1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
 2. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
 3. Add real discovery ingestion worker input source (currently seeded queue + public endpoint only).
 4. Add outbound T+7d conversion-prompt workflow (Resend pipeline).
+5. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
 
 ## Gate Rule
 

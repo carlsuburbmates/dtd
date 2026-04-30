@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, ShieldCheck, AlertCircle } from "lucide-react";
+import { ShieldCheck, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 export default function Submit() {
     const [form, setForm] = useState({
@@ -52,12 +52,7 @@ export default function Submit() {
 
     return (
         <div className="App min-h-screen">
-            <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#F5F2EB]/85 border-b border-[#E5DFD3]/60">
-                <div className="max-w-4xl mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
-                    <Link to="/" data-testid="brand-link" className="font-serif text-xl text-[#1A3A32]">Bark&amp;Bond</Link>
-                    <Link to="/" className="btn-ghost text-sm" data-testid="submit-back"><ArrowLeft className="h-4 w-4" /> Back</Link>
-                </div>
-            </header>
+            <PublicHeader />
 
             <div className="max-w-3xl mx-auto px-6 md:px-10 pt-12 pb-20">
                 <div className="small-caps">Submit a real trainer</div>
@@ -119,6 +114,7 @@ export default function Submit() {
                     </div>
                 )}
             </div>
+            <PublicFooter />
         </div>
     );
 }
