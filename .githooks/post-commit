@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+branch="$(git branch --show-current)"
+if [[ "$branch" != "main" ]]; then
+  exit 0
+fi
+
+# Skip auto-push for explicit opt-out.
+if [[ "${SKIP_AUTO_PUSH:-0}" == "1" ]]; then
+  exit 0
+fi
+
+# Prevent recursive runs in unusual environments.
+if [[ "${AUTO_PUSH_RUNNING:-0}" == "1" ]]; then
+  exit 0
+fi
+
+AUTO_PUSH_RUNNING=1 git push origin main >/dev/null 2>&1 || true
