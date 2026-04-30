@@ -1,42 +1,19 @@
-"""AI services using Claude Sonnet 4.5 via emergentintegrations.
+"""Deterministic matching/scoring/copy services with no vendor lock-in.
 
 Three capabilities:
   - score_trainer: produce a confidence score (0-1) + reasoning from supplied evidence.
   - match_trainers: pick the best trainers from a candidate list given a free-text query.
   - generate_seo_copy: generate suburb/category landing-page copy.
 
-All AI calls are isolated so a failure never breaks the request lifecycle —
-the caller receives a deterministic fallback so the rest of the system keeps running.
+This module is intentionally self-contained and vendor-neutral so the system can
+run without any third-party model SDK dependency.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
-import uuid
 from typing import Any, Dict, List, Optional
-
-from emergentintegrations.llm.chat import LlmChat, UserMessage
-
-MODEL_PROVIDER = "anthropic"
-MODEL_NAME = "claude-sonnet-4-5-20250929"
-
-
-def _api_key() -> Optional[str]:
-    return os.environ.get("EMERGENT_LLM_KEY")
-
-
-def _new_chat(system_message: str) -> Optional[LlmChat]:
-    key = _api_key()
-    if not key:
-        return None
-    chat = LlmChat(
-        api_key=key,
-        session_id=f"dtd-{uuid.uuid4()}",
-        system_message=system_message,
-    ).with_model(MODEL_PROVIDER, MODEL_NAME)
-    return chat
 
 
 def _extract_json(text: str) -> Optional[Any]:
@@ -78,38 +55,7 @@ VERIFY_SYSTEM = (
 
 async def score_trainer(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Return {confidence, reasoning, signals}."""
-    chat = _new_chat(VERIFY_SYSTEM)
-    if chat is None:
-        return _heuristic_score(payload)
-
-    prompt = (
-        "Listing data (JSON):\n"
-        f"{json.dumps(payload, ensure_ascii=False)}\n\n"
-        "Evaluate using these rules:\n"
-        "- A working website on a plausible domain is strong (+0.3)\n"
-        "- Concrete suburb in Greater Melbourne adds credibility (+0.15)\n"
-        "- Specific services / pricing / hours add credibility (+0.15)\n"
-        "- Phone, email, ABN-style detail add credibility (+0.10)\n"
-        "- Vague or generic copy reduces score\n"
-        "- Lack of any evidence (no website AND no contact) caps confidence at 0.5\n"
-        "Return JSON only."
-    )
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp) or {}
-        conf = float(data.get("confidence", 0))
-        conf = max(0.0, min(1.0, conf))
-        return {
-            "confidence": conf,
-            "reasoning": str(data.get("reasoning", "")).strip()
-            or "Scored from supplied evidence.",
-            "signals": data.get("signals", []) or [],
-            "model": MODEL_NAME,
-        }
-    except Exception as exc:  # noqa: BLE001
-        out = _heuristic_score(payload)
-        out["reasoning"] = f"AI unavailable, used heuristic ({type(exc).__name__})."
-        return out
+    return _heuristic_score(payload)
 
 
 def _heuristic_score(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -159,48 +105,7 @@ MATCH_SYSTEM = (
 
 
 async def match_trainers(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    chat = _new_chat(MATCH_SYSTEM)
-    if chat is None or not trainers:
-        return _heuristic_match(query, trainers)
-
-    candidates = [
-        {
-            "id": t.get("id"),
-            "name": t.get("name"),
-            "suburb": t.get("suburb"),
-            "services": t.get("services") or [],
-            "categories": t.get("categories") or [],
-            "bio": (t.get("bio") or "")[:400],
-            "tier": t.get("tier"),
-        }
-        for t in trainers
-    ]
-    prompt = (
-        f"User query:\n{query}\n\nCandidate trainers (JSON):\n"
-        f"{json.dumps(candidates, ensure_ascii=False)}\n\n"
-        "Return the 3 best matches as a JSON array."
-    )
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp) or []
-        if not isinstance(data, list):
-            return _heuristic_match(query, trainers)
-        # validate
-        cleaned = []
-        for item in data[:3]:
-            tid = item.get("trainer_id") or item.get("id")
-            if not tid:
-                continue
-            cleaned.append(
-                {
-                    "trainer_id": tid,
-                    "score": max(0.0, min(1.0, float(item.get("score", 0.7)))),
-                    "reasoning": str(item.get("reasoning", "")).strip(),
-                }
-            )
-        return cleaned or _heuristic_match(query, trainers)
-    except Exception:
-        return _heuristic_match(query, trainers)
+    return _heuristic_match(query, trainers)
 
 
 def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -241,7 +146,6 @@ SEO_SYSTEM = (
 
 
 async def generate_seo_copy(suburb: str, category: str) -> Dict[str, Any]:
-    chat = _new_chat(SEO_SYSTEM)
     fallback = {
         "title": f"Dog Trainers in {suburb} — {category.title()}",
         "meta_description": f"Find verified {category} dog trainers in {suburb}, Melbourne.",
@@ -262,18 +166,4 @@ async def generate_seo_copy(suburb: str, category: str) -> Dict[str, Any]:
             }
         ],
     }
-    if chat is None:
-        return fallback
-    prompt = (
-        f"Suburb: {suburb}\nCategory: {category}\n\n"
-        "Write the landing page copy as JSON. Mention typical Melbourne context where relevant. "
-        "Avoid invented business names or claims."
-    )
-    try:
-        resp = await chat.send_message(UserMessage(text=prompt))
-        data = _extract_json(resp) or {}
-        if not isinstance(data, dict) or "title" not in data:
-            return fallback
-        return data
-    except Exception:
-        return fallback
+    return fallback
