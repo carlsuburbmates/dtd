@@ -1,6 +1,6 @@
 # Lock State Snapshot
 
-Date: 2026-05-01  
+Date: 2026-05-02  
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Locked decisions (active)
@@ -30,9 +30,10 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Open completion gates (non-code configuration/evidence)
 
-1. Stage D evidence pack (domain/TLS/edge) in runbook.
-2. Stage E evidence pack (repeatable deploy/redeploy) in runbook.
-3. Configure and verify:
+1. Public custom domains are intentionally detached and currently return `404 DEPLOYMENT_NOT_FOUND`; reattach decision + evidence is required before launch.
+2. Stage D evidence pack completion (post-reattach domain/TLS/edge) in runbook.
+3. Stage E evidence pack (repeatable deploy/redeploy) in runbook.
+4. Configure and verify:
 - `DISCOVERY_SOURCE_URLS`
 - `RESEND_API_KEY`
 - `RESEND_FROM`
@@ -40,4 +41,3 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 ## Update rule
 
 If any governance, runtime, or route truth changes, update this file and `ROADMAP.md` in the same commit.
-

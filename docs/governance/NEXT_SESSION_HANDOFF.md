@@ -30,10 +30,19 @@ AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked comple
 
 ## Execution log (fill in during next session)
 
-1. Session start HEAD:
-2. Human blockers completed:
-3. AI tasks completed:
-4. Final Go/No-Go:
+1. Session start HEAD: `88e53c9` (`git rev-parse --short HEAD`)
+2. Human blockers completed: pending; Vercel migration work is verified, but `H-01` remains intentionally locked because `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` currently return `404 DEPLOYMENT_NOT_FOUND` by rollout design, `H-02` is only partially verified (`REACT_APP_BACKEND_URL` present in Vercel prod/preview), and `H-03`/`H-04` remain open.
+3. AI tasks completed: verified Vercel project/deployment state, DNS/TLS resolution, backend config endpoint, and frontend env wiring
+4. Final Go/No-Go: pending
+
+## Current verified state (2026-05-02)
+
+1. Vercel project `dtd` is live and the latest production deployment is ready.
+2. `https://dtd-api.onrender.com/api/config` returns `200` JSON with active-region and billing-mode config.
+3. Vercel prod and preview envs both contain `REACT_APP_BACKEND_URL=https://dtd-api.onrender.com`.
+4. `frontend/src/lib/api.js` builds the API base URL from `REACT_APP_BACKEND_URL`.
+5. Vercel env inventory for `dtd` currently shows only the frontend URL variable; the broader launch-secret set still needs external runtime confirmation.
+6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` still resolve to Vercel but return `404 DEPLOYMENT_NOT_FOUND` because the custom-domain aliases were intentionally removed/locked.
 
 ---
 
@@ -266,4 +275,3 @@ Use only `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/ROADMAP.md`
 Primary goal: complete launch-readiness gates for a ready-to-launch website with zero scope drift.  
 Do not execute A-02..A-06 until H-01..H-04 are explicitly marked complete with evidence in-file.  
 Record command-level evidence for every gate outcome.
-

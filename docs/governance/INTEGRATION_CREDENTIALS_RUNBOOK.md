@@ -2,15 +2,20 @@
 
 Purpose: keep credentials and infra verification simple for a one-man workflow.
 
-## Current lock (2026-05-01)
+## Current lock (2026-05-02)
 
 1. Accounts/keys created: Clerk, Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
 2. Evidence captured previously:
 - Stage A runtime baseline: remote verifier pass recorded.
 - Stage B observability baseline: Sentry/PostHog capture checks recorded.
 - Stage C outbound baseline: Resend controlled send recorded.
-3. Open evidence stages:
-- Stage D: edge/domain evidence pack.
+3. Stage D partial evidence captured:
+- New Vercel project `dtd` created and deployed from `frontend` root.
+- `REACT_APP_BACKEND_URL` configured to `https://dtd-api.onrender.com` in prod/preview.
+- Core route and backend-config validations recorded during migration.
+- Custom domains intentionally detached/locked after validation; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`.
+4. Open evidence stages:
+- Stage D: post-reattach domain/TLS/edge evidence pack.
 - Stage E: deploy automation/recovery evidence pack.
 
 ## Storage rules
