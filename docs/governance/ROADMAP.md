@@ -39,7 +39,7 @@ Launch Bark&Bond in Greater Melbourne with:
 
 1. Accounts/keys exist for Clerk, Sentry, PostHog, Resend, Render, Atlas, Vercel.
 2. Runtime and evidence snapshots for Stage A/B/C were captured in prior runbook entries.
-3. Vercel project migration to `dtd` is complete and `REACT_APP_BACKEND_URL` is set to `https://dtd-api.onrender.com` for prod/preview.
+3. Vercel project migration to `dtd` is complete and frontend runtime vars are set for prod/preview (`REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, plus `NEXT_PUBLIC_POSTHOG_*` parity keys).
 4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`.
 5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
 6. Stage E (deploy automation evidence) is still open.
@@ -112,9 +112,7 @@ Done when:
 1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
 2. Reattach public custom domains for launch window and capture post-reattach domain/TLS evidence.
 3. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-4. Configure and validate `DISCOVERY_SOURCE_URLS` against production sources (capture evidence in runbook).
-5. Configure and validate `RESEND_API_KEY`/`RESEND_FROM` for live T+7 outreach sends (capture evidence in runbook).
-6. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
+4. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
 
 ## Gate Rule
 

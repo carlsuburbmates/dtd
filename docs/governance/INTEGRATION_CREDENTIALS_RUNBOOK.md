@@ -18,6 +18,27 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - Stage D: post-reattach domain/TLS/edge evidence pack.
 - Stage E: deploy automation/recovery evidence pack.
 
+## H-02 readiness snapshot (2026-05-02)
+
+1. Render service-level secret presence verified and patched:
+- `dtd-api` (`srv-d7plat9kh4rs73e92qcg`)
+- `dtd-worker` (`srv-d7platpf9bms73alk5u0`)
+2. Verified keys present in both Render services:
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+- `DISCOVERY_SOURCE_URLS`
+- `SENTRY_DSN`
+3. Vercel project env presence verified and patched:
+- project `dtd` (`prj_TviWWkrOzNENkY4cazM3XsRHyIR1`)
+- `REACT_APP_BACKEND_URL`
+- `REACT_APP_POSTHOG_KEY`
+- `REACT_APP_POSTHOG_HOST`
+- `NEXT_PUBLIC_POSTHOG_KEY`
+- `NEXT_PUBLIC_POSTHOG_HOST`
+4. Post-patch deploy evidence:
+- Render latest deploys live for API + worker.
+- Vercel production redeploy completed: `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno`.
+
 ## Storage rules
 
 1. Keep secrets in your password manager (`BarkBond` vault/folder).
@@ -92,6 +113,10 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 
 ### Frontend
 1. `REACT_APP_BACKEND_URL`
+2. `REACT_APP_POSTHOG_KEY`
+3. `REACT_APP_POSTHOG_HOST`
+4. `NEXT_PUBLIC_POSTHOG_KEY` (compat/migration parity)
+5. `NEXT_PUBLIC_POSTHOG_HOST` (compat/migration parity)
 
 ## Verification commands
 
@@ -113,6 +138,16 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 ### Stage D/E (open)
 1. Record exact command outputs for Vercel edge/domain setup.
 2. Record exact command outputs for repeatable deploy/redeploy procedure.
+
+### H-02 verification commands (completed)
+1. Render env presence by service:
+- `GET /v1/services/{serviceId}/env-vars` (API key auth; keys-only checklist)
+2. Render deploy state check:
+- `GET /v1/services/{serviceId}/deploys`
+3. Vercel env presence by project:
+- `vercel api /v10/projects/prj_TviWWkrOzNENkY4cazM3XsRHyIR1/env?teamId=team_5Jzh8VcbTjO5MNniKHpivsCY --raw`
+4. Vercel production redeploy:
+- `vercel --prod --yes`
 
 ## Update rule
 

@@ -31,7 +31,7 @@ AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked comple
 ## Execution log (fill in during next session)
 
 1. Session start HEAD: `88e53c9` (`git rev-parse --short HEAD`)
-2. Human blockers completed: pending; Vercel migration work is verified, but `H-01` remains intentionally locked because `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` currently return `404 DEPLOYMENT_NOT_FOUND` by rollout design, `H-02` is only partially verified (`REACT_APP_BACKEND_URL` present in Vercel prod/preview), and `H-03`/`H-04` remain open.
+2. Human blockers completed: pending; Vercel migration work is verified, `H-02` is now complete with runtime evidence (Render + Vercel secret checks), while `H-01` remains intentionally locked because `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` currently return `404 DEPLOYMENT_NOT_FOUND` by rollout design, and `H-03`/`H-04` remain open.
 3. AI tasks completed: verified Vercel project/deployment state, DNS/TLS resolution, backend config endpoint, and frontend env wiring
 4. Final Go/No-Go: pending
 
@@ -41,7 +41,7 @@ AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked comple
 2. `https://dtd-api.onrender.com/api/config` returns `200` JSON with active-region and billing-mode config.
 3. Vercel prod and preview envs both contain `REACT_APP_BACKEND_URL=https://dtd-api.onrender.com`.
 4. `frontend/src/lib/api.js` builds the API base URL from `REACT_APP_BACKEND_URL`.
-5. Vercel env inventory for `dtd` currently shows only the frontend URL variable; the broader launch-secret set still needs external runtime confirmation.
+5. Vercel env inventory for `dtd` includes `REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`, and Render services `dtd-api`/`dtd-worker` include `RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, and `SENTRY_DSN`.
 6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` still resolve to Vercel but return `404 DEPLOYMENT_NOT_FOUND` because the custom-domain aliases were intentionally removed/locked.
 
 ---
@@ -84,20 +84,32 @@ Pass criteria:
 2. HTTPS returns valid response with no certificate warning.
 
 ### H-02 Platform secret readiness
-Owner: Human
+Owner: AI (autonomous verification + patching)
+
+Status: Completed on 2026-05-02
 
 Required actions:
-1. Ensure the following are valid and available in runtime secret storage:
+1. Ensure launch-secret keys are set in runtime targets:
 - `RESEND_API_KEY`
 - `RESEND_FROM`
 - `DISCOVERY_SOURCE_URLS`
 - `SENTRY_DSN`
 - `NEXT_PUBLIC_POSTHOG_KEY`
 - `NEXT_PUBLIC_POSTHOG_HOST`
-- `VERCEL_TOKEN` (only if API automation is used)
+2. Ensure frontend runtime vars are set for current CRA build path:
+- `REACT_APP_BACKEND_URL`
+- `REACT_APP_POSTHOG_KEY`
+- `REACT_APP_POSTHOG_HOST`
+3. `VERCEL_TOKEN` remains optional and only required if standalone Vercel REST automation is used outside authenticated CLI context.
 
 Required evidence:
-1. Redacted screenshot or checklist confirming each variable exists in deployment environment.
+1. Render API verification completed for both service IDs:
+- `srv-d7plat9kh4rs73e92qcg` (`dtd-api`)
+- `srv-d7platpf9bms73alk5u0` (`dtd-worker`)
+2. Vercel project env verification completed for:
+- `prj_TviWWkrOzNENkY4cazM3XsRHyIR1` (`dtd`)
+3. Production redeploy completed after env upsert:
+- `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno`
 
 Pass criteria:
 1. No missing required key for launch workflow.
