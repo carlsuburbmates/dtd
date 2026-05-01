@@ -2,138 +2,268 @@
 
 Date: 2026-05-01  
 Repo: `/Users/carlg/Documents/AI-Coding/dtd`  
-Baseline commit: `2666d5c`
+Authority files:
+1. `docs/governance/NEXT_SESSION_HANDOFF.md` (this file)
+2. `docs/governance/ROADMAP.md`
+3. `docs/governance/LOCK_STATE.md`
+4. current repository state on `main`
 
 ## Primary objective
 
-Complete a **ready-to-launch website** for Bark&Bond with production-grade deployment, legal/public copy, and verifiable operational readiness.
+Finish a **ready-to-launch website** for Bark&Bond with:
+1. production domain + TLS,
+2. deploy/redeploy evidence,
+3. final legal/public copy sign-off,
+4. verified operational runtime checks.
 
-## Verified baseline (already done)
+## Session-start protocol (mandatory)
 
-1. Public/trainer IA routes exist and are wired:
+1. Capture current HEAD at session start:
+- `git rev-parse --short HEAD`
+2. Write it into this file under “Execution log”.
+3. Do not rely on any prior chat history beyond the authority files above.
+4. Do not re-open locked governance decisions unless an objective blocker appears.
+
+## Hard gate rule (mandatory)
+
+AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked complete in this file with evidence.
+
+## Execution log (fill in during next session)
+
+1. Session start HEAD:
+2. Human blockers completed:
+3. AI tasks completed:
+4. Final Go/No-Go:
+
+---
+
+## Verified baseline (already complete)
+
+1. Public/trainer routes implemented:
 - `/`, `/how-it-works`, `/about`, `/pricing`, `/trust`, `/faq`, `/contact`, `/privacy`, `/terms`, `/trainers`, `/submit`, `/t/:id`, `/ops`
-2. Backend launch policies are implemented:
-- Region enforcement
-- Consent checkpoints
-- Intro idempotency
-- Intro-first billing with conversion `track_only` default
+2. Launch policy implementation complete:
+- region enforcement, consent checkpoints, intro idempotency, intro-first billing (`track_only`)
 3. Automation loops implemented:
 - source ingestion (`DISCOVERY_SOURCE_URLS`)
 - T+7 outreach (`RESEND_API_KEY`, `RESEND_FROM`)
-4. Local verification already passing:
+4. Local checks passing:
 - `python3 -m compileall backend`
 - `npm --prefix frontend run build`
 
-## Human-first blockers (must be completed before more AI execution)
+---
 
-H-01 Domain and DNS finalization  
-Owner: Human  
-Required:
-1. Confirm production domain(s) and canonical host.
-2. Complete DNS records.
-3. Confirm TLS issuance in Vercel.
-Why human-first:
-1. AI cannot complete registrar ownership actions without your account confirmation.
+## Human-first blockers (must be done first)
 
-H-02 Platform secret readiness  
-Owner: Human  
-Required:
-1. Ensure valid keys are present in secure storage and runtime env:
-- `VERCEL_TOKEN` (if API automation used)
+### H-01 Domain + DNS + TLS finalization
+Owner: Human
+
+Required actions:
+1. Confirm canonical production hostname (for example `dogtrainersdirectory.com.au` with `www` redirect policy).
+2. Complete DNS records at registrar/DNS host.
+3. Confirm TLS is issued and active.
+
+Required evidence (must be recorded in runbook):
+1. Screenshot or export showing DNS records.
+2. Screenshot showing domain status in Vercel (or target edge platform).
+3. Command proof:
+- `dig +short <domain>`
+- `dig +short www.<domain>`
+- `curl -I https://<domain>`
+
+Pass criteria:
+1. DNS resolves correctly.
+2. HTTPS returns valid response with no certificate warning.
+
+### H-02 Platform secret readiness
+Owner: Human
+
+Required actions:
+1. Ensure the following are valid and available in runtime secret storage:
 - `RESEND_API_KEY`
 - `RESEND_FROM`
 - `DISCOVERY_SOURCE_URLS`
 - `SENTRY_DSN`
 - `NEXT_PUBLIC_POSTHOG_KEY`
 - `NEXT_PUBLIC_POSTHOG_HOST`
-Why human-first:
-1. Missing/invalid credentials block deployment and runtime evidence capture.
+- `VERCEL_TOKEN` (only if API automation is used)
 
-H-03 Legal copy sign-off  
-Owner: Human  
-Required:
-1. Final approve legal/public wording for `/privacy`, `/terms`, `/trust`, `/pricing`.
-Why human-first:
-1. AI can draft text but cannot provide legal authority/approval.
+Required evidence:
+1. Redacted screenshot or checklist confirming each variable exists in deployment environment.
 
-H-04 Production billing/account state checks  
-Owner: Human  
-Required:
-1. Confirm account plans/limits are active for Vercel/Render/Atlas/Resend/Sentry/PostHog.
-Why human-first:
-1. AI cannot resolve account billing/verification constraints without account actions.
+Pass criteria:
+1. No missing required key for launch workflow.
 
-## AI-executable tasks (after human blockers)
+### H-03 Legal copy sign-off
+Owner: Human
 
-A-01 Documentation truth hardening  
+Required actions:
+1. Approve final public/legal copy for:
+- `/privacy`
+- `/terms`
+- `/trust`
+- `/pricing`
+
+Required evidence:
+1. Sign-off note in `docs/governance/LOCK_STATE.md` containing:
+- approver name/role
+- date
+- scope approved
+
+Pass criteria:
+1. Approved copy is recorded and versioned in git.
+
+### H-04 Account/billing readiness
+Owner: Human
+
+Required actions:
+1. Confirm active account state/limits for:
+- Vercel
+- Render
+- MongoDB Atlas
+- Resend
+- Sentry
+- PostHog
+
+Required evidence:
+1. Checklist entry in runbook confirming each platform is not blocked by unpaid/verification restrictions.
+
+Pass criteria:
+1. No platform blocks deployment or runtime event capture.
+
+---
+
+## AI-executable tasks (after H-01..H-04 complete)
+
+### A-01 Documentation truth hardening
 Goal:
-1. Remove stale references to external model runtime where deterministic heuristic is used.
-2. Align README, ARCHITECTURE, and roadmap wording to exact implementation.
-Verification:
-1. `rg` scan shows no conflicting runtime claims.
+1. Remove stale references that conflict with runtime truth.
+2. Ensure docs consistently describe deterministic heuristic runtime and launch billing mode.
 
-A-02 Stage D evidence pack capture  
-Goal:
-1. Record exact commands/results for domain, TLS, and edge config.
 Files:
-1. `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md`
-Verification:
-1. Evidence entries include date, command, and observed result.
+1. `README.md`
+2. `docs/ARCHITECTURE.md`
+3. `docs/DEPLOYMENT.md`
+4. `docs/OPERATIONS.md`
+5. `docs/governance/ROADMAP.md`
+6. `docs/governance/LOCK_STATE.md`
 
-A-03 Stage E deploy/redeploy evidence pack  
+Verification commands:
+1. `rg -n "Claude|Sonnet|per-conversion fee|six loops|6 autonomous loops" README.md docs backend frontend -S`
+2. Confirm all hits are either intentional historical notes or corrected.
+
+Pass criteria:
+1. No conflicting product/runtime claims remain.
+
+### A-02 Stage D evidence pack capture (domain/TLS/edge)
 Goal:
-1. Execute repeatable deploy and rollback/redeploy path.
-2. Record exact procedure and outcomes.
-Verification:
-1. Runbook contains a repeatable command sequence and pass/fail outcomes.
+1. Record command-level domain and edge evidence in runbook.
 
-A-04 Runtime smoke and launch gate checks  
+Primary commands:
+1. `dig +short <domain>`
+2. `dig +short www.<domain>`
+3. `curl -I https://<domain>`
+4. If Vercel CLI available:
+- `vercel domains ls`
+- `vercel inspect <deployment-url>`
+
+Fallback if CLI unavailable:
+1. Capture dashboard screenshots and record URLs/timestamps in runbook.
+
+Pass criteria:
+1. Runbook includes date, exact command (or dashboard path), and observed result.
+
+### A-03 Stage E deploy/redeploy evidence pack
 Goal:
-1. Validate backend health and `/ops` loop state.
-2. Validate frontend route accessibility and key CTAs.
-Verification:
-1. Build passes.
-2. Oversight shows active loops with fresh `last_run`.
-3. Route and CTA checklist passes.
+1. Prove repeatable deploy and rollback/redeploy process.
 
-A-05 Discovery + outreach operational proof  
+Minimum evidence sequence:
+1. Record initial deployed commit.
+2. Trigger deployment of current main.
+3. Verify app health on deployed URL.
+4. Trigger second deploy (or rollback + redeploy path).
+5. Re-verify health and key routes.
+
+Verification commands:
+1. `git rev-parse --short HEAD`
+2. frontend/backend build/runtime checks as appropriate
+3. deployment platform command/log references
+
+Pass criteria:
+1. A repeatable runbook sequence exists and was executed successfully at least once end-to-end.
+
+### A-04 Runtime smoke and launch gate checks
 Goal:
-1. Validate source ingestion adds queue entries.
-2. Validate outreach loop writes send/fail events.
-Verification:
-1. `system_state.source_ingestion` and `system_state.outreach` updated.
-2. `discovery_queue` and `outreach_events` contain expected rows.
+1. Validate route accessibility and operational oversight freshness.
 
-A-06 Final launch readiness report  
+Checks:
+1. Frontend routes return renderable pages for all required public/trainer paths.
+2. Backend `/api/` and `/api/config` return success.
+3. `/ops` loads and displays loop cards.
+
+Pass thresholds:
+1. Frontend build passes.
+2. `ranking`, `pricing`, `verification`, `discovery`, `inference`, `health`, `source_ingestion`, `outreach` appear in oversight.
+3. Loop `last_run` values are not stale beyond 2x their interval.
+
+### A-05 Discovery + outreach operational proof
 Goal:
-1. Produce a final “Go/No-Go” summary with unresolved risks.
-Verification:
-1. Every roadmap gate is marked with objective evidence.
+1. Demonstrate loop output, not just code presence.
 
-## Ordered execution plan for new session
+Checks:
+1. `system_state.source_ingestion` updated with recent run.
+2. `system_state.outreach` updated with recent run.
+3. `discovery_queue` contains candidate rows from configured sources.
+4. `outreach_events` contains sent/failed rows for eligible intros.
 
-1. Confirm H-01 to H-04 are complete.
-2. Run A-01 documentation hardening.
-3. Run A-02 Stage D evidence capture.
-4. Run A-03 Stage E evidence capture.
-5. Run A-04 runtime smoke checks.
-6. Run A-05 automation proofs.
-7. Run A-06 final launch report.
+Pass criteria:
+1. All four checks have recorded evidence in runbook.
+
+### A-06 Final launch readiness report
+Goal:
+1. Produce final Go/No-Go report with explicit blockers (if any).
+
+Required sections:
+1. Completed gates
+2. Remaining blockers (critical/high/medium)
+3. Recommendation (`GO` or `NO-GO`)
+4. Required next action list if `NO-GO`
+
+Pass criteria:
+1. Every roadmap gate has objective evidence reference.
+
+---
+
+## Ordered execution plan (do not reorder)
+
+1. Session-start protocol.
+2. Complete H-01 to H-04 with evidence.
+3. Run A-01.
+4. Run A-02.
+5. Run A-03.
+6. Run A-04.
+7. Run A-05.
+8. Run A-06.
+
+---
 
 ## Done definition (ready-to-launch website)
 
-1. Public/trainer pages are complete and coherent.
-2. Legal/policy pages are approved and final.
-3. Domain + TLS are live and validated.
-4. Deployment procedure is repeatable and documented.
-5. Observability and outreach/discovery loops are operational.
-6. Runbook contains evidence for Stages A-E.
-7. Final Go/No-Go report exists with zero unresolved critical blockers.
+A launch-ready website is true only when:
+1. Public/trainer routes are complete, accessible, and consistent.
+2. Legal copy is approved and committed.
+3. Domain and TLS are validated with command evidence.
+4. Deploy/redeploy procedure is documented and proven.
+5. Operational loops are visible and fresh in oversight.
+6. Discovery and outreach loops show real runtime outputs.
+7. Runbook contains evidence for stages A through E.
+8. Final report returns `GO` with zero unresolved critical blockers.
+
+---
 
 ## New session bootstrap prompt (copy/paste)
 
-Use only `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/ROADMAP.md`, and current repository state as authority.  
-Primary goal: finish “ready-to-launch website” gates with zero scope drift.  
-Do not re-open settled governance decisions unless an objective blocker appears.  
-Execute tasks strictly in the listed order, recording command-level evidence for each gate.
+Use only `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/ROADMAP.md`, `docs/governance/LOCK_STATE.md`, and current repo state.  
+Primary goal: complete launch-readiness gates for a ready-to-launch website with zero scope drift.  
+Do not execute A-02..A-06 until H-01..H-04 are explicitly marked complete with evidence in-file.  
+Record command-level evidence for every gate outcome.
 
