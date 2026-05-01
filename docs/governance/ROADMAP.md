@@ -40,7 +40,7 @@ Launch Bark&Bond in Greater Melbourne with:
 1. Accounts/keys exist for Clerk, Sentry, PostHog, Resend, Render, Atlas, Vercel.
 2. Runtime and evidence snapshots for Stage A/B/C were captured in prior runbook entries.
 3. Vercel project migration to `dtd` is complete and frontend runtime vars are set for prod/preview (`REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, plus `NEXT_PUBLIC_POSTHOG_*` parity keys).
-4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`.
+4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`. This is intentional during development and not a blocker until public-launch cutover.
 5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
 6. Stage E (deploy automation evidence) is still open.
 

@@ -26,12 +26,13 @@ Finish a **ready-to-launch website** for Bark&Bond with:
 
 ## Hard gate rule (mandatory)
 
-AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked complete in this file with evidence.
+AI may continue development tasks while domains remain intentionally detached.  
+Public-launch cutover and `GO` decision remain gated by H-01 to H-04 evidence completion.
 
 ## Execution log (fill in during next session)
 
 1. Session start HEAD: `88e53c9` (`git rev-parse --short HEAD`)
-2. Human blockers completed: pending; Vercel migration work is verified, `H-02` is now complete with runtime evidence (Render + Vercel secret checks), while `H-01` remains intentionally locked because `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` currently return `404 DEPLOYMENT_NOT_FOUND` by rollout design, and `H-03`/`H-04` remain open.
+2. Human gates completed: pending; Vercel migration work is verified, `H-02` is complete with runtime evidence (Render + Vercel secret checks), `H-01` is intentionally held while UI/workflows are unfinished, and `H-03`/`H-04` remain open.
 3. AI tasks completed: verified Vercel project/deployment state, DNS/TLS resolution, backend config endpoint, and frontend env wiring
 4. Final Go/No-Go: pending
 
@@ -61,10 +62,12 @@ AI must not execute A-02 to A-06 until H-01 to H-04 are explicitly marked comple
 
 ---
 
-## Human-first blockers (must be done first)
+## Human launch gates (required before public go-live)
 
 ### H-01 Domain + DNS + TLS finalization
 Owner: Human
+
+Status: Intentional hold during development (not a blocker for build-phase execution)
 
 Required actions:
 1. Confirm canonical production hostname (for example `dogtrainersdirectory.com.au` with `www` redirect policy).
@@ -153,7 +156,7 @@ Pass criteria:
 
 ---
 
-## AI-executable tasks (after H-01..H-04 complete)
+## AI-executable tasks (development can proceed while H-01 is intentionally held)
 
 ### A-01 Documentation truth hardening
 Goal:
@@ -257,7 +260,7 @@ Pass criteria:
 ## Ordered execution plan (do not reorder)
 
 1. Session-start protocol.
-2. Complete H-01 to H-04 with evidence.
+2. Complete H-02 to H-04 during development and complete H-01 before public launch.
 3. Run A-01.
 4. Run A-02.
 5. Run A-03.
@@ -285,5 +288,5 @@ A launch-ready website is true only when:
 
 Use only `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/ROADMAP.md`, `docs/governance/LOCK_STATE.md`, and current repo state.  
 Primary goal: complete launch-readiness gates for a ready-to-launch website with zero scope drift.  
-Do not execute A-02..A-06 until H-01..H-04 are explicitly marked complete with evidence in-file.  
+Do not execute public launch cutover or final `GO` declaration until H-01..H-04 are explicitly marked complete with evidence in-file.  
 Record command-level evidence for every gate outcome.
