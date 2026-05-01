@@ -33,7 +33,7 @@ Public-launch cutover and `GO` decision remain gated by H-01 to H-04 evidence co
 
 1. Session start HEAD: `88e53c9` (`git rev-parse --short HEAD`)
 2. Human gates completed: `H-03` completed (legal sign-off approved by owner), `H-04` completed (platform readiness verified across all configured integrations), `H-02` completed previously, and `H-01` remains intentionally held while UI/workflows are unfinished.
-3. AI tasks completed: verified Vercel project/deployment state, DNS/TLS resolution, backend config endpoint, and frontend env wiring
+3. AI tasks completed: verified Vercel/Render runtime state, completed H-02 secret readiness, and completed H-04 platform readiness verification with evidence report.
 4. Final Go/No-Go: pending
 
 ## Current verified state (2026-05-02)
@@ -267,7 +267,7 @@ Pass criteria:
 ## Ordered execution plan (do not reorder)
 
 1. Session-start protocol.
-2. Complete H-02 to H-04 during development and complete H-01 before public launch.
+2. Maintain H-02/H-03/H-04 as complete (re-verify only if configuration changes) and complete H-01 before public launch cutover.
 3. Run A-01.
 4. Run A-02.
 5. Run A-03.
