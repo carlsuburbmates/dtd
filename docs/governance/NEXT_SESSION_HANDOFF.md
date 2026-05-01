@@ -32,7 +32,7 @@ Public-launch cutover and `GO` decision remain gated by H-01 to H-04 evidence co
 ## Execution log (fill in during next session)
 
 1. Session start HEAD: `88e53c9` (`git rev-parse --short HEAD`)
-2. Human gates completed: pending; Vercel migration work is verified, `H-02` is complete with runtime evidence (Render + Vercel secret checks), `H-01` is intentionally held while UI/workflows are unfinished, and `H-03`/`H-04` remain open.
+2. Human gates completed: `H-03` completed (legal sign-off approved by owner), `H-04` completed (platform readiness verified across all configured integrations), `H-02` completed previously, and `H-01` remains intentionally held while UI/workflows are unfinished.
 3. AI tasks completed: verified Vercel project/deployment state, DNS/TLS resolution, backend config endpoint, and frontend env wiring
 4. Final Go/No-Go: pending
 
@@ -120,6 +120,8 @@ Pass criteria:
 ### H-03 Legal copy sign-off
 Owner: Human
 
+Status: Completed on 2026-05-02 (owner approval recorded)
+
 Required actions:
 1. Approve final public/legal copy for:
 - `/privacy`
@@ -139,6 +141,8 @@ Pass criteria:
 ### H-04 Account/billing readiness
 Owner: Human
 
+Status: Completed on 2026-05-02 (AI verification run)
+
 Required actions:
 1. Confirm active account state/limits for:
 - Vercel
@@ -149,7 +153,10 @@ Required actions:
 - PostHog
 
 Required evidence:
-1. Checklist entry in runbook confirming each platform is not blocked by unpaid/verification restrictions.
+1. Verification report committed at:
+- `docs/governance/H04_VERIFICATION_REPORT.json`
+2. Runbook checklist updated with per-platform API/runtime proof:
+- Vercel, Render, MongoDB Atlas, Resend, Sentry, PostHog
 
 Pass criteria:
 1. No platform blocks deployment or runtime event capture.

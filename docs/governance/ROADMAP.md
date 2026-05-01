@@ -43,6 +43,7 @@ Launch Bark&Bond in Greater Melbourne with:
 4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`. This is intentional during development and not a blocker until public-launch cutover.
 5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
 6. Stage E (deploy automation evidence) is still open.
+7. H-03 legal copy sign-off and H-04 platform readiness verification are completed and recorded in governance docs/runbook.
 
 ## Priority Order (next work)
 

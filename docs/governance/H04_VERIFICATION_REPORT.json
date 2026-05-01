@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-05-02",
+  "checks": {
+    "vercel": {
+      "passed": true,
+      "summary": "Vercel project API auth and access OK",
+      "details": {
+        "projectId": "prj_TviWWkrOzNENkY4cazM3XsRHyIR1",
+        "name": "dtd"
+      }
+    },
+    "render": {
+      "passed": true,
+      "summary": "Render services latest deploy status checked",
+      "details": {
+        "dtd-api": "live",
+        "dtd-worker": "live"
+      }
+    },
+    "atlas": {
+      "passed": true,
+      "summary": "Atlas Admin API digest auth OK",
+      "details": {
+        "projectId": "69f240f59a5199065ed1fce0",
+        "clusterCount": 1
+      }
+    },
+    "resend": {
+      "passed": true,
+      "summary": "Resend API reachable with valid auth",
+      "details": {
+        "domains_count": 0
+      }
+    },
+    "sentry": {
+      "passed": true,
+      "summary": "Sentry API org access OK",
+      "details": {
+        "org_count": 1
+      }
+    },
+    "posthog": {
+      "passed": true,
+      "summary": "PostHog capture accepted event",
+      "details": {
+        "host": "https://eu.i.posthog.com",
+        "http": 200
+      }
+    }
+  }
+}

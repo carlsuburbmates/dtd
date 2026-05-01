@@ -39,6 +39,20 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - Render latest deploys live for API + worker.
 - Vercel production redeploy completed: `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno`.
 
+## H-04 platform readiness snapshot (2026-05-02)
+
+1. Full platform check report:
+- `docs/governance/H04_VERIFICATION_REPORT.json`
+2. Verified pass across required platforms:
+- Vercel: project API access valid (`dtd`)
+- Render: `dtd-api` and `dtd-worker` latest deploys `live`
+- MongoDB Atlas: admin API digest auth pass for project `69f240f59a5199065ed1fce0`
+- Resend: authenticated API access pass (`/domains`)
+- Sentry: authenticated org access pass
+- PostHog: capture ingestion accepted (`/capture/`)
+3. Result:
+- no active platform block detected for deployment/runtime event flow at verification time.
+
 ## Storage rules
 
 1. Keep secrets in your password manager (`BarkBond` vault/folder).

@@ -33,7 +33,16 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 1. Public custom domains are intentionally detached and currently return `404 DEPLOYMENT_NOT_FOUND`; this is an intentional development hold and is not a blocker for ongoing build work. Reattach evidence is required before public launch.
 2. Stage D evidence pack completion (post-reattach domain/TLS/edge) in runbook.
 3. Stage E evidence pack (repeatable deploy/redeploy) in runbook.
-4. Legal/public copy final sign-off (`/privacy`, `/terms`, `/trust`, `/pricing`) still requires explicit owner approval note.
+
+## Legal copy sign-off (H-03)
+
+1. Approver: `carlg` (owner)
+2. Date: `2026-05-02`
+3. Scope approved:
+- `/privacy`
+- `/terms`
+- `/trust`
+- `/pricing`
 
 ## Update rule
 
