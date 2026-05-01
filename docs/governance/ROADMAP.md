@@ -2,6 +2,7 @@
 
 Rule: current-state only. Keep this file aligned to the code and infra that actually exist.
 Execution handoff reference: `docs/governance/NEXT_SESSION_HANDOFF.md`.
+Status updates in this file must include evidence references.
 
 ## Goal
 
@@ -42,14 +43,23 @@ Launch Bark&Bond in Greater Melbourne with:
 3. Vercel project migration to `dtd` is complete and frontend runtime vars are set for prod/preview (`REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, plus `NEXT_PUBLIC_POSTHOG_*` parity keys).
 4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`. This is intentional during development and not a blocker until public-launch cutover.
 5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
-6. Stage E (deploy automation evidence) is still open.
+6. Stage E (deploy automation evidence) is complete; Stage D remains open until domain reattach/tls evidence at launch cutover.
 7. H-03 legal copy sign-off and H-04 platform readiness verification are completed and recorded in governance docs/runbook.
+
+Evidence references for infrastructure status:
+1. Stage D/E open state: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", items 3-4 and "Stage D/E (open)").
+2. H-04 completion: `docs/governance/H04_VERIFICATION_REPORT.json`.
+3. Current detached-domain hold (`404 DEPLOYMENT_NOT_FOUND`): `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session runtime checks).
 
 ## Priority Order (next work)
 
 ### P0 - Governance and architecture alignment
 
 Status: completed.
+Evidence references:
+1. Oversight auth and scope/consent enforcement: `backend/server.py`.
+2. Loop-ownership guard: `backend/worker.py` (`RUN_AUTONOMY_IN_API` enforcement).
+3. Launch billing default and conversion handling: `backend/services/engine.py` (`CONVERSION_BILLING_MODE` default) and `backend/server.py` (`/api/conversions`).
 
 Locked decisions now implemented:
 1. Launch auth: passcode-only oversight (`ADMIN_PASS`), no Clerk enforcement on backend.
@@ -63,14 +73,15 @@ Locked decisions now implemented:
 Status: in progress.
 
 1. Stage D evidence pack:
-- Vercel domain/TLS/edge controls configured and recorded.
+- Pre-reattach migration/routing evidence exists, but post-reattach domain/TLS/edge command proof is still open.
 
 2. Stage E evidence pack:
-- Repeatable deploy/redeploy path documented and test-run.
+- Repeatable deploy/redeploy path has command-level proof (`dpl_CBoYcSJxiJprePuwDjUaQaLp9k5H` then `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`), and authenticated deployment-route smoke verifies required routes render (`HTTP 200` via `vercel curl`).
 
 Done when:
 1. Stage D and Stage E both have command-level evidence in runbook.
 2. Public domains are reattached and return non-404 launch responses.
+3. The session that changes P1 status appends matching evidence entries in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
 
 ### P2 - Controlled go-live
 
@@ -81,6 +92,9 @@ Done when:
 ### P3 - Website completion (public + trainer UX)
 
 Status: completed (baseline IA + routes + build verification complete).
+Evidence references:
+1. Route map: `frontend/src/App.js`.
+2. Build-pass record: `docs/governance/LOCK_STATE.md` ("Verification evidence", compileall + frontend build pass).
 
 1. Public information architecture must be complete and navigable:
 - `/` (match flow + product pillars)
@@ -111,14 +125,15 @@ Done when:
 ## Repo Task Backlog (codebase-derived)
 
 1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-2. Reattach public custom domains for launch window and capture post-reattach domain/TLS evidence.
-3. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-4. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
+2. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+3. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
+4. Reattach public custom domains for launch window and capture post-reattach domain/TLS evidence as the final launch step.
 
 ## Gate Rule
 
 No launch gate advancement claims unless the required evidence for the current stage is documented in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
 Current lock snapshot must also be reflected in `LOCK_STATE.md`.
+Any gate status change in this roadmap must also include a matching execution-log evidence entry in `NEXT_SESSION_HANDOFF.md`.
 
 ## Verification Requirements
 
