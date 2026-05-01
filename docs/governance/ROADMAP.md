@@ -1,6 +1,7 @@
 # Roadmap
 
 Rule: current-state only. Keep this file aligned to the code and infra that actually exist.
+Execution handoff reference: `docs/governance/NEXT_SESSION_HANDOFF.md`.
 
 ## Goal
 
