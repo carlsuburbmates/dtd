@@ -14,12 +14,12 @@ const NAV = [
 export function PublicHeader() {
     return (
         <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#F5F2EB]/85 border-b border-[#E5DFD3]/60">
-            <div className="max-w-6xl mx-auto px-6 md:px-10 h-14 flex items-center justify-between gap-4">
+            <div className="max-w-6xl mx-auto px-6 md:px-10 py-3 lg:h-14 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2 lg:gap-4">
                 <Link to="/" data-testid="brand-link" className="flex items-center gap-2 text-[#1A3A32] shrink-0">
                     <span className="font-serif text-xl tracking-tight">Bark&amp;Bond</span>
                     <span className="hidden sm:inline-block text-[10px] font-mono uppercase tracking-[0.25em] text-[#708265] mt-0.5">Melbourne</span>
                 </Link>
-                <nav className="hidden lg:flex items-center gap-4 text-sm text-[#4A615A]">
+                <nav className="flex items-center gap-4 text-sm text-[#4A615A] overflow-x-auto whitespace-nowrap w-full lg:w-auto">
                     {NAV.map((item) => (
                         <Link key={item.to} to={item.to} data-testid={item.testid} className="hover:text-[#1A3A32] whitespace-nowrap">
                             {item.label}
@@ -48,4 +48,3 @@ export function PublicFooter() {
         </footer>
     );
 }
-

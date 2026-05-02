@@ -32,7 +32,26 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 1. Public custom domains are intentionally detached and currently return `404 DEPLOYMENT_NOT_FOUND`; this is an intentional development hold and is not a blocker for ongoing build work. Reattach evidence is required before public launch.
 2. Stage D evidence pack completion (post-reattach domain/TLS/edge) in runbook.
-3. Stage E evidence pack (repeatable deploy/redeploy) in runbook.
+3. Stage E evidence pack is partially complete: redeploy repeatability is evidenced, but anonymous route checks are blocked by Vercel deployment protection (`HTTP 401`) and must be verified once protection is relaxed for smoke checks.
+
+## Human gate snapshot (synced 2026-05-02)
+
+1. `H-01` Domain + DNS + TLS finalization: `open` (final cutover step).
+2. `H-02` Platform secret readiness: `completed`.
+3. `H-03` Legal copy sign-off: `completed`.
+4. `H-04` Account/billing readiness: `completed`.
+
+Evidence references:
+1. `H-01` open + intentional detached-domain hold:
+- `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `curl -I` checks on apex + `www` returning `404` with `x-vercel-error: DEPLOYMENT_NOT_FOUND`).
+- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and open stages item 4).
+2. `H-02` completed:
+- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
+3. `H-03` completed:
+- this file ("Legal copy sign-off (H-03)" section below).
+4. `H-04` completed:
+- `docs/governance/H04_VERIFICATION_REPORT.json`.
+- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-04 platform readiness snapshot").
 
 ## Legal copy sign-off (H-03)
 
@@ -47,3 +66,4 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 ## Update rule
 
 If any governance, runtime, or route truth changes, update this file and `ROADMAP.md` in the same commit.
+If any gate/status value changes, append a matching command/file evidence entry in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log in the same session.

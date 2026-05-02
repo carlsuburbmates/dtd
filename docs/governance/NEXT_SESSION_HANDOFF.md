@@ -64,6 +64,9 @@ Current session entries:
 7. Outreach operational proof executed:
 - Created intro `70c9efee-1cc3-41f8-b1bb-eae0365979f0`, backdated to T+8d eligibility in runtime DB, ran `send_t7_outreach` once.
 - Result: `outreach_events_total=1`; latest row status `sent`, `http_status=200`.
+8. `2026-05-02T07:07:55Z` — Session start HEAD captured as `527c0b2` (`git rev-parse --short HEAD`) for frontend audit/remediation session.
+- Status changes in this entry: none yet (initial session bootstrap entry only).
+- Evidence: command output `git rev-parse --short HEAD` -> `527c0b2`.
 
 ## Current verified state (2026-05-02)
 

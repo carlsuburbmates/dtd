@@ -8,8 +8,8 @@
 Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
 - accepts a one-line problem from a dog owner (`/`),
 - returns 3 ranked trainer matches (deterministic relevance + outcome score),
-- charges a per-intro fee on **Connect**,
-- tracks conversions as quality signals by default (billing mode can be enabled later),
+- records an intro on **Connect**; launch defaults to `track_only` conversion tracking,
+- tracks conversions as quality signals by default, with bill-mode available later,
 - ingests new trainers, re-verifies them, prices them, and detects fraud — all without a human in the loop.
 
 There is **no admin panel** to operate the business. There is `/ops`, a read-only oversight surface.

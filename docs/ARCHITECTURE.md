@@ -5,8 +5,8 @@
 | Layer | What it is | Where |
 |---|---|---|
 | Product surface | One input → 3 ranked trainers → Connect → contact reveal → hire | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
-| Match decision | Claude Sonnet 4.5 relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
-| Monetisation | Intro-first (dynamic per-intro fee), conversion tracking by default | `POST /api/intros`, `POST /api/conversions` |
+| Match decision | Deterministic heuristic relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
+| Monetisation | Intro-first; launch defaults to `track_only` conversion tracking | `POST /api/intros`, `POST /api/conversions` |
 | Trust | Bayesian outcome score; multi-signal conversion inference | `engine.py` |
 | Anti-gaming | IP/email duplicate suppression, conversion velocity check | `services/fraud.py` |
 | Ingestion | Public `POST /api/discovery` → autonomous discovery loop | `engine.process_discovery_queue` |
@@ -22,7 +22,7 @@
                                             │
                                             ▼
                           ┌────────────────────────────────────┐
-                          │  Claude Sonnet 4.5 relevance       │
+                          │  deterministic relevance            │
                           │  +  outcome_score (engine.ranking) │
                           └────────────────┬───────────────────┘
                                            ▼

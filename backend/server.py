@@ -340,9 +340,10 @@ async def create_intro(
         "fraud_reasons": fraud["reasons"],
         "ip": ip,
         "user_agent": request.headers.get("user-agent", "")[:200],
-        "idempotency_key": idem or None,
         "created_at": now_iso(),
     }
+    if idem:
+        intro["idempotency_key"] = idem
     await db.intros.insert_one(intro.copy())
     await _audit("intro", trainer["id"], after={"intro_id": intro["id"], "billing_status": fraud["billing_status"], "reasons": fraud["reasons"]}, actor="user")
 

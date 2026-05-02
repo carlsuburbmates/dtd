@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { ShieldCheck, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -26,7 +27,9 @@ export default function Submit() {
 
     const submit = async (e) => {
         e.preventDefault();
-        if (!form.name || !form.suburb) {
+        const name = form.name.trim();
+        const suburb = form.suburb.trim();
+        if (!name || !suburb) {
             toast.error("Name and suburb are required.");
             return;
         }
@@ -38,13 +41,22 @@ export default function Submit() {
         try {
             const r = await api.post("/submissions", {
                 ...form,
+                name,
+                suburb,
+                region: form.region.trim(),
+                website: form.website.trim(),
+                phone: form.phone.trim(),
+                email: form.email.trim(),
+                bio: form.bio.trim(),
+                source_evidence_url: form.source_evidence_url.trim(),
                 services: form.services ? form.services.split(",").map((s) => s.trim()).filter(Boolean) : [],
                 categories: form.categories ? form.categories.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [],
             });
             setResult(r.data);
             toast.success(r.data.status === "published" ? "Live now." : r.data.status === "held" ? "Held — needs more evidence." : "Submitted.");
-        } catch {
-            toast.error("Submit failed.");
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            toast.error(typeof detail === "string" && detail ? detail : "Submit failed.");
         } finally {
             setBusy(false);
         }
@@ -59,16 +71,16 @@ export default function Submit() {
                 <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-3">Send their website. We'll do the rest.</h1>
 
                 <form onSubmit={submit} className="card-public p-7 mt-10 grid sm:grid-cols-2 gap-3" data-testid="submit-form">
-                    <Field label="Business name *"><input data-testid="submit-name" className="input-public" value={form.name} onChange={change("name")} /></Field>
-                    <Field label="Suburb *"><input data-testid="submit-suburb" className="input-public" value={form.suburb} onChange={change("suburb")} /></Field>
+                    <Field label="Business name *"><input data-testid="submit-name" required className="input-public" value={form.name} onChange={change("name")} /></Field>
+                    <Field label="Suburb *"><input data-testid="submit-suburb" required className="input-public" value={form.suburb} onChange={change("suburb")} /></Field>
                     <Field label="Region (optional override)"><input data-testid="submit-region" className="input-public" value={form.region} onChange={change("region")} placeholder="Greater Melbourne" /></Field>
-                    <Field label="Website" full><input data-testid="submit-website" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
+                    <Field label="Website" full><input data-testid="submit-website" type="url" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
                     <Field label="Phone"><input data-testid="submit-phone" className="input-public" value={form.phone} onChange={change("phone")} /></Field>
-                    <Field label="Email"><input data-testid="submit-email" className="input-public" value={form.email} onChange={change("email")} /></Field>
+                    <Field label="Email"><input data-testid="submit-email" type="email" className="input-public" value={form.email} onChange={change("email")} /></Field>
                     <Field label="Services (comma)" full><input data-testid="submit-services" className="input-public" value={form.services} onChange={change("services")} placeholder="In-home, Group classes" /></Field>
                     <Field label="Categories (comma)" full><input data-testid="submit-categories" className="input-public" value={form.categories} onChange={change("categories")} placeholder="puppy, behaviour" /></Field>
                     <Field label="Short description" full><textarea data-testid="submit-bio" rows={3} className="input-public" value={form.bio} onChange={change("bio")} /></Field>
-                    <Field label="Source URL (proves the business is real)" full><input data-testid="submit-evidence" className="input-public" value={form.source_evidence_url} onChange={change("source_evidence_url")} /></Field>
+                    <Field label="Source URL (proves the business is real)" full><input data-testid="submit-evidence" type="url" className="input-public" value={form.source_evidence_url} onChange={change("source_evidence_url")} /></Field>
                     <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A] mt-1">
                         <input
                             type="checkbox"
@@ -111,6 +123,13 @@ export default function Submit() {
                             <span className="text-xs font-mono text-[#708265]">confidence · {Math.round((result.confidence_score || 0) * 100)}%</span>
                         </div>
                         <p className="mt-3 text-sm text-[#4A615A] leading-relaxed">{result.verification_reasoning}</p>
+                        {result.status === "published" && result.trainer_id && (
+                            <div className="mt-4">
+                                <Link to={`/t/${result.trainer_id}`} className="btn-primary inline-flex">
+                                    View public listing
+                                </Link>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

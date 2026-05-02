@@ -1,51 +1,158 @@
 {
   "timestamp": "2026-05-02",
+  "timestamp_utc": "2026-05-01T19:43:05Z",
+  "overall": {
+    "passed": true,
+    "summary": "All required platform checks passed after resolving credential/command drift."
+  },
+  "runtime_baseline": {
+    "passed": true,
+    "command": "STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh",
+    "exit_code": 0,
+    "summary": "Remote stage-a baseline passed (Render, Atlas, and remote backend readiness)."
+  },
   "checks": {
     "vercel": {
       "passed": true,
-      "summary": "Vercel project API auth and access OK",
+      "summary": "Vercel API auth/access pass for project dtd.",
       "details": {
         "projectId": "prj_TviWWkrOzNENkY4cazM3XsRHyIR1",
-        "name": "dtd"
-      }
+        "teamId": "team_5Jzh8VcbTjO5MNniKHpivsCY",
+        "name": "dtd",
+        "latestProductionDeploymentId": "dpl_AD5Kghob4aQNHcAFVQyWwNoq373K"
+      },
+      "evidence": [
+        {
+          "command": "vercel api \"/v9/projects/prj_TviWWkrOzNENkY4cazM3XsRHyIR1?teamId=team_5Jzh8VcbTjO5MNniKHpivsCY\" --raw",
+          "exit_code": 0
+        }
+      ]
     },
     "render": {
       "passed": true,
-      "summary": "Render services latest deploy status checked",
+      "summary": "Render service presence and latest deploy health pass for both runtime services.",
       "details": {
-        "dtd-api": "live",
-        "dtd-worker": "live"
-      }
+        "dtd-api": {
+          "serviceId": "srv-d7plat9kh4rs73e92qcg",
+          "suspended": "not_suspended",
+          "latestDeployId": "dep-d7qfl9sm0tmc73dcree0",
+          "latestDeployStatus": "live"
+        },
+        "dtd-worker": {
+          "serviceId": "srv-d7platpf9bms73alk5u0",
+          "suspended": "not_suspended",
+          "latestDeployId": "dep-d7qfl9sm0tmc73dcreq0",
+          "latestDeployStatus": "live"
+        }
+      },
+      "evidence": [
+        {
+          "command": "curl -H \"Authorization: Bearer $RENDER_API_KEY\" \"https://api.render.com/v1/services?limit=100\"",
+          "http": 200
+        },
+        {
+          "command": "curl -H \"Authorization: Bearer $RENDER_API_KEY\" \"https://api.render.com/v1/services/srv-d7plat9kh4rs73e92qcg/deploys?limit=1\"",
+          "http": 200
+        },
+        {
+          "command": "curl -H \"Authorization: Bearer $RENDER_API_KEY\" \"https://api.render.com/v1/services/srv-d7platpf9bms73alk5u0/deploys?limit=1\"",
+          "http": 200
+        }
+      ]
     },
     "atlas": {
       "passed": true,
-      "summary": "Atlas Admin API digest auth OK",
+      "summary": "Atlas digest auth and cluster/runtime prerequisites pass.",
       "details": {
         "projectId": "69f240f59a5199065ed1fce0",
-        "clusterCount": 1
-      }
+        "clusterCount": 1,
+        "firstClusterName": "DTD",
+        "firstClusterState": "IDLE",
+        "dbUserCheck": "dtd_app present",
+        "accessListCheck": "0.0.0.0/0 present"
+      },
+      "evidence": [
+        {
+          "command": "curl --digest -u \"$MONGODB_ATLAS_PUBLIC_KEY:$MONGODB_ATLAS_PRIVATE_KEY\" \"https://cloud.mongodb.com/api/atlas/v2/groups/$MONGODB_ATLAS_PROJECT_ID/clusters\"",
+          "http": 200
+        },
+        {
+          "command": "STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh",
+          "observed": [
+            "atlas_users_http=200",
+            "atlas_has_dtd_app=True",
+            "atlas_access_http=200",
+            "atlas_has_0_0_0_0_0=True"
+          ]
+        }
+      ]
     },
     "resend": {
       "passed": true,
-      "summary": "Resend API reachable with valid auth",
+      "summary": "Resend API reachable with valid auth.",
       "details": {
-        "domains_count": 0
-      }
+        "domainsCount": 0
+      },
+      "evidence": [
+        {
+          "command": "curl -H \"Authorization: Bearer $RESEND_API_KEY\" \"https://api.resend.com/domains\"",
+          "http": 200
+        }
+      ]
     },
     "sentry": {
       "passed": true,
-      "summary": "Sentry API org access OK",
+      "summary": "Sentry org API access passes with SENTRY_ACCESS_TOKEN; alias-based token probe failed.",
       "details": {
-        "org_count": 1
-      }
+        "orgCount": 1,
+        "firstOrgSlug": "dtd-i9"
+      },
+      "evidence": [
+        {
+          "command": "curl -H \"Authorization: Bearer ${SENTRY_AUTH_TOKEN:-$SENTRY_API_TOKEN}\" \"https://sentry.io/api/0/organizations/\"",
+          "http": 401,
+          "result": "failed",
+          "error": "Invalid token header. No credentials provided."
+        },
+        {
+          "command": "curl -H \"Authorization: Bearer $SENTRY_ACCESS_TOKEN\" \"https://sentry.io/api/0/organizations/\"",
+          "http": 200,
+          "result": "passed"
+        }
+      ]
     },
     "posthog": {
       "passed": true,
-      "summary": "PostHog capture accepted event",
+      "summary": "PostHog ingestion accepted capture event.",
       "details": {
         "host": "https://eu.i.posthog.com",
-        "http": 200
-      }
+        "http": 200,
+        "captureStatus": "Ok"
+      },
+      "evidence": [
+        {
+          "command": "curl -X POST \"$NEXT_PUBLIC_POSTHOG_HOST/capture/\" -d '{\"api_key\":\"***\",\"event\":\"h04_verification_ping\"}'",
+          "http": 200
+        }
+      ]
     }
-  }
+  },
+  "drift": [
+    {
+      "type": "deployment_roll_forward",
+      "component": "vercel",
+      "previous": "dpl_H8gcahxzuwLfEmf66VL3v9MnoWno",
+      "current": "dpl_AD5Kghob4aQNHcAFVQyWwNoq373K"
+    },
+    {
+      "type": "credential_alias_mismatch",
+      "component": "sentry",
+      "details": "SENTRY_AUTH_TOKEN/SENTRY_API_TOKEN probe returns 401; SENTRY_ACCESS_TOKEN is the valid token variable in current env."
+    },
+    {
+      "type": "api_shape_drift",
+      "component": "render",
+      "details": "Latest deploy status is nested at response[0].deploy.status, not response[0].status."
+    }
+  ]
 }

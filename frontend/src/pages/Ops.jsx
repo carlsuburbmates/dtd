@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, Database, ArrowUpRight, AlertTriangle } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react";
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -8,40 +8,70 @@ export default function Ops() {
     const [authed, setAuthed] = useState(Boolean(getAdminPass()));
     const [snap, setSnap] = useState(null);
     const [loading, setLoading] = useState(false);
-    const navigate = useNavigate();
+    const [error, setError] = useState("");
+    const mountedRef = useRef(true);
 
     useEffect(() => {
         document.documentElement.setAttribute("data-theme", "admin");
         return () => document.documentElement.removeAttribute("data-theme");
     }, []);
 
-    const fetchSnap = async () => {
+    useEffect(() => () => {
+        mountedRef.current = false;
+    }, []);
+
+    const fetchSnap = useCallback(async () => {
         setLoading(true);
+        setError("");
         try {
             const r = await opsApi.get("/oversight");
+            if (!mountedRef.current) return;
             setSnap(r.data);
         } catch (err) {
+            if (!mountedRef.current) return;
             if (err?.response?.status === 401) {
                 setAdminPass("");
+                setSnap(null);
+                setError("");
                 setAuthed(false);
                 toast.error("Session expired");
+                return;
             }
+            setError("Unable to load oversight snapshot. Auto-retry continues.");
         } finally {
+            if (!mountedRef.current) return;
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        if (!authed) return;
+        if (!authed) {
+            setSnap(null);
+            setError("");
+            return;
+        }
         fetchSnap();
         const id = setInterval(fetchSnap, 15_000);
         return () => clearInterval(id);
-    }, [authed]); // eslint-disable-line
+    }, [authed, fetchSnap]);
 
     if (!authed) return <Login onPass={() => setAuthed(true)} />;
-    if (!snap) return <Frame loading />;
+    if (!snap) {
+        return (
+            <Frame loading={loading}>
+                {!loading && (
+                    <div className="p-6">
+                        <div className="admin-card p-4 max-w-xl">
+                            <div className="font-mono text-sm text-[#F5F2EB]">{error || "Waiting for oversight snapshot."}</div>
+                            <button data-testid="ops-refresh-empty" onClick={fetchSnap} className="admin-btn mt-3">Retry now</button>
+                        </div>
+                    </div>
+                )}
+            </Frame>
+        );
+    }
 
-    return <OversightSurface snap={snap} loading={loading} onRefresh={fetchSnap} onSignOut={() => { setAdminPass(""); setAuthed(false); }} />;
+    return <OversightSurface snap={snap} loading={loading} error={error} onRefresh={fetchSnap} onSignOut={() => { setAdminPass(""); setSnap(null); setError(""); setAuthed(false); }} />;
 }
 
 function Login({ onPass }) {
@@ -54,8 +84,12 @@ function Login({ onPass }) {
             await opsApi.post("/oversight/login", { passcode: pass });
             setAdminPass(pass);
             onPass();
-        } catch {
-            toast.error("Invalid passcode");
+        } catch (err) {
+            if (err?.response?.status === 401) {
+                toast.error("Invalid passcode");
+            } else {
+                toast.error("Login unavailable. Please try again.");
+            }
         } finally {
             setBusy(false);
         }
@@ -69,7 +103,7 @@ function Login({ onPass }) {
                 <form onSubmit={submit} className="admin-card p-5 mt-8" data-testid="ops-login-form">
                     <label className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] flex items-center gap-2"><Lock className="h-3 w-3" /> Passcode</label>
                     <input type="password" data-testid="ops-pass-input" className="admin-input mt-2" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
-                    <button data-testid="ops-login-submit" type="submit" disabled={busy} className="admin-btn admin-btn-accent mt-4 w-full justify-center">
+                    <button data-testid="ops-login-submit" type="submit" disabled={busy || !pass.trim()} className="admin-btn admin-btn-accent mt-4 w-full justify-center">
                         {busy ? "…" : "Enter"}
                     </button>
                 </form>
@@ -87,12 +121,16 @@ function Frame({ children, loading }) {
     );
 }
 
-function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
+function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const rev = snap.revenue || {};
     const tp = snap.throughput || {};
     const integrity = snap.integrity || {};
     const loops = snap.loops || {};
     const submissions = snap.submissions_summary || {};
+    const alerts = Array.isArray(snap.alerts) ? snap.alerts : [];
+    const pricingState = Array.isArray(snap.pricing_state) ? snap.pricing_state : [];
+    const topTrainers = Array.isArray(snap.top_trainers) ? snap.top_trainers : [];
+    const auditRecent = Array.isArray(snap.audit_recent) ? snap.audit_recent : [];
 
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
@@ -113,6 +151,12 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
             </header>
 
             <div className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+                {error && (
+                    <div className="admin-card p-3 text-xs font-mono text-[#D06D4F]" data-testid="ops-refresh-error">
+                        {error}
+                    </div>
+                )}
+
                 {/* North star */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-northstar">
                     <Metric label="Revenue · all time" value={audCents(rev.total_cents)} sub={`intro ${audCents(rev.intro_cents)} · conv ${audCents(rev.conversion_cents)}`} testid="metric-revenue" />
@@ -132,11 +176,11 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
 
                 {/* Alerts */}
                 <Section title="Alerts" testid="ops-alerts">
-                    {(snap.alerts || []).length === 0 ? (
+                    {alerts.length === 0 ? (
                         <div className="text-sm font-mono text-[#8B9E98]">No anomalies. System nominal.</div>
                     ) : (
                         <ul className="space-y-2">
-                            {snap.alerts.map((a, i) => (
+                            {alerts.map((a, i) => (
                                 <li key={i} className="flex items-center gap-3 text-sm">
                                     <SeverityTag s={a.severity} />
                                     <span className="font-mono text-xs text-[#8B9E98]">{a.type}</span>
@@ -194,7 +238,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {(snap.pricing_state || []).map((p) => (
+                                {pricingState.map((p) => (
                                     <tr key={p.suburb} className="border-b border-[#243631]">
                                         <td className="px-3 py-2 font-mono">{p.suburb}</td>
                                         <td className="px-3 py-2 font-mono">{p.multiplier?.toFixed(2)}×</td>
@@ -202,7 +246,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                                         <td className="px-3 py-2 font-mono">{p.intros_7d || 0}</td>
                                     </tr>
                                 ))}
-                                {(snap.pricing_state || []).length === 0 && (
+                                {pricingState.length === 0 && (
                                     <tr><td colSpan={4} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No pricing state yet — loop runs every 90s.</td></tr>
                                 )}
                             </tbody>
@@ -225,7 +269,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                                 </tr>
                             </thead>
                             <tbody>
-                                {(snap.top_trainers || []).map((t) => (
+                                {topTrainers.map((t) => (
                                     <tr key={t.id} className="border-b border-[#243631] hover:bg-[#1D2D29]">
                                         <td className="px-3 py-2 font-mono">{t.name}</td>
                                         <td className="px-3 py-2 font-mono">{t.suburb}</td>
@@ -239,7 +283,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                                         </td>
                                     </tr>
                                 ))}
-                                {(snap.top_trainers || []).length === 0 && (
+                                {topTrainers.length === 0 && (
                                     <tr><td colSpan={6} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No trainers yet.</td></tr>
                                 )}
                             </tbody>
@@ -250,7 +294,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                 {/* Audit */}
                 <Section title="Recent system actions" testid="ops-audit">
                     <div className="font-mono text-xs space-y-1.5 max-h-80 overflow-auto">
-                        {(snap.audit_recent || []).map((a) => (
+                        {auditRecent.map((a) => (
                             <div key={a.id} className="flex gap-3 text-[#cfd6d3]">
                                 <span className="text-[#8B9E98] w-44 shrink-0">{a.ts?.slice(0, 19).replace("T", " ")}</span>
                                 <span className="text-[#D06D4F] w-44 shrink-0">{a.action}</span>
@@ -258,7 +302,7 @@ function OversightSurface({ snap, loading, onRefresh, onSignOut }) {
                                 <span className="text-[#8B9E98] truncate">{a.target}</span>
                             </div>
                         ))}
-                        {(snap.audit_recent || []).length === 0 && <div className="text-[#8B9E98]">No events.</div>}
+                        {auditRecent.length === 0 && <div className="text-[#8B9E98]">No events.</div>}
                     </div>
                 </Section>
             </div>
@@ -289,7 +333,8 @@ function Metric({ label, value, sub, testid }) {
 
 function LoopCard({ name, loop, unit, countKey }) {
     const last = loop?.last_run;
-    const ago = last ? Math.max(0, Math.floor((Date.now() - new Date(last).getTime()) / 1000)) : null;
+    const lastMs = last ? new Date(last).getTime() : Number.NaN;
+    const ago = Number.isFinite(lastMs) ? Math.max(0, Math.floor((Date.now() - lastMs) / 1000)) : null;
     const count = countKey ? (loop?.[countKey] ?? "—") : "live";
     return (
         <div className="bg-[#0D1412] border border-[#243631] rounded p-3" data-testid={`loop-${name.toLowerCase()}`}>
