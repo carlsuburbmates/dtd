@@ -7,7 +7,7 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 1. One-branch workflow on `main`, local-first with auto-sync.
 2. Oversight auth is passcode-based (`ADMIN_PASS`) for launch.
-3. Launch billing model is intro-first; conversions default to `track_only`.
+3. Launch billing model is intro-first; conversions default to `track_only`; Stripe invoice collection is enabled when configured.
 4. Region enforcement is active (`ACTIVE_REGION` / `ACTIVE_REGIONS`).
 5. Consent checkpoints are required on match, intro, and submission flows.
 6. Loop ownership is env-controlled:

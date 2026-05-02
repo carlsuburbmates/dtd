@@ -18,6 +18,7 @@ export default function Trainers() {
                 <div className="card-public p-7 mt-10" data-testid="economics-card">
                     <ul className="space-y-3 text-[#1A3A32]">
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />A small fee when an owner clicks <em>Connect</em>. The price moves with demand in your suburb.</li>
+                        <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Billing profile is provisioned at submission when billing terms are accepted.</li>
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Outcome confirmations are tracked at launch to tune quality and fraud policies.</li>
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Better outcomes earn higher placement automatically. No tiers.</li>
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Real businesses only — listings auto-verify on the spot.</li>

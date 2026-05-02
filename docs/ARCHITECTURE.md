@@ -6,7 +6,7 @@
 |---|---|---|
 | Product surface | One input → 3 ranked trainers → Connect → contact reveal → hire | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
 | Match decision | Deterministic heuristic relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
-| Monetisation | Intro-first; launch defaults to `track_only` conversion tracking | `POST /api/intros`, `POST /api/conversions` |
+| Monetisation | Intro-first; `/api/intros` meters lead fee and attempts Stripe invoice collection. Launch defaults to `track_only` conversion tracking. | `POST /api/intros`, `POST /api/stripe/webhook`, `POST /api/conversions` |
 | Trust | Bayesian outcome score; multi-signal conversion inference | `engine.py` |
 | Anti-gaming | IP/email duplicate suppression, conversion velocity check | `services/fraud.py` |
 | Ingestion | Public `POST /api/discovery` → autonomous discovery loop | `engine.process_discovery_queue` |
@@ -33,6 +33,7 @@
                           ┌────────────────────────────────────┐
                           │  POST /api/intros (fraud filter)   │
                           │  → bills suburb-priced fee         │
+                          │  → creates/sends Stripe invoice    │
                           │  → reveals contact                 │
                           └────────────────┬───────────────────┘
                                            ▼
@@ -82,6 +83,7 @@ Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 | `outreach_events` | T+7 email sends/failures for intro follow-up |
 | `pricing_state` | per-suburb dynamic intro fee + EWMA multiplier + `frozen` |
 | `system_state` | last-run summary per loop (`key` ∈ {ranking, pricing, …}) |
+| `stripe_events` | webhook idempotency + latest Stripe event receipts |
 | `audit_log` | every state-mutating action with before/after |
 | `evidence` | (reserved) cross-source confidence bonus inputs |
 | `config_snapshots` | (reserved for prod) snapshots used by health auto-rollback |
@@ -93,6 +95,7 @@ The system *reacts* to signals, it doesn't sit in static rules:
 
 - **New listing in queue** → discovery loop scores it → either publishes or discards.
 - **User clicks Connect** → fraud module evaluates → bills or suppresses → ranking loop re-scores trainer in the next pass.
+- **Stripe webhook arrives** (`invoice.sent`, `invoice.paid`, `invoice.payment_failed`) → intro row `billing_collection_status` is reconciled.
 - **User clicks website / phone / email** → engagement recorded → if 2+ distinct kinds within an intro: inferred conversion logged.
 - **24-h conversion drop ≥50 %** → health loop rolls back the most recent `config_snapshots` row (if any) and emits an `auto_rollback` alert.
 

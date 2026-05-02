@@ -85,7 +85,7 @@ Current matching and verification run through deterministic heuristics in `servi
 
 | Service | What to wire | Where |
 |---|---|---|
-| **Stripe** | Optional for later conversion billing. Keep launch mode on `CONVERSION_BILLING_MODE=track_only` first, then enable `bill` mode when ready. | `backend/server.py` |
+| **Stripe** | Intro invoicing path on `POST /api/intros` uses Stripe Billing when `STRIPE_SECRET_KEY` is set. Configure webhook endpoint `POST /api/stripe/webhook` with `STRIPE_WEBHOOK_SECRET` to reconcile `invoice.sent`, `invoice.paid`, and `invoice.payment_failed`. Keep conversion mode on `CONVERSION_BILLING_MODE=track_only` during launch. | `backend/server.py`, `backend/services/stripe_billing.py` |
 | **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email` is implemented via `send_outreach` loop. Provide `RESEND_API_KEY` and `RESEND_FROM`. Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | `backend/services/automation.py` |
 | **Real ingestion** | Source-page ingestion is implemented via `ingest_sources` loop. Provide `DISCOVERY_SOURCE_URLS` and monitor `system_state.source_ingestion`. | `backend/services/automation.py` + `engine.py` |
 

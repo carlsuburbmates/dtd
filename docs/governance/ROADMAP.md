@@ -32,9 +32,10 @@ Launch Bark&Bond in Greater Melbourne with:
 4. Consent checkpoints are enforced on `/match`, `/intros`, and `/submissions`.
 5. Intro idempotency is enforced via `Idempotency-Key` / `client_token`.
 6. Conversion billing defaults to `CONVERSION_BILLING_MODE=track_only` (bill-mode is feature-flagged).
-7. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
-8. Source-ingestion loop and T+7 outreach loop are implemented in `backend/services/automation.py` and scheduled by engine.
-9. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
+7. Intro billing collection path is Stripe invoice-based when configured (`STRIPE_SECRET_KEY` + webhook reconciliation).
+8. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
+9. Source-ingestion loop and T+7 outreach loop are implemented in `backend/services/automation.py` and scheduled by engine.
+10. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
 
 ### Infrastructure reality
 

@@ -96,6 +96,23 @@ Current session entries:
   - `frontend/src/pages/TrainerDetail.jsx`
   - `frontend/src/pages/Ops.jsx`
   - `frontend/src/pages/SuburbSEO.jsx`
+11. Stripe intro-billing integration milestone completed (build-phase, no domain-cutover impact).
+- Status changes in this entry:
+  - Added fail-soft Stripe billing service for intro invoicing and trainer billing profile provisioning.
+  - Added webhook reconciliation endpoint `POST /api/stripe/webhook` and intro-level collection status tracking.
+  - Added trainer submit consent checkpoint for intro billing terms in UI.
+- Evidence (commands + observed results):
+  - `python3 -m compileall backend` -> pass.
+  - `npm --prefix frontend run build` -> pass.
+- Evidence (file paths updated in this milestone):
+  - `backend/services/stripe_billing.py`
+  - `backend/server.py`
+  - `frontend/src/pages/Submit.jsx`
+  - `README.md`
+  - `docs/ARCHITECTURE.md`
+  - `docs/DEPLOYMENT.md`
+  - `docs/governance/ROADMAP.md`
+  - `docs/governance/LOCK_STATE.md`
 
 ## Current verified state (2026-05-02)
 

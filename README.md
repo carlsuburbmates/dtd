@@ -8,7 +8,8 @@
 Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
 - accepts a one-line problem from a dog owner (`/`),
 - returns 3 ranked trainer matches (deterministic relevance + outcome score),
-- records an intro on **Connect**; launch defaults to `track_only` conversion tracking,
+- records an intro on **Connect** and issues Stripe invoice collection when trainer billing profile is ready,
+- launch defaults to `track_only` conversion tracking,
 - tracks conversions as quality signals by default, with bill-mode available later,
 - ingests new trainers, re-verifies them, prices them, and detects fraud — all without a human in the loop.
 
@@ -93,6 +94,10 @@ docker compose up --build
 | `DISCOVERY_SOURCE_URLS` | backend | Comma-separated source pages scanned for candidate trainer links |
 | `RESEND_API_KEY` | backend | Required for T+7 outreach delivery |
 | `RESEND_FROM` | backend | From-address for outreach emails |
+| `STRIPE_SECRET_KEY` | backend | Enables intro invoice creation/sending in Stripe |
+| `STRIPE_WEBHOOK_SECRET` | backend | Verifies `/api/stripe/webhook` events for reconciliation |
+| `STRIPE_INVOICE_DAYS_UNTIL_DUE` | backend | Due window for intro invoices (default 7) |
+| `STRIPE_REQUIRE_BILLING_CONSENT` | backend | Set `1` to require explicit trainer billing consent before invoicing |
 | `REACT_APP_BACKEND_URL` | frontend | Public URL of the backend (`/api` is appended client-side) |
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for service-by-service setup.
@@ -112,9 +117,10 @@ The latest iteration's report lives at `/app/test_reports/iteration_<n>.json`.
 ## Production checklist
 
 1. Keep `CONVERSION_BILLING_MODE=track_only` during soft-live while validating intro quality and fraud suppression behavior.
-2. Set `DISCOVERY_SOURCE_URLS` so the autonomous source-ingestion loop continuously feeds real candidates into `discovery_queue`.
-3. Configure `RESEND_API_KEY` + `RESEND_FROM` for automated **T+7d hire-confirmation** outreach.
-4. Configure `CORS_ORIGINS` to your real domain(s).
-5. Front the API with HTTPS at the platform layer.
+2. Configure `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` and register the webhook endpoint `/api/stripe/webhook`.
+3. Set `DISCOVERY_SOURCE_URLS` so the autonomous source-ingestion loop continuously feeds real candidates into `discovery_queue`.
+4. Configure `RESEND_API_KEY` + `RESEND_FROM` for automated **T+7d hire-confirmation** outreach.
+5. Configure `CORS_ORIGINS` to your real domain(s).
+6. Front the API with HTTPS at the platform layer.
 
 The system is designed to keep working at every step — none of these are blockers for revenue.

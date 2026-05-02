@@ -19,6 +19,7 @@ export default function Submit() {
         source_evidence_url: "",
         consent_public_listing: false,
         consent_information_accuracy: false,
+        consent_intro_billing_terms: false,
     });
     const [result, setResult] = useState(null);
     const [busy, setBusy] = useState(false);
@@ -35,6 +36,10 @@ export default function Submit() {
         }
         if (!form.consent_public_listing || !form.consent_information_accuracy) {
             toast.error("Consent is required before submitting.");
+            return;
+        }
+        if (!form.consent_intro_billing_terms) {
+            toast.error("Accept intro billing terms to activate billing profile.");
             return;
         }
         setBusy(true);
@@ -100,6 +105,16 @@ export default function Submit() {
                             data-testid="submit-consent-accuracy"
                         />
                         <span>I confirm the submitted business information is accurate and lawful to publish.</span>
+                    </label>
+                    <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A]">
+                        <input
+                            type="checkbox"
+                            checked={form.consent_intro_billing_terms}
+                            onChange={(e) => setForm({ ...form, consent_intro_billing_terms: e.target.checked })}
+                            className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                            data-testid="submit-consent-billing"
+                        />
+                        <span>I agree valid intros may incur a per-intro fee and invoices may be sent to my billing email.</span>
                     </label>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">

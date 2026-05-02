@@ -37,6 +37,7 @@ from starlette.middleware.cors import CORSMiddleware
 from services import ai as ai_service
 from services import engine as autonomy
 from services import fraud as fraud_service
+from services import stripe_billing
 from services.seed import MELBOURNE_TRAINERS
 
 ROOT_DIR = Path(__file__).parent
@@ -161,6 +162,7 @@ class SubmissionIn(BaseModel):
     submitter_email: Optional[EmailStr] = None
     consent_public_listing: bool = False
     consent_information_accuracy: bool = False
+    consent_intro_billing_terms: bool = False
 
 
 class OversightLogin(BaseModel):
@@ -234,6 +236,8 @@ async def config() -> Dict[str, Any]:
         "active_regions": ACTIVE_REGIONS,
         "active_region_default": ACTIVE_REGION,
         "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
+        "stripe_intro_billing_enabled": stripe_billing.billing_enabled(),
+        "stripe_webhook_enabled": stripe_billing.webhook_enabled(),
         "suburbs": suburbs,
     }
 
@@ -346,6 +350,13 @@ async def create_intro(
         intro["idempotency_key"] = idem
     await db.intros.insert_one(intro.copy())
     await _audit("intro", trainer["id"], after={"intro_id": intro["id"], "billing_status": fraud["billing_status"], "reasons": fraud["reasons"]}, actor="user")
+
+    # Bill the trainer side in Stripe (fail-soft). User-facing connect flow must
+    # continue even when billing infrastructure is unavailable.
+    billing_meta = await stripe_billing.bill_intro(db, trainer, intro)
+    if billing_meta:
+        await db.intros.update_one({"id": intro["id"]}, {"$set": billing_meta})
+        intro.update(billing_meta)
 
     contact = {
         "name": trainer.get("name"),
@@ -526,8 +537,16 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "via_submission_id": sub_doc["id"],
         }
         await db.trainers.insert_one(trainer_doc.copy())
+        # Prepare trainer billing profile (fail-soft). This does not block
+        # publication and gives ops visibility into billing readiness.
+        billing_profile = await stripe_billing.provision_trainer_billing_profile(
+            db,
+            trainer_doc,
+            consent_granted=payload.consent_intro_billing_terms,
+        )
         sub_doc["status"] = "published"
         sub_doc["trainer_id"] = trainer_id
+        sub_doc["billing_profile_status"] = billing_profile.get("billing_profile_status")
     else:
         sub_doc["status"] = "held"
 
@@ -542,6 +561,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "verification_reasoning": sub_doc["verification_reasoning"],
             "verification_signals": sub_doc["verification_signals"],
             "trainer_id": trainer_id,
+            "billing_profile_status": sub_doc.get("billing_profile_status"),
         }
     )
 
@@ -689,6 +709,77 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     }
 
 
+@api.post("/stripe/webhook")
+async def stripe_webhook(request: Request) -> Dict[str, Any]:
+    payload = await request.body()
+    signature = request.headers.get("Stripe-Signature", "")
+    try:
+        event = stripe_billing.construct_webhook_event(payload=payload, signature=signature)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Stripe webhook rejected: {str(exc)}")
+
+    event_id = str(event.get("id") or "")
+    if event_id:
+        if await db.stripe_events.find_one({"id": event_id}, {"_id": 0, "id": 1}):
+            return {"ok": True, "duplicate": True}
+
+    event_type = str(event.get("type") or "")
+    obj = (event.get("data") or {}).get("object") or {}
+    invoice_id = str(obj.get("id") or "")
+    updates: Dict[str, Any] = {"stripe_last_event_type": event_type, "stripe_last_event_at": now_iso()}
+
+    if event_type in {"invoice.paid", "invoice.payment_succeeded"}:
+        updates.update(
+            {
+                "billing_collection_status": "paid",
+                "stripe_invoice_status": "paid",
+                "stripe_invoice_paid_at": now_iso(),
+            }
+        )
+    elif event_type == "invoice.payment_failed":
+        updates.update(
+            {
+                "billing_collection_status": "payment_failed",
+                "stripe_invoice_status": str(obj.get("status") or "open"),
+            }
+        )
+    elif event_type == "invoice.sent":
+        updates.update(
+            {
+                "billing_collection_status": "invoice_sent",
+                "stripe_invoice_status": str(obj.get("status") or "open"),
+            }
+        )
+    elif event_type == "invoice.finalized":
+        updates.update(
+            {
+                "billing_collection_status": "invoice_finalized",
+                "stripe_invoice_status": str(obj.get("status") or "open"),
+            }
+        )
+    elif event_type in {"invoice.marked_uncollectible", "invoice.voided"}:
+        updates.update(
+            {
+                "billing_collection_status": "uncollectible",
+                "stripe_invoice_status": str(obj.get("status") or "uncollectible"),
+            }
+        )
+
+    if invoice_id:
+        await db.intros.update_many({"stripe_invoice_id": invoice_id}, {"$set": updates})
+
+    if event_id:
+        await db.stripe_events.insert_one(
+            {
+                "id": event_id,
+                "type": event_type,
+                "invoice_id": invoice_id,
+                "created_at": now_iso(),
+            }
+        )
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Wiring
 # ---------------------------------------------------------------------------
@@ -794,6 +885,7 @@ async def on_startup() -> None:
     await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
     await db.intros.create_index("ip")
     await db.intros.create_index("idempotency_key", unique=True, sparse=True)
+    await db.intros.create_index("stripe_invoice_id", sparse=True)
     await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
     await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
     await db.submissions.create_index("status")
@@ -802,6 +894,8 @@ async def on_startup() -> None:
     await db.system_state.create_index("key", unique=True)
     await db.discovery_queue.create_index("status")
     await db.discovery_queue.create_index("url")
+    await db.trainers.create_index("stripe_customer_id", sparse=True)
+    await db.stripe_events.create_index("id", unique=True, sparse=True)
     await db.config_snapshots.create_index("applied_at")
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
 
