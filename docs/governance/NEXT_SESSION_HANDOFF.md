@@ -67,6 +67,35 @@ Current session entries:
 8. `2026-05-02T07:07:55Z` — Session start HEAD captured as `527c0b2` (`git rev-parse --short HEAD`) for frontend audit/remediation session.
 - Status changes in this entry: none yet (initial session bootstrap entry only).
 - Evidence: command output `git rev-parse --short HEAD` -> `527c0b2`.
+9. `2026-05-02T07:19:58Z` — Session baseline revalidated as clean/synced on `main` with HEAD `68e6a7e` before frontend audit execution.
+- Status changes in this entry: none (baseline verification only).
+- Evidence: `git branch --show-current` -> `main`; `git rev-parse --short HEAD` -> `68e6a7e`; `git status --short` -> clean; `git rev-list --left-right --count origin/main...HEAD` -> `0 0`.
+10. Frontend audit/remediation milestone completed on `main` (HEAD baseline `68e6a7e`).
+- Status changes in this entry:
+  - Frontend accessibility/semantics baseline moved from partial compliance to verified pass on audited surfaces.
+  - Frontend route/CTA/workflow smoke revalidated after grouped fixes.
+  - Audit wording corrected: home suburb select control id is `match-suburb` (not `suburb`).
+  - Launch gates: unchanged (`H-01` open; `H-02/H-03/H-04` completed; final Go/No-Go pending).
+- Evidence (commands + observed results):
+  - `npm --prefix frontend run build` -> `Compiled successfully`.
+  - Local route smoke: `curl http://localhost:3000<route>` for `/`, `/how-it-works`, `/about`, `/pricing`, `/trust`, `/faq`, `/contact`, `/privacy`, `/terms`, `/trainers`, `/submit`, `/t/f1c3885f-53a7-4764-969f-278ba5b774b9`, `/ops`, `/melbourne/richmond` -> all `HTTP=200`.
+  - Accessibility re-checks (Lighthouse):
+    - `npx lighthouse http://localhost:3000/ ...` -> accessibility score `1`.
+    - `npx lighthouse http://localhost:3000/submit ...` -> accessibility score `1`.
+    - `npx lighthouse http://localhost:3000/trainers ...` -> accessibility score `1`.
+    - `npx lighthouse http://localhost:3000/t/f1c3885f-53a7-4764-969f-278ba5b774b9 ...` -> accessibility score `1`.
+    - `npx lighthouse http://localhost:3000/ops ...` -> accessibility score `1`.
+    - Additional route checks `/about`, `/how-it-works`, `/pricing`, `/trust`, `/faq`, `/contact`, `/privacy`, `/terms`, `/melbourne/richmond` -> accessibility score `1` each.
+- Evidence (file paths updated in this milestone):
+  - `frontend/src/index.css`
+  - `frontend/src/lib/api.js`
+  - `frontend/src/components/PublicChrome.jsx`
+  - `frontend/src/pages/Home.jsx`
+  - `frontend/src/pages/Trainers.jsx`
+  - `frontend/src/pages/Submit.jsx`
+  - `frontend/src/pages/TrainerDetail.jsx`
+  - `frontend/src/pages/Ops.jsx`
+  - `frontend/src/pages/SuburbSEO.jsx`
 
 ## Current verified state (2026-05-02)
 

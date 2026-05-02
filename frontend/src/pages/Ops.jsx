@@ -95,19 +95,21 @@ function Login({ onPass }) {
         }
     };
     return (
-        <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB] flex items-center justify-center px-6">
-            <div className="w-full max-w-md">
-                <div className="flex items-center gap-2 small-caps !text-[#8B9E98] mb-6"><Terminal className="h-4 w-4" /> Oversight</div>
-                <h1 className="font-serif text-4xl tracking-tight">Read-only console</h1>
-                <p className="text-sm text-[#8B9E98] mt-2 font-mono">No buttons mutate the system. The system runs itself.</p>
-                <form onSubmit={submit} className="admin-card p-5 mt-8" data-testid="ops-login-form">
-                    <label className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] flex items-center gap-2"><Lock className="h-3 w-3" /> Passcode</label>
-                    <input type="password" data-testid="ops-pass-input" className="admin-input mt-2" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
-                    <button data-testid="ops-login-submit" type="submit" disabled={busy || !pass.trim()} className="admin-btn admin-btn-accent mt-4 w-full justify-center">
-                        {busy ? "…" : "Enter"}
-                    </button>
-                </form>
-            </div>
+        <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB] px-6">
+            <main className="min-h-screen w-full max-w-md mx-auto flex items-center">
+                <div className="w-full">
+                    <div className="flex items-center gap-2 small-caps !text-[#8B9E98] mb-6"><Terminal className="h-4 w-4" /> Oversight</div>
+                    <h1 className="font-serif text-4xl tracking-tight">Read-only console</h1>
+                    <p className="text-sm text-[#8B9E98] mt-2 font-mono">No buttons mutate the system. The system runs itself.</p>
+                    <form onSubmit={submit} className="admin-card p-5 mt-8" data-testid="ops-login-form">
+                        <label htmlFor="ops-pass-input" className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] flex items-center gap-2"><Lock className="h-3 w-3" /> Passcode</label>
+                        <input id="ops-pass-input" type="password" data-testid="ops-pass-input" className="admin-input mt-2" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
+                        <button data-testid="ops-login-submit" type="submit" disabled={busy || !pass.trim()} className="admin-btn admin-btn-accent mt-4 w-full justify-center">
+                            {busy ? "…" : "Enter"}
+                        </button>
+                    </form>
+                </div>
+            </main>
         </div>
     );
 }
@@ -116,7 +118,7 @@ function Frame({ children, loading }) {
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
             {loading && <div className="p-6 text-[#8B9E98] font-mono text-sm">Loading…</div>}
-            {children}
+            <main>{children}</main>
         </div>
     );
 }
@@ -150,7 +152,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                 </div>
             </header>
 
-            <div className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
+            <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
                 {error && (
                     <div className="admin-card p-3 text-xs font-mono text-[#D06D4F]" data-testid="ops-refresh-error">
                         {error}
@@ -305,7 +307,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                         {auditRecent.length === 0 && <div className="text-[#8B9E98]">No events.</div>}
                     </div>
                 </Section>
-            </div>
+            </main>
         </div>
     );
 }

@@ -14,12 +14,12 @@ export default function Pricing() {
                     <article className="card-public p-6">
                         <h2 className="font-serif text-3xl text-[#1A3A32]">Intro fee</h2>
                         <p className="mt-2 text-[#4A615A]">A trainer is charged when a valid intro is created.</p>
-                        <p className="mt-2 text-xs text-[#708265] font-mono">Dynamic by suburb demand.</p>
+                        <p className="mt-2 text-xs text-[#5C6D59] font-mono">Dynamic by suburb demand.</p>
                     </article>
                     <article className="card-public p-6">
                         <h2 className="font-serif text-3xl text-[#1A3A32]">Conversion fee</h2>
                         <p className="mt-2 text-[#4A615A]">At launch this is tracked, not billed (`track_only` mode).</p>
-                        <p className="mt-2 text-xs text-[#708265] font-mono">Can be enabled later via bill-mode.</p>
+                        <p className="mt-2 text-xs text-[#5C6D59] font-mono">Can be enabled later via bill-mode.</p>
                     </article>
                 </div>
             </main>

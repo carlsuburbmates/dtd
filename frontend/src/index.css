@@ -10,9 +10,9 @@
     --surface-public: 60 17% 97%;     /* #FAFAF7 */
     --ink-public: 162 36% 16%;        /* #1A3A32 */
     --ink-secondary-public: 159 13% 34%;/* #4A615A */
-    --moss: 96 12% 46%;               /* #708265 */
-    --terracotta: 14 56% 56%;         /* #D06D4F */
-    --terracotta-deep: 14 50% 48%;
+    --moss: 102 10% 39%;              /* #5C6D59 */
+    --terracotta: 14 52% 40%;         /* #9B4F31 */
+    --terracotta-deep: 14 55% 34%;
     --line: 39 27% 86%;               /* #E5DFD3 */
     --trust-verified: 162 36% 26%;
     --trust-warn: 30 56% 53%;
@@ -99,6 +99,10 @@
     [data-theme="admin"] ::selection {
         background: hsl(var(--terracotta) / 0.4);
         color: hsl(var(--admin-ink));
+    }
+    :focus-visible {
+        outline: 2px solid hsl(var(--ring));
+        outline-offset: 2px;
     }
 }
 
@@ -234,6 +238,17 @@
     }
     .btn-ghost:hover {
         background: hsl(var(--line) / 0.7);
+    }
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
     }
 
     /* Admin */

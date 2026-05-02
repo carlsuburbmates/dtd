@@ -7,7 +7,6 @@ import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 export default function SuburbSEO() {
     const { suburb } = useParams();
     const [page, setPage] = useState(null);
-    const [trainers, setTrainers] = useState([]);
 
     useEffect(() => {
         api.get(`/seo/${suburb.toLowerCase()}`).then((r) => setPage(r.data)).catch(() => {});
@@ -15,14 +14,14 @@ export default function SuburbSEO() {
         // so we rely on the SEO page copy + a CTA back to the matcher.
     }, [suburb]);
 
-    if (!page) return <div className="max-w-3xl mx-auto px-6 py-24 text-[#708265]">Loading…</div>;
+    if (!page) return <div className="max-w-3xl mx-auto px-6 py-24 text-[#5C6D59]">Loading…</div>;
     const copy = page.copy || {};
 
     return (
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <div className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
+            <main className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
                 <div className="small-caps flex items-center gap-2"><MapPin className="h-3 w-3" /> {page.suburb} · {page.category}</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-4">
                     {copy.title || `Dog trainers in ${page.suburb}`}
@@ -56,7 +55,7 @@ export default function SuburbSEO() {
                         </div>
                     </section>
                 )}
-            </div>
+            </main>
             <PublicFooter />
         </div>
     );

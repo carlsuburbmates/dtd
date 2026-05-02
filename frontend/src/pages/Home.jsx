@@ -86,7 +86,11 @@ export default function Home() {
                                 <form onSubmit={submit} className="mt-10" data-testid="match-form">
                                     <div className="card-public p-2 flex flex-col sm:flex-row gap-2 items-stretch">
                                         <div className="flex-1 flex items-start gap-3 px-4 py-2">
+                                            <label htmlFor="match-description" className="sr-only">
+                                                Describe your dog's training issue
+                                            </label>
                                             <textarea
+                                                id="match-description"
                                                 ref={inputRef}
                                                 data-testid="match-input"
                                                 rows={2}
@@ -99,7 +103,7 @@ export default function Home() {
                                                     }
                                                 }}
                                                 placeholder="e.g. My kelpie pulls hard on the leash and barks at other dogs."
-                                                className="bg-transparent flex-1 resize-none outline-none text-[#1A3A32] placeholder:text-[#708265]/70 text-lg leading-snug"
+                                                className="bg-transparent flex-1 resize-none outline-none text-[#1A3A32] placeholder:text-[#5C6D59]/70 text-lg leading-snug"
                                                 autoFocus
                                             />
                                         </div>
@@ -118,12 +122,16 @@ export default function Home() {
                                         </button>
                                     </div>
                                     <div className="mt-4 flex items-center gap-3">
-                                        <MapPin className="h-4 w-4 text-[#708265]" />
+                                        <MapPin className="h-4 w-4 text-[#5C6D59]" />
+                                        <label htmlFor="match-suburb" className="sr-only">
+                                            Choose suburb for matching
+                                        </label>
                                         <select
+                                            id="match-suburb"
                                             data-testid="match-suburb"
                                             value={suburb}
                                             onChange={(e) => setSuburb(e.target.value)}
-                                            className="bg-transparent text-sm text-[#1A3A32] outline-none border-b border-transparent hover:border-[#E5DFD3] focus:border-[#708265] py-1"
+                                            className="bg-transparent text-sm text-[#1A3A32] outline-none border-b border-transparent hover:border-[#E5DFD3] focus:border-[#5C6D59] py-1"
                                         >
                                             <option value="">Anywhere in Melbourne</option>
                                             {suburbs.map((s) => (
@@ -228,7 +236,7 @@ function HomepageSections() {
 function Results({ results, matchId, description, onReset }) {
     const navigate = useNavigate();
     return (
-        <div data-testid="match-results">
+        <div data-testid="match-results" aria-live="polite">
             <div className="small-caps">3 best matches</div>
             <h2 className="editorial-h1 text-4xl sm:text-5xl text-[#1A3A32] mt-3">
                 Here's who fits.
@@ -251,7 +259,7 @@ function Results({ results, matchId, description, onReset }) {
                             {t.image_url ? (
                                 <img
                                     src={t.image_url}
-                                    alt=""
+                                    alt={`${t.name} profile`}
                                     className="h-14 w-14 rounded-full object-cover border border-[#E5DFD3] shrink-0"
                                 />
                             ) : (
@@ -260,7 +268,7 @@ function Results({ results, matchId, description, onReset }) {
                                 </div>
                             )}
                             <div className="min-w-0">
-                                <div className="flex items-center gap-2 text-xs font-mono text-[#708265]">
+                                <div className="flex items-center gap-2 text-xs font-mono text-[#5C6D59]">
                                     <span className="text-[#1A3A32] font-semibold">#{i + 1}</span>
                                     <MapPin className="h-3 w-3" />
                                     {t.suburb}
@@ -285,7 +293,7 @@ function Results({ results, matchId, description, onReset }) {
                                 Connect
                                 <ArrowRight className="h-4 w-4" />
                             </button>
-                            <div className="text-xs font-mono text-[#708265]">
+                            <div className="text-xs font-mono text-[#5C6D59]">
                                 {audCents(t.intro_fee_cents)} on connect
                             </div>
                         </div>
@@ -301,7 +309,7 @@ function Results({ results, matchId, description, onReset }) {
                 >
                     Try another problem
                 </button>
-                <span className="text-xs font-mono text-[#708265]">
+                <span className="text-xs font-mono text-[#5C6D59]">
                     Trainers pay only when you connect — and only succeed when you hire.
                 </span>
             </div>

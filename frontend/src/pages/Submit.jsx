@@ -66,7 +66,7 @@ export default function Submit() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <div className="max-w-3xl mx-auto px-6 md:px-10 pt-12 pb-20">
+            <main className="max-w-3xl mx-auto px-6 md:px-10 pt-12 pb-20">
                 <div className="small-caps">Submit a real trainer</div>
                 <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-3">Send their website. We'll do the rest.</h1>
 
@@ -103,7 +103,7 @@ export default function Submit() {
                     </label>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
-                        <span className="text-xs font-mono text-[#708265]">Auto-published if confidence is high enough. No human review.</span>
+                        <span className="text-xs font-mono text-[#5C6D59]">Auto-published if confidence is high enough. No human review.</span>
                         <button type="submit" disabled={busy} data-testid="submit-go" className="btn-primary disabled:opacity-50">
                             {busy ? "Scoring…" : "Submit"}
                         </button>
@@ -120,7 +120,7 @@ export default function Submit() {
                             ) : (
                                 <span className="pill pill-unverified">{result.status}</span>
                             )}
-                            <span className="text-xs font-mono text-[#708265]">confidence · {Math.round((result.confidence_score || 0) * 100)}%</span>
+                            <span className="text-xs font-mono text-[#5C6D59]">confidence · {Math.round((result.confidence_score || 0) * 100)}%</span>
                         </div>
                         <p className="mt-3 text-sm text-[#4A615A] leading-relaxed">{result.verification_reasoning}</p>
                         {result.status === "published" && result.trainer_id && (
@@ -132,7 +132,7 @@ export default function Submit() {
                         )}
                     </div>
                 )}
-            </div>
+            </main>
             <PublicFooter />
         </div>
     );
