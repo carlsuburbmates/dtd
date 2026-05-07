@@ -7,6 +7,9 @@
 
 ## Workflow Inventory By User Type
 
+Technical skeleton companion:
+- See `docs/WORKFLOW_TRACE_SHEET.md` for per-workflow route -> function -> DB -> event traceability and implementation status.
+
 ### 1) Dog owner (primary end user)
 
 #### W1. Match request (core acquisition flow)
@@ -175,5 +178,6 @@
 
 ## Execution Readiness
 - Design artifact completeness: complete (Understanding Lock + workflow map + decision log).
-- Risk level for this deliverable: low (read-only documentation task).
-- Next step: proceed to implementation planning if you want this converted into wireframes, journey maps, or test cases.
+- Technical traceability: complete via `docs/WORKFLOW_TRACE_SHEET.md`.
+- Current implementation status: mixed (`complete` + `partial`), no fully broken core workflow paths identified in code.
+- Next step: execute the priority fix queue from `docs/WORKFLOW_TRACE_SHEET.md` to move all partial workflows to complete.

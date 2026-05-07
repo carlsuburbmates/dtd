@@ -524,6 +524,9 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
 
     sub = payload.model_dump()
     sub["region"] = (sub.get("region") or ACTIVE_REGION).strip() or ACTIVE_REGION
+    # Preserve explicit submitter email when provided; otherwise fall back to
+    # the listing email so status notifications are still deliverable.
+    sub["submitter_email"] = (sub.get("submitter_email") or sub.get("email") or "").strip()
     _require_region(sub["region"])
     score = await ai_service.score_trainer(_verification_payload(sub))
     conf = float(score["confidence"])

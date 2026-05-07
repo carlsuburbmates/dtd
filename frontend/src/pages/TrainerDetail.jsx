@@ -25,6 +25,12 @@ export default function TrainerDetail() {
         consent_contact_release: false,
         consent_outcome_tracking: false,
     });
+    const [introClientToken] = useState(() => {
+        try {
+            if (typeof window !== "undefined" && window.crypto?.randomUUID) return window.crypto.randomUUID();
+        } catch (_) {}
+        return `intro-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    });
 
     useEffect(() => {
         api
@@ -54,8 +60,11 @@ export default function TrainerDetail() {
                 user_phone: form.user_phone,
                 suburb: trainer?.suburb,
                 match_id: matchId,
+                client_token: introClientToken,
                 consent_contact_release: form.consent_contact_release,
                 consent_outcome_tracking: form.consent_outcome_tracking,
+            }, {
+                headers: { "Idempotency-Key": introClientToken },
             });
             setContact(r.data.contact);
             setIntroId(r.data.id);

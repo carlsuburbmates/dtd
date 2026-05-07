@@ -13,6 +13,7 @@ export default function Submit() {
         website: "",
         phone: "",
         email: "",
+        submitter_email: "",
         bio: "",
         services: "",
         categories: "",
@@ -52,6 +53,7 @@ export default function Submit() {
                 website: form.website.trim(),
                 phone: form.phone.trim(),
                 email: form.email.trim(),
+                submitter_email: form.submitter_email.trim() || undefined,
                 bio: form.bio.trim(),
                 source_evidence_url: form.source_evidence_url.trim(),
                 services: form.services ? form.services.split(",").map((s) => s.trim()).filter(Boolean) : [],
@@ -82,6 +84,7 @@ export default function Submit() {
                     <Field label="Website" full><input data-testid="submit-website" type="url" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
                     <Field label="Phone"><input data-testid="submit-phone" className="input-public" value={form.phone} onChange={change("phone")} /></Field>
                     <Field label="Email"><input data-testid="submit-email" type="email" className="input-public" value={form.email} onChange={change("email")} /></Field>
+                    <Field label="Your notifications email"><input data-testid="submitter-email" type="email" className="input-public" value={form.submitter_email} onChange={change("submitter_email")} placeholder="Where submission results are sent" /></Field>
                     <Field label="Services (comma)" full><input data-testid="submit-services" className="input-public" value={form.services} onChange={change("services")} placeholder="In-home, Group classes" /></Field>
                     <Field label="Categories (comma)" full><input data-testid="submit-categories" className="input-public" value={form.categories} onChange={change("categories")} placeholder="puppy, behaviour" /></Field>
                     <Field label="Short description" full><textarea data-testid="submit-bio" rows={3} className="input-public" value={form.bio} onChange={change("bio")} /></Field>
