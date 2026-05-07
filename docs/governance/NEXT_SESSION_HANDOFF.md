@@ -7,6 +7,8 @@ Authority files:
 2. `docs/governance/ROADMAP.md`
 3. `docs/governance/LOCK_STATE.md`
 4. current repository state on `main`
+Companion (Codex interaction governance):
+- `docs/governance/CODEX_PLATFORM_SYNC.md`
 
 ## Primary objective
 

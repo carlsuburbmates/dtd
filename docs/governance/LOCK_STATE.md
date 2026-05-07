@@ -13,6 +13,8 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 6. Loop ownership is env-controlled:
 - `RUN_AUTONOMY_IN_API=1`: API owns loops
 - `RUN_AUTONOMY_IN_API=0`: worker owns loops
+7. Codex platform-interaction sync rules are governed by:
+- `docs/governance/CODEX_PLATFORM_SYNC.md`
 
 ## Implemented completion blocks
 
@@ -67,3 +69,4 @@ Evidence references:
 
 If any governance, runtime, or route truth changes, update this file and `ROADMAP.md` in the same commit.
 If any gate/status value changes, append a matching command/file evidence entry in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log in the same session.
+If Codex interaction protocols are updated from the global feed, update `docs/governance/CODEX_PLATFORM_SYNC.md` in the same commit.
