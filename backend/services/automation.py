@@ -86,6 +86,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
     return {
         "ok": True,
         "skipped": False,
+        "reason": "",
         "sources": scanned,
         "failed_sources": failed,
         "queued": queued,
@@ -189,4 +190,4 @@ async def send_t7_outreach(db) -> Dict[str, Any]:
                 }
             )
 
-    return {"ok": True, "skipped": False, "checked": checked, "sent": sent, "failed": failed}
+    return {"ok": True, "skipped": False, "reason": "", "checked": checked, "sent": sent, "failed": failed}
