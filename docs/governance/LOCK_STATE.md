@@ -1,6 +1,6 @@
 # Lock State Snapshot
 
-Date: 2026-05-02  
+Date: 2026-05-07
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Locked decisions (active)
@@ -30,26 +30,24 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 2. `npm --prefix frontend run build` → pass.
 3. `python -m pytest -q backend/tests` → pass (`45 passed`).
 
-## Open completion gates (non-code configuration/evidence)
+## Launch evidence status (non-code configuration/evidence)
 
-1. Public custom domains are intentionally detached and currently return `404 DEPLOYMENT_NOT_FOUND`; this is an intentional development hold and is not a blocker for ongoing build work. Reattach evidence is required before public launch.
-2. Stage D evidence pack completion (post-reattach domain/TLS/edge) in runbook.
-3. Stage E evidence pack is partially complete: redeploy repeatability is evidenced, but anonymous route checks are blocked by Vercel deployment protection (`HTTP 401`) and must be verified once protection is relaxed for smoke checks.
-4. Runtime loop-output drift requires remediation evidence before final GO:
-- `source_ingestion` latest snapshot reports `reason=no_sources_configured` with `failed_sources=1`.
-- `outreach` latest snapshot reports `reason=no_resend_api_key`.
+1. Public custom domains are attached and live. Reattach evidence is recorded in the execution log and runbook.
+2. Stage D evidence pack is complete (domain/TLS/edge).
+3. Stage E evidence pack is complete (repeatable deploy/redeploy and route smoke are evidenced).
+4. Runtime loop-output reasons are cleared in live checks; `source_ingestion.failed_sources=1` remains only as historical count until the next successful cycle.
 
-## Human gate snapshot (synced 2026-05-02)
+## Human gate snapshot (synced 2026-05-07)
 
-1. `H-01` Domain + DNS + TLS finalization: `open` (final cutover step).
+1. `H-01` Domain + DNS + TLS finalization: `completed`.
 2. `H-02` Platform secret readiness: `completed`.
 3. `H-03` Legal copy sign-off: `completed`.
 4. `H-04` Account/billing readiness: `completed`.
 
 Evidence references:
-1. `H-01` open + intentional detached-domain hold:
-- `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `curl -I` checks on apex + `www` returning `404` with `x-vercel-error: DEPLOYMENT_NOT_FOUND`).
-- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and open stages item 4).
+1. `H-01` completed + live-domain state:
+- `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `vercel alias ls` and `curl -I` checks on apex + `www` returning `307`/`200`).
+- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and Stage D/E complete evidence).
 2. `H-02` completed:
 - `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
 3. `H-03` completed:

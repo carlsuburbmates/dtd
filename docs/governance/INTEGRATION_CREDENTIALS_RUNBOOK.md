@@ -9,14 +9,14 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - Stage A runtime baseline: remote verifier pass recorded.
 - Stage B observability baseline: Sentry/PostHog capture checks recorded.
 - Stage C outbound baseline: Resend controlled send recorded.
-3. Stage D partial evidence captured:
+3. Stage D evidence captured:
 - New Vercel project `dtd` created and deployed from `frontend` root.
 - `REACT_APP_BACKEND_URL` configured to `https://dtd-api.onrender.com` in prod/preview.
 - Core route and backend-config validations recorded during migration.
-- Custom domains intentionally detached/locked after validation; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`.
-4. Open evidence stages:
-- Stage D: post-reattach domain/TLS/edge evidence pack.
-- Stage E: deploy automation/recovery evidence pack.
+- Custom domains reattached to the live `dtd` deployment; public hostnames now return `307` apex redirect to `www` and `200` on `www` and `/trainers`.
+4. Stage E evidence captured:
+- Repeatable deploy automation/recovery evidence recorded.
+- Authenticated route smoke confirms required routes render on the production deployment.
 
 ## H-02 readiness snapshot (2026-05-02)
 
@@ -158,22 +158,20 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 1. Set `DISCOVERY_SOURCE_URLS` with at least one source page.
 2. Validate `system_state.source_ingestion.queued` increments and `discovery_queue` receives pending rows.
 
-### Stage D/E (open)
+### Stage D/E (complete)
 1. Record exact command outputs for Vercel edge/domain setup.
 2. Record exact command outputs for repeatable deploy/redeploy procedure.
-3. Latest Stage D/E command evidence (2026-05-02 local):
-- `dig +short dogtrainersdirectory.com.au` -> `64.29.17.1`, `216.198.79.1`
-- `dig +short www.dogtrainersdirectory.com.au` -> `216.198.79.65`, `64.29.17.65`
-- `curl -I https://dogtrainersdirectory.com.au` -> `HTTP/2 404`, `x-vercel-error: DEPLOYMENT_NOT_FOUND`
-- `vercel domains ls` -> domain present in Vercel account inventory (`dogtrainersdirectory.com.au`)
-- `vercel inspect https://dtd-f1ghovnfd-carlitos-projects-a62ff78f.vercel.app` -> deployment `dpl_5SFLQk3kWUojKycMJNzQw6wHJ3Nj` ready (production alias present)
-- `vercel --prod --yes` -> `dpl_CBoYcSJxiJprePuwDjUaQaLp9k5H` ready
-- `vercel --prod --yes` (second run) -> `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K` ready
-- `curl -I https://dtd-carlitos-projects-a62ff78f.vercel.app/` -> `HTTP/2 401` (Vercel deployment protection/SSO)
+3. Latest Stage D/E command evidence (2026-05-07 local):
+- `vercel alias ls` -> `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` both aliased to `dtd-mv0os58gf-carlitos-projects-a62ff78f.vercel.app`.
+- `vercel domains ls` -> domain present in Vercel account inventory (`dogtrainersdirectory.com.au`).
+- `curl -I https://dogtrainersdirectory.com.au` -> `HTTP/2 307`, redirecting to `https://www.dogtrainersdirectory.com.au/`.
+- `curl -I https://www.dogtrainersdirectory.com.au` -> `HTTP/2 200`.
+- `curl -I https://www.dogtrainersdirectory.com.au/trainers` -> `HTTP/2 200`.
 - `vercel curl <route> --deployment dpl_AD5Kghob4aQNHcAFVQyWwNoq373K` for required public/trainer/ops paths -> all `HTTP=200` with authenticated deployment access.
 4. Current interpretation:
-- Stage E redeploy repeatability is evidenced.
-- Public anonymous checks remain blocked by deployment protection (`401`), but authenticated deployment-route smoke proves route renderability for build completion.
+- Stage D evidence pack is complete.
+- Stage E deploy repeatability is evidenced.
+- Public anonymous checks now return live domain responses; protected route smoke remains available for deployment-level verification.
 
 ### A-05 operational proof refresh (2026-05-02 local)
 1. Created intro `70c9efee-1cc3-41f8-b1bb-eae0365979f0`, backdated to T+8d eligibility in runtime DB, and executed `send_t7_outreach` once.

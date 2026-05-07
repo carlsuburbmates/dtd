@@ -29,8 +29,8 @@ Finish a **ready-to-launch website** for Bark&Bond with:
 
 ## Hard gate rule (mandatory)
 
-AI may continue development tasks while domains remain intentionally detached.  
-`H-01` is the final step before public-launch cutover. Public-launch cutover and `GO` decision remain gated by H-01 to H-04 evidence completion.
+Public-launch cutover and `GO` decision remain gated by H-01 to H-04 evidence completion.
+`H-01` domain/TLS evidence is now satisfied and recorded; do not regress the live domain state.
 
 ## Execution log (append each session; mandatory)
 
@@ -138,6 +138,17 @@ Current session entries:
   - `backend/tests/backend_test.py`
   - `backend/tests/test_iteration3.py`
   - `backend/tests/test_w8_billing_unit.py`
+13. `2026-05-07T14:47:14Z` — Session start HEAD captured as `b33f30a` (`git rev-parse --short HEAD`) for domain-state reconciliation.
+- Status changes in this entry:
+  - `H-01` transitioned from open to completed.
+  - Stage D evidence pack transitioned from open to complete.
+  - Governance docs were updated to match the live public-domain state.
+- Evidence:
+  - `vercel alias ls` -> `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` both aliased to `dtd-mv0os58gf-carlitos-projects-a62ff78f.vercel.app`.
+  - `vercel domains ls` -> `dogtrainersdirectory.com.au` present in the Vercel domain inventory.
+  - `curl -sSI https://dogtrainersdirectory.com.au` -> `HTTP/2 307` redirecting to `https://www.dogtrainersdirectory.com.au/`.
+  - `curl -sSI https://www.dogtrainersdirectory.com.au` -> `HTTP/2 200`.
+  - `curl -sSI https://www.dogtrainersdirectory.com.au/trainers` -> `HTTP/2 200`.
 
 ## Current verified state (2026-05-07)
 
@@ -146,15 +157,16 @@ Current session entries:
 3. Vercel prod and preview envs both contain `REACT_APP_BACKEND_URL=https://dtd-api.onrender.com`.
 4. `frontend/src/lib/api.js` builds the API base URL from `REACT_APP_BACKEND_URL`.
 5. Vercel env inventory for `dtd` includes `REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`, and Render services `dtd-api`/`dtd-worker` include `RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, and `SENTRY_DSN`.
-6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` still resolve to Vercel but return `404 DEPLOYMENT_NOT_FOUND` because the custom-domain aliases were intentionally removed/locked.
+6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` now resolve to Vercel and return live responses (`307` apex redirect to `www`, `200` on `www` and `/trainers`).
 7. Required frontend routes are renderable on the protected production deployment when accessed via authenticated Vercel route smoke.
-8. Historical `outreach_events` evidence exists, but latest runtime loop snapshot indicates operational drift (`no_resend_api_key` and `no_sources_configured`) that must be resolved before final GO.
+8. Historical `outreach_events` evidence exists; live oversight loop reasons are now cleared after the Render env verification/redeploys, and `source_ingestion.failed_sources=1` remains only as a historical count until the next successful ingestion cycle.
 
 Evidence references:
-1. H-02 snapshot and env inventory: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
-2. H-04 readiness proof: `docs/governance/H04_VERIFICATION_REPORT.json`.
-3. API base URL wiring: `frontend/src/lib/api.js`.
-4. Live runtime checks from this session log (section above): API, oversight, protected route-smoke, and outreach loop-output evidence.
+1. H-01 live-domain proof: execution log entry 13 + `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Stage D/E (complete)").
+2. H-02 snapshot and env inventory: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
+3. H-04 readiness proof: `docs/governance/H04_VERIFICATION_REPORT.json`.
+4. API base URL wiring: `frontend/src/lib/api.js`.
+5. Live runtime checks from this session log (section above): API, oversight, protected route-smoke, and outreach loop-output evidence.
 
 ---
 
@@ -178,13 +190,11 @@ Evidence references:
 ### H-01 Domain + DNS + TLS finalization
 Owner: Human
 
-Status: Final cutover step; not a blocker for build-phase execution
-Evidence status reference: current-session execution log (`curl -I` domain checks show intentional `404 DEPLOYMENT_NOT_FOUND`) + `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Stage D/E (open)").
+Status: Completed on 2026-05-07
+Evidence status reference: current-session execution log (`vercel alias ls` + `curl -I` checks) + `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Stage D/E (complete)").
 
 Required actions:
-1. Confirm canonical production hostname (for example `dogtrainersdirectory.com.au` with `www` redirect policy).
-2. Complete DNS records at registrar/DNS host.
-3. Confirm TLS is issued and active.
+1. None; canonical production hostname, redirect policy, DNS, and TLS are live and verified.
 
 Required evidence (must be recorded in runbook):
 1. Screenshot or export showing DNS records.

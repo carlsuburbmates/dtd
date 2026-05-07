@@ -42,16 +42,16 @@ Launch Bark&Bond in Greater Melbourne with:
 1. Accounts/keys exist for Clerk, Sentry, PostHog, Resend, Render, Atlas, Vercel.
 2. Runtime and evidence snapshots for Stage A/B/C were captured in prior runbook entries.
 3. Vercel project migration to `dtd` is complete and frontend runtime vars are set for prod/preview (`REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, plus `NEXT_PUBLIC_POSTHOG_*` parity keys).
-4. Custom domains are intentionally detached/locked; public hostnames currently return `404 DEPLOYMENT_NOT_FOUND`. This is intentional during development and not a blocker until public-launch cutover.
-5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
-6. Stage E (deploy automation evidence) is complete; Stage D remains open until domain reattach/tls evidence at launch cutover.
+4. Custom domains are attached and live; public hostnames return `307` apex redirect to `www` and `200` on `www` and `/trainers`.
+5. Stage D evidence is complete (migration + routing + domain reattach/TLS/edge validation).
+6. Stage E (deploy automation evidence) is complete; repeatable deploy/redeploy evidence and authenticated route smoke both pass.
 7. H-03 legal copy sign-off and H-04 platform readiness verification are completed and recorded in governance docs/runbook.
-8. Latest runtime snapshot indicates loop-output drift (`source_ingestion` reason `no_sources_configured`, `outreach` reason `no_resend_api_key`) requiring remediation evidence before final GO.
+8. Latest live runtime snapshot has cleared loop reasons after secret verification/redeploys; `source_ingestion.failed_sources=1` remains only as a historical count until the next successful ingestion cycle.
 
 Evidence references for infrastructure status:
-1. Stage D/E open state: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", items 3-4 and "Stage D/E (open)").
+1. Stage D/E complete state: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", items 3-4 and "Stage D/E (complete)").
 2. H-04 completion: `docs/governance/H04_VERIFICATION_REPORT.json`.
-3. Current detached-domain hold (`404 DEPLOYMENT_NOT_FOUND`): `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session runtime checks).
+3. Current live-domain state: `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session alias mapping + `curl -I` checks).
 
 ## Priority Order (next work)
 
@@ -72,18 +72,18 @@ Locked decisions now implemented:
 
 ### P1 - Launch-readiness evidence completion
 
-Status: in progress.
+Status: completed.
 
 1. Stage D evidence pack:
-- Pre-reattach migration/routing evidence exists, but post-reattach domain/TLS/edge command proof is still open.
+- Command-level domain/TLS/edge proof is recorded in the runbook and execution log.
 
 2. Stage E evidence pack:
 - Repeatable deploy/redeploy path has command-level proof (`dpl_CBoYcSJxiJprePuwDjUaQaLp9k5H` then `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`), and authenticated deployment-route smoke verifies required routes render (`HTTP 200` via `vercel curl`).
 
 Done when:
 1. Stage D and Stage E both have command-level evidence in runbook.
-2. Public domains are reattached and return non-404 launch responses.
-3. The session that changes P1 status appends matching evidence entries in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
+2. Public domains are attached and return live launch responses.
+3. The session that changed P1 status appended matching evidence entries in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
 
 ### P2 - Controlled go-live
 
@@ -126,10 +126,10 @@ Done when:
 
 ## Repo Task Backlog (codebase-derived)
 
-1. Implement Stage D evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-2. Implement Stage E deploy/redeploy evidence capture in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
-3. Expand public/trainer copy from baseline to final launch-grade legal and policy text.
-4. Reattach public custom domains for launch window and capture post-reattach domain/TLS evidence as the final launch step.
+1. Stage D evidence capture: completed and recorded in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+2. Stage E deploy/redeploy evidence capture: completed and recorded in `INTEGRATION_CREDENTIALS_RUNBOOK.md`.
+3. Public custom domains: reattached and verified live; no open domain/TLS evidence task remains.
+4. Remaining launch work is non-domain only and should be driven by new evidence, not by stale backlog entries.
 
 ## Gate Rule
 
