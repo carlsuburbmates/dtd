@@ -46,6 +46,7 @@ Launch Bark&Bond in Greater Melbourne with:
 5. Stage D evidence is partially captured (migration + routing validation), while public-domain re-enable evidence remains open.
 6. Stage E (deploy automation evidence) is complete; Stage D remains open until domain reattach/tls evidence at launch cutover.
 7. H-03 legal copy sign-off and H-04 platform readiness verification are completed and recorded in governance docs/runbook.
+8. Latest runtime snapshot indicates loop-output drift (`source_ingestion` reason `no_sources_configured`, `outreach` reason `no_resend_api_key`) requiring remediation evidence before final GO.
 
 Evidence references for infrastructure status:
 1. Stage D/E open state: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", items 3-4 and "Stage D/E (open)").

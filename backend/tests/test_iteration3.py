@@ -14,10 +14,25 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv("/app/frontend/.env")
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", ".env"))
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
-BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
+
+def _base_url() -> str:
+    raw = (
+        os.environ.get("REACT_APP_BACKEND_URL")
+        or os.environ.get("REMOTE_BACKEND_URL")
+        or "http://localhost:8001"
+    )
+    base = raw.strip().rstrip("/")
+    if base.endswith("/api"):
+        base = base[:-4]
+    return base
+
+
+BASE_URL = _base_url()
 API = f"{BASE_URL}/api"
-ADMIN_PASS = "melbourne-bark-2026"
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "melbourne-bark-2026")
 HDR = {"X-Admin-Pass": ADMIN_PASS}
 
 

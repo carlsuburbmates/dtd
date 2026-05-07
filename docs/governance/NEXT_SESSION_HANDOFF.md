@@ -115,8 +115,31 @@ Current session entries:
   - `docs/DEPLOYMENT.md`
   - `docs/governance/ROADMAP.md`
   - `docs/governance/LOCK_STATE.md`
+12. `2026-05-07T14:13:11Z` — Session start HEAD captured as `b670472` (`git rev-parse --short HEAD`) and launch-track verification rerun.
+- Status changes in this entry:
+  - Backend regression harness hardened to avoid env-coupled collection failures.
+  - Full backend test suite now runs and passes in local environment.
+  - Runtime drift discovered for operational loops despite platform env-key presence checks.
+- Evidence (commands + observed results):
+  - `python -m pytest -q backend/tests` -> `45 passed`.
+  - `python3` runtime checks against `https://dtd-api.onrender.com/api`:
+    - `/api/` -> `HTTP 200`
+    - `/api/config` -> `HTTP 200` (`active_region_default=Greater Melbourne`, `conversion_billing_mode=track_only`)
+    - `/api/oversight` -> `HTTP 200` with required loop keys present.
+  - Oversight loop snapshot:
+    - `source_ingestion` -> `reason=no_sources_configured`, `sources=1`, `failed_sources=1`
+    - `outreach` -> `reason=no_resend_api_key`, `checked=4`, `sent=0`
+  - Render API diagnostics:
+    - `GET /v1/services?limit=100` -> `HTTP 200`; `dtd-api` and `dtd-worker` found/live.
+    - `GET /v1/services/{id}/env-vars` -> required keys present for both services (`RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, `SENTRY_DSN`).
+  - Stage-A remote runtime verification:
+    - `STAGE_A_MODE=remote bash scripts/verify_stage_a_runtime.sh` -> `RESULT=PASS`.
+- Evidence (file paths updated in this milestone):
+  - `backend/tests/backend_test.py`
+  - `backend/tests/test_iteration3.py`
+  - `backend/tests/test_w8_billing_unit.py`
 
-## Current verified state (2026-05-02)
+## Current verified state (2026-05-07)
 
 1. Vercel project `dtd` is live and the latest production deployment is ready.
 2. `https://dtd-api.onrender.com/api/config` returns `200` JSON with active-region and billing-mode config.
@@ -125,7 +148,7 @@ Current session entries:
 5. Vercel env inventory for `dtd` includes `REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`, and Render services `dtd-api`/`dtd-worker` include `RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, and `SENTRY_DSN`.
 6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` still resolve to Vercel but return `404 DEPLOYMENT_NOT_FOUND` because the custom-domain aliases were intentionally removed/locked.
 7. Required frontend routes are renderable on the protected production deployment when accessed via authenticated Vercel route smoke.
-8. `outreach_events` now contains real runtime output (`sent` row), satisfying loop-output evidence.
+8. Historical `outreach_events` evidence exists, but latest runtime loop snapshot indicates operational drift (`no_resend_api_key` and `no_sources_configured`) that must be resolved before final GO.
 
 Evidence references:
 1. H-02 snapshot and env inventory: `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).

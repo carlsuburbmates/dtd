@@ -48,6 +48,7 @@ def test_bill_intro_invoice_sent_with_mocked_stripe(monkeypatch):
     monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
     monkeypatch.setattr(stripe_billing, "provision_trainer_billing_profile", fake_profile)
+    monkeypatch.setattr(stripe_billing, "_consent_ok", lambda _trainer, consent_granted: True)
 
     trainer = {"id": "t_1", "name": "Trainer", "stripe_customer_id": "", "billing_profile_status": "ready"}
     intro = {"id": "i_1", "billing_status": "billed", "intro_fee_cents": 500, "match_id": "m_1"}

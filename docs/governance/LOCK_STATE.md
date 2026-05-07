@@ -28,13 +28,16 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 1. `python3 -m compileall backend` → pass.
 2. `npm --prefix frontend run build` → pass.
-3. Backend pytest is not runnable in this host runtime unless `pytest` is installed in the active Python environment.
+3. `python -m pytest -q backend/tests` → pass (`45 passed`).
 
 ## Open completion gates (non-code configuration/evidence)
 
 1. Public custom domains are intentionally detached and currently return `404 DEPLOYMENT_NOT_FOUND`; this is an intentional development hold and is not a blocker for ongoing build work. Reattach evidence is required before public launch.
 2. Stage D evidence pack completion (post-reattach domain/TLS/edge) in runbook.
 3. Stage E evidence pack is partially complete: redeploy repeatability is evidenced, but anonymous route checks are blocked by Vercel deployment protection (`HTTP 401`) and must be verified once protection is relaxed for smoke checks.
+4. Runtime loop-output drift requires remediation evidence before final GO:
+- `source_ingestion` latest snapshot reports `reason=no_sources_configured` with `failed_sources=1`.
+- `outreach` latest snapshot reports `reason=no_resend_api_key`.
 
 ## Human gate snapshot (synced 2026-05-02)
 
