@@ -223,3 +223,75 @@ def construct_webhook_event(payload: bytes, signature: str) -> Dict[str, Any]:
     s = _client()
     event = s.Webhook.construct_event(payload=payload, sig_header=signature, secret=_webhook_secret())
     return event
+
+
+def extract_invoice_id(event_type: str, obj: Dict[str, Any]) -> str:
+    if event_type.startswith("invoice."):
+        return str(obj.get("id") or "")
+    if event_type.startswith("charge."):
+        return str(obj.get("invoice") or "")
+    if event_type.startswith("credit_note."):
+        return str(obj.get("invoice") or "")
+    return ""
+
+
+def invoice_id_from_charge(charge_id: str) -> str:
+    charge_id = (charge_id or "").strip()
+    if not charge_id or not billing_enabled():
+        return ""
+    try:
+        s = _client()
+        charge = s.Charge.retrieve(charge_id)
+        return str((charge or {}).get("invoice") or "")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def billing_updates_for_event(event_type: str, obj: Dict[str, Any]) -> Dict[str, Any]:
+    if event_type in {"invoice.paid", "invoice.payment_succeeded"}:
+        return {
+            "billing_collection_status": "paid",
+            "stripe_invoice_status": "paid",
+            "stripe_invoice_paid_at": now_iso(),
+        }
+    if event_type == "invoice.payment_failed":
+        return {
+            "billing_collection_status": "payment_failed",
+            "stripe_invoice_status": str(obj.get("status") or "open"),
+        }
+    if event_type == "invoice.sent":
+        return {
+            "billing_collection_status": "invoice_sent",
+            "stripe_invoice_status": str(obj.get("status") or "open"),
+        }
+    if event_type == "invoice.finalized":
+        return {
+            "billing_collection_status": "invoice_finalized",
+            "stripe_invoice_status": str(obj.get("status") or "open"),
+        }
+    if event_type == "invoice.marked_uncollectible":
+        return {
+            "billing_collection_status": "uncollectible",
+            "stripe_invoice_status": str(obj.get("status") or "uncollectible"),
+        }
+    if event_type == "invoice.voided":
+        return {
+            "billing_collection_status": "waived",
+            "stripe_invoice_status": str(obj.get("status") or "void"),
+        }
+    if event_type == "charge.refunded":
+        return {
+            "billing_collection_status": "refunded",
+            "stripe_invoice_status": "refunded",
+        }
+    if event_type in {"charge.dispute.created", "charge.dispute.funds_withdrawn"}:
+        return {
+            "billing_collection_status": "disputed",
+            "stripe_invoice_status": "disputed",
+        }
+    if event_type in {"charge.dispute.closed", "charge.dispute.funds_reinstated"}:
+        return {
+            "billing_collection_status": "dispute_resolved",
+            "stripe_invoice_status": "dispute_resolved",
+        }
+    return {}

@@ -1,12 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Send, MapPin, Sparkles, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { api, audCents } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 const HERO_IMG =
     "https://images.unsplash.com/photo-1762077815792-ab25f29834c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwxfHxkb2clMjB0cmFpbmluZyUyMG91dGRvb3JzfGVufDB8fHx8MTc3NzExNTUzOHww&ixlib=rb-4.1.0&q=85";
+const TRAINER_ACTION_IMG =
+    "https://images.pexels.com/photos/37107251/pexels-photo-37107251.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
+const TRAINER_PROFILE_1 =
+    "https://images.unsplash.com/photo-1660849636221-9a1fc064d57a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBkb2clMjB0cmFpbmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc3MTE1NTM4fDA&ixlib=rb-4.1.0&q=85";
+const TRAINER_PROFILE_2 =
+    "https://images.unsplash.com/photo-1752090660908-6523cd11604c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBkb2clMjB0cmFpbmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc3MTE1NTM4fDA&ixlib=rb-4.1.0&q=85";
 
 export default function Home() {
     const navigate = useNavigate();
@@ -65,15 +72,25 @@ export default function Home() {
     };
 
     return (
-        <div className="App min-h-screen flex flex-col">
+        <div className="App min-h-screen flex flex-col relative overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(208,109,79,0.15),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(112,130,101,0.12),transparent_35%),radial-gradient(circle_at_50%_85%,rgba(26,58,50,0.08),transparent_42%)]" />
             <PublicHeader />
 
             {/* The product surface — one screen */}
-            <main className="flex-1 grid lg:grid-cols-12 gap-0">
-                <section className="lg:col-span-7 px-6 md:px-12 lg:px-20 pt-16 lg:pt-24 pb-20">
-                    <div className="max-w-2xl">
+            <main className="flex-1 grid lg:grid-cols-12 gap-0 relative">
+                <section className="lg:col-span-7 px-6 md:px-12 lg:px-20 pt-14 lg:pt-24 pb-20 relative">
+                    <motion.div
+                        className="max-w-2xl"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.55, ease: [0.2, 0.8, 0.2, 1] }}
+                    >
                         {!results ? (
                             <>
+                                <div className="small-caps inline-flex items-center gap-2 rounded-full border border-[#E5DFD3] bg-[#FAFAF7]/70 px-4 py-2">
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    Outcome-ranked trainer matching
+                                </div>
                                 <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-[#1A3A32]">
                                     What's going on
                                     <br />
@@ -84,60 +101,74 @@ export default function Home() {
                                 </p>
 
                                 <form onSubmit={submit} className="mt-10" data-testid="match-form">
-                                    <div className="card-public p-2 flex flex-col sm:flex-row gap-2 items-stretch">
-                                        <div className="flex-1 flex items-start gap-3 px-4 py-2">
-                                            <label htmlFor="match-description" className="sr-only">
-                                                Describe your dog's training issue
-                                            </label>
-                                            <textarea
-                                                id="match-description"
-                                                ref={inputRef}
-                                                data-testid="match-input"
-                                                rows={2}
-                                                value={desc}
-                                                onChange={(e) => setDesc(e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === "Enter" && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        submit();
-                                                    }
-                                                }}
-                                                placeholder="e.g. My kelpie pulls hard on the leash and barks at other dogs."
-                                                className="bg-transparent flex-1 resize-none outline-none text-[#1A3A32] placeholder:text-[#5C6D59]/70 text-lg leading-snug"
-                                                autoFocus
-                                            />
+                                    <div className="relative rounded-2xl">
+                                        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#D06D4F]/25 via-[#708265]/20 to-[#1A3A32]/15 blur-md" />
+                                        <div className="card-public relative p-2.5 sm:p-3 flex flex-col sm:flex-row gap-2 items-stretch bg-[#FAFAF7]/95 backdrop-blur">
+                                            <div className="flex-1 flex items-start gap-3 px-4 py-2">
+                                                <Sparkles className="h-5 w-5 text-[#D06D4F] mt-1 shrink-0" />
+                                                <div className="flex-1">
+                                                    <label htmlFor="match-description" className="sr-only">
+                                                        Describe your dog's training issue
+                                                    </label>
+                                                    <textarea
+                                                        id="match-description"
+                                                        ref={inputRef}
+                                                        data-testid="match-input"
+                                                        rows={2}
+                                                        value={desc}
+                                                        onChange={(e) => setDesc(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === "Enter" && !e.shiftKey) {
+                                                                e.preventDefault();
+                                                                submit();
+                                                            }
+                                                        }}
+                                                        placeholder="e.g. My kelpie pulls hard on the leash and barks at other dogs."
+                                                        className="bg-transparent w-full resize-none outline-none text-[#1A3A32] placeholder:text-[#5C6D59]/70 text-lg leading-snug"
+                                                        autoFocus
+                                                    />
+                                                    <div className="text-xs text-[#5C6D59] font-mono mt-2">
+                                                        Shift+Enter for line breaks
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="submit"
+                                                disabled={loading}
+                                                data-testid="match-submit"
+                                                className="btn-accent self-end sm:self-stretch sm:w-auto min-w-[8.25rem] justify-center"
+                                            >
+                                                {loading ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Send className="h-4 w-4" />
+                                                )}
+                                                {loading ? "Matching" : "Match"}
+                                            </button>
                                         </div>
-                                        <button
-                                            type="submit"
-                                            disabled={loading}
-                                            data-testid="match-submit"
-                                            className="btn-accent self-end sm:self-stretch sm:w-auto"
-                                        >
-                                            {loading ? (
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                            ) : (
-                                                <Send className="h-4 w-4" />
-                                            )}
-                                            {loading ? "Matching" : "Match"}
-                                        </button>
                                     </div>
-                                    <div className="mt-4 flex items-center gap-3">
-                                        <MapPin className="h-4 w-4 text-[#5C6D59]" />
-                                        <label htmlFor="match-suburb" className="sr-only">
-                                            Choose suburb for matching
-                                        </label>
-                                        <select
-                                            id="match-suburb"
-                                            data-testid="match-suburb"
-                                            value={suburb}
-                                            onChange={(e) => setSuburb(e.target.value)}
-                                            className="bg-transparent text-sm text-[#1A3A32] outline-none border-b border-transparent hover:border-[#E5DFD3] focus:border-[#5C6D59] py-1"
-                                        >
-                                            <option value="">Anywhere in Melbourne</option>
-                                            {suburbs.map((s) => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
+                                    <div className="mt-4 flex flex-wrap items-center gap-3 justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <MapPin className="h-4 w-4 text-[#5C6D59]" />
+                                            <label htmlFor="match-suburb" className="sr-only">
+                                                Choose suburb for matching
+                                            </label>
+                                            <select
+                                                id="match-suburb"
+                                                data-testid="match-suburb"
+                                                value={suburb}
+                                                onChange={(e) => setSuburb(e.target.value)}
+                                                className="bg-transparent text-sm text-[#1A3A32] outline-none border-b border-transparent hover:border-[#E5DFD3] focus:border-[#5C6D59] py-1"
+                                            >
+                                                <option value="">Anywhere in Melbourne</option>
+                                                {suburbs.map((s) => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <span className="text-xs font-mono text-[#5C6D59]">
+                                            Returns 3 ranked trainers instantly
+                                        </span>
                                     </div>
                                     <label className="mt-4 flex items-start gap-2 text-xs text-[#4A615A]">
                                         <input
@@ -172,6 +203,38 @@ export default function Home() {
                                         </button>
                                     ))}
                                 </div>
+                                <div className="grid grid-cols-3 gap-3 mt-8" data-testid="home-trust-metrics">
+                                    <div className="card-public p-3 text-center">
+                                        <div className="small-caps !text-[#D06D4F]">Speed</div>
+                                        <div className="font-serif text-2xl text-[#1A3A32] mt-1">&lt;30s</div>
+                                    </div>
+                                    <div className="card-public p-3 text-center">
+                                        <div className="small-caps !text-[#D06D4F]">Matches</div>
+                                        <div className="font-serif text-2xl text-[#1A3A32] mt-1">Top 3</div>
+                                    </div>
+                                    <div className="card-public p-3 text-center">
+                                        <div className="small-caps !text-[#D06D4F]">Model</div>
+                                        <div className="font-serif text-2xl text-[#1A3A32] mt-1">Outcome</div>
+                                    </div>
+                                </div>
+                                <div className="lg:hidden mt-8" data-testid="mobile-hero-card">
+                                    <div className="card-public overflow-hidden">
+                                        <div className="relative h-52">
+                                            <img
+                                                src={HERO_IMG}
+                                                alt="Dog and owner outdoors"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-[#0D1412]/70 via-[#0D1412]/20 to-transparent" />
+                                            <div className="absolute bottom-0 left-0 right-0 p-5 text-[#F5F2EB]">
+                                                <div className="small-caps !text-[#A3D9BF]">Pay only when it works</div>
+                                                <div className="font-serif text-2xl leading-tight mt-2">
+                                                    Trainers rise by results, not subscriptions.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </>
                         ) : (
                             <Results
@@ -181,7 +244,7 @@ export default function Home() {
                                 onReset={reset}
                             />
                         )}
-                    </div>
+                    </motion.div>
                 </section>
 
                 {/* Right column — visual context. Replaced with results panel on mobile via flex order. */}
@@ -197,6 +260,16 @@ export default function Home() {
                         <div className="font-serif text-3xl leading-tight max-w-xs">
                             Trainers earn their place by results — never by a subscription.
                         </div>
+                        <div className="mt-8 grid grid-cols-2 gap-3 max-w-sm">
+                            <div className="rounded-xl border border-[#A3D9BF]/30 bg-[#0D1412]/25 p-3">
+                                <div className="small-caps !text-[#A3D9BF]">System</div>
+                                <div className="font-mono text-sm mt-2">Autonomous ranking loop</div>
+                            </div>
+                            <div className="rounded-xl border border-[#A3D9BF]/30 bg-[#0D1412]/25 p-3">
+                                <div className="small-caps !text-[#A3D9BF]">Billing</div>
+                                <div className="font-mono text-sm mt-2">Track-only at launch</div>
+                            </div>
+                        </div>
                     </div>
                 </aside>
             </main>
@@ -208,25 +281,72 @@ export default function Home() {
 
 function HomepageSections() {
     return (
-        <section className="max-w-6xl mx-auto px-6 md:px-10 pb-10">
-            <div className="grid md:grid-cols-3 gap-4" data-testid="home-pillars">
-                <article className="card-public p-6">
-                    <div className="small-caps">Owner journey</div>
-                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Fast matching</h2>
-                    <p className="text-[#4A615A] mt-2">Describe one issue and get 3 ranked trainers instantly.</p>
-                    <Link to="/how-it-works" data-testid="home-how-link" className="btn-ghost mt-4 inline-flex">How it works</Link>
+        <section className="max-w-6xl mx-auto px-6 md:px-10 pb-12 space-y-4">
+            <div className="grid lg:grid-cols-12 gap-4" data-testid="home-pillars">
+                <article className="lg:col-span-7 card-public overflow-hidden relative grain-overlay">
+                    <img
+                        src={TRAINER_ACTION_IMG}
+                        alt="Dog training outdoors"
+                        className="absolute inset-0 w-full h-full object-cover opacity-35"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-tr from-[#FAFAF7] via-[#FAFAF7]/92 to-[#F5F2EB]/60" />
+                    <div className="relative p-7 sm:p-8">
+                        <div className="small-caps">Owner journey</div>
+                        <h2 className="font-serif text-4xl sm:text-5xl text-[#1A3A32] mt-2 leading-none">
+                            Fast matching,
+                            <br />
+                            serious outcomes.
+                        </h2>
+                        <p className="text-[#4A615A] mt-4 max-w-lg">
+                            Describe one issue and get three ranked trainers instantly, with transparent connect pricing and trust signals.
+                        </p>
+                        <Link to="/how-it-works" data-testid="home-how-link" className="btn-primary mt-6 inline-flex">
+                            How it works
+                            <ArrowRight className="h-4 w-4" />
+                        </Link>
+                    </div>
                 </article>
-                <article className="card-public p-6">
-                    <div className="small-caps">Trainer journey</div>
-                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Outcome-based</h2>
-                    <p className="text-[#4A615A] mt-2">No monthly listing rent. Ranking is earned with outcomes.</p>
-                    <Link to="/trainers" data-testid="home-trainers-link" className="btn-ghost mt-4 inline-flex">For trainers</Link>
+                <div className="lg:col-span-5 grid sm:grid-cols-2 lg:grid-cols-1 gap-4">
+                    <article className="card-public p-6">
+                        <div className="small-caps">Trainer journey</div>
+                        <h3 className="font-serif text-3xl text-[#1A3A32] mt-2">Outcome-based</h3>
+                        <p className="text-[#4A615A] mt-2">No monthly listing rent. Ranking is earned with outcomes.</p>
+                        <Link to="/trainers" data-testid="home-trainers-link" className="btn-ghost mt-4 inline-flex">For trainers</Link>
+                    </article>
+                    <article className="card-public p-6">
+                        <div className="small-caps">Launch policy</div>
+                        <h3 className="font-serif text-3xl text-[#1A3A32] mt-2">Consent first</h3>
+                        <p className="text-[#4A615A] mt-2">Matching, contact release, and submissions require explicit consent.</p>
+                        <Link to="/trust" data-testid="home-trust-link" className="btn-ghost mt-4 inline-flex">Trust &amp; safety</Link>
+                    </article>
+                </div>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4" data-testid="home-featured-trainers">
+                <article className="card-public p-5 flex items-center gap-4">
+                    <img
+                        src={TRAINER_PROFILE_1}
+                        alt="Professional trainer portrait"
+                        className="w-16 h-16 rounded-full object-cover border border-[#E5DFD3]"
+                    />
+                    <div>
+                        <div className="small-caps">Verified profiles</div>
+                        <div className="text-[#4A615A] text-sm mt-1">
+                            Listings are re-verified on cadence and scored against quality signals.
+                        </div>
+                    </div>
                 </article>
-                <article className="card-public p-6">
-                    <div className="small-caps">Launch policy</div>
-                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Consent first</h2>
-                    <p className="text-[#4A615A] mt-2">Matching, contact release, and submissions require explicit consent.</p>
-                    <Link to="/trust" data-testid="home-trust-link" className="btn-ghost mt-4 inline-flex">Trust &amp; safety</Link>
+                <article className="card-public p-5 flex items-center gap-4">
+                    <img
+                        src={TRAINER_PROFILE_2}
+                        alt="Dog trainer portrait"
+                        className="w-16 h-16 rounded-full object-cover border border-[#E5DFD3]"
+                    />
+                    <div>
+                        <div className="small-caps">Transparent connect</div>
+                        <div className="text-[#4A615A] text-sm mt-1">
+                            Trainers pay only when owners connect, and pricing adapts by local market response.
+                        </div>
+                    </div>
                 </article>
             </div>
         </section>
@@ -236,7 +356,13 @@ function HomepageSections() {
 function Results({ results, matchId, description, onReset }) {
     const navigate = useNavigate();
     return (
-        <div data-testid="match-results" aria-live="polite">
+        <motion.div
+            data-testid="match-results"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+        >
             <div className="small-caps">3 best matches</div>
             <h2 className="editorial-h1 text-4xl sm:text-5xl text-[#1A3A32] mt-3">
                 Here's who fits.
@@ -250,10 +376,13 @@ function Results({ results, matchId, description, onReset }) {
                     </div>
                 )}
                 {results.map((t, i) => (
-                    <article
+                    <motion.article
                         key={t.id}
-                        className="card-public p-6 flex flex-col sm:flex-row gap-5"
+                        className="card-public p-6 flex flex-col sm:flex-row gap-5 bg-[#FAFAF7]/95"
                         data-testid={`result-${t.id}`}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: i * 0.08, ease: "easeOut" }}
                     >
                         <div className="flex items-start gap-4 flex-1">
                             {t.image_url ? (
@@ -269,7 +398,9 @@ function Results({ results, matchId, description, onReset }) {
                             )}
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2 text-xs font-mono text-[#5C6D59]">
-                                    <span className="text-[#1A3A32] font-semibold">#{i + 1}</span>
+                                    <span className="inline-flex items-center justify-center h-6 min-w-6 rounded-full bg-[#1A3A32] text-[#F5F2EB] px-2 text-[10px]">
+                                        #{i + 1}
+                                    </span>
                                     <MapPin className="h-3 w-3" />
                                     {t.suburb}
                                 </div>
@@ -297,7 +428,7 @@ function Results({ results, matchId, description, onReset }) {
                                 {audCents(t.intro_fee_cents)} on connect
                             </div>
                         </div>
-                    </article>
+                    </motion.article>
                 ))}
             </div>
 
@@ -313,6 +444,6 @@ function Results({ results, matchId, description, onReset }) {
                     Trainers pay only when you connect — and only succeed when you hire.
                 </span>
             </div>
-        </div>
+        </motion.div>
     );
 }

@@ -348,6 +348,7 @@ async def reverify_listings(db, ai_service, batch: int = 5) -> Dict[str, Any]:
                     "verification_model": score.get("model", "heuristic"),
                     "verified_at": now_iso(),
                     "published": published,
+                    "contact_ready": bool(t.get("website") or t.get("phone") or t.get("email")),
                 },
                 "$push": {"verification_history": {"$each": [history_entry], "$slice": -20}},
             },
@@ -454,6 +455,7 @@ async def process_discovery_queue(db, ai_service, batch: int = 3) -> Dict[str, A
                 "conversions_30d": 0,
                 "engagements_30d": 0,
                 "published": True,
+                "contact_ready": bool(entry.get("url", "") or candidate.get("phone") or candidate.get("email")),
                 "created_at": now_iso(),
                 "via_discovery": True,
             }

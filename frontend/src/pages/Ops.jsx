@@ -133,6 +133,9 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const pricingState = Array.isArray(snap.pricing_state) ? snap.pricing_state : [];
     const topTrainers = Array.isArray(snap.top_trainers) ? snap.top_trainers : [];
     const auditRecent = Array.isArray(snap.audit_recent) ? snap.audit_recent : [];
+    const billingSummary = snap.billing_summary || {};
+    const nonBillable = snap.non_billable_causes || {};
+    const notificationSummary = snap.notification_summary || {};
 
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
@@ -226,6 +229,44 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                         <div className="text-xs font-mono text-[#8B9E98] mt-3">No buttons — the system decides on score and source.</div>
                     </Section>
                 </div>
+
+                <Section title="Revenue operations" testid="ops-revenue-ops">
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Invoice lifecycle</div>
+                            <div className="space-y-1 text-sm font-mono">
+                                <div>sent · {billingSummary.invoice_sent ?? 0}</div>
+                                <div>paid · {billingSummary.paid ?? 0}</div>
+                                <div>failed · {billingSummary.payment_failed ?? 0}</div>
+                                <div>uncollectible · {billingSummary.uncollectible ?? 0}</div>
+                                <div>waived · {billingSummary.waived ?? 0}</div>
+                                <div>refunded · {billingSummary.refunded ?? 0}</div>
+                                <div>disputed · {billingSummary.disputed ?? 0}</div>
+                                <div>dispute resolved · {billingSummary.dispute_resolved ?? 0}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Non-billable causes</div>
+                            <div className="space-y-1 text-sm font-mono">
+                                <div>profile incomplete · {nonBillable.profile_incomplete ?? 0}</div>
+                                <div>consent required · {nonBillable.consent_required ?? 0}</div>
+                                <div>stripe unconfigured · {nonBillable.stripe_unconfigured ?? 0}</div>
+                                <div>invoice error · {nonBillable.invoice_error ?? 0}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Notification delivery</div>
+                            <div className="space-y-1 text-sm font-mono">
+                                <div>trainer intro sent · {notificationSummary.trainer_intro_sent ?? 0}</div>
+                                <div>trainer intro failed · {notificationSummary.trainer_intro_failed ?? 0}</div>
+                                <div>trainer intro skipped · {notificationSummary.trainer_intro_skipped ?? 0}</div>
+                                <div>submission sent · {notificationSummary.submission_sent ?? 0}</div>
+                                <div>submission failed · {notificationSummary.submission_failed ?? 0}</div>
+                                <div>submission skipped · {notificationSummary.submission_skipped ?? 0}</div>
+                            </div>
+                        </div>
+                    </div>
+                </Section>
 
                 {/* Pricing state */}
                 <Section title="Dynamic pricing · per suburb" testid="ops-pricing">

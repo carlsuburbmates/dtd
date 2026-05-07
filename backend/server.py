@@ -37,6 +37,7 @@ from starlette.middleware.cors import CORSMiddleware
 from services import ai as ai_service
 from services import engine as autonomy
 from services import fraud as fraud_service
+from services import notifications as notifications_service
 from services import stripe_billing
 from services.seed import MELBOURNE_TRAINERS
 
@@ -58,6 +59,8 @@ HOLD_THRESHOLD = 0.60
 ACTIVE_REGION = (os.environ.get("ACTIVE_REGION") or "Greater Melbourne").strip()
 ACTIVE_REGIONS = [r.strip() for r in os.environ.get("ACTIVE_REGIONS", ACTIVE_REGION).split(",") if r.strip()]
 ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
+BILLABILITY_POLICY = (os.environ.get("BILLABILITY_POLICY") or "allow").strip().lower()
+CONTACT_READY_POLICY = (os.environ.get("CONTACT_READY_POLICY") or "allow").strip().lower()
 
 
 def now_iso() -> str:
@@ -192,6 +195,14 @@ def _verification_payload(t: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _has_contact_channel(trainer: Dict[str, Any]) -> bool:
+    return any((trainer.get("website"), trainer.get("phone"), trainer.get("email")))
+
+
+def _is_billable_ready(trainer: Dict[str, Any]) -> bool:
+    return (trainer.get("billing_profile_status") or "").strip().lower() == "ready"
+
+
 def _region_allowed(region: Optional[str]) -> bool:
     if not region:
         return False
@@ -263,15 +274,37 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
         t = by_id.get(m["trainer_id"])
         if not t:
             continue
+        contact_ready = _has_contact_channel(t)
+        billable_ready = _is_billable_ready(t)
+        if CONTACT_READY_POLICY == "block" and not contact_ready:
+            continue
+        if BILLABILITY_POLICY == "block" and not billable_ready:
+            continue
+        policy_penalty = 0.0
+        if CONTACT_READY_POLICY == "rerank" and not contact_ready:
+            policy_penalty += 0.15
+        if BILLABILITY_POLICY == "rerank" and not billable_ready:
+            policy_penalty += 0.20
         # outcome_score already on the doc; AI provides relevance reason.
-        selected.append({**t, "match_score": m["score"], "match_reasoning": m["reasoning"]})
+        selected.append(
+            {
+                **t,
+                "match_score": m["score"],
+                "match_reasoning": m["reasoning"],
+                "contact_ready": contact_ready,
+                "billable_ready": billable_ready,
+                "_policy_penalty": policy_penalty,
+            }
+        )
 
     # Final sort = AI relevance × outcome score. AI relevance is the primary
     # signal; outcome is the tiebreaker / cold-start dampener.
     selected.sort(
-        key=lambda t: (t.get("match_score", 0) * 0.7) + (t.get("outcome_score", 0.05) * 0.3),
+        key=lambda t: ((t.get("match_score", 0) * 0.7) + (t.get("outcome_score", 0.05) * 0.3) - t.get("_policy_penalty", 0.0)),
         reverse=True,
     )
+    for t in selected:
+        t.pop("_policy_penalty", None)
     selected = await _decorate_with_pricing(selected[:3])
 
     match_id = new_id()
@@ -357,6 +390,15 @@ async def create_intro(
     if billing_meta:
         await db.intros.update_one({"id": intro["id"]}, {"$set": billing_meta})
         intro.update(billing_meta)
+
+    # Notify trainer about the new intro; never block owner experience.
+    try:
+        notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+        if notif_meta:
+            await db.intros.update_one({"id": intro["id"]}, {"$set": notif_meta})
+            intro.update(notif_meta)
+    except Exception:  # noqa: BLE001
+        logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
 
     contact = {
         "name": trainer.get("name"),
@@ -533,6 +575,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "intros_30d": 0,
             "conversions_30d": 0,
             "published": True,
+            "contact_ready": bool(sub.get("website") or sub.get("phone") or sub.get("email")),
             "created_at": now_iso(),
             "via_submission_id": sub_doc["id"],
         }
@@ -551,6 +594,15 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         sub_doc["status"] = "held"
 
     await db.submissions.insert_one(sub_doc.copy())
+
+    try:
+        submission_notif = await notifications_service.notify_submitter_result(db, sub_doc)
+        if submission_notif:
+            await db.submissions.update_one({"id": sub_doc["id"]}, {"$set": submission_notif})
+            sub_doc.update(submission_notif)
+    except Exception:  # noqa: BLE001
+        logger.exception("submission notification failed for submission_id=%s", sub_doc.get("id"))
+
     await _audit(auto_action, sub_doc["id"], after={"confidence": conf, "trainer_id": trainer_id}, actor="system")
     return _scrub(
         {
@@ -562,6 +614,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "verification_signals": sub_doc["verification_signals"],
             "trainer_id": trainer_id,
             "billing_profile_status": sub_doc.get("billing_profile_status"),
+            "submitter_notification_status": sub_doc.get("submitter_notification_status"),
         }
     )
 
@@ -615,6 +668,51 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     suspicious_conv = await db.conversions.count_documents({"billing_status": "suspicious"})
     inferred_pending = await db.conversions.count_documents({"inferred": True, "billing_status": "pending"})
     engagements_total = await db.engagements.count_documents({})
+
+    billing_status_defaults = {
+        "invoice_sent": 0,
+        "invoice_finalized": 0,
+        "paid": 0,
+        "payment_failed": 0,
+        "uncollectible": 0,
+        "waived": 0,
+        "refunded": 0,
+        "disputed": 0,
+        "dispute_resolved": 0,
+        "profile_incomplete": 0,
+        "consent_required": 0,
+        "stripe_unconfigured": 0,
+        "invoice_error": 0,
+        "not_billable": 0,
+    }
+    billing_rows = await db.intros.aggregate(
+        [
+            {"$match": {"billing_collection_status": {"$exists": True}}},
+            {"$group": {"_id": "$billing_collection_status", "n": {"$sum": 1}}},
+        ]
+    ).to_list(100)
+    billing_summary = dict(billing_status_defaults)
+    for row in billing_rows:
+        k = str(row.get("_id") or "")
+        if not k:
+            continue
+        billing_summary[k] = int(row.get("n") or 0)
+
+    non_billable_causes = {
+        "profile_incomplete": billing_summary.get("profile_incomplete", 0),
+        "consent_required": billing_summary.get("consent_required", 0),
+        "stripe_unconfigured": billing_summary.get("stripe_unconfigured", 0),
+        "invoice_error": billing_summary.get("invoice_error", 0),
+    }
+
+    notification_summary = {
+        "trainer_intro_sent": await db.intros.count_documents({"trainer_notification_status": "sent"}),
+        "trainer_intro_failed": await db.intros.count_documents({"trainer_notification_status": "failed"}),
+        "trainer_intro_skipped": await db.intros.count_documents({"trainer_notification_status": "skipped"}),
+        "submission_sent": await db.submissions.count_documents({"submitter_notification_status": "sent"}),
+        "submission_failed": await db.submissions.count_documents({"submitter_notification_status": "failed"}),
+        "submission_skipped": await db.submissions.count_documents({"submitter_notification_status": "skipped"}),
+    }
 
     revenue_intro_cents = sum(i.get("intro_fee_cents", 0) for i in intros)
     revenue_conv_cents = sum(c.get("fee_cents", 0) for c in conversions)
@@ -704,6 +802,9 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "audit_recent": audit_recent,
         "submissions_summary": submissions_summary,
         "discovery_summary": discovery_summary,
+        "billing_summary": billing_summary,
+        "non_billable_causes": non_billable_causes,
+        "notification_summary": notification_summary,
         "integrity": integrity,
         "ts": now_iso(),
     }
@@ -725,48 +826,18 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
 
     event_type = str(event.get("type") or "")
     obj = (event.get("data") or {}).get("object") or {}
-    invoice_id = str(obj.get("id") or "")
+    invoice_id = stripe_billing.extract_invoice_id(event_type, obj)
+    if not invoice_id and event_type.startswith("charge.dispute"):
+        charge_id = str(obj.get("charge") or "")
+        invoice_id = stripe_billing.invoice_id_from_charge(charge_id)
+    intro_id = str(((obj.get("metadata") or {}).get("intro_id")) or "")
     updates: Dict[str, Any] = {"stripe_last_event_type": event_type, "stripe_last_event_at": now_iso()}
-
-    if event_type in {"invoice.paid", "invoice.payment_succeeded"}:
-        updates.update(
-            {
-                "billing_collection_status": "paid",
-                "stripe_invoice_status": "paid",
-                "stripe_invoice_paid_at": now_iso(),
-            }
-        )
-    elif event_type == "invoice.payment_failed":
-        updates.update(
-            {
-                "billing_collection_status": "payment_failed",
-                "stripe_invoice_status": str(obj.get("status") or "open"),
-            }
-        )
-    elif event_type == "invoice.sent":
-        updates.update(
-            {
-                "billing_collection_status": "invoice_sent",
-                "stripe_invoice_status": str(obj.get("status") or "open"),
-            }
-        )
-    elif event_type == "invoice.finalized":
-        updates.update(
-            {
-                "billing_collection_status": "invoice_finalized",
-                "stripe_invoice_status": str(obj.get("status") or "open"),
-            }
-        )
-    elif event_type in {"invoice.marked_uncollectible", "invoice.voided"}:
-        updates.update(
-            {
-                "billing_collection_status": "uncollectible",
-                "stripe_invoice_status": str(obj.get("status") or "uncollectible"),
-            }
-        )
+    updates.update(stripe_billing.billing_updates_for_event(event_type, obj))
 
     if invoice_id:
         await db.intros.update_many({"stripe_invoice_id": invoice_id}, {"$set": updates})
+    elif intro_id:
+        await db.intros.update_many({"id": intro_id}, {"$set": updates})
 
     if event_id:
         await db.stripe_events.insert_one(
@@ -812,6 +883,7 @@ async def _seed_if_empty() -> None:
             "id": new_id(),
             "verification_status": "pending",
             "published": False,
+            "contact_ready": bool(entry.get("website") or entry.get("phone") or entry.get("email")),
             "outcome_score": 0.05,
             "intros_30d": 0,
             "conversions_30d": 0,
@@ -898,6 +970,7 @@ async def on_startup() -> None:
     await db.stripe_events.create_index("id", unique=True, sparse=True)
     await db.config_snapshots.create_index("applied_at")
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
+    await db.notification_events.create_index("id", unique=True, sparse=True)
 
     await _seed_if_empty()
     await _seed_discovery_if_empty()

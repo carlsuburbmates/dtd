@@ -1,0 +1,162 @@
+{
+  "$description": "DTD design tokens for Figma sync (public light + admin dark).",
+  "primitives": {
+    "public": {
+      "bg": { "$type": "color", "$value": "#F5F2EB" },
+      "surface": { "$type": "color", "$value": "#FAFAF7" },
+      "ink": { "$type": "color", "$value": "#1A3A32" },
+      "ink_secondary": { "$type": "color", "$value": "#4A615A" },
+      "moss": { "$type": "color", "$value": "#5C6D59" },
+      "line": { "$type": "color", "$value": "#E5DFD3" },
+      "muted": { "$type": "color", "$value": "#EFEBE4" },
+      "secondary": { "$type": "color", "$value": "#E5DFD3" }
+    },
+    "admin": {
+      "bg": { "$type": "color", "$value": "#0D1412" },
+      "surface": { "$type": "color", "$value": "#15201D" },
+      "surface_hover": { "$type": "color", "$value": "#1D2D29" },
+      "line": { "$type": "color", "$value": "#243631" },
+      "ink": { "$type": "color", "$value": "#F5F2EB" },
+      "ink_dim": { "$type": "color", "$value": "#8B9E98" },
+      "muted": { "$type": "color", "$value": "#1A2421" },
+      "secondary": { "$type": "color", "$value": "#1D2D29" }
+    },
+    "brand": {
+      "terracotta_runtime": { "$type": "color", "$value": "#9B4F31" },
+      "terracotta_ui": { "$type": "color", "$value": "#D06D4F" },
+      "terracotta_deep": { "$type": "color", "$value": "#B85C40" }
+    },
+    "status": {
+      "trust_verified": { "$type": "color", "$value": "#2A5A4A" },
+      "trust_warn": { "$type": "color", "$value": "#C98544" },
+      "destructive": { "$type": "color", "$value": "#C52B2B" }
+    }
+  },
+  "semantic": {
+    "background": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.bg}",
+        "admin_dark": "{primitives.admin.bg}"
+      }
+    },
+    "foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.ink}",
+        "admin_dark": "{primitives.admin.ink}"
+      }
+    },
+    "card": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.surface}",
+        "admin_dark": "{primitives.admin.surface}"
+      }
+    },
+    "card_foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.ink}",
+        "admin_dark": "{primitives.admin.ink}"
+      }
+    },
+    "primary": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.ink}",
+        "admin_dark": "{primitives.admin.ink}"
+      }
+    },
+    "primary_foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.bg}",
+        "admin_dark": "{primitives.admin.bg}"
+      }
+    },
+    "secondary": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.secondary}",
+        "admin_dark": "{primitives.admin.secondary}"
+      }
+    },
+    "secondary_foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.ink}",
+        "admin_dark": "{primitives.admin.ink}"
+      }
+    },
+    "muted": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.muted}",
+        "admin_dark": "{primitives.admin.muted}"
+      }
+    },
+    "muted_foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.ink_secondary}",
+        "admin_dark": "{primitives.admin.ink_dim}"
+      }
+    },
+    "accent": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.brand.terracotta_runtime}",
+        "admin_dark": "{primitives.brand.terracotta_runtime}"
+      }
+    },
+    "accent_foreground": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.bg}",
+        "admin_dark": "{primitives.admin.bg}"
+      }
+    },
+    "border": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.line}",
+        "admin_dark": "{primitives.admin.line}"
+      }
+    },
+    "input": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.line}",
+        "admin_dark": "{primitives.admin.line}"
+      }
+    },
+    "ring": {
+      "$type": "color",
+      "$value": {
+        "public_light": "{primitives.public.moss}",
+        "admin_dark": "{primitives.brand.terracotta_runtime}"
+      }
+    }
+  },
+  "spacing": {
+    "space_2xs": { "$type": "dimension", "$value": "2px" },
+    "space_xs": { "$type": "dimension", "$value": "4px" },
+    "space_sm": { "$type": "dimension", "$value": "8px" },
+    "space_md": { "$type": "dimension", "$value": "12px" },
+    "space_lg": { "$type": "dimension", "$value": "16px" },
+    "space_xl": { "$type": "dimension", "$value": "24px" },
+    "space_2xl": { "$type": "dimension", "$value": "32px" },
+    "space_3xl": { "$type": "dimension", "$value": "48px" },
+    "space_4xl": { "$type": "dimension", "$value": "64px" }
+  },
+  "radius": {
+    "radius_sm": { "$type": "dimension", "$value": "6px" },
+    "radius_md": { "$type": "dimension", "$value": "8px" },
+    "radius_lg": { "$type": "dimension", "$value": "12px" },
+    "radius_xl": { "$type": "dimension", "$value": "16px" },
+    "radius_pill": { "$type": "dimension", "$value": "999px" },
+    "radius_full": { "$type": "dimension", "$value": "9999px" }
+  }
+}
+
