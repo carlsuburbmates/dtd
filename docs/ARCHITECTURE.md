@@ -65,8 +65,11 @@
 | `update_health` | 45 s | rolling intro/conv counts + suppressed counts | `system_state.health` + alerts + auto-rollback of last config snapshot if conversion rate drops ≥50 % |
 
 Loop ownership is explicit via env:
-- `RUN_AUTONOMY_IN_API=1` → API process schedules loops.
-- `RUN_AUTONOMY_IN_API=0` → worker process owns loops.
+- `AUTONOMY_LOOP_OWNER=api` → API process is owner.
+- `AUTONOMY_LOOP_OWNER=worker` → worker process is owner.
+- `AUTONOMY_LOOP_OWNER=none` → no process owns/schedules loops.
+- Legacy compatibility: `RUN_AUTONOMY_IN_API=1|0` still maps to `api|worker`, but conflicting values with `AUTONOMY_LOOP_OWNER` hard-fail startup.
+- DB lease guard (`system_state.key=autonomy_loop_lease`) ensures only one live owner executes loops across multiple processes.
 Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 
 ## 4. Data model (collections)

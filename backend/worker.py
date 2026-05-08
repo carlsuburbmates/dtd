@@ -10,6 +10,8 @@ import sentry_sdk
 
 from services import ai as ai_service
 from services import engine as autonomy
+from services import runtime_control
+from services.runtime_control import LoopRuntimeConfig
 import server
 
 ROOT_DIR = Path(__file__).parent
@@ -30,19 +32,37 @@ db = server.db
 mongo_client = server.mongo_client
 
 
-async def ensure_runtime_baseline() -> None:
-    # Worker is the only process that should own autonomy loops in hosted mode.
-    run_loops_in_api = (os.environ.get("RUN_AUTONOMY_IN_API") or "0").strip() == "1"
-    if run_loops_in_api:
-        raise RuntimeError("RUN_AUTONOMY_IN_API must be 0 when running worker process.")
-    await server.on_startup()
+async def ensure_runtime_baseline() -> LoopRuntimeConfig:
+    runtime = runtime_control.resolve_loop_runtime("worker")
+    if runtime.loop_owner != "worker":
+        raise RuntimeError(
+            "Worker process started while loop owner is "
+            f"'{runtime.loop_owner}'. Set AUTONOMY_LOOP_OWNER=worker for worker-owned runtime."
+        )
+    await server.on_startup(process_role="worker", allow_loop_schedule=False)
+    return runtime
 
 
 async def main() -> None:
-    await ensure_runtime_baseline()
+    runtime = await ensure_runtime_baseline()
 
-    tasks = autonomy.schedule_all(db, ai_service)
-    logger.info("worker scheduled %s autonomous loops", len(tasks))
+    tasks = autonomy.schedule_all(
+        db,
+        ai_service,
+        owner_id=runtime.owner_id,
+        lease_enabled=runtime.lease_enabled,
+        lease_ttl_s=runtime.lease_ttl_s,
+        lease_renew_s=runtime.lease_renew_s,
+    )
+    scheduled = max(0, len(tasks) - (1 if runtime.lease_enabled else 0))
+    logger.info(
+        "worker runtime: owner=%s source=%s lease=%s owner_id=%s scheduled_loops=%s",
+        runtime.loop_owner,
+        runtime.source,
+        runtime.lease_enabled,
+        runtime.owner_id,
+        scheduled,
+    )
     if not tasks:
         raise RuntimeError("No autonomous loops scheduled; check worker configuration.")
     try:

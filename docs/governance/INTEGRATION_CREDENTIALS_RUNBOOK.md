@@ -115,8 +115,9 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 3. `ADMIN_PASS`
 4. `ACTIVE_REGION`
 5. `ACTIVE_REGIONS`
-6. `RUN_AUTONOMY_IN_API` (important when running worker)
-7. `CONVERSION_BILLING_MODE` (`track_only` for launch)
+6. `AUTONOMY_LOOP_OWNER` (`api` / `worker` / `none`)
+7. `RUN_AUTONOMY_IN_API` (legacy compatibility; must not conflict with `AUTONOMY_LOOP_OWNER`)
+8. `CONVERSION_BILLING_MODE` (`track_only` for launch)
 
 ### Optional monitoring/email vars currently used by supporting workflows
 1. `SENTRY_DSN`

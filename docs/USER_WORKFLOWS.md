@@ -12,7 +12,7 @@ Technical skeleton companion:
 
 ### 1) Dog owner (primary end user)
 
-#### W1. Match request (core acquisition flow)
+#### W1. Match request (core demand-capture flow)
 - Scope: discover trainers from one problem statement.
 - Entry: owner opens `/` and submits issue text with consent.
 - Main path:
@@ -66,8 +66,8 @@ Technical skeleton companion:
 
 ### 2) Trainer / business submitter
 
-#### W6. Trainer education and intent capture
-- Scope: communicate model and route to submission.
+#### W6. Trainer acquisition and qualification entry
+- Scope: attract trainer interest and route qualified supply to submission.
 - Entry: trainer visits `/trainers` or trainer CTAs from public pages.
 - Main path:
   1. Read pay-on-outcome model.
@@ -75,8 +75,8 @@ Technical skeleton companion:
 - Exit outcomes:
   - Proceeds to submission or support.
 
-#### W7. Listing submission and auto-decision
-- Scope: create/verify listing with no manual review.
+#### W7. Listing submission, decision, and activation start
+- Scope: create/verify listing with no manual review and begin onboarding activation.
 - Entry: submitter posts form on `/submit` with required consents.
 - Main path:
   1. Submit profile (`POST /api/submissions`).
@@ -89,8 +89,8 @@ Technical skeleton companion:
   - Published with `trainer_id` and public detail page.
   - Held with reasoning.
 
-#### W8. Passive trainer monetization lifecycle
-- Scope: trainer-side billing events after intros.
+#### W8. Trainer monetization lifecycle
+- Scope: trainer-side billing and collection lifecycle after intros.
 - Entry: owner creates billed intro for trainer.
 - Main path:
   1. Intro fee metered on `POST /api/intros`.
@@ -98,6 +98,58 @@ Technical skeleton companion:
   3. Stripe webhook reconciles invoice state (`POST /api/stripe/webhook`).
 - Exit outcomes:
   - Intro billing status updated (`invoice_sent`, `paid`, `failed`, etc.).
+
+### 6) Growth + lifecycle operations (cross-actor, partially implemented)
+
+#### W15. Demand acquisition and attribution
+- Scope: track how demand arrives before W1 demand capture.
+- Entry: external traffic source lands on public pages (`/`, `/how-it-works`, `/pricing`, `/faq`).
+- Main path:
+  1. User enters through channel-driven landing surface.
+  2. User proceeds to W1 match request.
+  3. Attribution evidence is retained for channel performance analysis.
+- Exit outcomes:
+  - Attributed demand-source visibility for top-of-funnel traffic.
+
+#### W16. Programmatic SEO and nurture loop
+- Scope: generate and reuse SEO surfaces for ongoing demand generation.
+- Entry: user lands on generated SEO pages (`/seo/{slug}` backend surface + routed frontend pages).
+- Main path:
+  1. SEO copy is generated/cached on demand (`GET /api/seo/{slug}`).
+  2. Visitor follows CTA path into W1/W2 flows.
+  3. Follow-up or nurture pathways are measured for optimization.
+- Exit outcomes:
+  - Search-sourced demand path is measurable and improvable.
+
+#### W17. Trainer onboarding completion and activation
+- Scope: advance newly submitted trainers from publish decision to intro-ready state.
+- Entry: W7 publish result + billing readiness outcomes.
+- Main path:
+  1. Submission publishes as verified/unverified or holds.
+  2. Billing profile state (`ready`, `profile_incomplete`, etc.) is set.
+  3. Trainer progresses toward first-intro readiness and activation.
+- Exit outcomes:
+  - Trainer reaches intro-eligible state or enters remediation path.
+
+#### W18. Revenue recovery and billing remediation
+- Scope: recover revenue when collection path degrades.
+- Entry: failed/uncollectible/disputed/profile-incomplete invoice outcomes.
+- Main path:
+  1. Billing states are observed via webhook and oversight.
+  2. Recovery actions are triggered (notify, fix profile, retry policy, or suppress).
+  3. Recovered rows return to collectible path or move to at-risk reporting.
+- Exit outcomes:
+  - Revenue risk and recovery are explicit and measurable.
+
+#### W19. Trainer reactivation and retention
+- Scope: re-activate low-activity or billing-blocked trainers.
+- Entry: low activity, repeated suppression, or billing failure patterns.
+- Main path:
+  1. Detect reactivation candidates from oversight and loop outputs.
+  2. Trigger remediation sequence (listing refresh, billing repair, outreach).
+  3. Return trainer to intro-ready/active state.
+- Exit outcomes:
+  - Recoverable trainers re-enter live demand flow.
 
 ### 3) Oversight operator (internal observer)
 
@@ -163,21 +215,23 @@ Technical skeleton companion:
   - More complete outcome signal set and stabilized ops state.
 
 ## Workflow Scope Map (quick grouping)
-- `Acquisition`: W1, W6.
+- `Demand generation`: W15, W16.
+- `Demand capture`: W1.
+- `Supply capture`: W6, W11.
 - `Activation`: W2, W7, W9.
 - `Engagement`: W3, W10.
-- `Outcome/Revenue`: W4, W8.
-- `Retention/Reactivation`: W5.
-- `Supply growth`: W11, W13.
+- `Outcome/Revenue`: W4, W8, W18.
+- `Retention/Reactivation`: W5, W19.
+- `Supply growth`: W13, W17.
 - `Autonomous optimization`: W12, W14.
 
 ## Decision Log
 - Chosen actor model includes human and non-human actors because the product is explicitly autonomous.
 - Legacy admin CRUD workflows are excluded by design; endpoints are removed and routes redirect to `/ops`.
-- Trainer lifecycle split into explicit submitter flow (W7) and passive billing lifecycle (W8) to avoid mixing UI and backend revenue mechanics.
+- Trainer lifecycle is split across supply capture (W6/W7), onboarding completion (W17), monetization lifecycle (W8/W18), and reactivation (W19).
 
 ## Execution Readiness
 - Design artifact completeness: complete (Understanding Lock + workflow map + decision log).
 - Technical traceability: complete via `docs/WORKFLOW_TRACE_SHEET.md`.
-- Current implementation status: mixed (`complete` + `partial`), no fully broken core workflow paths identified in code.
+- Current implementation status: mixed (`complete` + `partial` + `planned` + `missing`), no fully broken core workflow paths identified in existing implemented routes.
 - Next step: execute the priority fix queue from `docs/WORKFLOW_TRACE_SHEET.md` to move all partial workflows to complete.

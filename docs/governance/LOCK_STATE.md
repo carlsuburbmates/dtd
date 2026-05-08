@@ -11,8 +11,11 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 4. Region enforcement is active (`ACTIVE_REGION` / `ACTIVE_REGIONS`).
 5. Consent checkpoints are required on match, intro, and submission flows.
 6. Loop ownership is env-controlled:
-- `RUN_AUTONOMY_IN_API=1`: API owns loops
-- `RUN_AUTONOMY_IN_API=0`: worker owns loops
+- `AUTONOMY_LOOP_OWNER=api`: API owns loops
+- `AUTONOMY_LOOP_OWNER=worker`: worker owns loops
+- `AUTONOMY_LOOP_OWNER=none`: no process owns loops
+- Legacy `RUN_AUTONOMY_IN_API=1|0` remains supported but cannot conflict with `AUTONOMY_LOOP_OWNER`
+- DB lease lock `system_state.autonomy_loop_lease` ensures a single active executor across processes
 7. Codex platform-interaction sync rules are governed by:
 - `docs/governance/CODEX_PLATFORM_SYNC.md`
 

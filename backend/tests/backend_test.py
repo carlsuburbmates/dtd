@@ -5,7 +5,7 @@ Covers (per redesign iteration 2):
   * Instant /match (single input → up to 3 results) and per-trainer detail
   * /intros (records intro, returns contact, intro billing may be suppressed by fraud rules)
   * /conversions (idempotent, tracked outcome by default)
-  * /submissions auto-publish (≥0.85) and auto-hold (<0.6)
+  * /submissions auto-publish (≥0.60; ≥0.85 = verified) and auto-hold (<0.6)
   * /seo/{slug:path} including nested slugs
   * /oversight login + read-only oversight surface (X-Admin-Pass)
   * Mongo `_id` scrub everywhere

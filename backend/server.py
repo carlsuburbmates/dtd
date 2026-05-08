@@ -4,8 +4,8 @@ Design intent:
   - The product is the match, not the directory. There is no browse view.
   - Visibility is earned only through outcome signals (billed intros + tracked outcomes)
     via a Bayesian outcome score recomputed every minute by services.engine.
-  - There are no manual approvals. Submissions auto-publish when score ≥ 0.85
-    and auto-hold when < 0.6.
+  - There are no manual approvals. Submissions auto-publish when score ≥ 0.60
+    (≥0.85 is marked verified) and auto-hold when < 0.60.
   - Launch monetisation is intro-first: per-intro fee only.
     Conversions are tracked signals by default (bill mode is feature-flagged).
   - The "admin panel" is a single read-only oversight surface; no endpoint in
@@ -38,6 +38,7 @@ from services import ai as ai_service
 from services import engine as autonomy
 from services import fraud as fraud_service
 from services import notifications as notifications_service
+from services import runtime_control
 from services import stripe_billing
 from services.seed import MELBOURNE_TRAINERS
 
@@ -518,7 +519,7 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
 
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
-    """Submit a real Melbourne trainer. Auto-publishes if AI score ≥ 0.85."""
+    """Submit a real Melbourne trainer. Auto-publishes if AI score ≥ 0.60."""
     if not payload.consent_public_listing or not payload.consent_information_accuracy:
         raise HTTPException(status_code=400, detail="Consent required for public listing.")
 
@@ -720,6 +721,29 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     revenue_intro_cents = sum(i.get("intro_fee_cents", 0) for i in intros)
     revenue_conv_cents = sum(c.get("fee_cents", 0) for c in conversions)
     revenue_total_cents = revenue_intro_cents + revenue_conv_cents
+    collected_statuses = {"paid", "dispute_resolved"}
+    at_risk_statuses = {
+        "payment_failed",
+        "uncollectible",
+        "disputed",
+        "invoice_error",
+        "profile_incomplete",
+        "consent_required",
+        "stripe_unconfigured",
+    }
+    collected_intro_cents = sum(
+        int(i.get("intro_fee_cents", 0) or 0)
+        for i in intros
+        if str(i.get("billing_collection_status") or "") in collected_statuses
+    )
+    at_risk_intro_cents = sum(
+        int(i.get("intro_fee_cents", 0) or 0)
+        for i in intros
+        if str(i.get("billing_collection_status") or "") in at_risk_statuses
+    )
+    booked_revenue_cents = revenue_total_cents
+    collected_revenue_cents = collected_intro_cents
+    at_risk_revenue_cents = at_risk_intro_cents
 
     intros_total = max(1, len(intros))
     intro_to_conv = round(len(conversions) / intros_total, 3)
@@ -770,6 +794,13 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
 
     return {
         "revenue": {
+            "booked_revenue_cents": booked_revenue_cents,
+            "collected_revenue_cents": collected_revenue_cents,
+            "at_risk_revenue_cents": at_risk_revenue_cents,
+            "booked_intro_cents": revenue_intro_cents,
+            "booked_conversion_cents": revenue_conv_cents,
+            "collected_intro_cents": collected_intro_cents,
+            "at_risk_intro_cents": at_risk_intro_cents,
             "intro_cents": revenue_intro_cents,
             "conversion_cents": revenue_conv_cents,
             "total_cents": revenue_total_cents,
@@ -954,8 +985,14 @@ async def _seed_discovery_if_empty() -> None:
     logger.info("seeded %s discovery URLs", len(candidates))
 
 
+def _cancel_bg_tasks() -> None:
+    for task in _BG_TASKS:
+        task.cancel()
+    _BG_TASKS.clear()
+
+
 @app.on_event("startup")
-async def on_startup() -> None:
+async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_loop_schedule: bool = True) -> None:
     await db.trainers.create_index("id", unique=True, sparse=True)
     await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
     await db.intros.create_index("ip")
@@ -975,28 +1012,67 @@ async def on_startup() -> None:
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
     await db.notification_events.create_index("id", unique=True, sparse=True)
 
+    runtime = runtime_control.resolve_loop_runtime(process_role)
     await _seed_if_empty()
     await _seed_discovery_if_empty()
 
-    # Run an immediate ranking + pricing pass so the first request has data.
-    try:
-        await autonomy.recompute_ranking(db)
-        await autonomy.recompute_pricing(db)
-        await autonomy.update_health(db)
-    except Exception:  # noqa: BLE001
-        logger.exception("initial loop pass failed")
-
-    # Schedule continuous loops when API owns loop execution.
-    run_loops_in_api = (os.environ.get("RUN_AUTONOMY_IN_API") or "1").strip() == "1"
-    if run_loops_in_api:
-        _BG_TASKS.extend(autonomy.schedule_all(db, ai_service))
-        logger.info("scheduled %s autonomous loops in API process", len(_BG_TASKS))
+    # Only the active owner process should execute initial autonomy writes.
+    if allow_loop_schedule and runtime.should_schedule_loops:
+        try:
+            await autonomy.recompute_ranking(db)
+            await autonomy.recompute_pricing(db)
+            await autonomy.update_health(db)
+        except Exception:  # noqa: BLE001
+            logger.exception("initial loop pass failed")
     else:
-        logger.info("API loop scheduling disabled (RUN_AUTONOMY_IN_API=0); worker process should own loops")
+        logger.info(
+            "initial loop pass skipped: process=%s owner=%s allow_loop_schedule=%s",
+            runtime.process_role,
+            runtime.loop_owner,
+            allow_loop_schedule,
+        )
+
+    scheduled = 0
+
+    if not allow_loop_schedule:
+        logger.info(
+            "autonomy startup: process=%s owner=%s source=%s lease=%s scheduled_loops=%s (disabled by caller)",
+            runtime.process_role,
+            runtime.loop_owner,
+            runtime.source,
+            runtime.lease_enabled,
+            scheduled,
+        )
+        return
+
+    if _BG_TASKS:
+        logger.warning("autonomy startup called with %s existing tasks; rescheduling from clean state", len(_BG_TASKS))
+        _cancel_bg_tasks()
+
+    if runtime.should_schedule_loops:
+        tasks = autonomy.schedule_all(
+            db,
+            ai_service,
+            owner_id=runtime.owner_id,
+            lease_enabled=runtime.lease_enabled,
+            lease_ttl_s=runtime.lease_ttl_s,
+            lease_renew_s=runtime.lease_renew_s,
+        )
+        _BG_TASKS.extend(tasks)
+        scheduled = max(0, len(tasks) - (1 if runtime.lease_enabled else 0))
+
+    logger.info(
+        "autonomy startup: process=%s owner=%s source=%s lease=%s owner_id=%s scheduled_loops=%s",
+        runtime.process_role,
+        runtime.loop_owner,
+        runtime.source,
+        runtime.lease_enabled,
+        runtime.owner_id,
+        scheduled,
+    )
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
-    for t in _BG_TASKS:
-        t.cancel()
+    _cancel_bg_tasks()
     mongo_client.close()

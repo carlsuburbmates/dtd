@@ -248,7 +248,7 @@ class TestOversightShapeIter3:
                   "integrity", "top_trainers", "audit_recent", "pricing_state"):
             assert k in ov, f"missing top-level key: {k}"
 
-        # 6 autonomous loops
+        # autonomous loop snapshot includes all scheduled loop families
         loops = ov["loops"]
         for k in ("ranking", "pricing", "verification", "discovery", "inference", "health"):
             assert k in loops, f"missing loops.{k}"

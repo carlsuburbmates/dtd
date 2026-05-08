@@ -26,16 +26,19 @@ Launch Bark&Bond in Greater Melbourne with:
 
 1. Backend oversight auth currently uses `ADMIN_PASS` (`X-Admin-Pass`) in `backend/server.py`.
 2. Loop ownership is explicit:
-- `RUN_AUTONOMY_IN_API=1` = API owns loops.
-- `RUN_AUTONOMY_IN_API=0` = worker owns loops.
-3. Active scope is region-gated via `ACTIVE_REGION` / `ACTIVE_REGIONS`.
-4. Consent checkpoints are enforced on `/match`, `/intros`, and `/submissions`.
-5. Intro idempotency is enforced via `Idempotency-Key` / `client_token`.
-6. Conversion billing defaults to `CONVERSION_BILLING_MODE=track_only` (bill-mode is feature-flagged).
-7. Intro billing collection path is Stripe invoice-based when configured (`STRIPE_SECRET_KEY` + webhook reconciliation).
-8. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
-9. Source-ingestion loop and T+7 outreach loop are implemented in `backend/services/automation.py` and scheduled by engine.
-10. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
+- `AUTONOMY_LOOP_OWNER=api` = API owns loops.
+- `AUTONOMY_LOOP_OWNER=worker` = worker owns loops.
+- `AUTONOMY_LOOP_OWNER=none` = loops disabled by ownership contract.
+- Legacy `RUN_AUTONOMY_IN_API=1|0` is supported but cannot conflict with `AUTONOMY_LOOP_OWNER`.
+3. Loop execution is lease-guarded in DB (`system_state.autonomy_loop_lease`) so only one live process executes loops at a time.
+4. Active scope is region-gated via `ACTIVE_REGION` / `ACTIVE_REGIONS`.
+5. Consent checkpoints are enforced on `/match`, `/intros`, and `/submissions`.
+6. Intro idempotency is enforced via `Idempotency-Key` / `client_token`.
+7. Conversion billing defaults to `CONVERSION_BILLING_MODE=track_only` (bill-mode is feature-flagged).
+8. Intro billing collection path is Stripe invoice-based when configured (`STRIPE_SECRET_KEY` + webhook reconciliation).
+9. Matching/scoring is deterministic heuristic in `backend/services/ai.py`.
+10. Source-ingestion loop and T+7 outreach loop are implemented in `backend/services/automation.py` and scheduled by engine.
+11. Stage A verifier exists at `scripts/verify_stage_a_runtime.sh`.
 
 ### Infrastructure reality
 
@@ -60,7 +63,7 @@ Evidence references for infrastructure status:
 Status: completed.
 Evidence references:
 1. Oversight auth and scope/consent enforcement: `backend/server.py`.
-2. Loop-ownership guard: `backend/worker.py` (`RUN_AUTONOMY_IN_API` enforcement).
+2. Loop-ownership guard + lease contract: `backend/services/runtime_control.py`, `backend/worker.py`, `backend/services/engine.py`.
 3. Launch billing default and conversion handling: `backend/services/engine.py` (`CONVERSION_BILLING_MODE` default) and `backend/server.py` (`/api/conversions`).
 
 Locked decisions now implemented:
@@ -91,9 +94,9 @@ Done when:
 2. Observe intro event quality, suppression patterns, and incident trends.
 3. Tune thresholds/policies only with explicit evidence updates in docs.
 
-### P3 - Website completion (public + trainer UX)
+### P3 - Website completion (public + trainer UX only)
 
-Status: completed (baseline IA + routes + build verification complete).
+Status: completed (IA/routes/UX baseline complete; does not imply business workflow completeness).
 Evidence references:
 1. Route map: `frontend/src/App.js`.
 2. Build-pass record: `docs/governance/LOCK_STATE.md` ("Verification evidence", compileall + frontend build pass).
@@ -123,6 +126,20 @@ Done when:
 1. All listed routes exist and render.
 2. Primary CTAs are wired and non-dead.
 3. Frontend build passes in CI/local.
+
+### P4 - Business workflow completeness (demand/supply/revenue lifecycle)
+
+Status: in progress.
+
+Evidence gates:
+1. `docs/USER_WORKFLOWS.md` includes `W1-W19` with demand generation, onboarding completion, and revenue recovery workflows.
+2. `docs/WORKFLOW_TRACE_SHEET.md` assigns explicit status (`complete|partial|planned|missing`) for each workflow.
+3. Oversight KPI semantics separate booked revenue from collected/at-risk collection outcomes.
+4. Operations runbook defines KPI meanings with no terminology conflicts.
+
+Done when:
+1. All `R1-R6` recommendations in `SESSION_IMPLEMENTATION_REPORT_2026-05-08.md` are implemented or explicitly closed with evidence.
+2. No remaining contradictions between roadmap claims and workflow/operations evidence.
 
 ## Repo Task Backlog (codebase-derived)
 

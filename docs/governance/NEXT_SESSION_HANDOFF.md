@@ -304,7 +304,7 @@ Files:
 6. `docs/governance/LOCK_STATE.md`
 
 Verification commands:
-1. `rg -n "Claude|Sonnet|per-conversion fee|six loops|6 autonomous loops" README.md docs backend frontend -S`
+1. `rg -n "Claude|Sonnet|per-conversion fee|six loops|6 autonomous loops|RUN_AUTONOMY_IN_API=1 = API owns loops" README.md docs backend frontend -S`
 2. Confirm all hits are either intentional historical notes or corrected.
 
 Pass criteria:

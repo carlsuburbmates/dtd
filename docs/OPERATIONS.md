@@ -8,7 +8,9 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 
 | Tile | Means |
 |---|---|
-| **Revenue · billed** | All-time billed intro + conversion cents. In launch `track_only` mode, conversion revenue is expected to stay at 0. |
+| **Revenue · booked** | Status-based commercial value (`booked_revenue_cents`) from billed intros + conversion fee rows. In launch `track_only` mode, conversion booking is expected to stay at 0. |
+| **Revenue · collected** | Cash-collected intro value (`collected_revenue_cents`) from settled invoice outcomes (`paid`/`dispute_resolved`). |
+| **Revenue · at risk** | Booked intro value currently exposed to collection risk (`at_risk_revenue_cents`) for failed/uncollectible/disputed/remediation statuses. |
 | **Intros 24 h / 7 d** | Billed intros only. |
 | **Conversions 24 h** | Confirmed outcomes (`tracked` + `billed`). |
 | **Engagement events** | website/phone/email/return-visit clicks since launch. |

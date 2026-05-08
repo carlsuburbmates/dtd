@@ -164,7 +164,12 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
 
                 {/* North star */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-northstar">
-                    <Metric label="Revenue · all time" value={audCents(rev.total_cents)} sub={`intro ${audCents(rev.intro_cents)} · conv ${audCents(rev.conversion_cents)}`} testid="metric-revenue" />
+                    <Metric
+                        label="Revenue · booked"
+                        value={audCents(rev.booked_revenue_cents ?? rev.total_cents)}
+                        sub={`collected ${audCents(rev.collected_revenue_cents)} · at risk ${audCents(rev.at_risk_revenue_cents)}`}
+                        testid="metric-revenue"
+                    />
                     <Metric label="Intros · 24h" value={tp.intros_24h ?? 0} sub={`7d ${tp.intros_7d ?? 0}`} testid="metric-intros" />
                     <Metric label="Conversions · 24h" value={tp.conversions_24h ?? 0} sub={`rate ${((tp.intro_to_conversion_rate || 0) * 100).toFixed(0)}%`} testid="metric-conversions" />
                     <Metric label="Live listings" value={integrity.live_total ?? 0} sub={`${integrity.verified ?? 0} verified · ${integrity.hidden ?? 0} held`} testid="metric-listings" />

@@ -19,8 +19,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from . import automation as automation_service
 
@@ -40,6 +44,7 @@ INFERENCE_INTERVAL_S = 60 * 15
 HEALTH_INTERVAL_S = 45
 SOURCE_INGEST_INTERVAL_S = 60 * 60 * 6
 OUTREACH_INTERVAL_S = 60 * 60
+AUTONOMY_LEASE_KEY = "autonomy_loop_lease"
 
 # Pricing only goes dynamic after a suburb has enough demand data.  Below
 # this threshold, price is frozen at BASE_INTRO_FEE so we never sticker-shock
@@ -635,18 +640,107 @@ async def _run_loop(name: str, fn, interval: int) -> None:
         await asyncio.sleep(interval)
 
 
-def schedule_all(db, ai_service) -> List[asyncio.Task]:
+class LoopLease:
+    def __init__(self, db, *, owner_id: str, ttl_s: int, renew_s: int):
+        self.db = db
+        self.owner_id = owner_id
+        self.ttl_s = ttl_s
+        self.renew_s = renew_s
+        self.is_holder = False
+        self.last_seen_owner: Optional[str] = None
+
+    async def heartbeat(self) -> bool:
+        now_epoch = time.time()
+        expires_epoch = now_epoch + self.ttl_s
+        now_ts = now_iso()
+        try:
+            doc = await self.db.system_state.find_one_and_update(
+                {
+                    "key": AUTONOMY_LEASE_KEY,
+                    "$or": [
+                        {"owner_id": self.owner_id},
+                        {"expires_at_epoch": {"$lte": now_epoch}},
+                        {"expires_at_epoch": {"$exists": False}},
+                    ],
+                },
+                {
+                    "$set": {
+                        "key": AUTONOMY_LEASE_KEY,
+                        "owner_id": self.owner_id,
+                        "expires_at_epoch": expires_epoch,
+                        "ttl_s": self.ttl_s,
+                        "last_heartbeat": now_ts,
+                    },
+                },
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            doc = await self.db.system_state.find_one({"key": AUTONOMY_LEASE_KEY}, {"_id": 0})
+
+        self.last_seen_owner = (doc or {}).get("owner_id")
+        self.is_holder = bool(
+            doc
+            and doc.get("owner_id") == self.owner_id
+            and float(doc.get("expires_at_epoch") or 0) > now_epoch
+        )
+        return self.is_holder
+
+
+async def _run_loop_with_lease(name: str, fn, interval: int, lease: Optional[LoopLease]) -> None:
+    while True:
+        try:
+            if lease is None or lease.is_holder:
+                await fn()
+        except Exception:  # noqa: BLE001
+            logger.exception("loop %s failed", name)
+        await asyncio.sleep(interval)
+
+
+async def _lease_heartbeat_task(lease: LoopLease) -> None:
+    was_holder = False
+    while True:
+        try:
+            is_holder = await lease.heartbeat()
+            if is_holder and not was_holder:
+                logger.info("autonomy lease acquired owner_id=%s ttl=%ss", lease.owner_id, lease.ttl_s)
+            if (not is_holder) and was_holder:
+                logger.warning("autonomy lease lost owner_id=%s current_owner=%s", lease.owner_id, lease.last_seen_owner)
+            was_holder = is_holder
+        except Exception:  # noqa: BLE001
+            logger.exception("autonomy lease heartbeat failed owner_id=%s", lease.owner_id)
+            was_holder = False
+        await asyncio.sleep(lease.renew_s)
+
+
+def schedule_all(
+    db,
+    ai_service,
+    *,
+    owner_id: str = "",
+    lease_enabled: bool = True,
+    lease_ttl_s: int = 120,
+    lease_renew_s: int = 30,
+) -> List[asyncio.Task]:
     if os.environ.get("DISABLE_AUTONOMY") == "1":
         logger.warning("autonomy disabled via env")
         return []
+    lease = LoopLease(
+        db,
+        owner_id=owner_id or f"autonomy@{os.getpid()}",
+        ttl_s=lease_ttl_s,
+        renew_s=lease_renew_s,
+    ) if lease_enabled else None
     tasks = [
-        asyncio.create_task(_run_loop("ranking", lambda: recompute_ranking(db), RANKING_INTERVAL_S)),
-        asyncio.create_task(_run_loop("pricing", lambda: recompute_pricing(db), PRICING_INTERVAL_S)),
-        asyncio.create_task(_run_loop("verification", lambda: reverify_listings(db, ai_service), VERIFICATION_INTERVAL_S)),
-        asyncio.create_task(_run_loop("discovery", lambda: process_discovery_queue(db, ai_service), DISCOVERY_INTERVAL_S)),
-        asyncio.create_task(_run_loop("inference", lambda: promote_inferred_conversions(db), INFERENCE_INTERVAL_S)),
-        asyncio.create_task(_run_loop("health", lambda: update_health(db), HEALTH_INTERVAL_S)),
-        asyncio.create_task(_run_loop("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S)),
-        asyncio.create_task(_run_loop("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S)),
+        asyncio.create_task(_run_loop_with_lease("ranking", lambda: recompute_ranking(db), RANKING_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("pricing", lambda: recompute_pricing(db), PRICING_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("verification", lambda: reverify_listings(db, ai_service), VERIFICATION_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("discovery", lambda: process_discovery_queue(db, ai_service), DISCOVERY_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("inference", lambda: promote_inferred_conversions(db), INFERENCE_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("health", lambda: update_health(db), HEALTH_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S, lease)),
     ]
+    if lease is not None:
+        tasks.append(asyncio.create_task(_lease_heartbeat_task(lease)))
     return tasks
