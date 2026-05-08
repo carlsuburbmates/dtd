@@ -17,7 +17,11 @@ def _api_key() -> str:
 
 
 def _from_email() -> str:
-    return (os.environ.get("RESEND_FROM") or "onboarding@resend.dev").strip()
+    return (os.environ.get("RESEND_FROM") or "no-reply@dogtrainersdirectory.com.au").strip()
+
+
+def _reply_to_email() -> str:
+    return (os.environ.get("RESEND_REPLY_TO") or "info@dogtrainersdirectory.com.au").strip()
 
 
 def _retry_attempts() -> int:
@@ -95,7 +99,17 @@ async def _send_with_retry(
         return {"status": "skipped", "attempts": 0, "reason": "no_resend_api_key"}
 
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-    payload = {"from": _from_email(), "to": [to_email], "subject": subject, "html": html}
+    reply_to_email = _reply_to_email()
+    payload = {
+        "from": _from_email(),
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+        # Resend accepts `reply_to`; we also set an explicit header so the
+        # delivered MIME always carries Reply-To across providers.
+        "reply_to": [reply_to_email],
+        "headers": {"Reply-To": reply_to_email},
+    }
     attempts = _retry_attempts()
     last_error = ""
 
@@ -153,6 +167,14 @@ async def _send_with_retry(
 
 def _safe_text(value: Optional[str]) -> str:
     return (value or "").strip()
+
+
+def _public_app_base_url() -> str:
+    return (
+        (os.environ.get("FRONTEND_BASE_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
 
 
 async def notify_trainer_new_intro(db, trainer: Dict[str, Any], intro: Dict[str, Any]) -> Dict[str, Any]:
@@ -213,6 +235,9 @@ async def notify_submitter_result(db, submission: Dict[str, Any]) -> Dict[str, A
         f"<p>Your submission for <strong>{name}</strong> is now <strong>{status}</strong>.</p>"
         f"<p>Confidence score: {float(submission.get('confidence_score') or 0):.2f}</p>"
     )
+    base = _public_app_base_url()
+    if base and submission.get("id"):
+        html += f'<p>Track status: <a href="{base}/submit/status/{submission.get("id")}">View submission status</a></p>'
     outcome = await _send_with_retry(
         db,
         target_kind="submission",

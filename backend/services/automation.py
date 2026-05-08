@@ -109,10 +109,19 @@ def _outreach_html(trainer_name: str) -> str:
     )
 
 
+def _public_app_base_url() -> str:
+    return (
+        (os.environ.get("FRONTEND_BASE_URL") or "")
+        .strip()
+        .rstrip("/")
+    )
+
+
 async def send_t7_outreach(db) -> Dict[str, Any]:
     """Send a T+7 day follow-up email for intros with no conversion signal."""
     api_key = (os.environ.get("RESEND_API_KEY") or "").strip()
-    resend_from = (os.environ.get("RESEND_FROM") or "onboarding@resend.dev").strip()
+    resend_from = (os.environ.get("RESEND_FROM") or "no-reply@dogtrainersdirectory.com.au").strip()
+    resend_reply_to = (os.environ.get("RESEND_REPLY_TO") or "info@dogtrainersdirectory.com.au").strip()
     if not api_key:
         return {"ok": True, "skipped": True, "reason": "no_resend_api_key", "checked": 0, "sent": 0}
 
@@ -140,11 +149,20 @@ async def send_t7_outreach(db) -> Dict[str, Any]:
         if conv:
             continue
 
+        follow_up_html = _outreach_html(intro.get("trainer_name", ""))
+        base = _public_app_base_url()
+        if base:
+            follow_link = f"{base}/follow-up/{intro_id}"
+            follow_up_html += f'<p><a href="{follow_link}">Confirm outcome</a></p>'
+
         payload = {
             "from": resend_from,
             "to": [intro["user_email"]],
             "subject": "Quick follow-up on your dog trainer match",
-            "html": _outreach_html(intro.get("trainer_name", "")),
+            "html": follow_up_html,
+            # Keep both fields to maximize downstream client compatibility.
+            "reply_to": [resend_reply_to],
+            "headers": {"Reply-To": resend_reply_to},
         }
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         try:
