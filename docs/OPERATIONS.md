@@ -11,14 +11,16 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 | **Revenue · booked** | Status-based commercial value (`booked_revenue_cents`) from billed intros + conversion fee rows. In launch `track_only` mode, conversion booking is expected to stay at 0. |
 | **Revenue · collected** | Cash-collected intro value (`collected_revenue_cents`) from settled invoice outcomes (`paid`/`dispute_resolved`). |
 | **Revenue · at risk** | Booked intro value currently exposed to collection risk (`at_risk_revenue_cents`) for failed/uncollectible/disputed/remediation statuses. |
+| **Trial free** | Intro rows in trainer 30-day free window (`billing_collection_status=trial_free`), excluded from collected revenue. |
 | **Intros 24 h / 7 d** | Billed intros only. |
 | **Conversions 24 h** | Confirmed outcomes (`tracked` + `billed`). |
 | **Engagement events** | website/phone/email/return-visit clicks since launch. |
+| **Connect-click signals** | included in engagement totals as `result_connect_click` pre-intro signals. |
 | **Suppressed intros** | Anti-gaming filter rejected billing for these. Ranking unaffected by them. |
 | **Suspicious conversions** | Manual confirms inside 5 min of intro. Stored, not billed. |
 | **Inferred pending** | Multi-signal conversions awaiting the 48 h + ≥0.8 confidence promotion to `tracked` (or `billed` in bill-mode). |
-| **Loop cards** | Last-run timestamp + key counter per loop. |
-| **Pricing state** | Per suburb. `frozen=true` means below the 10 intros / 7 d threshold; price is locked at A$5. |
+| **Loop cards** | Last-run timestamp + key counter per loop (including billing recovery, nurture, and reactivation routing). |
+| **Pricing state** | Per suburb fixed intro fee snapshot. Launch mode is `pricing_mode=fixed` and fee defaults to A$5 after trainer trial window. |
 | **Top trainers** | Sorted by `outcome_score`. Breakdown is on the trainer doc. |
 | **Recent system actions** | Audit log. `actor=system` rows are loop activity. |
 
@@ -28,6 +30,8 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 - `integrity_ratio` ≥ 0.5.
 - No `severity:high` alerts older than the last loop run.
 - `discovery.pending` trends down over time (queue is being processed).
+- `billing_recovery.retry_exhausted` does not grow continuously (or remediation path is actively being worked).
+- `source_ingestion.suppressed_sources` remains low and non-sticky after source health recovers.
 
 ## 3. Common failure scenarios
 
@@ -42,7 +46,7 @@ Likely cause: backend crash or a long-running coroutine. Action:
 
 If the drop is real (not a side effect of yesterday's burst):
 1. Check `audit_recent` for any high-impact changes (deletions, manual config writes).
-2. Inspect `pricing_state` — sometimes a sudden multiplier hike chokes demand. The pricing loop will smooth this back over the next two passes due to EWMA.
+2. Inspect `pricing_state` — confirm `pricing_mode=fixed` and `intro_fee_cents` equals your launch policy.
 3. If a recent change is the cause, write its inverse as a fresh `config_snapshots` row; the next health loop will treat the previous change as outdated.
 
 ### C. `auto_rollback` alert
@@ -67,9 +71,11 @@ No action is required — these intros never billed and never affected ranking. 
 
 Loop runs every 10 min. Check `system_state.discovery.last_run`. If stale, see (A). If fresh but pending count is high, the queue may be backlogged; heuristic verification still resolves items conservatively (many go to `discarded`).
 
-### F. Pricing whiplash
+### F. Pricing mismatch
 
-If a suburb's multiplier swings by more than 0.5 between passes, lower `PRICING_EWMA_ALPHA` in `engine.py`. Defaults to 0.30; 0.15 produces glassier curves at the cost of slower demand response.
+If intro fee differs from expected launch policy, verify runtime env and restart runtime:
+- `FIXED_INTRO_FEE_CENTS` should match your intended amount (default `500`).
+- `TRAINER_FREE_INTRO_DAYS` should match your intended trial window (default `30`).
 
 ## 4. Manual interventions (when essential)
 

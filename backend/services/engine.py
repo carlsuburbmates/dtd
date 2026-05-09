@@ -2,12 +2,15 @@
 
 Loops (asyncio background tasks scheduled by ``schedule_all``):
   - ranking_loop      (60 s)  composite outcome_score over multiple signals.
-  - pricing_loop      (90 s)  EWMA-smoothed, threshold-gated dynamic intro fee.
+  - pricing_loop      (90 s)  refreshes fixed intro fee state per suburb.
   - verification_loop (6 h)   age-weighted re-score; cross-source bonus.
   - discovery_loop    (10 min) processes the discovery_queue (ingestion).
   - inference_loop    (15 min) promotes inferred conversions to tracked/billed.
   - source_ingestion  (6 h)   scans configured source pages and queues candidates.
   - outreach_loop     (1 h)   sends T+7 follow-up emails via Resend.
+  - billing_recovery  (30 min) retries failed intro collection with backoff.
+  - nurture_loop      (1 h)   updates campaign/source remarketing cohorts.
+  - reactivation_loop (6 h)   routes inactive trainers to reactivation lifecycle.
   - health_loop       (45 s)  anomaly detection + auto-rollback last-good config.
 
 The functions in this module are unit-testable and idempotent.  Each writes
@@ -27,6 +30,8 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from . import automation as automation_service
+from . import notifications as notifications_service
+from . import stripe_billing
 
 logger = logging.getLogger("dtd.engine")
 
@@ -44,13 +49,10 @@ INFERENCE_INTERVAL_S = 60 * 15
 HEALTH_INTERVAL_S = 45
 SOURCE_INGEST_INTERVAL_S = 60 * 60 * 6
 OUTREACH_INTERVAL_S = 60 * 60
+BILLING_RECOVERY_INTERVAL_S = 60 * 30
+NURTURE_INTERVAL_S = 60 * 60
+REACTIVATION_ROUTE_INTERVAL_S = 60 * 60 * 6
 AUTONOMY_LEASE_KEY = "autonomy_loop_lease"
-
-# Pricing only goes dynamic after a suburb has enough demand data.  Below
-# this threshold, price is frozen at BASE_INTRO_FEE so we never sticker-shock
-# trainers from noise on day one.
-PRICING_MIN_INTROS_7D = 10
-PRICING_EWMA_ALPHA = 0.30           # smoothing factor
 
 # Outcome score is a weighted blend of multiple signals.
 W_CONV = 0.50
@@ -85,6 +87,25 @@ def now_iso() -> str:
 
 def _iso_ago(days: int = 0, hours: int = 0, minutes: int = 0) -> str:
     return (now() - timedelta(days=days, hours=hours, minutes=minutes)).isoformat()
+
+
+def _parse_iso(value: str) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def _int_env(name: str, default: int, *, minimum: int = 1, maximum: int = 10_000) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+FIXED_INTRO_FEE_CENTS = _int_env("FIXED_INTRO_FEE_CENTS", BASE_INTRO_FEE, minimum=100, maximum=50_000)
 
 
 # ---------------------------------------------------------------------------
@@ -219,13 +240,15 @@ async def recompute_ranking(db) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Pricing loop — threshold-gated, EWMA-smoothed
+# Pricing loop — fixed intro fee state
 # ---------------------------------------------------------------------------
 
 
 async def recompute_pricing(db) -> Dict[str, Any]:
-    """Per-suburb intro fee.  Stays at base until enough demand is observed,
-    then uses an EWMA over the demand multiplier so prices don't whiplash.
+    """Per-suburb intro fee snapshot.
+
+    Launch policy uses a fixed intro fee after trial, so this loop keeps
+    `pricing_state` synchronized for oversight visibility.
     """
     cutoff = _iso_ago(days=7)
     pipeline = [
@@ -235,37 +258,25 @@ async def recompute_pricing(db) -> Dict[str, Any]:
     rows = await db.intros.aggregate(pipeline).to_list(500)
     counts = {r["_id"]: r["n"] for r in rows if r.get("_id")}
 
-    qualifying = [n for n in counts.values() if n >= PRICING_MIN_INTROS_7D]
-    median = max(1, (sum(qualifying) / len(qualifying)) if qualifying else 1)
-
     suburbs = await db.trainers.distinct("suburb", {"published": True})
     out: List[Dict[str, Any]] = []
     for suburb in suburbs:
         n = counts.get(suburb, 0)
-        if n < PRICING_MIN_INTROS_7D:
-            target_mult = 1.0  # frozen at base
-        else:
-            target_mult = max(0.7, min(2.5, 0.7 + 0.6 * (n / median)))
-
-        existing = await db.pricing_state.find_one({"suburb": suburb}, {"_id": 0})
-        prev_mult = float(existing["multiplier"]) if existing and existing.get("multiplier") else 1.0
-        # EWMA smoothing.
-        smoothed = (1 - PRICING_EWMA_ALPHA) * prev_mult + PRICING_EWMA_ALPHA * target_mult
-        smoothed = round(smoothed, 3)
-        fee = int(BASE_INTRO_FEE * smoothed)
+        fee = int(FIXED_INTRO_FEE_CENTS)
         await db.pricing_state.update_one(
             {"suburb": suburb},
             {"$set": {
                 "suburb": suburb,
-                "multiplier": smoothed,
+                "multiplier": 1.0,
                 "intro_fee_cents": fee,
                 "intros_7d": n,
-                "frozen": n < PRICING_MIN_INTROS_7D,
+                "frozen": True,
+                "pricing_mode": "fixed",
                 "updated_at": now_iso(),
             }},
             upsert=True,
         )
-        out.append({"suburb": suburb, "multiplier": smoothed, "intro_fee_cents": fee, "frozen": n < PRICING_MIN_INTROS_7D})
+        out.append({"suburb": suburb, "multiplier": 1.0, "intro_fee_cents": fee, "frozen": True, "pricing_mode": "fixed"})
 
     await db.system_state.update_one(
         {"key": "pricing"},
@@ -273,7 +284,7 @@ async def recompute_pricing(db) -> Dict[str, Any]:
             "key": "pricing",
             "last_run": now_iso(),
             "suburbs_priced": len(out),
-            "frozen_count": sum(1 for r in out if r["frozen"]),
+            "fixed_count": len(out),
         }},
         upsert=True,
     )
@@ -281,11 +292,12 @@ async def recompute_pricing(db) -> Dict[str, Any]:
 
 
 async def get_intro_fee(db, suburb: Optional[str]) -> int:
+    fixed = int(FIXED_INTRO_FEE_CENTS)
     if suburb:
         ps = await db.pricing_state.find_one({"suburb": suburb}, {"_id": 0})
         if ps and ps.get("intro_fee_cents"):
             return int(ps["intro_fee_cents"])
-    return BASE_INTRO_FEE
+    return fixed
 
 
 # ---------------------------------------------------------------------------
@@ -602,6 +614,309 @@ async def update_health(db) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Revenue recovery + growth nurture + reactivation routing
+# ---------------------------------------------------------------------------
+
+
+async def run_billing_recovery(db) -> Dict[str, Any]:
+    """Retry intro collection with bounded attempts and exponential backoff."""
+    max_attempts = _int_env("BILLING_RETRY_MAX_ATTEMPTS", 3, minimum=1, maximum=10)
+    base_delay_h = _int_env("BILLING_RETRY_BASE_DELAY_HOURS", 24, minimum=1, maximum=168)
+    retryable_statuses = {"payment_failed", "uncollectible", "invoice_error"}
+    remediation_statuses = {"profile_incomplete", "consent_required", "stripe_unconfigured"}
+
+    candidates = await db.intros.find(
+        {"billing_status": "billed", "billing_collection_status": {"$in": list(retryable_statuses | remediation_statuses)}},
+        {"_id": 0},
+    ).to_list(3000)
+
+    now_dt = now()
+    scanned = len(candidates)
+    retried = 0
+    retry_sent = 0
+    retry_failed = 0
+    retry_exhausted = 0
+    needs_remediation = 0
+    waiting_backoff = 0
+
+    for intro in candidates:
+        status = str(intro.get("billing_collection_status") or "")
+        if status in remediation_statuses:
+            needs_remediation += 1
+            if str(intro.get("billing_retry_state") or "") != "needs_remediation":
+                await db.intros.update_one({"id": intro["id"]}, {"$set": {"billing_retry_state": "needs_remediation"}})
+            continue
+
+        attempts = int(intro.get("billing_retry_attempts") or 0)
+        if attempts >= max_attempts:
+            retry_exhausted += 1
+            if str(intro.get("billing_retry_state") or "") != "retry_exhausted":
+                await db.intros.update_one({"id": intro["id"]}, {"$set": {"billing_retry_state": "retry_exhausted"}})
+            continue
+
+        backoff_h = min(base_delay_h * (2 ** attempts), 168)
+        last_ts = (
+            intro.get("billing_last_retry_at")
+            or intro.get("stripe_last_event_at")
+            or intro.get("stripe_invoice_sent_at")
+            or intro.get("created_at")
+            or ""
+        )
+        last_dt = _parse_iso(str(last_ts))
+        if last_dt and (now_dt - last_dt).total_seconds() < backoff_h * 3600:
+            waiting_backoff += 1
+            continue
+
+        trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
+        if not trainer:
+            needs_remediation += 1
+            await db.intros.update_one(
+                {"id": intro["id"]},
+                {"$set": {
+                    "billing_retry_state": "trainer_missing",
+                    "billing_retry_attempts": attempts + 1,
+                    "billing_last_retry_at": now_iso(),
+                }},
+            )
+            continue
+
+        billing_meta = await stripe_billing.bill_intro(db, trainer, intro)
+        retried += 1
+        new_status = str(billing_meta.get("billing_collection_status") or "")
+        update_fields: Dict[str, Any] = {
+            **billing_meta,
+            "billing_retry_attempts": attempts + 1,
+            "billing_last_retry_at": now_iso(),
+            "billing_retry_max_attempts": max_attempts,
+        }
+        if new_status in {"invoice_sent", "invoice_finalized", "paid"}:
+            update_fields["billing_retry_state"] = "retry_sent"
+            retry_sent += 1
+        elif new_status in remediation_statuses:
+            update_fields["billing_retry_state"] = "needs_remediation"
+            needs_remediation += 1
+        else:
+            update_fields["billing_retry_state"] = "retry_failed"
+            retry_failed += 1
+        await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+
+    summary = {
+        "scanned": scanned,
+        "retried": retried,
+        "retry_sent": retry_sent,
+        "retry_failed": retry_failed,
+        "retry_exhausted": retry_exhausted,
+        "needs_remediation": needs_remediation,
+        "waiting_backoff": waiting_backoff,
+        "max_attempts": max_attempts,
+        "base_delay_hours": base_delay_h,
+    }
+    await db.system_state.update_one(
+        {"key": "billing_recovery"},
+        {"$set": {"key": "billing_recovery", "last_run": now_iso(), **summary}},
+        upsert=True,
+    )
+    return summary
+
+
+async def run_growth_nurture(db) -> Dict[str, Any]:
+    """Build remarketing cohorts from campaign/source attribution."""
+    window_start = _iso_ago(days=30)
+    matches = await db.match_events.find(
+        {"created_at": {"$gte": window_start}},
+        {"_id": 0, "id": 1, "campaign": 1, "source": 1, "created_at": 1},
+    ).to_list(5000)
+
+    if not matches:
+        empty = {"cohorts": 0, "matched": 0, "connected": 0, "converted": 0, "remarketing_candidates": 0}
+        await db.system_state.update_one(
+            {"key": "nurture"},
+            {"$set": {"key": "nurture", "last_run": now_iso(), **empty}},
+            upsert=True,
+        )
+        return empty
+
+    match_ids = [m["id"] for m in matches if m.get("id")]
+    intros = await db.intros.find(
+        {"match_id": {"$in": match_ids}},
+        {"_id": 0, "id": 1, "match_id": 1, "created_at": 1, "campaign": 1, "source": 1},
+    ).to_list(6000)
+    intros_by_match: Dict[str, List[Dict[str, Any]]] = {}
+    for intro in intros:
+        intros_by_match.setdefault(str(intro.get("match_id") or ""), []).append(intro)
+
+    intro_ids = [i["id"] for i in intros if i.get("id")]
+    converted_intro_ids = set(
+        await db.conversions.distinct(
+            "intro_id",
+            {"intro_id": {"$in": intro_ids}, "billing_status": {"$in": ["tracked", "billed", "suspicious"]}},
+        )
+    ) if intro_ids else set()
+
+    now_dt = now()
+    cohorts: Dict[str, Dict[str, Any]] = {}
+    for match in matches:
+        campaign = (match.get("campaign") or "unknown").strip().lower() or "unknown"
+        source = (match.get("source") or "unknown").strip().lower() or "unknown"
+        key = f"{campaign}|{source}"
+        bucket = cohorts.setdefault(
+            key,
+            {
+                "campaign": campaign,
+                "source": source,
+                "matched": 0,
+                "connected": 0,
+                "converted": 0,
+                "remarketing_candidates": 0,
+                "conversion_gap_candidates": 0,
+            },
+        )
+        bucket["matched"] += 1
+        linked_intros = intros_by_match.get(str(match.get("id") or ""), [])
+        if linked_intros:
+            bucket["connected"] += 1
+            has_conversion = any(str(i.get("id") or "") in converted_intro_ids for i in linked_intros)
+            if has_conversion:
+                bucket["converted"] += 1
+            else:
+                oldest_intro = min((_parse_iso(str(i.get("created_at") or "")) for i in linked_intros if i.get("created_at")), default=None)
+                if oldest_intro and (now_dt - oldest_intro).total_seconds() >= 7 * 24 * 3600:
+                    bucket["conversion_gap_candidates"] += 1
+        else:
+            created_at = _parse_iso(str(match.get("created_at") or ""))
+            if created_at and (now_dt - created_at).total_seconds() >= 24 * 3600:
+                bucket["remarketing_candidates"] += 1
+
+    upserts = 0
+    remarketing_total = 0
+    for value in cohorts.values():
+        remarketing_total += int(value["remarketing_candidates"])
+        await db.growth_attribution.update_one(
+            {"campaign": value["campaign"], "source": value["source"]},
+            {"$set": {
+                **value,
+                "updated_at": now_iso(),
+            }},
+            upsert=True,
+        )
+        upserts += 1
+
+    summary = {
+        "cohorts": upserts,
+        "matched": sum(int(v["matched"]) for v in cohorts.values()),
+        "connected": sum(int(v["connected"]) for v in cohorts.values()),
+        "converted": sum(int(v["converted"]) for v in cohorts.values()),
+        "remarketing_candidates": remarketing_total,
+    }
+    await db.system_state.update_one(
+        {"key": "nurture"},
+        {"$set": {"key": "nurture", "last_run": now_iso(), **summary}},
+        upsert=True,
+    )
+    return summary
+
+
+async def run_reactivation_routing(db) -> Dict[str, Any]:
+    """Detect and route inactive/billing-blocked trainers into reactivation flow."""
+    trainers = await db.trainers.find({}, {"_id": 0}).to_list(3000)
+    now_dt = now()
+    notify_cooldown_h = _int_env("REACTIVATION_NOTIFY_COOLDOWN_HOURS", 168, minimum=12, maximum=24 * 60)
+
+    candidates: Dict[str, Dict[str, Any]] = {}
+    for trainer in trainers:
+        trainer_id = str(trainer.get("id") or "")
+        if not trainer_id:
+            continue
+        reasons: List[str] = []
+        created = _parse_iso(str(trainer.get("created_at") or ""))
+        age_days = (now_dt - created).days if created else 999
+        billing_state = str(trainer.get("billing_profile_status") or "")
+        if age_days >= 14 and int(trainer.get("intros_30d") or 0) == 0:
+            reasons.append("No intro activity in the past 30 days.")
+        if not bool(trainer.get("published")) or float(trainer.get("confidence_score") or 0) < 0.60:
+            reasons.append("Listing is currently unpublished or below confidence threshold.")
+        if billing_state in {"missing_email", "profile_incomplete", "consent_required", "stripe_unconfigured", "stripe_error"}:
+            reasons.append("Billing profile has unresolved blockers.")
+        if not reasons:
+            continue
+        candidates[trainer_id] = {
+            "trainer_id": trainer_id,
+            "trainer_name": trainer.get("name", ""),
+            "email": trainer.get("billing_email") or trainer.get("email") or "",
+            "reasons": reasons,
+            "status": "open",
+            "updated_at": now_iso(),
+        }
+
+    existing_open = await db.reactivation_candidates.find({"status": "open"}, {"_id": 0, "trainer_id": 1}).to_list(4000)
+    existing_open_ids = {str(row.get("trainer_id") or "") for row in existing_open}
+
+    routed = 0
+    notified = 0
+    skipped_notify = 0
+    for trainer_id, payload in candidates.items():
+        prior = await db.reactivation_candidates.find_one({"trainer_id": trainer_id, "status": "open"}, {"_id": 0})
+        await db.reactivation_candidates.update_one(
+            {"trainer_id": trainer_id},
+            {"$set": payload, "$setOnInsert": {"created_at": now_iso()}},
+            upsert=True,
+        )
+        routed += 1
+
+        last_notified_at = _parse_iso(str((prior or {}).get("last_notified_at") or ""))
+        should_notify = prior is None
+        if last_notified_at and (now_dt - last_notified_at).total_seconds() < notify_cooldown_h * 3600:
+            should_notify = False
+        if not should_notify:
+            skipped_notify += 1
+            continue
+        outcome = await notifications_service.notify_trainer_reactivation_candidate(
+            db,
+            {
+                "id": trainer_id,
+                "name": payload["trainer_name"],
+                "billing_email": payload["email"],
+                "email": payload["email"],
+            },
+            reasons=payload["reasons"],
+        )
+        if outcome.get("status") == "sent":
+            notified += 1
+            await db.reactivation_candidates.update_one(
+                {"trainer_id": trainer_id},
+                {"$set": {"last_notified_at": now_iso(), "last_notification_status": "sent"}},
+            )
+        elif outcome.get("status") == "failed":
+            await db.reactivation_candidates.update_one(
+                {"trainer_id": trainer_id},
+                {"$set": {"last_notified_at": now_iso(), "last_notification_status": "failed"}},
+            )
+        else:
+            skipped_notify += 1
+
+    resolved_ids = [x for x in existing_open_ids if x not in candidates]
+    if resolved_ids:
+        await db.reactivation_candidates.update_many(
+            {"trainer_id": {"$in": resolved_ids}, "status": "open"},
+            {"$set": {"status": "resolved", "resolved_at": now_iso(), "updated_at": now_iso()}},
+        )
+
+    summary = {
+        "routed": routed,
+        "notified": notified,
+        "skipped_notify": skipped_notify,
+        "resolved": len(resolved_ids),
+        "open_candidates": routed,
+    }
+    await db.system_state.update_one(
+        {"key": "reactivation_route"},
+        {"$set": {"key": "reactivation_route", "last_run": now_iso(), **summary}},
+        upsert=True,
+    )
+    return summary
+
+
+# ---------------------------------------------------------------------------
 # Source ingestion + outreach loops
 # ---------------------------------------------------------------------------
 
@@ -740,6 +1055,9 @@ def schedule_all(
         asyncio.create_task(_run_loop_with_lease("health", lambda: update_health(db), HEALTH_INTERVAL_S, lease)),
         asyncio.create_task(_run_loop_with_lease("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S, lease)),
         asyncio.create_task(_run_loop_with_lease("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("billing_recovery", lambda: run_billing_recovery(db), BILLING_RECOVERY_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("nurture", lambda: run_growth_nurture(db), NURTURE_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("reactivation_route", lambda: run_reactivation_routing(db), REACTIVATION_ROUTE_INTERVAL_S, lease)),
     ]
     if lease is not None:
         tasks.append(asyncio.create_task(_lease_heartbeat_task(lease)))

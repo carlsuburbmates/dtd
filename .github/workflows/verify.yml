@@ -29,6 +29,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           python -m py_compile backend/server.py backend/worker.py backend/services/*.py
+          pytest -q backend/tests/test_runtime_control_unit.py backend/tests/test_w8_billing_unit.py backend/tests/test_email_delivery_unit.py
 
       - name: Frontend checks
         working-directory: frontend

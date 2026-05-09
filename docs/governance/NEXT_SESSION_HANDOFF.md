@@ -131,7 +131,7 @@ Current session entries:
     - `outreach` -> `reason=no_resend_api_key`, `checked=4`, `sent=0`
   - Render API diagnostics:
     - `GET /v1/services?limit=100` -> `HTTP 200`; `dtd-api` and `dtd-worker` found/live.
-    - `GET /v1/services/{id}/env-vars` -> required keys present for both services (`RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, `SENTRY_DSN`).
+    - `GET /v1/services/{id}/env-vars` -> required keys present for both services (`RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`, `DISCOVERY_SOURCE_URLS`, `SENTRY_DSN`).
   - Stage-A remote runtime verification:
     - `STAGE_A_MODE=remote bash scripts/verify_stage_a_runtime.sh` -> `RESULT=PASS`.
 - Evidence (file paths updated in this milestone):
@@ -156,7 +156,7 @@ Current session entries:
 2. `https://dtd-api.onrender.com/api/config` returns `200` JSON with active-region and billing-mode config.
 3. Vercel prod and preview envs both contain `REACT_APP_BACKEND_URL=https://dtd-api.onrender.com`.
 4. `frontend/src/lib/api.js` builds the API base URL from `REACT_APP_BACKEND_URL`.
-5. Vercel env inventory for `dtd` includes `REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`, and Render services `dtd-api`/`dtd-worker` include `RESEND_API_KEY`, `RESEND_FROM`, `DISCOVERY_SOURCE_URLS`, and `SENTRY_DSN`.
+5. Vercel env inventory for `dtd` includes `REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, `NEXT_PUBLIC_POSTHOG_KEY`, and `NEXT_PUBLIC_POSTHOG_HOST`, and Render services `dtd-api`/`dtd-worker` include `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`, `DISCOVERY_SOURCE_URLS`, and `SENTRY_DSN`.
 6. `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` now resolve to Vercel and return live responses (`307` apex redirect to `www`, `200` on `www` and `/trainers`).
 7. Required frontend routes are renderable on the protected production deployment when accessed via authenticated Vercel route smoke.
 8. Historical `outreach_events` evidence exists; live oversight loop reasons are now cleared after the Render env verification/redeploys, and `source_ingestion.failed_sources=1` remains only as a historical count until the next successful ingestion cycle.
@@ -178,7 +178,7 @@ Evidence references:
 - region enforcement, consent checkpoints, intro idempotency, intro-first billing (`track_only`)
 3. Automation loops implemented:
 - source ingestion (`DISCOVERY_SOURCE_URLS`)
-- T+7 outreach (`RESEND_API_KEY`, `RESEND_FROM`)
+- T+7 outreach (`RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`)
 4. Local checks passing:
 - `python3 -m compileall backend`
 - `npm --prefix frontend run build`
@@ -218,6 +218,7 @@ Required actions:
 1. Ensure launch-secret keys are set in runtime targets:
 - `RESEND_API_KEY`
 - `RESEND_FROM`
+- `RESEND_REPLY_TO`
 - `DISCOVERY_SOURCE_URLS`
 - `SENTRY_DSN`
 - `NEXT_PUBLIC_POSTHOG_KEY`

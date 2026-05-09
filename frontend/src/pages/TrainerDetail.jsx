@@ -75,15 +75,6 @@ export default function TrainerDetail() {
         }
     };
 
-    const markHired = async () => {
-        try {
-            await api.post("/conversions", { intro_id: introId, confirmed: true });
-            toast.success("Thanks — outcome recorded.");
-        } catch {
-            toast.error("Couldn't record. Try again.");
-        }
-    };
-
     const trackEngagement = (kind) => {
         if (!introId) return;
         api.post("/engagements", { intro_id: introId, kind }).catch(() => {});
@@ -189,7 +180,7 @@ export default function TrainerDetail() {
                         </div>
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <span className="text-xs font-mono text-[#5C6D59]">
-                                You see contact details immediately. Trainer is billed {audCents(trainer.intro_fee_cents)}.
+                                You see contact details immediately. Trainer is in a 30-day free window after registration, then billed A$5 per valid intro.
                             </span>
                             <button type="submit" disabled={busy} data-testid="connect-submit" className="btn-accent">
                                 {busy ? "Connecting…" : <>Connect <ArrowRight className="h-4 w-4" /></>}
@@ -225,11 +216,10 @@ export default function TrainerDetail() {
                                 </div>
                             )}
                         </div>
-                        <div className="mt-6 border-t border-[#E5DFD3] pt-5 flex items-center justify-between">
-                            <span className="text-xs text-[#4A615A]">When you've hired them, tell us so we don't ask twice.</span>
-                            <button data-testid="conversion-confirm" onClick={markHired} className="btn-primary text-sm py-2">
-                                I hired them
-                            </button>
+                        <div className="mt-6 border-t border-[#E5DFD3] pt-5">
+                            <span className="text-xs text-[#4A615A]">
+                                We’ll follow up by email later so you can confirm whether this trainer was the right fit.
+                            </span>
                         </div>
                     </div>
                 )}

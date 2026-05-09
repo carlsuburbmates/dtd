@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request, Query
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -111,6 +111,8 @@ class InstantMatchIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     description: str = Field(min_length=3)
     suburb: Optional[str] = None
+    campaign: Optional[str] = None
+    source: Optional[str] = None
     consent_match_processing: bool = False
 
 
@@ -139,6 +141,15 @@ class EngagementIn(BaseModel):
     intro_id: str
     kind: str  # website_click | phone_click | email_click | return_visit
     trainer_id: Optional[str] = None
+
+
+class ConnectClickIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    match_id: str
+    trainer_id: str
+    rank: Optional[int] = None
+    campaign: Optional[str] = None
+    source: Optional[str] = None
 
 
 class DiscoveryIn(BaseModel):
@@ -172,6 +183,24 @@ class SubmissionIn(BaseModel):
 class OversightLogin(BaseModel):
     model_config = ConfigDict(extra="ignore")
     passcode: str
+
+
+class FollowUpOutcomeIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    action: str = "hired"  # hired | still_deciding | need_another_match
+
+
+class TrainerBillingActionIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: Optional[str] = None
+    submission_id: Optional[str] = None
+    billing_email: Optional[EmailStr] = None
+
+
+class TrainerReactivateIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: Optional[str] = None
+    submission_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -217,15 +246,32 @@ def _require_region(region: Optional[str]) -> None:
 
 
 async def _decorate_with_pricing(trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Attach the dynamic intro fee for each trainer's suburb."""
+    """Attach the current intro fee snapshot for each trainer's suburb."""
     suburbs = list({t.get("suburb") for t in trainers if t.get("suburb")})
     pricing = await db.pricing_state.find({"suburb": {"$in": suburbs}}, {"_id": 0}).to_list(500)
     by_suburb = {p["suburb"]: p for p in pricing}
     for t in trainers:
         ps = by_suburb.get(t.get("suburb"))
-        t["intro_fee_cents"] = int(ps["intro_fee_cents"]) if ps else autonomy.BASE_INTRO_FEE
+        t["intro_fee_cents"] = int(ps["intro_fee_cents"]) if ps else autonomy.FIXED_INTRO_FEE_CENTS
         t["demand_multiplier"] = float(ps["multiplier"]) if ps else 1.0
+        t["intro_fee_mode"] = str((ps or {}).get("pricing_mode") or "fixed")
     return trainers
+
+
+async def _resolve_submission(submission_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not submission_id:
+        return None
+    return await db.submissions.find_one({"id": submission_id}, {"_id": 0})
+
+
+async def _resolve_trainer(*, trainer_id: Optional[str], submission_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    resolved_id = (trainer_id or "").strip()
+    if not resolved_id and submission_id:
+        sub = await _resolve_submission(submission_id)
+        resolved_id = (sub or {}).get("trainer_id", "")
+    if not resolved_id:
+        return None
+    return await db.trainers.find_one({"id": resolved_id}, {"_id": 0})
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +289,9 @@ async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
     suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
     return {
-        "base_intro_fee_cents": autonomy.BASE_INTRO_FEE,
+        "base_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
+        "fixed_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
+        "trainer_free_intro_days": stripe_billing.trainer_free_intro_days(),
         "base_conversion_fee_cents": autonomy.BASE_CONVERSION_FEE,
         "active_regions": ACTIVE_REGIONS,
         "active_region_default": ACTIVE_REGION,
@@ -314,11 +362,44 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
             "id": match_id,
             "description": payload.description,
             "suburb": payload.suburb,
+            "campaign": (payload.campaign or "").strip(),
+            "source": (payload.source or "").strip(),
             "result_ids": [t["id"] for t in selected],
             "created_at": now_iso(),
         }
     )
     return {"match_id": match_id, "matches": selected}
+
+
+@api.post("/match/connect-click")
+async def record_match_connect_click(payload: ConnectClickIn) -> Dict[str, Any]:
+    match = await db.match_events.find_one({"id": payload.match_id}, {"_id": 0, "result_ids": 1, "campaign": 1, "source": 1})
+    if not match:
+        raise HTTPException(status_code=404, detail="Match not found")
+
+    result_ids = [str(x) for x in (match.get("result_ids") or [])]
+    if payload.trainer_id not in result_ids:
+        raise HTTPException(status_code=400, detail="Trainer not present in match results")
+
+    rank = payload.rank if payload.rank and payload.rank > 0 else (result_ids.index(payload.trainer_id) + 1 if payload.trainer_id in result_ids else None)
+    ev = {
+        "id": new_id(),
+        "match_id": payload.match_id,
+        "trainer_id": payload.trainer_id,
+        "kind": "result_connect_click",
+        "rank": rank,
+        "campaign": (payload.campaign or match.get("campaign") or "").strip(),
+        "source": (payload.source or match.get("source") or "").strip(),
+        "created_at": now_iso(),
+    }
+    await db.engagements.insert_one(ev.copy())
+    await _audit(
+        "result_connect_click",
+        payload.trainer_id,
+        after={"match_id": payload.match_id, "rank": rank, "campaign": ev["campaign"], "source": ev["source"]},
+        actor="user",
+    )
+    return _scrub(ev)
 
 
 @api.get("/trainers/{trainer_id}")
@@ -380,6 +461,15 @@ async def create_intro(
         "user_agent": request.headers.get("user-agent", "")[:200],
         "created_at": now_iso(),
     }
+    if payload.match_id:
+        match_event = await db.match_events.find_one(
+            {"id": payload.match_id},
+            {"_id": 0, "campaign": 1, "source": 1, "created_at": 1},
+        )
+        if match_event:
+            intro["campaign"] = (match_event.get("campaign") or "").strip()
+            intro["source"] = (match_event.get("source") or "").strip()
+            intro["match_created_at"] = match_event.get("created_at")
     if idem:
         intro["idempotency_key"] = idem
     await db.intros.insert_one(intro.copy())
@@ -439,6 +529,9 @@ async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
                 "id": new_id(),
                 "intro_id": payload.intro_id,
                 "trainer_id": intro["trainer_id"],
+                "match_id": intro.get("match_id"),
+                "campaign": intro.get("campaign", ""),
+                "attribution_source": intro.get("source", ""),
                 "fee_cents": autonomy.BASE_CONVERSION_FEE if target_status == "billed" else 0,
                 "billing_status": target_status,
                 "inferred": True,
@@ -477,6 +570,9 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
         "id": new_id(),
         "intro_id": payload.intro_id,
         "trainer_id": intro["trainer_id"],
+        "match_id": intro.get("match_id"),
+        "campaign": intro.get("campaign", ""),
+        "attribution_source": intro.get("source", ""),
         "fee_cents": autonomy.BASE_CONVERSION_FEE if status == "billed" else 0,
         "billing_status": status,
         "fraud_reason": decision["reason"],
@@ -494,6 +590,62 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
     await db.conversions.insert_one(conv.copy())
     await _audit("conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "billing_status": conv["billing_status"]}, actor="user")
     return _scrub({**conv, "billed": status == "billed"})
+
+
+@api.get("/follow-up/{token}")
+async def get_follow_up(token: str) -> Dict[str, Any]:
+    intro = await db.intros.find_one({"id": token}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Follow-up link invalid or expired.")
+
+    trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
+    existing = await db.conversions.find_one(
+        {"intro_id": intro["id"], "billing_status": {"$in": ["tracked", "billed", "suspicious"]}},
+        {"_id": 0, "id": 1, "billing_status": 1, "created_at": 1},
+    )
+    return {
+        "token": token,
+        "intro_id": intro["id"],
+        "description": intro.get("description", ""),
+        "created_at": intro.get("created_at"),
+        "already_confirmed": bool(existing),
+        "conversion_status": (existing or {}).get("billing_status"),
+        "trainer": {
+            "id": (trainer or {}).get("id"),
+            "name": (trainer or {}).get("name") or intro.get("trainer_name", ""),
+            "suburb": (trainer or {}).get("suburb") or intro.get("suburb"),
+            "website": (trainer or {}).get("website", ""),
+            "phone": (trainer or {}).get("phone", ""),
+            "email": (trainer or {}).get("email", ""),
+        },
+    }
+
+
+@api.post("/follow-up/{token}/outcome")
+async def submit_follow_up_outcome(token: str, payload: FollowUpOutcomeIn) -> Dict[str, Any]:
+    intro = await db.intros.find_one({"id": token}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Follow-up link invalid or expired.")
+
+    action = (payload.action or "").strip().lower()
+    if action == "hired":
+        conversion = await create_conversion(ConversionIn(intro_id=intro["id"], confirmed=True))
+        await db.outreach_events.update_one(
+            {"intro_id": intro["id"], "kind": "t7_response_hired"},
+            {"$set": {"id": new_id(), "intro_id": intro["id"], "kind": "t7_response_hired", "status": "recorded", "created_at": now_iso()}},
+            upsert=True,
+        )
+        return {"ok": True, "action": "hired", "conversion": conversion}
+    if action in {"still_deciding", "need_another_match"}:
+        kind = "t7_response_still_deciding" if action == "still_deciding" else "t7_response_need_another_match"
+        await db.outreach_events.update_one(
+            {"intro_id": intro["id"], "kind": kind},
+            {"$set": {"id": new_id(), "intro_id": intro["id"], "kind": kind, "status": "recorded", "created_at": now_iso()}},
+            upsert=True,
+        )
+        await _audit("follow_up_outcome", intro.get("trainer_id", ""), after={"intro_id": intro["id"], "action": action}, actor="user")
+        return {"ok": True, "action": action}
+    raise HTTPException(status_code=400, detail="Invalid follow-up action.")
 
 
 @api.post("/discovery")
@@ -580,6 +732,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "conversions_30d": 0,
             "published": True,
             "contact_ready": bool(sub.get("website") or sub.get("phone") or sub.get("email")),
+            "registered_at": now_iso(),
             "created_at": now_iso(),
             "via_submission_id": sub_doc["id"],
         }
@@ -621,6 +774,185 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "submitter_notification_status": sub_doc.get("submitter_notification_status"),
         }
     )
+
+
+@api.get("/submissions/{submission_id}/status")
+async def get_submission_status(submission_id: str) -> Dict[str, Any]:
+    sub = await db.submissions.find_one({"id": submission_id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+
+    trainer = await _resolve_trainer(trainer_id=sub.get("trainer_id"), submission_id=submission_id)
+    billing_profile_status = (
+        sub.get("billing_profile_status")
+        or (trainer or {}).get("billing_profile_status")
+        or "unknown"
+    )
+    blockers: List[Dict[str, str]] = []
+    if sub.get("status") == "held":
+        blockers.append({"code": "held", "message": "Submission is held. Add stronger evidence and contact details."})
+    if billing_profile_status in {"missing_email", "profile_incomplete"}:
+        blockers.append({"code": "billing_profile", "message": "Billing profile is incomplete. Add billing email and trainer details."})
+    if billing_profile_status == "consent_required":
+        blockers.append({"code": "billing_consent", "message": "Billing consent is required to activate collection."})
+    if billing_profile_status in {"stripe_unconfigured", "stripe_error"}:
+        blockers.append({"code": "billing_integration", "message": "Billing integration needs remediation before collection."})
+
+    return {
+        "id": sub["id"],
+        "submitted_at": sub.get("created_at"),
+        "status": sub.get("status"),
+        "verification_status": sub.get("verification_status"),
+        "confidence_score": sub.get("confidence_score"),
+        "billing_profile_status": billing_profile_status,
+        "submitter_notification_status": sub.get("submitter_notification_status"),
+        "trainer": {
+            "id": (trainer or {}).get("id"),
+            "name": (trainer or {}).get("name") or sub.get("name"),
+            "published": bool((trainer or {}).get("published")) if trainer else sub.get("status") == "published",
+            "verification_status": (trainer or {}).get("verification_status") or sub.get("verification_status"),
+        },
+        "blockers": blockers,
+    }
+
+
+@api.get("/trainer/billing")
+async def get_trainer_billing_health(
+    trainer_id: Optional[str] = Query(default=None),
+    submission_id: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    trainer = await _resolve_trainer(trainer_id=trainer_id, submission_id=submission_id)
+    sub = await _resolve_submission(submission_id)
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer context not found.")
+
+    intros = await db.intros.find(
+        {"trainer_id": trainer.get("id")},
+        {"_id": 0, "intro_fee_cents": 1, "billing_collection_status": 1, "billing_retry_state": 1},
+    ).to_list(1000)
+    statuses: Dict[str, int] = {}
+    billed_total_cents = 0
+    retry_states: Dict[str, int] = {}
+    for intro in intros:
+        status = str(intro.get("billing_collection_status") or "not_billable")
+        statuses[status] = statuses.get(status, 0) + 1
+        billed_total_cents += int(intro.get("intro_fee_cents") or 0)
+        retry_state = str(intro.get("billing_retry_state") or "")
+        if retry_state:
+            retry_states[retry_state] = retry_states.get(retry_state, 0) + 1
+
+    issues = {
+        "profile_incomplete": str(trainer.get("billing_profile_status") or "") in {"missing_email", "profile_incomplete"},
+        "consent_required": str(trainer.get("billing_profile_status") or "") == "consent_required",
+        "stripe_unconfigured": str(trainer.get("billing_profile_status") or "") in {"stripe_unconfigured", "stripe_error"},
+        "payment_failed_or_disputed": (statuses.get("payment_failed", 0) + statuses.get("disputed", 0) + statuses.get("uncollectible", 0)) > 0,
+    }
+    try:
+        max_attempts = max(1, int(os.environ.get("BILLING_RETRY_MAX_ATTEMPTS", "3")))
+    except ValueError:
+        max_attempts = 3
+    try:
+        base_delay_hours = max(1, int(os.environ.get("BILLING_RETRY_BASE_DELAY_HOURS", "24")))
+    except ValueError:
+        base_delay_hours = 24
+    return {
+        "trainer": {
+            "id": trainer.get("id"),
+            "name": trainer.get("name"),
+            "billing_email": trainer.get("billing_email") or trainer.get("email"),
+            "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
+            "stripe_customer_id": trainer.get("stripe_customer_id"),
+        },
+        "submission_id": (sub or {}).get("id"),
+        "status_counts": statuses,
+        "retry_state_counts": retry_states,
+        "retry_policy": {
+            "max_attempts": max_attempts,
+            "base_delay_hours": base_delay_hours,
+        },
+        "billed_total_cents": billed_total_cents,
+        "issues": issues,
+    }
+
+
+@api.post("/trainer/billing/reconnect")
+async def reconnect_trainer_billing(payload: TrainerBillingActionIn) -> Dict[str, Any]:
+    trainer = await _resolve_trainer(trainer_id=payload.trainer_id, submission_id=payload.submission_id)
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer context not found.")
+
+    update_fields: Dict[str, Any] = {}
+    if payload.billing_email:
+        update_fields["billing_email"] = payload.billing_email.strip()
+    if update_fields:
+        await db.trainers.update_one({"id": trainer["id"]}, {"$set": update_fields})
+        trainer.update(update_fields)
+
+    profile = await stripe_billing.provision_trainer_billing_profile(db, trainer, consent_granted=False)
+    await _audit("trainer_billing_reconnect", trainer["id"], after={"billing_profile_status": profile.get("billing_profile_status")}, actor="user")
+    return {"ok": True, "trainer_id": trainer["id"], "billing_profile_status": profile.get("billing_profile_status")}
+
+
+@api.get("/trainer/reactivate")
+async def get_trainer_reactivation_health(
+    trainer_id: Optional[str] = Query(default=None),
+    submission_id: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    trainer = await _resolve_trainer(trainer_id=trainer_id, submission_id=submission_id)
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer context not found.")
+
+    billing_status = str(trainer.get("billing_profile_status") or "")
+    reasons: List[Dict[str, str]] = []
+    if int(trainer.get("intros_30d") or 0) == 0:
+        reasons.append({"code": "low_activity", "message": "No billed intro activity in the recent window."})
+    if not bool(trainer.get("published")) or float(trainer.get("confidence_score") or 0) < HOLD_THRESHOLD:
+        reasons.append({"code": "verification_drift", "message": "Listing confidence/publication is below active threshold."})
+    if billing_status in {"missing_email", "profile_incomplete", "consent_required", "stripe_unconfigured", "stripe_error"}:
+        reasons.append({"code": "billing_blocker", "message": "Billing profile has unresolved blockers."})
+    if not reasons:
+        reasons.append({"code": "healthy", "message": "No hard blockers detected. Refresh profile for better performance."})
+
+    return {
+        "trainer": {
+            "id": trainer.get("id"),
+            "name": trainer.get("name"),
+            "published": bool(trainer.get("published")),
+            "verification_status": trainer.get("verification_status"),
+            "confidence_score": trainer.get("confidence_score"),
+            "billing_profile_status": trainer.get("billing_profile_status"),
+            "intros_30d": trainer.get("intros_30d", 0),
+            "conversions_30d": trainer.get("conversions_30d", 0),
+            "outcome_score": trainer.get("outcome_score", 0),
+        },
+        "reasons": reasons,
+    }
+
+
+@api.post("/trainer/reactivate")
+async def reactivate_trainer_listing(payload: TrainerReactivateIn) -> Dict[str, Any]:
+    trainer = await _resolve_trainer(trainer_id=payload.trainer_id, submission_id=payload.submission_id)
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer context not found.")
+
+    score = await ai_service.score_trainer(_verification_payload(trainer))
+    conf = float(score.get("confidence") or 0)
+    status = ai_service.status_for_score(conf)
+    published = conf >= HOLD_THRESHOLD
+    await db.trainers.update_one(
+        {"id": trainer["id"]},
+        {"$set": {
+            "confidence_score": conf,
+            "verification_status": status,
+            "verification_reasoning": score.get("reasoning", ""),
+            "verification_signals": score.get("signals", []),
+            "verification_model": score.get("model", "heuristic"),
+            "verified_at": now_iso(),
+            "published": published,
+        }},
+    )
+    await _audit("trainer_reactivate", trainer["id"], after={"published": published, "confidence_score": conf}, actor="user")
+    return {"ok": True, "trainer_id": trainer["id"], "published": published, "confidence_score": conf, "verification_status": status}
 
 
 @api.get("/seo/{slug:path}")
@@ -677,6 +1009,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "invoice_sent": 0,
         "invoice_finalized": 0,
         "paid": 0,
+        "trial_free": 0,
         "payment_failed": 0,
         "uncollectible": 0,
         "waived": 0,
@@ -703,6 +1036,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         billing_summary[k] = int(row.get("n") or 0)
 
     non_billable_causes = {
+        "trial_free": billing_summary.get("trial_free", 0),
         "profile_incomplete": billing_summary.get("profile_incomplete", 0),
         "consent_required": billing_summary.get("consent_required", 0),
         "stripe_unconfigured": billing_summary.get("stripe_unconfigured", 0),
@@ -756,8 +1090,11 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     inference = await db.system_state.find_one({"key": "inference"}, {"_id": 0}) or {}
     source_ingestion = await db.system_state.find_one({"key": "source_ingestion"}, {"_id": 0}) or {}
     outreach = await db.system_state.find_one({"key": "outreach"}, {"_id": 0}) or {}
+    billing_recovery = await db.system_state.find_one({"key": "billing_recovery"}, {"_id": 0}) or {}
+    nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
+    reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
 
-    pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("multiplier", -1).to_list(40)
+    pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("suburb", 1).to_list(200)
 
     top_trainers = await db.trainers.find(
         {"published": True},
@@ -828,6 +1165,9 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "source_ingestion": source_ingestion,
             "outreach": outreach,
             "health": health,
+            "billing_recovery": billing_recovery,
+            "nurture": nurture,
+            "reactivation_route": reactivation_route,
         },
         "alerts": health.get("alerts", []),
         "rollback_recent": rollback_recent,

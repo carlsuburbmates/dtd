@@ -71,3 +71,21 @@ def test_bill_intro_profile_incomplete_when_customer_unavailable(monkeypatch):
     out = asyncio.run(stripe_billing.bill_intro(object(), trainer, intro))
     assert out["billing_collection_status"] == "profile_incomplete"
     assert out["billing_profile_status"] == "missing_email"
+
+
+def test_bill_intro_trial_free_skips_invoice(monkeypatch):
+    monkeypatch.setenv("TRAINER_FREE_INTRO_DAYS", "30")
+    monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
+    monkeypatch.setattr(stripe_billing, "_consent_ok", lambda _trainer, consent_granted: True)
+
+    trainer = {
+        "id": "t_1",
+        "name": "Trainer",
+        "via_submission_id": "sub_1",
+        "created_at": stripe_billing.now_iso(),
+    }
+    intro = {"id": "i_1", "billing_status": "billed", "intro_fee_cents": 500}
+    out = asyncio.run(stripe_billing.bill_intro(object(), trainer, intro))
+    assert out["billing_collection_status"] == "trial_free"
+    assert out["intro_fee_cents"] == 0
+    assert out["intro_fee_list_cents"] == 500

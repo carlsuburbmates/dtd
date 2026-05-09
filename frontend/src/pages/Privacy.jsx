@@ -12,6 +12,7 @@ export default function Privacy() {
                 </h1>
                 <div className="card-public p-6 mt-8 text-[#4A615A] space-y-3">
                     <p>We process submitted match and contact data to run the matching service and fraud protections.</p>
+                    <p>If you provide email in a connect request, we may send one follow-up message to confirm outcome and improve service quality.</p>
                     <p>Outcome signals are used to improve ranking quality. Data is retained according to project governance settings.</p>
                     <p>Legal copy will be finalized before public launch gates are opened.</p>
                 </div>
@@ -20,4 +21,3 @@ export default function Privacy() {
         </div>
     );
 }
-

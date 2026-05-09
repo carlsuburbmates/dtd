@@ -256,3 +256,47 @@ async def notify_submitter_result(db, submission: Dict[str, Any]) -> Dict[str, A
     if outcome.get("error"):
         result["submitter_notification_error"] = str(outcome["error"])[:240]
     return result
+
+
+async def notify_trainer_reactivation_candidate(
+    db,
+    trainer: Dict[str, Any],
+    *,
+    reasons: list[str],
+) -> Dict[str, Any]:
+    trainer_id = str(trainer.get("id") or "")
+    email = _safe_text(trainer.get("billing_email")) or _safe_text(trainer.get("email"))
+    if not email:
+        return {
+            "status": "skipped",
+            "attempts": 0,
+            "reason": "missing_email",
+        }
+
+    base = _public_app_base_url()
+    reactivate_link = f"{base}/trainer/reactivate?trainerId={trainer_id}" if base else ""
+    subject = "Bark&Bond listing reactivation recommended"
+    reason_lines = "".join(f"<li>{_safe_text(r)}</li>" for r in reasons if _safe_text(r))
+    html = (
+        f"<p>Hi {_safe_text(trainer.get('name')) or 'there'},</p>"
+        "<p>We detected listing signals that may reduce intros.</p>"
+        f"<ul>{reason_lines or '<li>General listing health refresh recommended.</li>'}</ul>"
+    )
+    if reactivate_link:
+        html += f'<p><a href="{reactivate_link}">Open reactivation checklist</a></p>'
+    html += "<p>You can also reply to this email for support.</p>"
+
+    outcome = await _send_with_retry(
+        db,
+        target_kind="trainer",
+        target_id=trainer_id,
+        kind="trainer_reactivation_notification",
+        to_email=email,
+        subject=subject,
+        html=html,
+    )
+    return {
+        "status": outcome.get("status", "failed"),
+        "attempts": int(outcome.get("attempts") or 0),
+        "error": str(outcome.get("error") or "")[:240],
+    }

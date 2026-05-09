@@ -29,6 +29,22 @@ def _parse_csv(value: str) -> List[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
+def _parse_int_env(name: str, default: int, *, minimum: int = 1, maximum: int = 10_000) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = default
+    return max(minimum, min(maximum, value))
+
+
+def _parse_iso(value: str) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
 def _extract_links(html: str, base_url: str) -> List[str]:
     # Lightweight link extraction without extra parser dependencies.
     hrefs = re.findall(r'href=[\'"]([^\'"]+)[\'"]', html, flags=re.IGNORECASE)
@@ -53,10 +69,25 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
     if not sources:
         return {"ok": True, "skipped": True, "reason": "no_sources_configured", "sources": 0, "queued": 0}
 
+    suppress_after_failures = _parse_int_env("SOURCE_INGEST_FAILURE_SUPPRESS_AFTER", 3, minimum=1, maximum=50)
+    suppress_hours = _parse_int_env("SOURCE_INGEST_SUPPRESS_HOURS", 24, minimum=1, maximum=720)
+    alert_after_failures = _parse_int_env("SOURCE_INGEST_ALERT_AFTER", 2, minimum=1, maximum=50)
+
     queued = 0
     scanned = 0
     failed = 0
+    skipped_suppressed = 0
+    suppressed_now = 0
+    alerts: List[Dict[str, Any]] = []
+    now_dt = _now()
     for src in sources:
+        state = await db.source_ingestion_state.find_one({"source_url": src}, {"_id": 0}) or {}
+        suppressed_until = _parse_iso(str(state.get("suppressed_until") or ""))
+        if suppressed_until and suppressed_until > now_dt:
+            skipped_suppressed += 1
+            suppressed_now += 1
+            continue
+
         scanned += 1
         try:
             r = requests.get(src, timeout=20)
@@ -80,8 +111,50 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
                 }
                 await db.discovery_queue.insert_one(doc)
                 queued += 1
+            await db.source_ingestion_state.update_one(
+                {"source_url": src},
+                {"$set": {
+                    "source_url": src,
+                    "last_checked_at": _now_iso(),
+                    "last_ok_at": _now_iso(),
+                    "last_error": "",
+                    "last_http_status": r.status_code,
+                    "consecutive_failures": 0,
+                    "suppressed_until": "",
+                    "last_candidates_seen": len(candidates),
+                }},
+                upsert=True,
+            )
         except Exception:
             failed += 1
+            prev_failures = int(state.get("consecutive_failures") or 0)
+            new_failures = prev_failures + 1
+            suppressed_until_value = ""
+            if new_failures >= suppress_after_failures:
+                suppressed_until_value = (now_dt + timedelta(hours=suppress_hours)).isoformat()
+                suppressed_now += 1
+            if new_failures >= alert_after_failures:
+                alerts.append(
+                    {
+                        "severity": "medium",
+                        "type": "source_ingestion_failures",
+                        "source": src,
+                        "consecutive_failures": new_failures,
+                        "suppressed_until": suppressed_until_value,
+                    }
+                )
+            await db.source_ingestion_state.update_one(
+                {"source_url": src},
+                {"$set": {
+                    "source_url": src,
+                    "last_checked_at": _now_iso(),
+                    "last_error": "request_failed",
+                    "last_http_status": 0,
+                    "consecutive_failures": new_failures,
+                    "suppressed_until": suppressed_until_value,
+                }},
+                upsert=True,
+            )
 
     return {
         "ok": True,
@@ -89,15 +162,13 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
         "reason": "",
         "sources": scanned,
         "failed_sources": failed,
+        "skipped_suppressed": skipped_suppressed,
+        "suppressed_sources": suppressed_now,
         "queued": queued,
+        "alerts": alerts,
+        "suppress_after_failures": suppress_after_failures,
+        "suppress_hours": suppress_hours,
     }
-
-
-def _parse_iso(ts: str) -> Optional[datetime]:
-    try:
-        return datetime.fromisoformat(ts)
-    except Exception:
-        return None
 
 
 def _outreach_html(trainer_name: str) -> str:

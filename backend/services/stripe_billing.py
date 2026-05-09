@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 try:
@@ -12,6 +12,17 @@ except Exception:  # pragma: no cover - optional dependency in some environments
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_iso(value: str) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
 
 
 def _secret_key() -> str:
@@ -37,6 +48,46 @@ def _days_until_due() -> int:
     except ValueError:
         value = 7
     return max(1, min(value, 60))
+
+
+def _free_intro_days() -> int:
+    raw = (os.environ.get("TRAINER_FREE_INTRO_DAYS") or "30").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 30
+    return max(0, min(value, 365))
+
+
+def trainer_free_intro_days() -> int:
+    return _free_intro_days()
+
+
+def _registration_started_at(trainer: Dict[str, Any]) -> Optional[datetime]:
+    reg = (trainer.get("registered_at") or "").strip() if isinstance(trainer.get("registered_at"), str) else ""
+    if reg:
+        dt = _parse_iso(reg)
+        if dt:
+            return dt
+    created = (trainer.get("created_at") or "").strip() if isinstance(trainer.get("created_at"), str) else ""
+    if (trainer.get("via_submission_id") or "").strip():
+        return _parse_iso(created) if created else None
+    return None
+
+
+def trial_status(trainer: Dict[str, Any]) -> Dict[str, Any]:
+    days = _free_intro_days()
+    start = _registration_started_at(trainer)
+    if days <= 0 or start is None:
+        return {"active": False, "days": days, "started_at": "", "ends_at": ""}
+    ends = start + timedelta(days=days)
+    active = _now() < ends
+    return {
+        "active": active,
+        "days": days,
+        "started_at": start.isoformat(),
+        "ends_at": ends.isoformat(),
+    }
 
 
 def billing_enabled() -> bool:
@@ -150,6 +201,17 @@ async def bill_intro(db, trainer: Dict[str, Any], intro: Dict[str, Any]) -> Dict
     fee_cents = int(intro.get("intro_fee_cents") or 0)
     if fee_cents <= 0:
         return {"billing_collection_status": "not_billable"}
+
+    trial = trial_status(trainer)
+    if trial["active"]:
+        return {
+            "billing_collection_status": "trial_free",
+            "intro_fee_cents": 0,
+            "intro_fee_list_cents": fee_cents,
+            "billing_trial_days": int(trial["days"] or 0),
+            "billing_trial_started_at": trial["started_at"],
+            "billing_trial_ends_at": trial["ends_at"],
+        }
 
     if not billing_enabled():
         return {"billing_collection_status": "stripe_unconfigured"}

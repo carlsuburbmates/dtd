@@ -26,6 +26,7 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 2. Verified keys present in both Render services:
 - `RESEND_API_KEY`
 - `RESEND_FROM`
+- `RESEND_REPLY_TO`
 - `DISCOVERY_SOURCE_URLS`
 - `SENTRY_DSN`
 3. Vercel project env presence verified and patched:
@@ -60,6 +61,21 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - Vercel production deployment advanced from `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno` to `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`.
 4. Result:
 - No active platform block detected at refresh time; one credential-variable naming drift and one response-shape drift require command hygiene.
+
+## Email channel verification snapshot (2026-05-09)
+
+1. Application + outreach email path (Resend) is aligned:
+- Controlled app emails display `From: no-reply@dogtrainersdirectory.com.au`.
+- Controlled app emails display `Reply-To: info@dogtrainersdirectory.com.au`.
+- Backend unit coverage now asserts `from`, `reply_to`, and MIME `Reply-To` header for both submitter notifications and T+7 outreach payloads.
+2. DNS/auth baseline is aligned:
+- DMARC policy added at `_dmarc.dogtrainersdirectory.com.au` with quarantine policy and reporting to `info@dogtrainersdirectory.com.au`.
+3. Stripe invoice email path is aligned to single-mailbox policy:
+- Controlled Stripe invoice reminder preview shows `Reply-To` mapped to `info@dogtrainersdirectory.com.au`.
+- Invoice body support contact resolves to `info@dogtrainersdirectory.com.au`.
+- This remains Stripe-managed behavior (outside Resend/backend payload config), so it should be rechecked after Stripe account profile edits.
+4. Detailed evidence/report:
+- `docs/governance/EMAIL_DELIVERY_COMPLETION_REPORT_2026-05-09.md`
 
 ## Storage rules
 
@@ -118,6 +134,8 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 6. `AUTONOMY_LOOP_OWNER` (`api` / `worker` / `none`)
 7. `RUN_AUTONOMY_IN_API` (legacy compatibility; must not conflict with `AUTONOMY_LOOP_OWNER`)
 8. `CONVERSION_BILLING_MODE` (`track_only` for launch)
+9. `TRAINER_FREE_INTRO_DAYS` (launch default `30`)
+10. `FIXED_INTRO_FEE_CENTS` (launch default `500`)
 
 ### Optional monitoring/email vars currently used by supporting workflows
 1. `SENTRY_DSN`
@@ -134,6 +152,7 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 12. `REMOTE_BACKEND_URL`
 13. `DISCOVERY_SOURCE_URLS`
 14. `RESEND_FROM`
+15. `RESEND_REPLY_TO`
 
 ### Frontend
 1. `REACT_APP_BACKEND_URL`

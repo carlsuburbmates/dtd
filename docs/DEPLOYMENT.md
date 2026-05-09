@@ -85,8 +85,8 @@ Current matching and verification run through deterministic heuristics in `servi
 
 | Service | What to wire | Where |
 |---|---|---|
-| **Stripe** | Intro invoicing path on `POST /api/intros` uses Stripe Billing when `STRIPE_SECRET_KEY` is set. Configure webhook endpoint `POST /api/stripe/webhook` with `STRIPE_WEBHOOK_SECRET` to reconcile `invoice.sent`, `invoice.paid`, and `invoice.payment_failed`. Keep conversion mode on `CONVERSION_BILLING_MODE=track_only` during launch. | `backend/server.py`, `backend/services/stripe_billing.py` |
-| **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email` is implemented via `send_outreach` loop. Provide `RESEND_API_KEY` and `RESEND_FROM`. Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | `backend/services/automation.py` |
+| **Stripe** | Intro invoicing path on `POST /api/intros` uses Stripe Billing when `STRIPE_SECRET_KEY` is set. Submission-registered trainers are trial-free for `TRAINER_FREE_INTRO_DAYS` (default 30), then charged fixed `FIXED_INTRO_FEE_CENTS` (default 500 = A$5) per valid intro. Configure webhook endpoint `POST /api/stripe/webhook` with `STRIPE_WEBHOOK_SECRET` to reconcile `invoice.sent`, `invoice.paid`, and `invoice.payment_failed`. Keep conversion mode on `CONVERSION_BILLING_MODE=track_only` during launch. Also set Stripe Billing public contact/support email to `info@dogtrainersdirectory.com.au` so invoice-reply flow matches the single-mailbox policy. | `backend/server.py`, `backend/services/stripe_billing.py`, `backend/services/engine.py` |
+| **Resend / SendGrid** | T+7 d "Did you hire?" outreach to `intros.user_email` is implemented via `send_outreach` loop. Provide `RESEND_API_KEY`, `RESEND_FROM` (recommended `no-reply@dogtrainersdirectory.com.au`), and `RESEND_REPLY_TO` (recommended `info@dogtrainersdirectory.com.au`). Returning answers should call `POST /api/conversions` (manual) or `POST /api/engagements` (kind=`return_visit`). | `backend/services/automation.py` |
 | **Real ingestion** | Source-page ingestion is implemented via `ingest_sources` loop. Provide `DISCOVERY_SOURCE_URLS` and monitor `system_state.source_ingestion`. | `backend/services/automation.py` + `engine.py` |
 
 ## 7. CORS / domains
@@ -98,9 +98,12 @@ Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-
 1. Provision Atlas; copy the SRV URI into `MONGO_URL`.
 2. Provision domain + HTTPS at the platform layer (Cloudflare, Vercel, etc.).
 3. Keep conversion billing disabled during launch (`CONVERSION_BILLING_MODE=track_only`), and only enable bill-mode after intro quality metrics are stable.
-4. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
-5. Bump `ADMIN_PASS` to a strong secret; document it only in the password manager.
-6. Verify all configured loops surface in `/ops` after deploy.
+4. Confirm launch intro policy env is set as intended:
+   - `TRAINER_FREE_INTRO_DAYS=30`
+   - `FIXED_INTRO_FEE_CENTS=500`
+5. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
+6. Bump `ADMIN_PASS` to a strong secret; document it only in the password manager.
+7. Verify all configured loops surface in `/ops` after deploy.
 
 ## 9. Code ownership / portability
 

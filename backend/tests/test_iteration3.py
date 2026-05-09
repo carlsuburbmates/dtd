@@ -220,22 +220,20 @@ class TestDiscoveryQueue:
         assert (ds["pending"] + ds["promoted"] + ds["duplicate"] + ds["discarded"]) >= 1
 
 
-# --- Pricing stability (frozen below threshold) ---------------------------
+# --- Pricing stability (fixed launch fee) ---------------------------------
 
 class TestPricingStability:
     def test_frozen_at_baseline(self, session):
         ov = _oversight(session)
         ps_list = ov.get("pricing_state", [])
         assert ps_list, "pricing_state empty"
-        # Iter-3 pricing: when intros_7d < 10 the suburb is frozen at multiplier=1.0, fee=500.
+        # Launch pricing is fixed by policy: A$5 post-trial intro fee.
         frozen_rows = [p for p in ps_list if p.get("frozen") is True]
-        assert frozen_rows, "expected at least one frozen suburb (intros_7d<10)"
+        assert frozen_rows, "expected fixed pricing rows"
         for p in frozen_rows:
-            # Frozen suburbs sit close to baseline; EWMA smoothing may drift the
-            # multiplier slightly off 1.0 but it must stay within a tight band.
-            assert abs(float(p.get("multiplier", 0)) - 1.0) < 0.05, p
+            assert abs(float(p.get("multiplier", 0)) - 1.0) < 0.001, p
             fee = int(p.get("intro_fee_cents", 0))
-            assert 470 <= fee <= 530, p
+            assert fee == 500, p
 
 
 # --- Oversight: shape for iteration 3 -------------------------------------

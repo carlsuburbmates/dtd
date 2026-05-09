@@ -204,7 +204,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                 <div className="grid md:grid-cols-2 gap-6">
                     {/* Loops */}
                     <Section title="Autonomous loops" testid="ops-loops">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" />
                             <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" />
                             <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" />
@@ -212,6 +212,9 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" />
                             <LoopCard name="SourceIngest" loop={loops.source_ingestion} unit="queued urls" countKey="queued" />
                             <LoopCard name="Outreach" loop={loops.outreach} unit="emails sent" countKey="sent" />
+                            <LoopCard name="BillingRecovery" loop={loops.billing_recovery} unit="retries" countKey="retried" />
+                            <LoopCard name="Nurture" loop={loops.nurture} unit="cohorts" countKey="cohorts" />
+                            <LoopCard name="Reactivation" loop={loops.reactivation_route} unit="candidates" countKey="open_candidates" />
                             <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" />
                         </div>
                     </Section>
@@ -242,6 +245,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             <div className="space-y-1 text-sm font-mono">
                                 <div>sent · {billingSummary.invoice_sent ?? 0}</div>
                                 <div>paid · {billingSummary.paid ?? 0}</div>
+                                <div>trial free · {billingSummary.trial_free ?? 0}</div>
                                 <div>failed · {billingSummary.payment_failed ?? 0}</div>
                                 <div>uncollectible · {billingSummary.uncollectible ?? 0}</div>
                                 <div>waived · {billingSummary.waived ?? 0}</div>
@@ -253,6 +257,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                         <div>
                             <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Non-billable causes</div>
                             <div className="space-y-1 text-sm font-mono">
+                                <div>trial free · {nonBillable.trial_free ?? 0}</div>
                                 <div>profile incomplete · {nonBillable.profile_incomplete ?? 0}</div>
                                 <div>consent required · {nonBillable.consent_required ?? 0}</div>
                                 <div>stripe unconfigured · {nonBillable.stripe_unconfigured ?? 0}</div>
@@ -274,13 +279,13 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                 </Section>
 
                 {/* Pricing state */}
-                <Section title="Dynamic pricing · per suburb" testid="ops-pricing">
+                <Section title="Intro fee state · per suburb" testid="ops-pricing">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="text-left text-[10px] uppercase tracking-wider font-mono text-[#8B9E98] border-b border-[#243631]">
                                     <th className="px-3 py-2">Suburb</th>
-                                    <th className="px-3 py-2">Multiplier</th>
+                                    <th className="px-3 py-2">Mode</th>
                                     <th className="px-3 py-2">Intro fee</th>
                                     <th className="px-3 py-2">Intros · 7d</th>
                                 </tr>
@@ -289,7 +294,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                                 {pricingState.map((p) => (
                                     <tr key={p.suburb} className="border-b border-[#243631]">
                                         <td className="px-3 py-2 font-mono">{p.suburb}</td>
-                                        <td className="px-3 py-2 font-mono">{p.multiplier?.toFixed(2)}×</td>
+                                        <td className="px-3 py-2 font-mono">{p.pricing_mode || "fixed"}</td>
                                         <td className="px-3 py-2 font-mono">{audCents(p.intro_fee_cents)}</td>
                                         <td className="px-3 py-2 font-mono">{p.intros_7d || 0}</td>
                                     </tr>
