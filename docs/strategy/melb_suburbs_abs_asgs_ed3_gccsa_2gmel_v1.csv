@@ -1,0 +1,614 @@
+sal_code_2021,sal_name_2021,state_code_2021,state_name_2021,gccsa_code_2021,gccsa_name_2021
+20002,Abbotsford (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20003,Aberfeldie,2,Victoria,2GMEL,Greater Melbourne
+20006,Ada,2,Victoria,2GMEL,Greater Melbourne
+20011,Aintree,2,Victoria,2GMEL,Greater Melbourne
+20015,Airport West,2,Victoria,2GMEL,Greater Melbourne
+20017,Albanvale,2,Victoria,2GMEL,Greater Melbourne
+20018,Albert Park (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20021,Albion (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20034,Alphington,2,Victoria,2GMEL,Greater Melbourne
+20035,Altona (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20036,Altona Meadows,2,Victoria,2GMEL,Greater Melbourne
+20037,Altona North,2,Victoria,2GMEL,Greater Melbourne
+20062,Ardeer,2,Victoria,2GMEL,Greater Melbourne
+20066,Armadale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20071,Arthurs Creek,2,Victoria,2GMEL,Greater Melbourne
+20072,Arthurs Seat,2,Victoria,2GMEL,Greater Melbourne
+20075,Ascot Vale,2,Victoria,2GMEL,Greater Melbourne
+20076,Ashbourne (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20077,Ashburton,2,Victoria,2GMEL,Greater Melbourne
+20078,Ashwood,2,Victoria,2GMEL,Greater Melbourne
+20079,Aspendale,2,Victoria,2GMEL,Greater Melbourne
+20080,Aspendale Gardens,2,Victoria,2GMEL,Greater Melbourne
+20081,Athlone,2,Victoria,2GMEL,Greater Melbourne
+20082,Attwood,2,Victoria,2GMEL,Greater Melbourne
+20089,Avondale Heights,2,Victoria,2GMEL,Greater Melbourne
+20091,Avonsleigh,2,Victoria,2GMEL,Greater Melbourne
+20095,Bacchus Marsh,2,Victoria,2GMEL,Greater Melbourne
+20097,Badger Creek,2,Victoria,2GMEL,Greater Melbourne
+20105,Balaclava (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20115,Balliang,2,Victoria,2GMEL,Greater Melbourne
+20116,Balliang East,2,Victoria,2GMEL,Greater Melbourne
+20120,Balnarring,2,Victoria,2GMEL,Greater Melbourne
+20121,Balnarring Beach,2,Victoria,2GMEL,Greater Melbourne
+20123,Balwyn,2,Victoria,2GMEL,Greater Melbourne
+20124,Balwyn North,2,Victoria,2GMEL,Greater Melbourne
+20131,Bangholme,2,Victoria,2GMEL,Greater Melbourne
+20169,Baxter,2,Victoria,2GMEL,Greater Melbourne
+20171,Bayles,2,Victoria,2GMEL,Greater Melbourne
+20172,Baynton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20173,Bayswater (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20174,Bayswater North,2,Victoria,2GMEL,Greater Melbourne
+20175,Beaconsfield (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20176,Beaconsfield Upper,2,Victoria,2GMEL,Greater Melbourne
+20182,Beaumaris (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20187,Beenak,2,Victoria,2GMEL,Greater Melbourne
+20188,Belgrave,2,Victoria,2GMEL,Greater Melbourne
+20189,Belgrave Heights,2,Victoria,2GMEL,Greater Melbourne
+20190,Belgrave South,2,Victoria,2GMEL,Greater Melbourne
+20198,Bellfield (Banyule - Vic.),2,Victoria,2GMEL,Greater Melbourne
+20207,Bend Of Islands,2,Victoria,2GMEL,Greater Melbourne
+20212,Benloch,2,Victoria,2GMEL,Greater Melbourne
+20214,Bentleigh,2,Victoria,2GMEL,Greater Melbourne
+20215,Bentleigh East,2,Victoria,2GMEL,Greater Melbourne
+20224,Berwick,2,Victoria,2GMEL,Greater Melbourne
+20233,Beveridge,2,Victoria,2GMEL,Greater Melbourne
+20237,Big Pats Creek,2,Victoria,2GMEL,Greater Melbourne
+20248,Bittern,2,Victoria,2GMEL,Greater Melbourne
+20251,Black Rock (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20252,Blackburn,2,Victoria,2GMEL,Greater Melbourne
+20253,Blackburn North,2,Victoria,2GMEL,Greater Melbourne
+20254,Blackburn South,2,Victoria,2GMEL,Greater Melbourne
+20257,Blairgowrie,2,Victoria,2GMEL,Greater Melbourne
+20260,Blind Bight,2,Victoria,2GMEL,Greater Melbourne
+20272,Bolinda,2,Victoria,2GMEL,Greater Melbourne
+20278,Bonbeach,2,Victoria,2GMEL,Greater Melbourne
+20280,Boneo,2,Victoria,2GMEL,Greater Melbourne
+20282,Bonnie Brook,2,Victoria,2GMEL,Greater Melbourne
+20304,Boronia,2,Victoria,2GMEL,Greater Melbourne
+20307,Botanic Ridge,2,Victoria,2GMEL,Greater Melbourne
+20314,Box Hill (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20315,Box Hill North,2,Victoria,2GMEL,Greater Melbourne
+20316,Box Hill South,2,Victoria,2GMEL,Greater Melbourne
+20320,Braeside,2,Victoria,2GMEL,Greater Melbourne
+20324,Braybrook,2,Victoria,2GMEL,Greater Melbourne
+20331,Briar Hill,2,Victoria,2GMEL,Greater Melbourne
+20337,Brighton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20338,Brighton East,2,Victoria,2GMEL,Greater Melbourne
+20345,Broadford,2,Victoria,2GMEL,Greater Melbourne
+20346,Broadmeadows (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20351,Brookfield (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20352,Brooklyn (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20361,Brunswick (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20362,Brunswick East,2,Victoria,2GMEL,Greater Melbourne
+20363,Brunswick West,2,Victoria,2GMEL,Greater Melbourne
+20381,Bulla (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20386,Bulleen,2,Victoria,2GMEL,Greater Melbourne
+20387,Bullengarook,2,Victoria,2GMEL,Greater Melbourne
+20399,Bundoora (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20411,Bunyip,2,Victoria,2GMEL,Greater Melbourne
+20412,Bunyip North,2,Victoria,2GMEL,Greater Melbourne
+20418,Burnley,2,Victoria,2GMEL,Greater Melbourne
+20419,Burnside (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20420,Burnside Heights,2,Victoria,2GMEL,Greater Melbourne
+20426,Burwood (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20427,Burwood East,2,Victoria,2GMEL,Greater Melbourne
+20435,Bylands,2,Victoria,2GMEL,Greater Melbourne
+20441,Cairnlea,2,Victoria,2GMEL,Greater Melbourne
+20442,Calder Park,2,Victoria,2GMEL,Greater Melbourne
+20443,Caldermeade,2,Victoria,2GMEL,Greater Melbourne
+20453,Camberwell (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20455,Campbellfield,2,Victoria,2GMEL,Greater Melbourne
+20466,Cannons Creek,2,Victoria,2GMEL,Greater Melbourne
+20468,Canterbury (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20474,Cape Schanck,2,Victoria,2GMEL,Greater Melbourne
+20476,Capel Sound,2,Victoria,2GMEL,Greater Melbourne
+20487,Cardinia,2,Victoria,2GMEL,Greater Melbourne
+20495,Carlton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20496,Carlton North,2,Victoria,2GMEL,Greater Melbourne
+20498,Carnegie,2,Victoria,2GMEL,Greater Melbourne
+20500,Caroline Springs,2,Victoria,2GMEL,Greater Melbourne
+20507,Carrum,2,Victoria,2GMEL,Greater Melbourne
+20508,Carrum Downs,2,Victoria,2GMEL,Greater Melbourne
+20512,Castella,2,Victoria,2GMEL,Greater Melbourne
+20517,Catani,2,Victoria,2GMEL,Greater Melbourne
+20521,Caulfield,2,Victoria,2GMEL,Greater Melbourne
+20522,Caulfield East,2,Victoria,2GMEL,Greater Melbourne
+20523,Caulfield North,2,Victoria,2GMEL,Greater Melbourne
+20524,Caulfield South,2,Victoria,2GMEL,Greater Melbourne
+20528,Chadstone,2,Victoria,2GMEL,Greater Melbourne
+20537,Chelsea,2,Victoria,2GMEL,Greater Melbourne
+20538,Chelsea Heights,2,Victoria,2GMEL,Greater Melbourne
+20539,Cheltenham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20541,Cherokee,2,Victoria,2GMEL,Greater Melbourne
+20555,Chintin,2,Victoria,2GMEL,Greater Melbourne
+20556,Chirnside Park,2,Victoria,2GMEL,Greater Melbourne
+20559,Christmas Hills (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20560,Chum Creek,2,Victoria,2GMEL,Greater Melbourne
+20566,Clarinda,2,Victoria,2GMEL,Greater Melbourne
+20567,Clarkefield,2,Victoria,2GMEL,Greater Melbourne
+20569,Clayton,2,Victoria,2GMEL,Greater Melbourne
+20570,Clayton South,2,Victoria,2GMEL,Greater Melbourne
+20572,Clematis,2,Victoria,2GMEL,Greater Melbourne
+20574,Clifton Hill,2,Victoria,2GMEL,Greater Melbourne
+20576,Clonbinane,2,Victoria,2GMEL,Greater Melbourne
+20581,Clyde (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20582,Clyde North,2,Victoria,2GMEL,Greater Melbourne
+20587,Cobaw,2,Victoria,2GMEL,Greater Melbourne
+20590,Cobblebank,2,Victoria,2GMEL,Greater Melbourne
+20596,Coburg,2,Victoria,2GMEL,Greater Melbourne
+20597,Coburg North,2,Victoria,2GMEL,Greater Melbourne
+20600,Cockatoo (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20601,Cocoroc,2,Victoria,2GMEL,Greater Melbourne
+20605,Coimadai,2,Victoria,2GMEL,Greater Melbourne
+20613,Coldstream (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20616,Collingwood (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20624,Coolaroo,2,Victoria,2GMEL,Greater Melbourne
+20633,Cora Lynn,2,Victoria,2GMEL,Greater Melbourne
+20654,Cottles Bridge,2,Victoria,2GMEL,Greater Melbourne
+20661,Craigieburn,2,Victoria,2GMEL,Greater Melbourne
+20662,Cranbourne,2,Victoria,2GMEL,Greater Melbourne
+20663,Cranbourne East,2,Victoria,2GMEL,Greater Melbourne
+20664,Cranbourne North,2,Victoria,2GMEL,Greater Melbourne
+20665,Cranbourne South,2,Victoria,2GMEL,Greater Melbourne
+20666,Cranbourne West,2,Victoria,2GMEL,Greater Melbourne
+20670,Cremorne (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20674,Crib Point,2,Victoria,2GMEL,Greater Melbourne
+20682,Croydon (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20683,Croydon Hills,2,Victoria,2GMEL,Greater Melbourne
+20684,Croydon North,2,Victoria,2GMEL,Greater Melbourne
+20685,Croydon South,2,Victoria,2GMEL,Greater Melbourne
+20702,Dallas,2,Victoria,2GMEL,Greater Melbourne
+20703,Dalmore,2,Victoria,2GMEL,Greater Melbourne
+20707,Dandenong,2,Victoria,2GMEL,Greater Melbourne
+20708,Dandenong North,2,Victoria,2GMEL,Greater Melbourne
+20709,Dandenong South,2,Victoria,2GMEL,Greater Melbourne
+20712,Darley,2,Victoria,2GMEL,Greater Melbourne
+20716,Darraweit Guim,2,Victoria,2GMEL,Greater Melbourne
+20724,Deanside,2,Victoria,2GMEL,Greater Melbourne
+20728,Deepdene (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20729,Deer Park,2,Victoria,2GMEL,Greater Melbourne
+20731,Delahey,2,Victoria,2GMEL,Greater Melbourne
+20743,Derrimut,2,Victoria,2GMEL,Greater Melbourne
+20748,Devon Meadows,2,Victoria,2GMEL,Greater Melbourne
+20750,Dewhurst,2,Victoria,2GMEL,Greater Melbourne
+20752,Diamond Creek,2,Victoria,2GMEL,Greater Melbourne
+20754,Diggers Rest,2,Victoria,2GMEL,Greater Melbourne
+20758,Dingley Village,2,Victoria,2GMEL,Greater Melbourne
+20762,Dixons Creek,2,Victoria,2GMEL,Greater Melbourne
+20766,Docklands,2,Victoria,2GMEL,Greater Melbourne
+20769,Don Valley,2,Victoria,2GMEL,Greater Melbourne
+20771,Doncaster,2,Victoria,2GMEL,Greater Melbourne
+20772,Doncaster East,2,Victoria,2GMEL,Greater Melbourne
+20773,Donnybrook (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20774,Donvale,2,Victoria,2GMEL,Greater Melbourne
+20779,Doreen,2,Victoria,2GMEL,Greater Melbourne
+20783,Doveton,2,Victoria,2GMEL,Greater Melbourne
+20788,Dromana,2,Victoria,2GMEL,Greater Melbourne
+20825,Eaglemont,2,Victoria,2GMEL,Greater Melbourne
+20830,East Melbourne,2,Victoria,2GMEL,Greater Melbourne
+20833,East Warburton,2,Victoria,2GMEL,Greater Melbourne
+20843,Eden Park,2,Victoria,2GMEL,Greater Melbourne
+20848,Edithvale,2,Victoria,2GMEL,Greater Melbourne
+20864,Elsternwick,2,Victoria,2GMEL,Greater Melbourne
+20865,Eltham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20866,Eltham North,2,Victoria,2GMEL,Greater Melbourne
+20867,Elwood,2,Victoria,2GMEL,Greater Melbourne
+20868,Emerald (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20871,Endeavour Hills,2,Victoria,2GMEL,Greater Melbourne
+20878,Epping (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20885,Essendon,2,Victoria,2GMEL,Greater Melbourne
+20886,Essendon Fields,2,Victoria,2GMEL,Greater Melbourne
+20887,Essendon North,2,Victoria,2GMEL,Greater Melbourne
+20888,Essendon West,2,Victoria,2GMEL,Greater Melbourne
+20889,Eumemmerring,2,Victoria,2GMEL,Greater Melbourne
+20898,Exford,2,Victoria,2GMEL,Greater Melbourne
+20899,Eynesbury,2,Victoria,2GMEL,Greater Melbourne
+20901,Fairfield (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20909,Fawkner,2,Victoria,2GMEL,Greater Melbourne
+20916,Fernshaw,2,Victoria,2GMEL,Greater Melbourne
+20917,Ferntree Gully,2,Victoria,2GMEL,Greater Melbourne
+20918,Ferny Creek,2,Victoria,2GMEL,Greater Melbourne
+20920,Fingal (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20924,Fitzroy (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20925,Fitzroy North,2,Victoria,2GMEL,Greater Melbourne
+20929,Flemington,2,Victoria,2GMEL,Greater Melbourne
+20930,Flinders (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20932,Flowerdale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20935,Footscray,2,Victoria,2GMEL,Greater Melbourne
+20936,Forbes (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20937,Forest Hill (Vic.),2,Victoria,2GMEL,Greater Melbourne
+20947,Frankston,2,Victoria,2GMEL,Greater Melbourne
+20948,Frankston North,2,Victoria,2GMEL,Greater Melbourne
+20949,Frankston South,2,Victoria,2GMEL,Greater Melbourne
+20950,Fraser Rise,2,Victoria,2GMEL,Greater Melbourne
+20965,Gardenvale,2,Victoria,2GMEL,Greater Melbourne
+20966,Garfield,2,Victoria,2GMEL,Greater Melbourne
+20967,Garfield North,2,Victoria,2GMEL,Greater Melbourne
+20979,Gembrook,2,Victoria,2GMEL,Greater Melbourne
+20981,Gentle Annie,2,Victoria,2GMEL,Greater Melbourne
+20995,Gilderoy,2,Victoria,2GMEL,Greater Melbourne
+21001,Gisborne,2,Victoria,2GMEL,Greater Melbourne
+21002,Gisborne South,2,Victoria,2GMEL,Greater Melbourne
+21004,Gladstone Park,2,Victoria,2GMEL,Greater Melbourne
+21005,Gladysdale,2,Victoria,2GMEL,Greater Melbourne
+21009,Glen Huntly,2,Victoria,2GMEL,Greater Melbourne
+21010,Glen Iris (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21013,Glen Waverley,2,Victoria,2GMEL,Greater Melbourne
+21020,Glenburn,2,Victoria,2GMEL,Greater Melbourne
+21047,Glenroy (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21059,Goldie,2,Victoria,2GMEL,Greater Melbourne
+21079,Gowanbrae,2,Victoria,2GMEL,Greater Melbourne
+21087,Grangefields,2,Victoria,2GMEL,Greater Melbourne
+21104,Greensborough,2,Victoria,2GMEL,Greater Melbourne
+21105,Greenvale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21115,Gruyere,2,Victoria,2GMEL,Greater Melbourne
+21121,Guys Hill,2,Victoria,2GMEL,Greater Melbourne
+21124,Hadfield,2,Victoria,2GMEL,Greater Melbourne
+21125,Hallam,2,Victoria,2GMEL,Greater Melbourne
+21131,Hampton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21132,Hampton East,2,Victoria,2GMEL,Greater Melbourne
+21133,Hampton Park,2,Victoria,2GMEL,Greater Melbourne
+21139,Harkaway,2,Victoria,2GMEL,Greater Melbourne
+21140,Harkness,2,Victoria,2GMEL,Greater Melbourne
+21145,Hastings (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21152,Hawthorn (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21153,Hawthorn East,2,Victoria,2GMEL,Greater Melbourne
+21158,Healesville,2,Victoria,2GMEL,Greater Melbourne
+21159,Heath Hill,2,Victoria,2GMEL,Greater Melbourne
+21161,Heathcote Junction,2,Victoria,2GMEL,Greater Melbourne
+21163,Heatherton,2,Victoria,2GMEL,Greater Melbourne
+21165,Heathmont,2,Victoria,2GMEL,Greater Melbourne
+21167,Heidelberg,2,Victoria,2GMEL,Greater Melbourne
+21168,Heidelberg Heights,2,Victoria,2GMEL,Greater Melbourne
+21169,Heidelberg West,2,Victoria,2GMEL,Greater Melbourne
+21176,Hesket,2,Victoria,2GMEL,Greater Melbourne
+21185,Highett,2,Victoria,2GMEL,Greater Melbourne
+21193,Hillside (Melton - Vic.),2,Victoria,2GMEL,Greater Melbourne
+21195,Hmas Cerberus,2,Victoria,2GMEL,Greater Melbourne
+21196,Hoddles Creek,2,Victoria,2GMEL,Greater Melbourne
+21202,Hopetoun Park,2,Victoria,2GMEL,Greater Melbourne
+21203,Hoppers Crossing,2,Victoria,2GMEL,Greater Melbourne
+21214,Hughesdale,2,Victoria,2GMEL,Greater Melbourne
+21215,Humevale,2,Victoria,2GMEL,Greater Melbourne
+21218,Huntingdale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21223,Hurstbridge,2,Victoria,2GMEL,Greater Melbourne
+21232,Ingliston,2,Victoria,2GMEL,Greater Melbourne
+21238,Iona,2,Victoria,2GMEL,Greater Melbourne
+21246,Ivanhoe (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21247,Ivanhoe East,2,Victoria,2GMEL,Greater Melbourne
+21248,Jacana,2,Victoria,2GMEL,Greater Melbourne
+21252,Jam Jerrup,2,Victoria,2GMEL,Greater Melbourne
+21277,Junction Village,2,Victoria,2GMEL,Greater Melbourne
+21284,Kalkallo,2,Victoria,2GMEL,Greater Melbourne
+21286,Kallista,2,Victoria,2GMEL,Greater Melbourne
+21287,Kalorama,2,Victoria,2GMEL,Greater Melbourne
+21294,Kangaroo Ground,2,Victoria,2GMEL,Greater Melbourne
+21312,Kealba,2,Victoria,2GMEL,Greater Melbourne
+21314,Keilor,2,Victoria,2GMEL,Greater Melbourne
+21315,Keilor Downs,2,Victoria,2GMEL,Greater Melbourne
+21316,Keilor East,2,Victoria,2GMEL,Greater Melbourne
+21317,Keilor Lodge,2,Victoria,2GMEL,Greater Melbourne
+21318,Keilor North,2,Victoria,2GMEL,Greater Melbourne
+21319,Keilor Park,2,Victoria,2GMEL,Greater Melbourne
+21327,Kensington (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21333,Kerrie,2,Victoria,2GMEL,Greater Melbourne
+21336,Kew (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21337,Kew East,2,Victoria,2GMEL,Greater Melbourne
+21339,Keysborough,2,Victoria,2GMEL,Greater Melbourne
+21352,Kilmore,2,Victoria,2GMEL,Greater Melbourne
+21353,Kilmore East,2,Victoria,2GMEL,Greater Melbourne
+21354,Kilsyth,2,Victoria,2GMEL,Greater Melbourne
+21355,Kilsyth South,2,Victoria,2GMEL,Greater Melbourne
+21358,Kinglake,2,Victoria,2GMEL,Greater Melbourne
+21359,Kinglake Central,2,Victoria,2GMEL,Greater Melbourne
+21360,Kinglake West,2,Victoria,2GMEL,Greater Melbourne
+21362,Kings Park (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21363,Kingsbury,2,Victoria,2GMEL,Greater Melbourne
+21365,Kingsville,2,Victoria,2GMEL,Greater Melbourne
+21374,Knoxfield,2,Victoria,2GMEL,Greater Melbourne
+21380,Koo Wee Rup,2,Victoria,2GMEL,Greater Melbourne
+21381,Koo Wee Rup North,2,Victoria,2GMEL,Greater Melbourne
+21393,Kooyong,2,Victoria,2GMEL,Greater Melbourne
+21411,Kurunjang,2,Victoria,2GMEL,Greater Melbourne
+21419,Labertouche,2,Victoria,2GMEL,Greater Melbourne
+21452,Lalor,2,Victoria,2GMEL,Greater Melbourne
+21456,Lancefield,2,Victoria,2GMEL,Greater Melbourne
+21459,Lang Lang,2,Victoria,2GMEL,Greater Melbourne
+21460,Lang Lang East,2,Victoria,2GMEL,Greater Melbourne
+21467,Langwarrin,2,Victoria,2GMEL,Greater Melbourne
+21468,Langwarrin South,2,Victoria,2GMEL,Greater Melbourne
+21473,Launching Place,2,Victoria,2GMEL,Greater Melbourne
+21476,Laverton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21477,Laverton North,2,Victoria,2GMEL,Greater Melbourne
+21494,Lerderderg,2,Victoria,2GMEL,Greater Melbourne
+21504,Lilydale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21520,Little River (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21533,Long Forest,2,Victoria,2GMEL,Greater Melbourne
+21538,Longwarry,2,Victoria,2GMEL,Greater Melbourne
+21539,Longwarry North,2,Victoria,2GMEL,Greater Melbourne
+21547,Lower Plenty,2,Victoria,2GMEL,Greater Melbourne
+21554,Lynbrook,2,Victoria,2GMEL,Greater Melbourne
+21555,Lyndhurst (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21558,Lysterfield,2,Victoria,2GMEL,Greater Melbourne
+21559,Lysterfield South,2,Victoria,2GMEL,Greater Melbourne
+21561,Macclesfield (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21562,Macedon,2,Victoria,2GMEL,Greater Melbourne
+21564,Macleod (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21569,Maddingley,2,Victoria,2GMEL,Greater Melbourne
+21575,Maidstone,2,Victoria,2GMEL,Greater Melbourne
+21578,Main Ridge,2,Victoria,2GMEL,Greater Melbourne
+21586,Malvern (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21587,Malvern East,2,Victoria,2GMEL,Greater Melbourne
+21588,Mambourin,2,Victoria,2GMEL,Greater Melbourne
+21597,Manor Lakes,2,Victoria,2GMEL,Greater Melbourne
+21604,Maribyrnong,2,Victoria,2GMEL,Greater Melbourne
+21619,Maryknoll,2,Victoria,2GMEL,Greater Melbourne
+21620,Marysville,2,Victoria,2GMEL,Greater Melbourne
+21625,McCrae,2,Victoria,2GMEL,Greater Melbourne
+21629,McKinnon,2,Victoria,2GMEL,Greater Melbourne
+21631,McMahons Creek,2,Victoria,2GMEL,Greater Melbourne
+21635,Meadow Heights,2,Victoria,2GMEL,Greater Melbourne
+21640,Melbourne,2,Victoria,2GMEL,Greater Melbourne
+21641,Melbourne Airport,2,Victoria,2GMEL,Greater Melbourne
+21642,Melton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21643,Melton South,2,Victoria,2GMEL,Greater Melbourne
+21644,Melton West,2,Victoria,2GMEL,Greater Melbourne
+21648,Mentone,2,Victoria,2GMEL,Greater Melbourne
+21649,Menzies Creek,2,Victoria,2GMEL,Greater Melbourne
+21659,Mernda,2,Victoria,2GMEL,Greater Melbourne
+21662,Merricks,2,Victoria,2GMEL,Greater Melbourne
+21663,Merricks Beach,2,Victoria,2GMEL,Greater Melbourne
+21664,Merricks North,2,Victoria,2GMEL,Greater Melbourne
+21668,Merrimu,2,Victoria,2GMEL,Greater Melbourne
+21675,Mickleham,2,Victoria,2GMEL,Greater Melbourne
+21677,Middle Park (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21683,Mill Park,2,Victoria,2GMEL,Greater Melbourne
+21685,Millgrove,2,Victoria,2GMEL,Greater Melbourne
+21706,Mitcham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21714,Modella,2,Victoria,2GMEL,Greater Melbourne
+21727,Monbulk,2,Victoria,2GMEL,Greater Melbourne
+21728,Monegeetta,2,Victoria,2GMEL,Greater Melbourne
+21731,Monomeith,2,Victoria,2GMEL,Greater Melbourne
+21732,Mont Albert,2,Victoria,2GMEL,Greater Melbourne
+21733,Mont Albert North,2,Victoria,2GMEL,Greater Melbourne
+21735,Montmorency,2,Victoria,2GMEL,Greater Melbourne
+21736,Montrose (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21742,Moonee Ponds,2,Victoria,2GMEL,Greater Melbourne
+21746,Moorabbin,2,Victoria,2GMEL,Greater Melbourne
+21747,Moorabbin Airport,2,Victoria,2GMEL,Greater Melbourne
+21754,Moorooduc,2,Victoria,2GMEL,Greater Melbourne
+21755,Mooroolbark,2,Victoria,2GMEL,Greater Melbourne
+21760,Mordialloc,2,Victoria,2GMEL,Greater Melbourne
+21763,Mornington (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21779,Mount Burnett,2,Victoria,2GMEL,Greater Melbourne
+21786,Mount Cottrell,2,Victoria,2GMEL,Greater Melbourne
+21787,Mount Dandenong,2,Victoria,2GMEL,Greater Melbourne
+21793,Mount Eliza,2,Victoria,2GMEL,Greater Melbourne
+21795,Mount Evelyn,2,Victoria,2GMEL,Greater Melbourne
+21801,Mount Macedon,2,Victoria,2GMEL,Greater Melbourne
+21803,Mount Martha,2,Victoria,2GMEL,Greater Melbourne
+21814,Mount Toolebewong,2,Victoria,2GMEL,Greater Melbourne
+21816,Mount Waverley,2,Victoria,2GMEL,Greater Melbourne
+21827,Mulgrave (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21847,Murrindindi,2,Victoria,2GMEL,Greater Melbourne
+21849,Murrumbeena,2,Victoria,2GMEL,Greater Melbourne
+21859,Myrniong,2,Victoria,2GMEL,Greater Melbourne
+21872,Nangana,2,Victoria,2GMEL,Greater Melbourne
+21878,Nar Nar Goon,2,Victoria,2GMEL,Greater Melbourne
+21879,Nar Nar Goon North,2,Victoria,2GMEL,Greater Melbourne
+21880,Narbethong,2,Victoria,2GMEL,Greater Melbourne
+21893,Narre Warren,2,Victoria,2GMEL,Greater Melbourne
+21894,Narre Warren East,2,Victoria,2GMEL,Greater Melbourne
+21895,Narre Warren North,2,Victoria,2GMEL,Greater Melbourne
+21896,Narre Warren South,2,Victoria,2GMEL,Greater Melbourne
+21921,New Gisborne,2,Victoria,2GMEL,Greater Melbourne
+21927,Newham,2,Victoria,2GMEL,Greater Melbourne
+21934,Newport (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21942,Niddrie,2,Victoria,2GMEL,Greater Melbourne
+21952,Noble Park,2,Victoria,2GMEL,Greater Melbourne
+21953,Noble Park North,2,Victoria,2GMEL,Greater Melbourne
+21966,North Melbourne,2,Victoria,2GMEL,Greater Melbourne
+21969,North Warrandyte,2,Victoria,2GMEL,Greater Melbourne
+21971,Northcote,2,Victoria,2GMEL,Greater Melbourne
+21974,Notting Hill,2,Victoria,2GMEL,Greater Melbourne
+21980,Nulla Vale,2,Victoria,2GMEL,Greater Melbourne
+21985,Nunawading,2,Victoria,2GMEL,Greater Melbourne
+21991,Nutfield,2,Victoria,2GMEL,Greater Melbourne
+21996,Nyora (Vic.),2,Victoria,2GMEL,Greater Melbourne
+21998,Oak Park,2,Victoria,2GMEL,Greater Melbourne
+21999,Oaklands Junction,2,Victoria,2GMEL,Greater Melbourne
+22000,Oakleigh,2,Victoria,2GMEL,Greater Melbourne
+22001,Oakleigh East,2,Victoria,2GMEL,Greater Melbourne
+22002,Oakleigh South,2,Victoria,2GMEL,Greater Melbourne
+22006,Officer,2,Victoria,2GMEL,Greater Melbourne
+22007,Officer South,2,Victoria,2GMEL,Greater Melbourne
+22009,Olinda (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22016,Ormond,2,Victoria,2GMEL,Greater Melbourne
+22027,Pakenham,2,Victoria,2GMEL,Greater Melbourne
+22028,Pakenham South,2,Victoria,2GMEL,Greater Melbourne
+22029,Pakenham Upper,2,Victoria,2GMEL,Greater Melbourne
+22032,Panton Hill,2,Victoria,2GMEL,Greater Melbourne
+22036,Park Orchards,2,Victoria,2GMEL,Greater Melbourne
+22037,Parkdale,2,Victoria,2GMEL,Greater Melbourne
+22038,Parkville (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22039,Parwan,2,Victoria,2GMEL,Greater Melbourne
+22041,Pascoe Vale,2,Victoria,2GMEL,Greater Melbourne
+22042,Pascoe Vale South,2,Victoria,2GMEL,Greater Melbourne
+22043,Pastoria,2,Victoria,2GMEL,Greater Melbourne
+22044,Pastoria East,2,Victoria,2GMEL,Greater Melbourne
+22047,Patterson Lakes,2,Victoria,2GMEL,Greater Melbourne
+22050,Pearcedale,2,Victoria,2GMEL,Greater Melbourne
+22058,Pentland Hills,2,Victoria,2GMEL,Greater Melbourne
+22064,Pheasant Creek (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22078,Pipers Creek,2,Victoria,2GMEL,Greater Melbourne
+22084,Plenty (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22085,Plumpton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22086,Point Cook,2,Victoria,2GMEL,Greater Melbourne
+22087,Point Leo,2,Victoria,2GMEL,Greater Melbourne
+22089,Point Wilson,2,Victoria,2GMEL,Greater Melbourne
+22100,Poowong North,2,Victoria,2GMEL,Greater Melbourne
+22107,Port Melbourne,2,Victoria,2GMEL,Greater Melbourne
+22113,Portsea,2,Victoria,2GMEL,Greater Melbourne
+22115,Powelltown,2,Victoria,2GMEL,Greater Melbourne
+22118,Prahran,2,Victoria,2GMEL,Greater Melbourne
+22121,Preston (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22122,Princes Hill,2,Victoria,2GMEL,Greater Melbourne
+22132,Quandong,2,Victoria,2GMEL,Greater Melbourne
+22141,Ravenhall,2,Victoria,2GMEL,Greater Melbourne
+22148,Red Hill (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22149,Red Hill South,2,Victoria,2GMEL,Greater Melbourne
+22155,Reedy Creek (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22160,Research,2,Victoria,2GMEL,Greater Melbourne
+22161,Reservoir (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22170,Richmond (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22172,Riddells Creek,2,Victoria,2GMEL,Greater Melbourne
+22174,Ringwood (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22175,Ringwood East,2,Victoria,2GMEL,Greater Melbourne
+22176,Ringwood North,2,Victoria,2GMEL,Greater Melbourne
+22179,Ripponlea,2,Victoria,2GMEL,Greater Melbourne
+22185,Rochford,2,Victoria,2GMEL,Greater Melbourne
+22186,Rockbank,2,Victoria,2GMEL,Greater Melbourne
+22193,Romsey,2,Victoria,2GMEL,Greater Melbourne
+22194,Rosanna,2,Victoria,2GMEL,Greater Melbourne
+22198,Rosebud,2,Victoria,2GMEL,Greater Melbourne
+22206,Rowsley,2,Victoria,2GMEL,Greater Melbourne
+22207,Rowville,2,Victoria,2GMEL,Greater Melbourne
+22208,Roxburgh Park,2,Victoria,2GMEL,Greater Melbourne
+22220,Rye,2,Victoria,2GMEL,Greater Melbourne
+22221,Rythdale,2,Victoria,2GMEL,Greater Melbourne
+22222,Safety Beach (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22232,Sandhurst,2,Victoria,2GMEL,Greater Melbourne
+22234,Sandringham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22239,Sassafras (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22242,Scoresby,2,Victoria,2GMEL,Greater Melbourne
+22247,Seabrook,2,Victoria,2GMEL,Greater Melbourne
+22249,Seaford (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22250,Seaholme,2,Victoria,2GMEL,Greater Melbourne
+22256,Seddon (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22258,Selby,2,Victoria,2GMEL,Greater Melbourne
+22263,Seville,2,Victoria,2GMEL,Greater Melbourne
+22264,Seville East,2,Victoria,2GMEL,Greater Melbourne
+22278,Sherbrooke,2,Victoria,2GMEL,Greater Melbourne
+22279,Shoreham,2,Victoria,2GMEL,Greater Melbourne
+22281,Silvan,2,Victoria,2GMEL,Greater Melbourne
+22291,Skye (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22295,Smiths Gully,2,Victoria,2GMEL,Greater Melbourne
+22303,Somers,2,Victoria,2GMEL,Greater Melbourne
+22304,Somerton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22305,Somerville (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22306,Sorrento (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22309,South Kingsville,2,Victoria,2GMEL,Greater Melbourne
+22310,South Melbourne,2,Victoria,2GMEL,Greater Melbourne
+22311,South Morang,2,Victoria,2GMEL,Greater Melbourne
+22313,South Wharf,2,Victoria,2GMEL,Greater Melbourne
+22314,South Yarra,2,Victoria,2GMEL,Greater Melbourne
+22315,Southbank,2,Victoria,2GMEL,Greater Melbourne
+22319,Spotswood,2,Victoria,2GMEL,Greater Melbourne
+22325,Springfield (Macedon Ranges - Vic.),2,Victoria,2GMEL,Greater Melbourne
+22328,Springvale (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22329,Springvale South,2,Victoria,2GMEL,Greater Melbourne
+22330,St Albans (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22332,St Andrews (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22333,St Andrews Beach,2,Victoria,2GMEL,Greater Melbourne
+22339,St Helena,2,Victoria,2GMEL,Greater Melbourne
+22343,St Kilda (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22344,St Kilda East,2,Victoria,2GMEL,Greater Melbourne
+22345,St Kilda West,2,Victoria,2GMEL,Greater Melbourne
+22355,Steels Creek,2,Victoria,2GMEL,Greater Melbourne
+22370,Strath Creek,2,Victoria,2GMEL,Greater Melbourne
+22375,Strathewen,2,Victoria,2GMEL,Greater Melbourne
+22380,Strathmore (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22381,Strathmore Heights,2,Victoria,2GMEL,Greater Melbourne
+22382,Strathtulloh,2,Victoria,2GMEL,Greater Melbourne
+22391,Sunbury,2,Victoria,2GMEL,Greater Melbourne
+22392,Sunday Creek,2,Victoria,2GMEL,Greater Melbourne
+22395,Sunshine (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22396,Sunshine North,2,Victoria,2GMEL,Greater Melbourne
+22397,Sunshine West,2,Victoria,2GMEL,Greater Melbourne
+22399,Surrey Hills,2,Victoria,2GMEL,Greater Melbourne
+22414,Sydenham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22451,Tarneit,2,Victoria,2GMEL,Greater Melbourne
+22457,Tarrawarra,2,Victoria,2GMEL,Greater Melbourne
+22473,Taylors Hill,2,Victoria,2GMEL,Greater Melbourne
+22474,Taylors Lakes,2,Victoria,2GMEL,Greater Melbourne
+22476,Tecoma,2,Victoria,2GMEL,Greater Melbourne
+22483,Templestowe,2,Victoria,2GMEL,Greater Melbourne
+22484,Templestowe Lower,2,Victoria,2GMEL,Greater Melbourne
+22496,The Basin (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22501,The Patch,2,Victoria,2GMEL,Greater Melbourne
+22504,Thomastown,2,Victoria,2GMEL,Greater Melbourne
+22508,Thornbury,2,Victoria,2GMEL,Greater Melbourne
+22509,Thornhill Park,2,Victoria,2GMEL,Greater Melbourne
+22514,Three Bridges,2,Victoria,2GMEL,Greater Melbourne
+22531,Tonimbuk,2,Victoria,2GMEL,Greater Melbourne
+22536,Toolangi,2,Victoria,2GMEL,Greater Melbourne
+22537,Toolern Vale,2,Victoria,2GMEL,Greater Melbourne
+22546,Tooradin,2,Victoria,2GMEL,Greater Melbourne
+22547,Toorak,2,Victoria,2GMEL,Greater Melbourne
+22550,Tootgarook,2,Victoria,2GMEL,Greater Melbourne
+22556,Tottenham (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22572,Travancore,2,Victoria,2GMEL,Greater Melbourne
+22576,Tremont,2,Victoria,2GMEL,Greater Melbourne
+22582,Truganina,2,Victoria,2GMEL,Greater Melbourne
+22584,Tuerong,2,Victoria,2GMEL,Greater Melbourne
+22586,Tullamarine,2,Victoria,2GMEL,Greater Melbourne
+22594,Tyabb,2,Victoria,2GMEL,Greater Melbourne
+22598,Tynong,2,Victoria,2GMEL,Greater Melbourne
+22599,Tynong North,2,Victoria,2GMEL,Greater Melbourne
+22614,Upper Ferntree Gully,2,Victoria,2GMEL,Greater Melbourne
+22617,Upper Plenty,2,Victoria,2GMEL,Greater Melbourne
+22620,Upwey,2,Victoria,2GMEL,Greater Melbourne
+22627,Vermont,2,Victoria,2GMEL,Greater Melbourne
+22628,Vermont South,2,Victoria,2GMEL,Greater Melbourne
+22629,Vervale,2,Victoria,2GMEL,Greater Melbourne
+22633,Viewbank,2,Victoria,2GMEL,Greater Melbourne
+22661,Wallan,2,Victoria,2GMEL,Greater Melbourne
+22672,Wandin East,2,Victoria,2GMEL,Greater Melbourne
+22673,Wandin North,2,Victoria,2GMEL,Greater Melbourne
+22676,Wandong,2,Victoria,2GMEL,Greater Melbourne
+22685,Wantirna,2,Victoria,2GMEL,Greater Melbourne
+22686,Wantirna South,2,Victoria,2GMEL,Greater Melbourne
+22689,Warburton (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22695,Warneet,2,Victoria,2GMEL,Greater Melbourne
+22702,Warrandyte,2,Victoria,2GMEL,Greater Melbourne
+22703,Warrandyte South,2,Victoria,2GMEL,Greater Melbourne
+22704,Warranwood,2,Victoria,2GMEL,Greater Melbourne
+22717,Waterford Park,2,Victoria,2GMEL,Greater Melbourne
+22720,Waterways,2,Victoria,2GMEL,Greater Melbourne
+22721,Watsonia,2,Victoria,2GMEL,Greater Melbourne
+22722,Watsonia North,2,Victoria,2GMEL,Greater Melbourne
+22723,Watsons Creek (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22727,Wattle Glen,2,Victoria,2GMEL,Greater Melbourne
+22740,Weir Views,2,Victoria,2GMEL,Greater Melbourne
+22750,Werribee,2,Victoria,2GMEL,Greater Melbourne
+22751,Werribee South,2,Victoria,2GMEL,Greater Melbourne
+22753,Wesburn,2,Victoria,2GMEL,Greater Melbourne
+22756,West Footscray,2,Victoria,2GMEL,Greater Melbourne
+22757,West Melbourne,2,Victoria,2GMEL,Greater Melbourne
+22761,Westmeadows,2,Victoria,2GMEL,Greater Melbourne
+22766,Wheelers Hill,2,Victoria,2GMEL,Greater Melbourne
+22775,Whittlesea,2,Victoria,2GMEL,Greater Melbourne
+22784,Wildwood,2,Victoria,2GMEL,Greater Melbourne
+22791,Williams Landing,2,Victoria,2GMEL,Greater Melbourne
+22792,Williamstown (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22793,Williamstown North,2,Victoria,2GMEL,Greater Melbourne
+22795,Willowmavin,2,Victoria,2GMEL,Greater Melbourne
+22805,Windsor (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22820,Wollert,2,Victoria,2GMEL,Greater Melbourne
+22825,Wonga Park,2,Victoria,2GMEL,Greater Melbourne
+22833,Woodend (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22843,Woodstock (Vic.),2,Victoria,2GMEL,Greater Melbourne
+22857,Woori Yallock,2,Victoria,2GMEL,Greater Melbourne
+22883,Wyndham Vale,2,Victoria,2GMEL,Greater Melbourne
+22892,Yallambie,2,Victoria,2GMEL,Greater Melbourne
+22898,Yan Yean,2,Victoria,2GMEL,Greater Melbourne
+22906,Yannathan,2,Victoria,2GMEL,Greater Melbourne
+22910,Yarra Glen,2,Victoria,2GMEL,Greater Melbourne
+22911,Yarra Junction,2,Victoria,2GMEL,Greater Melbourne
+22916,Yarrambat,2,Victoria,2GMEL,Greater Melbourne
+22917,Yarraville,2,Victoria,2GMEL,Greater Melbourne
+22925,Yellingbo,2,Victoria,2GMEL,Greater Melbourne
+22930,Yering,2,Victoria,2GMEL,Greater Melbourne
+22941,Yuroke,2,Victoria,2GMEL,Greater Melbourne

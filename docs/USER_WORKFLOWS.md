@@ -4,6 +4,7 @@
 - Goal: identify all project workflows and organize them by user type.
 - Scope: current implemented product surfaces (`frontend/src/pages/*`) plus active API workflows (`backend/server.py`) and autonomous loops documented in architecture.
 - Exclusions: deprecated legacy `/admin/*` and directory browse/list endpoints (explicitly removed).
+- Mode lock note (2026-05-10): education-first prelaunch is enforced on the home entry path via `PUBLIC_MATCHING_ENABLED` (`/api/config` + `Home.jsx`), while owner/trainer lifecycle routes and APIs still exist in code.
 
 ## Workflow Inventory By User Type
 
@@ -110,6 +111,7 @@ Technical skeleton companion:
   3. Attribution evidence is retained for channel performance analysis.
 - Exit outcomes:
   - Attributed demand-source visibility for top-of-funnel traffic.
+- Current status: planned (governed target; not yet complete as a first-class measured workflow).
 
 #### W16. Programmatic SEO and nurture loop
 - Scope: generate and reuse SEO surfaces for ongoing demand generation.
@@ -120,6 +122,7 @@ Technical skeleton companion:
   3. Follow-up or nurture pathways are measured for optimization.
 - Exit outcomes:
   - Search-sourced demand path is measurable and improvable.
+- Current status: partial (SEO route exists; full attribution+nurture measurement remains incomplete).
 
 #### W17. Trainer onboarding completion and activation
 - Scope: advance newly submitted trainers from publish decision to intro-ready state.
@@ -130,6 +133,7 @@ Technical skeleton companion:
   3. Trainer progresses toward first-intro readiness and activation.
 - Exit outcomes:
   - Trainer reaches intro-eligible state or enters remediation path.
+- Current status: partial (`/submit/status/:submissionId` and billing/remediation links exist; end-to-end lifecycle orchestration is limited).
 
 #### W18. Revenue recovery and billing remediation
 - Scope: recover revenue when collection path degrades.
@@ -140,6 +144,7 @@ Technical skeleton companion:
   3. Recovered rows return to collectible path or move to at-risk reporting.
 - Exit outcomes:
   - Revenue risk and recovery are explicit and measurable.
+- Current status: partial (webhook + recovery loop exist; policy/runbook hardening still in progress).
 
 #### W19. Trainer reactivation and retention
 - Scope: re-activate low-activity or billing-blocked trainers.
@@ -150,6 +155,7 @@ Technical skeleton companion:
   3. Return trainer to intro-ready/active state.
 - Exit outcomes:
   - Recoverable trainers re-enter live demand flow.
+- Current status: partial (`/trainer/reactivate` APIs/UI and reactivation loop exist; closed-loop effectiveness criteria are still maturing).
 
 ### 3) Oversight operator (internal observer)
 

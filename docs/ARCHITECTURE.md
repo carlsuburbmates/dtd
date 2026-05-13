@@ -1,10 +1,12 @@
 # Architecture
 
+Current mode-lock context (2026-05-10): education-first prelaunch. Public matching from home is gated by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`), while owner/trainer lifecycle routes and APIs remain implemented.
+
 ## 1. Final product model
 
 | Layer | What it is | Where |
 |---|---|---|
-| Product surface | One input → 3 ranked trainers → Connect → contact reveal → hire | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
+| Product surface | Technical path: one input → 3 ranked trainers → Connect → contact reveal → hire. Current public entry may be deferred by mode-lock flag. | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
 | Lifecycle surfaces | Follow-up confirmation, trainer onboarding status, billing remediation, reactivation, campaign entry | `frontend/src/pages/FollowUp.jsx`, `SubmitStatus.jsx`, `TrainerBilling.jsx`, `TrainerReactivate.jsx`, `CampaignLanding.jsx` |
 | Match decision | Deterministic heuristic relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
 | Monetisation | Intro-first; `/api/intros` meters lead fee. Submission-registered trainers receive `trial_free` intros for first 30 days, then Stripe invoice collection begins. Launch defaults to `track_only` conversion tracking. | `POST /api/intros`, `POST /api/stripe/webhook`, `POST /api/conversions` |

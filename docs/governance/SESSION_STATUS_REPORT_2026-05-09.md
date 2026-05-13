@@ -26,9 +26,9 @@ Evidence:
 - [SESSION_IMPLEMENTATION_REPORT_2026-05-08.md](/Users/carlg/Documents/AI-Coding/dtd/docs/governance/SESSION_IMPLEMENTATION_REPORT_2026-05-08.md)
 
 ### B) R1-R6 implementation and technical verification
-1. **Addressed**: R1-R6 implementation was recorded as complete with targeted tests/build/smoke checks.
-2. **Addressed**: Residual risks were explicitly tracked (previously W15/W17/W18 lifecycle expansion and W19 gap).
-3. **Superseded**: prior workflow residuals are now closed; W1-W19 are complete in the current trace sheet.
+1. **Addressed**: R1-R6 implementation report exists and remains a historical reference.
+2. **Addressed**: Residual lifecycle risks are documented in workflow trace/status docs.
+3. **Not addressed in this report**: independent rerun evidence is not included here; this file is governance summary only.
 
 Evidence:
 - [SESSION_IMPLEMENTATION_REPORT_2026-05-08.md](/Users/carlg/Documents/AI-Coding/dtd/docs/governance/SESSION_IMPLEMENTATION_REPORT_2026-05-08.md)
@@ -37,12 +37,14 @@ Evidence:
 ### C) Website completeness (pages and lifecycle coverage)
 1. **Addressed (planning/governance)**: Human-focused verification framing by persona (owner, trainer, operator/admin) was requested and shaped.
 2. **Addressed (planning/governance)**: Wireframe/page inventory intent and missing-page prompt set were created for another agent session.
-3. **Addressed (implementation confirmed)**: External implementation report was ingested and reconciled with repo code paths.
-4. **Addressed (verification confirmed)**: Lifecycle page routes, supporting backend endpoints, and lifecycle tests are present and passing.
+3. **Addressed (implementation reconciliation)**: Route and endpoint existence can be cross-checked in code.
+4. **Not fully closed**: website/page completeness does not equal workflow completeness; several lifecycle workflows remain `partial`.
 
-Current technical snapshot from this repo:
-- W1-W19 are now marked `complete` in the workflow trace source of truth.
-- Priority queue has shifted from gap implementation to regression protection.
+Current technical snapshot from this repo (reconciled on 2026-05-10):
+- `frontend/src/App.js` includes lifecycle routes (`/follow-up/:token`, `/submit/status/:submissionId`, `/trainer/billing`, `/trainer/reactivate`, `/lp/:campaign`).
+- `backend/server.py` includes matching, intro, follow-up, billing, and reactivation endpoints.
+- Workflow status is mixed in `docs/WORKFLOW_TRACE_SHEET.md` (`complete` + `partial`), not all-complete.
+- Launch mode lock is education-first prelaunch with public matching controlled by `PUBLIC_MATCHING_ENABLED` in `/api/config` and `Home.jsx`.
 
 Evidence:
 - [WORKFLOW_TRACE_SHEET.md](/Users/carlg/Documents/AI-Coding/dtd/docs/WORKFLOW_TRACE_SHEET.md)
@@ -72,31 +74,15 @@ Evidence:
 - [CODEX_PLATFORM_SYNC.md](/Users/carlg/Documents/AI-Coding/dtd/docs/governance/CODEX_PLATFORM_SYNC.md)
 
 ## Consolidated “What Is Still Not Fully Closed”
-1. No open workflow-gap items remain in the tracked W1-W19 set.
-2. Remaining work is ongoing regression monitoring and launch operations, not missing lifecycle implementation.
+1. Workflow gaps remain open in W3/W8/W13/W15/W16/W17/W18/W19 per the workflow trace.
+2. Mode lock and route availability are not equivalent: routes exist even when public entry is deferred.
+3. Public matching deferment is controlled at runtime/UI gate level, not by removing backend endpoints.
 
-## Recommended Next Step (for your next message)
-If you send the other session’s full artifact/report file, I can append a final “verification ledger” section mapping each claimed check to exact command/file evidence lines for audit closure.
+## Recommended Next Step
+Update any remaining governance docs that still claim full workflow completion so all status surfaces match `docs/WORKFLOW_TRACE_SHEET.md`.
 
-## Reconciliation Evidence (This Session)
-1. Route wiring present:
-- `/follow-up/:token`
-- `/submit/status/:submissionId`
-- `/trainer/billing`
-- `/trainer/reactivate`
-- `/lp/:campaign`
-2. Lifecycle pages present:
-- `FollowUp.jsx`
-- `SubmitStatus.jsx`
-- `TrainerBilling.jsx`
-- `TrainerReactivate.jsx`
-- `CampaignLanding.jsx`
-3. Backend lifecycle endpoints present:
-- `GET/POST /api/follow-up/{token}*`
-- `GET /api/submissions/{submission_id}/status`
-- `GET/POST /api/trainer/billing*`
-- `GET/POST /api/trainer/reactivate*`
-4. Workflow status source-of-truth confirms:
-- `W1-W19=complete`
-5. Verified test pack in this reconciliation pass:
-- `.venv/bin/python -m pytest -q backend/tests/test_lifecycle_endpoints_unit.py backend/tests/test_runtime_control_unit.py backend/tests/test_w8_billing_unit.py backend/tests/test_gap_closure_unit.py` -> pass (current session verification target).
+## Reconciliation Evidence (Code Anchors)
+1. Frontend route map: `frontend/src/App.js`.
+2. Public matching gate: `frontend/src/pages/Home.jsx` (`publicMatchingEnabled` from `/api/config`).
+3. Runtime flag source: `backend/server.py` (`PUBLIC_MATCHING_ENABLED`, `/api/config`).
+4. Lifecycle endpoints: `backend/server.py` (`/follow-up`, `/submissions/{id}/status`, `/trainer/billing`, `/trainer/reactivate`).

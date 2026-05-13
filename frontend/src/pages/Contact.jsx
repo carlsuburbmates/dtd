@@ -12,10 +12,10 @@ export default function Contact() {
                 </h1>
                 <div className="card-public p-6 mt-8">
                     <p className="text-[#4A615A]">
-                        For trainer onboarding or platform support, contact:
+                        For onboarding, support, or billing queries, contact:
                     </p>
-                    <a href="mailto:carldtdmelb@gmail.com" data-testid="contact-email" className="btn-primary mt-4 inline-flex">
-                        carldtdmelb@gmail.com
+                    <a href="mailto:info@dogtrainersdirectory.com.au" data-testid="contact-email" className="btn-primary mt-4 inline-flex">
+                        info@dogtrainersdirectory.com.au
                     </a>
                 </div>
             </main>
@@ -23,4 +23,3 @@ export default function Contact() {
         </div>
     );
 }
-

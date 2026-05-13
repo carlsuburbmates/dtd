@@ -21,6 +21,7 @@ Launch Bark&Bond in Greater Melbourne with:
 6. No archive docs. Update or delete in place when truth changes.
 
 ## Current System Truth (2026-05-02)
+Reconciled addendum (2026-05-10): public matching deferment is currently enforced at home-entry UI/runtime flag level (`PUBLIC_MATCHING_ENABLED`), while matching/contact lifecycle routes and APIs remain implemented in code.
 
 ### Code reality
 
@@ -96,13 +97,13 @@ Done when:
 
 ### P3 - Website completion (public + trainer UX only)
 
-Status: completed (IA/routes/UX baseline complete; does not imply business workflow completeness).
+Status: completed (IA/routes/UX baseline complete; does not imply workflow completeness or that all routes are publicly promoted in current mode lock).
 Evidence references:
 1. Route map: `frontend/src/App.js`.
 2. Build-pass record: `docs/governance/LOCK_STATE.md` ("Verification evidence", compileall + frontend build pass).
 
 1. Public information architecture must be complete and navigable:
-- `/` (match flow + product pillars)
+- `/` (education-first hub with gated matching entry)
 - `/how-it-works`
 - `/about`
 - `/pricing`

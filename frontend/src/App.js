@@ -6,6 +6,11 @@ import { Toaster } from "sonner";
 import Home from "@/pages/Home";
 import TrainerDetail from "@/pages/TrainerDetail";
 import Submit from "@/pages/Submit";
+import FollowUp from "@/pages/FollowUp";
+import SubmitStatus from "@/pages/SubmitStatus";
+import TrainerBilling from "@/pages/TrainerBilling";
+import TrainerReactivate from "@/pages/TrainerReactivate";
+import CampaignLanding from "@/pages/CampaignLanding";
 import Trainers from "@/pages/Trainers";
 import SuburbSEO from "@/pages/SuburbSEO";
 import Ops from "@/pages/Ops";
@@ -30,6 +35,11 @@ function App() {
                     <Route path="/t/:id" element={<TrainerDetail />} />
                     <Route path="/trainers/:id" element={<TrainerDetail />} />
                     <Route path="/submit" element={<Submit />} />
+                    <Route path="/follow-up/:token" element={<FollowUp />} />
+                    <Route path="/submit/status/:submissionId" element={<SubmitStatus />} />
+                    <Route path="/trainer/billing" element={<TrainerBilling />} />
+                    <Route path="/trainer/reactivate" element={<TrainerReactivate />} />
+                    <Route path="/lp/:campaign" element={<CampaignLanding />} />
                     <Route path="/melbourne/:suburb" element={<SuburbSEO />} />
                     <Route path="/about" element={<About />} />
                     <Route path="/how-it-works" element={<HowItWorks />} />

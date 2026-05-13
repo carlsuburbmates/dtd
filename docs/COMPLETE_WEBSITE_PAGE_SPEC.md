@@ -7,6 +7,7 @@ Current launch mode (2026-05-09):
 1. Public surface is education-first.
 2. Public owner matching and trainer-contact reveal are intentionally deferred until trainer supply readiness gate is met.
 3. Trainer onboarding remains open.
+4. Route reality: deferred owner flows still exist as implemented routes/APIs; deferment is enforced by entry gating (`PUBLIC_MATCHING_ENABLED`) rather than route removal.
 
 ## 1) Is this different from workflows?
 Yes.
@@ -52,8 +53,8 @@ flowchart TD
     L["Campaign Landing /lp/:campaign"] -->|"Open hub"| A
     M["SEO Page /melbourne/:suburb"] -->|"Open hub"| A
 
-    X["Deferred until supply gate"] --> C["Trainer Detail /t/:id"]
-    X --> F["Follow-up /follow-up/:token"]
+    X["Deferred from public home entry when gate is off"] --> C["Trainer Detail /t/:id (implemented)"]
+    X --> F["Follow-up /follow-up/:token (implemented)"]
     X --> E["Outcome Confirmed"]
 
     N["Info Pages"] --> N1["/how-it-works"]
@@ -85,6 +86,7 @@ flowchart TD
 - Contact reveal cards
 - Follow-up expectation notice
 - Footer
+- Note: page is implemented; in mode-lock periods it is not the primary public entry path from home.
 
 3. `Submit /submit`
 - Header
@@ -120,6 +122,7 @@ flowchart TD
 - Outcome buttons (hired/still deciding/new match)
 - Confirmation state
 - Footer
+- Note: route is active and used by outreach flow; it is lifecycle-facing, not a primary nav page.
 
 8. `Campaign /lp/:campaign` + `SEO /melbourne/:suburb`
 - Header

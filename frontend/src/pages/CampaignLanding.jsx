@@ -31,11 +31,11 @@ export default function CampaignLanding() {
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">
                     {prettyCampaign(cleanCampaign)}
                     <br />
-                    Dog trainer matching
+                    Dog training support
                 </h1>
                 <p className="text-[#4A615A] mt-5 max-w-2xl text-lg">
-                    Tell us one real dog-training problem and get ranked Melbourne trainer matches.
-                    Outcome signals drive ranking, not paid placement.
+                    Public matching is in education-first prelaunch mode.
+                    Explore how ranking and trainer quality signals will work at launch.
                 </p>
 
                 <section className="card-public p-7 mt-8" data-testid="lp-campaign-card">
@@ -50,7 +50,7 @@ export default function CampaignLanding() {
                     </ul>
                     <div className="mt-6 flex flex-wrap gap-3">
                         <button onClick={goToMatch} className="btn-accent" data-testid="lp-find-trainers">
-                            Find trainers
+                            Open launch hub
                             <ArrowRight className="h-4 w-4" />
                         </button>
                         <Link to="/how-it-works" className="btn-ghost" data-testid="lp-how-it-works">
