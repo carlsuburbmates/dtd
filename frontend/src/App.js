@@ -52,8 +52,8 @@ function App() {
                     <Route path="/ops" element={<Ops />} />
                     {/* Legacy routes — redirect to home (the product surface) */}
                     <Route path="/match" element={<Navigate to="/" replace />} />
-                    <Route path="/admin" element={<Navigate to="/ops" replace />} />
-                    <Route path="/admin/dashboard" element={<Navigate to="/ops" replace />} />
+                    <Route path="/admin" element={<Navigate to="/" replace />} />
+                    <Route path="/admin/dashboard" element={<Navigate to="/" replace />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </BrowserRouter>
