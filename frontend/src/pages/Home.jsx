@@ -435,13 +435,13 @@ export default function Home() {
                     </div>
                 </aside>
             </main>
-            {!results && <HomepageSections />}
+            {!results && <HomepageSections monetizationCopy={monetizationCopy} />}
             <PublicFooter />
         </div>
     );
 }
 
-function HomepageSections() {
+function HomepageSections({ monetizationCopy }) {
     return (
         <section className="max-w-6xl mx-auto px-6 md:px-10 pb-12 space-y-4">
             <div className="grid lg:grid-cols-12 gap-4" data-testid="home-pillars">
