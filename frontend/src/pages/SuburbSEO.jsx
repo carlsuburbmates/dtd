@@ -10,8 +10,7 @@ export default function SuburbSEO() {
 
     useEffect(() => {
         api.get(`/seo/${suburb.toLowerCase()}`).then((r) => setPage(r.data)).catch(() => {});
-        // The new model has no /trainers list endpoint that filters publicly,
-        // so we rely on the SEO page copy + a CTA back to the matcher.
+        // Prelaunch route: SEO pages point visitors to guidance and demand capture.
     }, [suburb]);
 
     if (!page) return <div className="max-w-3xl mx-auto px-6 py-24 text-[#5C6D59]">Loading…</div>;
@@ -30,7 +29,7 @@ export default function SuburbSEO() {
 
                 <div className="mt-10">
                     <Link to="/" className="btn-accent" data-testid="seo-cta-match">
-                        Match a {page.suburb} trainer
+                        Join {page.suburb} waitlist
                         <ArrowRight className="h-4 w-4" />
                     </Link>
                 </div>
