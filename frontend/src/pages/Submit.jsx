@@ -4,8 +4,10 @@ import { ShieldCheck, AlertCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
+import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 
 export default function Submit() {
+    const monetizationCopy = usePublicMonetizationCopy();
     const [form, setForm] = useState({
         name: "",
         suburb: "",
@@ -40,7 +42,7 @@ export default function Submit() {
             return;
         }
         if (!form.consent_intro_billing_terms) {
-            toast.error("Accept intro billing terms to activate billing profile.");
+            toast.error(monetizationCopy.submitConsentBillingRequiredError || "Accept billing terms to continue submission.");
             return;
         }
         setBusy(true);
@@ -117,7 +119,7 @@ export default function Submit() {
                             className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
                             data-testid="submit-consent-billing"
                         />
-                        <span>I agree valid intros may incur a per-intro fee and invoices may be sent to my billing email.</span>
+                        <span>{monetizationCopy.submitConsentBillingLabel || "I acknowledge billing terms and invoices may be sent to my billing email."}</span>
                     </label>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
@@ -141,9 +143,19 @@ export default function Submit() {
                             <span className="text-xs font-mono text-[#5C6D59]">confidence · {Math.round((result.confidence_score || 0) * 100)}%</span>
                         </div>
                         <p className="mt-3 text-sm text-[#4A615A] leading-relaxed">{result.verification_reasoning}</p>
-                        {result.status === "published" && result.trainer_id && (
+                        {(result.submission_id || result.id || (result.submission && result.submission.id)) && (
                             <div className="mt-4">
-                                <Link to={`/t/${result.trainer_id}`} className="btn-primary inline-flex">
+                                <Link
+                                    to={`/submit/status/${result.submission_id || result.id || result.submission.id}`}
+                                    className="btn-primary inline-flex"
+                                >
+                                    Track submission status
+                                </Link>
+                            </div>
+                        )}
+                        {result.status === "published" && result.trainer_id && (
+                            <div className="mt-3">
+                                <Link to={`/t/${result.trainer_id}`} className="inline-flex text-sm text-[#1A3A32] underline underline-offset-2">
                                     View public listing
                                 </Link>
                             </div>

@@ -136,6 +136,72 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const billingSummary = snap.billing_summary || {};
     const nonBillable = snap.non_billable_causes || {};
     const notificationSummary = snap.notification_summary || {};
+    const claimPolicy = snap.claim_policy || {};
+    const ownerWaitlistSummary = snap.owner_waitlist_summary || {};
+    const prelaunchKpi = snap.kpi_prelaunch || {};
+    const datasetIdentity = snap.dataset_identity || integrity.dataset_identity || {};
+    const datasetListId = datasetIdentity.list_id || integrity.list_id || "unknown";
+    const datasetSuburbCount = typeof datasetIdentity.suburb_count === "number"
+        ? datasetIdentity.suburb_count
+        : typeof integrity.suburb_count === "number"
+          ? integrity.suburb_count
+          : "unknown";
+    const datasetHash = datasetIdentity.hash || datasetIdentity.suburb_hash_sha256_code_name || integrity.suburb_hash_sha256_code_name || "unknown";
+    const datasetAsOf = datasetIdentity.as_of_date || integrity.as_of_date || "unknown";
+    const claimPolicyEnabled =
+        typeof claimPolicy.enabled === "boolean"
+            ? claimPolicy.enabled
+            : typeof claimPolicy.model_enabled === "boolean"
+              ? claimPolicy.model_enabled
+              : null;
+    const claimPolicyState =
+        typeof claimPolicy.state === "string"
+            ? claimPolicy.state
+            : typeof claimPolicy.state_current === "string"
+              ? claimPolicy.state_current
+              : "STATE_0";
+    const claimEnforcementMode = typeof claimPolicy.enforcement_mode === "string" ? claimPolicy.enforcement_mode : "report_only";
+    const melbourneWideBlockRule = typeof claimPolicy.block_melbourne_wide_below_state_2 === "boolean"
+        ? claimPolicy.block_melbourne_wide_below_state_2
+        : null;
+    const integrityReasonCodes = Array.isArray(snap.integrity_reason_codes)
+        ? snap.integrity_reason_codes
+        : Array.isArray(integrity.reason_codes)
+          ? integrity.reason_codes
+          : [];
+    const integrityStatusRaw = typeof snap.integrity_status === "string"
+        ? snap.integrity_status
+        : typeof integrity.status === "string"
+          ? integrity.status
+          : "ok";
+    const integrityStatus = integrityStatusRaw === "ok" ? "ok" : "warn";
+    const waitlistTotalActive = typeof ownerWaitlistSummary.total_active === "number" ? ownerWaitlistSummary.total_active : 0;
+    const waitlistJoins24h = typeof ownerWaitlistSummary.joins_24h === "number" ? ownerWaitlistSummary.joins_24h : 0;
+    const waitlistTopSuburbsRaw = Array.isArray(ownerWaitlistSummary.top_suburbs) ? ownerWaitlistSummary.top_suburbs : [];
+    const waitlistTopSuburbs = waitlistTopSuburbsRaw.slice(0, 5);
+    const waitlistStatusRaw = typeof ownerWaitlistSummary.status === "string" ? ownerWaitlistSummary.status : "unavailable";
+    const waitlistStatus = waitlistStatusRaw === "ok" ? "ok" : "warn";
+    const waitlistReasonCodes = Array.isArray(ownerWaitlistSummary.reason_codes) ? ownerWaitlistSummary.reason_codes : [];
+    const waitlistStatusExplanation = waitlistStatus === "ok"
+        ? "Waitlist tracking is available and up to date."
+        : waitlistReasonCodes.length > 0
+          ? `Waitlist data is limited: ${waitlistReasonCodes.join(", ")}`
+          : "Waitlist data is temporarily unavailable.";
+    const prelaunchKpiStatusRaw = typeof prelaunchKpi.status === "string" ? prelaunchKpi.status : "unavailable";
+    const prelaunchKpiStatus = prelaunchKpiStatusRaw === "ok" ? "ok" : "warn";
+    const prelaunchKpiReasonCodes = Array.isArray(prelaunchKpi.reason_codes) ? prelaunchKpi.reason_codes : [];
+    const prelaunchKpiEntries = Object.entries(prelaunchKpi).filter(([key]) => !["status", "reason_codes", "ts"].includes(key));
+    const prelaunchKpiStatusExplanation = prelaunchKpiStatus === "ok"
+        ? "Prelaunch progress tracking is available."
+        : prelaunchKpiReasonCodes.length > 0
+          ? `Some KPI signals are limited: ${prelaunchKpiReasonCodes.join(", ")}`
+          : "Prelaunch KPI tracking is temporarily unavailable.";
+    const hasDatasetIdentity = datasetListId !== "unknown" && datasetSuburbCount !== "unknown" && datasetHash !== "unknown";
+    const statusExplanation = integrityStatus === "ok" && hasDatasetIdentity
+        ? "Dataset identity and claim policy are present."
+        : integrityReasonCodes.length > 0
+          ? `Attention needed: ${integrityReasonCodes.join(", ")}`
+          : "Some integrity fields are missing from the latest snapshot.";
 
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
@@ -199,6 +265,146 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             ))}
                         </ul>
                     )}
+                </Section>
+
+                {/* Claim policy */}
+                <Section title="Claim policy · read-only" testid="ops-claim-policy">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <Tile label="State" value={claimPolicyState} accent="mute" />
+                        <Tile
+                            label="Model enabled"
+                            value={claimPolicyEnabled === null ? "unknown" : claimPolicyEnabled ? "yes" : "no"}
+                            accent={claimPolicyEnabled ? "green" : "mute"}
+                        />
+                        <Tile label="Enforcement mode" value={claimEnforcementMode} accent={claimEnforcementMode === "block_invalid" ? "amber" : "mute"} />
+                        <Tile
+                            label="Melbourne-wide block (< STATE_2)"
+                            value={melbourneWideBlockRule === null ? "unknown" : melbourneWideBlockRule ? "on" : "off"}
+                            accent={melbourneWideBlockRule ? "amber" : "mute"}
+                        />
+                    </div>
+                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
+                        Visibility only. Claim policy is controlled by runtime configuration.
+                    </div>
+                </Section>
+
+                <Section title="Data integrity" testid="ops-data-integrity">
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Dataset identity</div>
+                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
+                                <div>list · {datasetListId}</div>
+                                <div>suburbs · {datasetSuburbCount}</div>
+                                <div>hash · {datasetHash}</div>
+                                <div>as of · {datasetAsOf}</div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Claim policy</div>
+                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
+                                <div>state · {claimPolicyState}</div>
+                                <div>mode · {claimEnforcementMode}</div>
+                                <div>model · {claimPolicyEnabled === null ? "unknown" : claimPolicyEnabled ? "enabled" : "disabled"}</div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
+                            <div className="mt-2">
+                                <span className={`admin-tag ${integrityStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
+                                    {integrityStatus === "ok" ? "OK" : "WARN"}
+                                </span>
+                            </div>
+                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
+                                {statusExplanation}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
+                        Read-only visibility. No controls here can change runtime behavior.
+                    </div>
+                </Section>
+
+                <Section title="Owner waitlist" testid="ops-owner-waitlist">
+                    <div className="grid md:grid-cols-3 gap-4">
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Waitlist size</div>
+                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
+                                <div>active owners · {waitlistTotalActive}</div>
+                                <div>new in 24h · {waitlistJoins24h}</div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Top suburbs</div>
+                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
+                                {waitlistTopSuburbs.length === 0 ? (
+                                    <div className="text-[#8B9E98]">No suburb trends yet.</div>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {waitlistTopSuburbs.map((row) => (
+                                            <li key={row.suburb} className="flex items-center justify-between gap-2">
+                                                <span className="truncate">{row.suburb}</span>
+                                                <span className="text-[#8B9E98]">{row.count}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
+                            <div className="mt-2">
+                                <span className={`admin-tag ${waitlistStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
+                                    {waitlistStatus === "ok" ? "OK" : "WARN"}
+                                </span>
+                            </div>
+                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
+                                {waitlistStatusExplanation}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
+                        Visibility only. This dashboard does not change waitlist entries.
+                    </div>
+                </Section>
+
+                <Section title="Prelaunch KPIs" testid="ops-prelaunch-kpis">
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Current values</div>
+                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
+                                {prelaunchKpiEntries.length === 0 ? (
+                                    <div className="text-[#8B9E98]">No KPI values available yet.</div>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {prelaunchKpiEntries.map(([key, value]) => (
+                                            <li key={key} className="flex items-center justify-between gap-2">
+                                                <span className="text-[#8B9E98]">
+                                                    {key.replace(/_/g, " ")}
+                                                </span>
+                                                <span className="truncate">
+                                                    {typeof value === "boolean" ? (value ? "yes" : "no") : String(value)}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
+                            <div className="mt-2">
+                                <span className={`admin-tag ${prelaunchKpiStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
+                                    {prelaunchKpiStatus === "ok" ? "OK" : "WARN"}
+                                </span>
+                            </div>
+                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
+                                {prelaunchKpiStatusExplanation}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
+                        Read-only visibility for prelaunch progress. No actions can be taken from this panel.
+                    </div>
                 </Section>
 
                 <div className="grid md:grid-cols-2 gap-6">

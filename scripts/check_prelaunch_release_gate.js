@@ -1,0 +1,122 @@
+#!/usr/bin/env node
+const fs = require("fs");
+const path = require("path");
+const { spawnSync } = require("child_process");
+
+const repoRoot = path.resolve(__dirname, "..");
+const serverPath = path.join(repoRoot, "backend", "server.py");
+const copyGuardPath = path.join(repoRoot, "scripts", "check_frontend_copy_guard.js");
+const metaPath = path.join(
+  repoRoot,
+  "docs",
+  "strategy",
+  "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json",
+);
+
+const requiredMetaFields = [
+  "alert_code",
+  "active_list_id",
+  "asgs_edition",
+  "effective_from",
+  "effective_to",
+  "supersedes",
+  "cutover_from_list_id",
+  "state_freeze_flag",
+  "validation_job_id",
+];
+
+const failures = [];
+
+function check(condition, message) {
+  if (!condition) failures.push(message);
+}
+
+function readText(filePath, label) {
+  if (!fs.existsSync(filePath)) {
+    failures.push(`${label} missing: ${path.relative(repoRoot, filePath)}`);
+    return "";
+  }
+  try {
+    return fs.readFileSync(filePath, "utf8");
+  } catch (err) {
+    failures.push(`${label} unreadable: ${path.relative(repoRoot, filePath)} (${err.message})`);
+    return "";
+  }
+}
+
+const serverText = readText(serverPath, "backend server");
+if (serverText) {
+  check(
+    serverText.includes("PUBLIC_MATCHING_ENABLED"),
+    "matching gate symbol missing: PUBLIC_MATCHING_ENABLED",
+  );
+  check(
+    serverText.includes("def _require_public_matching("),
+    "matching gate function missing: _require_public_matching",
+  );
+  check(
+    serverText.includes('_require_public_matching("Public matching")'),
+    "matching gate check missing on match path",
+  );
+  check(
+    serverText.includes('_require_public_matching("Public contact release")'),
+    "matching gate check missing on intro/contact path",
+  );
+
+  check(
+    serverText.includes('@api.get("/claims/validate")'),
+    "claims validate endpoint missing",
+  );
+  check(
+    serverText.includes('@api.post("/owner-waitlist")'),
+    "owner waitlist endpoint missing",
+  );
+}
+
+if (!fs.existsSync(copyGuardPath)) {
+  failures.push("copy guard script missing: scripts/check_frontend_copy_guard.js");
+} else {
+  const copyGuardRun = spawnSync(process.execPath, [copyGuardPath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  if (copyGuardRun.status !== 0) {
+    failures.push("copy guard check failed: scripts/check_frontend_copy_guard.js");
+    const mergedOutput = `${copyGuardRun.stdout || ""}\n${copyGuardRun.stderr || ""}`.trim();
+    if (mergedOutput) {
+      const firstLines = mergedOutput
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 5);
+      for (const line of firstLines) {
+        failures.push(`copy guard detail: ${line}`);
+      }
+    }
+  }
+}
+
+if (!fs.existsSync(metaPath)) {
+  failures.push("suburb meta file missing: docs/strategy/melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json");
+} else {
+  try {
+    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+    for (const field of requiredMetaFields) {
+      if (!(field in meta)) {
+        failures.push(`suburb meta missing required field: ${field}`);
+      }
+    }
+  } catch (err) {
+    failures.push(`suburb meta file parse failed: ${err.message}`);
+  }
+}
+
+if (failures.length > 0) {
+  console.log("PRELAUNCH_RELEASE_GATE=FAIL");
+  for (const reason of failures) {
+    console.log(`REASON: ${reason}`);
+  }
+  process.exit(1);
+}
+
+console.log("PRELAUNCH_RELEASE_GATE=PASS");

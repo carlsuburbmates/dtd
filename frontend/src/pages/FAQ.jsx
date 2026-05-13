@@ -1,14 +1,16 @@
 import React from "react";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
-
-const faqs = [
-    { q: "Can I browse all trainers?", a: "No. Bark&Bond is a match engine, not a browse directory." },
-    { q: "How many matches do I get?", a: "You receive the top 3 ranked options for your problem statement." },
-    { q: "Do trainers pay monthly?", a: "No monthly subscription is required at launch. Intro-first model applies." },
-    { q: "Who can access ops?", a: "Only authorized oversight access can view /ops." },
-];
+import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 
 export default function FAQ() {
+    const monetizationCopy = usePublicMonetizationCopy();
+    const faqs = [
+        { q: "Can I browse all trainers?", a: "No. Bark&Bond is a match engine, not a browse directory." },
+        { q: "How many matches do I get?", a: "The live model returns top 3 ranked options; public matching is currently in prelaunch mode." },
+        { q: "Do trainers pay monthly?", a: monetizationCopy.faqTrainerPricing },
+        { q: "Who can access ops?", a: "Only authorized oversight access can view /ops." },
+    ];
+
     return (
         <div className="App min-h-screen">
             <PublicHeader />
@@ -30,4 +32,3 @@ export default function FAQ() {
         </div>
     );
 }
-

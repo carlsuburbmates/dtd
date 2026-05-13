@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Mail, Phone, Globe, MapPin, Sparkles, ShieldCheck, ArrowRight } from "lucide-react";
 import { api, audCents } from "@/lib/api";
+import { extractPublicMonetizationPolicy, resolvePublicMonetizationCopy } from "@/lib/publicPolicy";
 import { toast } from "sonner";
 import { PublicFooter } from "@/components/PublicChrome";
 
@@ -17,6 +18,8 @@ export default function TrainerDetail() {
     const [contact, setContact] = useState(null);
     const [introId, setIntroId] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
+    const [monetizationCopy, setMonetizationCopy] = useState(() => resolvePublicMonetizationCopy());
     const [form, setForm] = useState({
         user_name: "",
         user_email: "",
@@ -40,8 +43,22 @@ export default function TrainerDetail() {
             .finally(() => setLoading(false));
     }, [id]);
 
+    useEffect(() => {
+        api
+            .get("/config")
+            .then((r) => {
+                setPublicMatchingEnabled(Boolean(r.data.public_matching_enabled));
+                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(r.data || {})));
+            })
+            .catch(() => setPublicMatchingEnabled(false));
+    }, []);
+
     const connect = async (e) => {
         e?.preventDefault();
+        if (!publicMatchingEnabled) {
+            toast.error("Live connect is not available in prelaunch mode yet.");
+            return;
+        }
         if (!form.user_email || !form.user_name) {
             toast.error("Add your name and email so the trainer can reach you.");
             return;
@@ -141,6 +158,22 @@ export default function TrainerDetail() {
 
                 {/* Connect surface */}
                 {!contact ? (
+                    !publicMatchingEnabled ? (
+                    <section className="card-public p-7 mt-10" data-testid="connect-deferred">
+                        <div className="small-caps">Education-first prelaunch</div>
+                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Live connect is deferred.</h2>
+                        <p className="text-[#4A615A] mt-3 max-w-xl">
+                            Public contact release is currently gated. You can review trainer details now, and full connect
+                            flow will be enabled when public matching launches.
+                        </p>
+                        <div className="mt-6">
+                            <Link to="/how-it-works" className="btn-primary" data-testid="connect-deferred-how">
+                                Learn how launch works
+                                <ArrowRight className="h-4 w-4" />
+                            </Link>
+                        </div>
+                    </section>
+                    ) : (
                     <form onSubmit={connect} className="card-public p-7 mt-10" data-testid="connect-form">
                         <div className="small-caps">Connect</div>
                         <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">
@@ -180,13 +213,14 @@ export default function TrainerDetail() {
                         </div>
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <span className="text-xs font-mono text-[#5C6D59]">
-                                You see contact details immediately. Trainer is in a 30-day free window after registration, then billed A$5 per valid intro.
+                                {monetizationCopy.trainerDetailConnectPricing}
                             </span>
                             <button type="submit" disabled={busy} data-testid="connect-submit" className="btn-accent">
                                 {busy ? "Connecting…" : <>Connect <ArrowRight className="h-4 w-4" /></>}
                             </button>
                         </div>
                     </form>
+                    )
                 ) : (
                     <div className="card-public p-7 mt-10 border-2 border-[#1A3A32]" data-testid="connect-success">
                         <div className="small-caps">Connected</div>
