@@ -5,18 +5,18 @@ import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 const STEPS = [
     {
         id: "01",
-        title: "Describe your issue",
-        copy: "Write one sentence about your dog and optionally select suburb.",
+        title: "Learn",
+        copy: "Start with practical guidance based on your dog's training problem.",
     },
     {
         id: "02",
-        title: "See 3 ranked matches",
-        copy: "The engine combines intent relevance and trainer outcome signals.",
+        title: "Register",
+        copy: "Join the owner waitlist by suburb so we can prioritize verified coverage.",
     },
     {
         id: "03",
-        title: "Connect instantly",
-        copy: "You can reveal contact details and engage directly with a trainer.",
+        title: "Prepare",
+        copy: "Receive updates as introductions open in your area.",
     },
 ];
 
@@ -25,9 +25,9 @@ export default function HowItWorks() {
         <div className="App min-h-screen">
             <PublicHeader />
             <main className="max-w-5xl mx-auto px-6 md:px-10 pt-14 pb-8">
-                <div className="small-caps">How It Works</div>
+                <div className="small-caps">For owners</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">
-                    One input. Three matches. Actionable next step.
+                    Clear steps during prelaunch.
                 </h1>
                 <div className="grid md:grid-cols-3 gap-4 mt-10">
                     {STEPS.map((s) => (
@@ -38,12 +38,12 @@ export default function HowItWorks() {
                         </article>
                     ))}
                 </div>
-                <div className="mt-8">
-                    <Link to="/" data-testid="how-cta-match" className="btn-primary inline-flex">Start matching</Link>
+                <div className="mt-8 flex flex-wrap gap-3">
+                    <Link to="/" data-testid="how-cta-match" className="btn-primary inline-flex">Join waitlist</Link>
+                    <Link to="/trust" className="btn-ghost inline-flex">Trust</Link>
                 </div>
             </main>
             <PublicFooter />
         </div>
     );
 }
-

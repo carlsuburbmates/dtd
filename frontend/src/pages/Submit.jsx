@@ -76,21 +76,21 @@ export default function Submit() {
             <PublicHeader />
 
             <main className="max-w-3xl mx-auto px-6 md:px-10 pt-12 pb-20">
-                <div className="small-caps">Submit a real trainer</div>
-                <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-3">Send their website. We'll do the rest.</h1>
+                <div className="small-caps">Apply as trainer</div>
+                <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-3">Create a verified trainer profile.</h1>
 
                 <form onSubmit={submit} className="card-public p-7 mt-10 grid sm:grid-cols-2 gap-3" data-testid="submit-form">
                     <Field label="Business name *"><input data-testid="submit-name" required className="input-public" value={form.name} onChange={change("name")} /></Field>
                     <Field label="Suburb *"><input data-testid="submit-suburb" required className="input-public" value={form.suburb} onChange={change("suburb")} /></Field>
-                    <Field label="Region (optional override)"><input data-testid="submit-region" className="input-public" value={form.region} onChange={change("region")} placeholder="Greater Melbourne" /></Field>
+                    <Field label="Region (optional)"><input data-testid="submit-region" className="input-public" value={form.region} onChange={change("region")} placeholder="Greater Melbourne" /></Field>
                     <Field label="Website" full><input data-testid="submit-website" type="url" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
                     <Field label="Phone"><input data-testid="submit-phone" className="input-public" value={form.phone} onChange={change("phone")} /></Field>
                     <Field label="Email"><input data-testid="submit-email" type="email" className="input-public" value={form.email} onChange={change("email")} /></Field>
-                    <Field label="Your notifications email"><input data-testid="submitter-email" type="email" className="input-public" value={form.submitter_email} onChange={change("submitter_email")} placeholder="Where submission results are sent" /></Field>
+                    <Field label="Notification email"><input data-testid="submitter-email" type="email" className="input-public" value={form.submitter_email} onChange={change("submitter_email")} placeholder="Where updates are sent" /></Field>
                     <Field label="Services (comma)" full><input data-testid="submit-services" className="input-public" value={form.services} onChange={change("services")} placeholder="In-home, Group classes" /></Field>
                     <Field label="Categories (comma)" full><input data-testid="submit-categories" className="input-public" value={form.categories} onChange={change("categories")} placeholder="puppy, behaviour" /></Field>
                     <Field label="Short description" full><textarea data-testid="submit-bio" rows={3} className="input-public" value={form.bio} onChange={change("bio")} /></Field>
-                    <Field label="Source URL (proves the business is real)" full><input data-testid="submit-evidence" type="url" className="input-public" value={form.source_evidence_url} onChange={change("source_evidence_url")} /></Field>
+                    <Field label="Source URL (business proof)" full><input data-testid="submit-evidence" type="url" className="input-public" value={form.source_evidence_url} onChange={change("source_evidence_url")} /></Field>
                     <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A] mt-1">
                         <input
                             type="checkbox"
@@ -99,7 +99,7 @@ export default function Submit() {
                             className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
                             data-testid="submit-consent-public"
                         />
-                        <span>I consent to publishing this listing if quality checks pass.</span>
+                        <span>I agree this listing may be published if checks pass.</span>
                     </label>
                     <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A]">
                         <input
@@ -109,7 +109,7 @@ export default function Submit() {
                             className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
                             data-testid="submit-consent-accuracy"
                         />
-                        <span>I confirm the submitted business information is accurate and lawful to publish.</span>
+                        <span>I confirm the submitted information is accurate and lawful to publish.</span>
                     </label>
                     <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A]">
                         <input
@@ -121,9 +121,14 @@ export default function Submit() {
                         />
                         <span>{monetizationCopy.submitConsentBillingLabel || "I acknowledge billing terms and invoices may be sent to my billing email."}</span>
                     </label>
+                    <div className="sm:col-span-2 flex flex-wrap items-center gap-3 text-xs text-[#4A615A]">
+                        <Link to="/pricing" className="underline underline-offset-2">View pricing</Link>
+                        <span>•</span>
+                        <Link to="/trust" className="underline underline-offset-2">Review trust standards</Link>
+                    </div>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
-                        <span className="text-xs font-mono text-[#5C6D59]">Auto-published if confidence is high enough. No human review.</span>
+                        <span className="text-xs font-mono text-[#5C6D59]">Profiles that pass checks are published.</span>
                         <button type="submit" disabled={busy} data-testid="submit-go" className="btn-primary disabled:opacity-50">
                             {busy ? "Scoring…" : "Submit"}
                         </button>

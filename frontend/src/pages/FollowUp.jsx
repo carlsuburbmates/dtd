@@ -76,7 +76,7 @@ export default function FollowUp() {
                         <p className="text-[#4A615A] mt-3">{error}</p>
                         <div className="mt-5">
                             <Link to="/" className="btn-primary inline-flex" data-testid="followup-home-cta">
-                                Back to matching
+                                Back to home
                             </Link>
                         </div>
                     </div>
@@ -85,7 +85,7 @@ export default function FollowUp() {
                         <div className="small-caps">Trainer</div>
                         <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">{ctx?.trainer?.name || "Trainer"}</h2>
                         <p className="text-[#4A615A] mt-2">
-                            {ctx?.trainer?.suburb || "Melbourne"} · {ctx?.description || "Your recent match"}
+                            {ctx?.trainer?.suburb || "Melbourne"} · {ctx?.description || "Your recent request"}
                         </p>
                         {ctx?.already_confirmed && (
                             <div className="mt-4 inline-flex items-center gap-2 pill pill-verified">
@@ -118,7 +118,7 @@ export default function FollowUp() {
                                 disabled={busy}
                                 onClick={() => submit("need_another_match")}
                             >
-                                Need another match
+                                Request new support
                                 <ArrowRight className="h-4 w-4" />
                             </button>
                         </div>

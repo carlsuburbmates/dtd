@@ -56,7 +56,7 @@ export default function TrainerDetail() {
     const connect = async (e) => {
         e?.preventDefault();
         if (!publicMatchingEnabled) {
-            toast.error("Live connect is not available in prelaunch mode yet.");
+            toast.error("Direct connect is opening soon.");
             return;
         }
         if (!form.user_email || !form.user_name) {
@@ -161,14 +161,13 @@ export default function TrainerDetail() {
                     !publicMatchingEnabled ? (
                     <section className="card-public p-7 mt-10" data-testid="connect-deferred">
                         <div className="small-caps">Education-first prelaunch</div>
-                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Live connect is deferred.</h2>
+                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Direct connect opens soon.</h2>
                         <p className="text-[#4A615A] mt-3 max-w-xl">
-                            Public contact release is currently gated. You can review trainer details now, and full connect
-                            flow will be enabled when public matching launches.
+                            Review trainer details now and get ready to connect when launch opens in your suburb.
                         </p>
                         <div className="mt-6">
                             <Link to="/how-it-works" className="btn-primary" data-testid="connect-deferred-how">
-                                Learn how launch works
+                                See how launch works
                                 <ArrowRight className="h-4 w-4" />
                             </Link>
                         </div>
@@ -282,9 +281,9 @@ function Header({ navigate }) {
     return (
         <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#F5F2EB]/85 border-b border-[#E5DFD3]/60">
             <div className="max-w-6xl mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
-                <Link to="/" data-testid="brand-link" className="font-serif text-xl text-[#1A3A32]">Bark&amp;Bond</Link>
+                <Link to="/" data-testid="brand-link" className="font-serif text-xl text-[#1A3A32]">Dog Trainers Directory</Link>
                 <button onClick={() => navigate("/")} data-testid="trainer-back" className="btn-ghost text-sm">
-                    <ArrowLeft className="h-4 w-4" /> New match
+                    <ArrowLeft className="h-4 w-4" /> Back to home
                 </button>
             </div>
         </header>
