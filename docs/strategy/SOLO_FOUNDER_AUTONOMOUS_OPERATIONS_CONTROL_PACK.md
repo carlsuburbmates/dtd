@@ -331,4 +331,4 @@ Add machine-readable control fields to the canonical suburb meta JSON:
 
 ## 17) Pre-sync blockers (status-only)
 - Curated files currently marked untracked must be intentionally staged before any approved sync.
-- `STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh` is expected to fail while remote worker service is suspended.
+- Current runtime baseline check target is `STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh` -> `RESULT=PASS` before sync.

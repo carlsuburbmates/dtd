@@ -98,3 +98,7 @@ credentials.json
 .credentials
 
 .emergent/
+
+# Codex local skill artifacts (machine-local; not part of app runtime)
+.agents/
+skills-lock.json
