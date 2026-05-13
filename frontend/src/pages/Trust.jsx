@@ -1,15 +1,17 @@
 import React from "react";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
-
-const items = [
-    "Consent required before matching, contact release, and listing submission.",
-    "Region scope enforced to active launch region.",
-    "Duplicate and abuse-intros are suppressed from billing.",
-    "Launch trainer billing policy is explicit: first 30 days free, then fixed A$5 per valid intro.",
-    "Ops is read-only oversight, not manual operational control.",
-];
+import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 
 export default function Trust() {
+    const monetizationCopy = usePublicMonetizationCopy();
+    const items = [
+        "Consent required before matching, contact release, and listing submission.",
+        "Region scope enforced to active launch region.",
+        "Duplicate and abuse-intros are suppressed from billing.",
+        monetizationCopy.trustBillingRule,
+        "Ops is read-only oversight, not manual operational control.",
+    ];
+
     return (
         <div className="App min-h-screen">
             <PublicHeader />

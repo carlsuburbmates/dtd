@@ -20,6 +20,7 @@ Conventions:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -36,6 +37,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
 from services import engine as autonomy
+from services import event_contract
 from services import fraud as fraud_service
 from services import notifications as notifications_service
 from services import runtime_control
@@ -62,6 +64,35 @@ ACTIVE_REGIONS = [r.strip() for r in os.environ.get("ACTIVE_REGIONS", ACTIVE_REG
 ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
 BILLABILITY_POLICY = (os.environ.get("BILLABILITY_POLICY") or "allow").strip().lower()
 CONTACT_READY_POLICY = (os.environ.get("CONTACT_READY_POLICY") or "allow").strip().lower()
+PUBLIC_MATCHING_ENABLED = (os.environ.get("PUBLIC_MATCHING_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
+
+PUBLIC_MONETIZATION_COPY_MODE = (os.environ.get("PUBLIC_MONETIZATION_COPY_MODE") or "legacy_intro_fee").strip()
+if PUBLIC_MONETIZATION_COPY_MODE not in {"legacy_intro_fee", "founding_profile_prelaunch"}:
+    PUBLIC_MONETIZATION_COPY_MODE = "legacy_intro_fee"
+
+PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+PUBLIC_SHOW_FOUNDING_PROFILE_COPY = (os.environ.get("PUBLIC_SHOW_FOUNDING_PROFILE_COPY") or "0").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+CLAIM_STATE_MODEL_ENABLED = (os.environ.get("CLAIM_STATE_MODEL_ENABLED") or "0").strip().lower() in {"1", "true", "yes", "on"}
+_claim_state_current_env = (os.environ.get("CLAIM_STATE_CURRENT") or "STATE_0").strip().upper()
+CLAIM_STATE_CURRENT = _claim_state_current_env if _claim_state_current_env in {"STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"} else "STATE_0"
+CLAIM_ENFORCEMENT_MODE = (os.environ.get("CLAIM_ENFORCEMENT_MODE") or "report_only").strip().lower()
+if CLAIM_ENFORCEMENT_MODE not in {"report_only", "block_invalid"}:
+    CLAIM_ENFORCEMENT_MODE = "report_only"
+CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = (
+    (os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in {"1", "true", "yes", "on"}
+)
+SUBURB_META_PATH = ROOT_DIR.parent / "docs" / "strategy" / "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json"
 
 
 def now_iso() -> str:
@@ -75,6 +106,15 @@ def new_id() -> str:
 def _scrub(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc.pop("_id", None)
     return doc
+
+
+def _require_public_matching(path_label: str) -> None:
+    if PUBLIC_MATCHING_ENABLED:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=f"{path_label} is unavailable during education-first prelaunch.",
+    )
 
 
 async def _audit(action: str, target: str, before: Any = None, after: Any = None, actor: str = "system") -> None:
@@ -180,6 +220,13 @@ class SubmissionIn(BaseModel):
     consent_intro_billing_terms: bool = False
 
 
+class OwnerWaitlistJoinIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email: EmailStr
+    suburb: str = Field(min_length=1)
+    consent_owner_waitlist: bool = False
+
+
 class OversightLogin(BaseModel):
     model_config = ConfigDict(extra="ignore")
     passcode: str
@@ -245,6 +292,288 @@ def _require_region(region: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail=f"Region not in active scope. Active region(s): {allowed}.")
 
 
+def _normalize_claim_state(raw_state: Optional[str]) -> str:
+    token = (raw_state or CLAIM_STATE_CURRENT).strip().upper()
+    if token in {"STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"}:
+        return token
+    return CLAIM_STATE_CURRENT
+
+
+def _normalize_suburb_key(raw_suburb: Optional[str]) -> str:
+    return " ".join((raw_suburb or "").strip().lower().split())
+
+
+def _normalize_email_key(raw_email: Optional[str]) -> str:
+    return (raw_email or "").strip().lower()
+
+
+async def _record_owner_waitlist_event(
+    event_type: str,
+    *,
+    email_norm: str = "",
+    suburb_norm: str = "",
+    status: str,
+    reason_codes: Optional[List[str]] = None,
+    waitlist_id: Optional[str] = None,
+) -> None:
+    normalized = event_contract.normalize_prelaunch_event(
+        event_type,
+        payload={
+            "email_norm": email_norm,
+            "suburb_norm": suburb_norm,
+            "status": status,
+            "reason_codes": reason_codes or [],
+            "waitlist_id": waitlist_id,
+        },
+    )
+    payload = normalized["payload"]
+    await db.owner_waitlist_events.insert_one(
+        {
+            "id": new_id(),
+            "event_type": normalized["event_type"],
+            "email_norm": payload.get("email_norm") or "",
+            "suburb_norm": payload.get("suburb_norm") or "",
+            "status": payload.get("status") or "unknown",
+            "reason_codes": payload.get("reason_codes") or [],
+            "waitlist_id": payload.get("waitlist_id"),
+            "contract_status": normalized["contract_status"],
+            "contract_reason_codes": normalized["contract_reason_codes"],
+            "created_at": now_iso(),
+        }
+    )
+
+
+async def _owner_waitlist_summary() -> Dict[str, Any]:
+    waitlist_coll = getattr(db, "owner_waitlist", None)
+    if waitlist_coll is None:
+        return {
+            "total_active": 0,
+            "joins_24h": 0,
+            "top_suburbs": [],
+            "status": "unavailable",
+            "reason_codes": ["owner_waitlist_collection_unavailable"],
+        }
+
+    since_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    total_active = await waitlist_coll.count_documents({"status": "active"})
+    joins_24h = await waitlist_coll.count_documents({"status": "active", "created_at": {"$gte": since_24h}})
+    top_rows = await waitlist_coll.aggregate(
+        [
+            {"$match": {"status": "active"}},
+            {"$group": {"_id": "$suburb", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1, "_id": 1}},
+            {"$limit": 5},
+        ]
+    ).to_list(5)
+    top_suburbs = [{"suburb": str(row.get("_id") or ""), "count": int(row.get("count") or 0)} for row in top_rows if row.get("_id")]
+    return {
+        "total_active": int(total_active or 0),
+        "joins_24h": int(joins_24h or 0),
+        "top_suburbs": top_suburbs,
+        "status": "ok",
+        "reason_codes": ["owner_waitlist_summary_ok"],
+    }
+
+
+async def _kpi_prelaunch_summary() -> Dict[str, Any]:
+    """Read-only deterministic KPI rollup for prelaunch oversight."""
+    # Repository accepted verified set (current canonical usage).
+    verified_statuses = ["verified"]
+    try:
+        waitlist_coll = getattr(db, "owner_waitlist", None)
+        trainers_coll = getattr(db, "trainers", None)
+        if waitlist_coll is None or trainers_coll is None:
+            return {
+                "owner_waitlist_total_active": 0,
+                "owner_waitlist_joins_24h": 0,
+                "waitlist_suburb_coverage_count": 0,
+                "published_trainer_count": 0,
+                "verified_trainer_count": 0,
+                "trainer_suburb_coverage_count": 0,
+                "status": "unavailable",
+                "reason_codes": ["kpi_prelaunch_collection_unavailable"],
+            }
+
+        since_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        owner_waitlist_total_active = int(
+            await waitlist_coll.count_documents({"status": "active"})
+        )
+        owner_waitlist_joins_24h = int(
+            await waitlist_coll.count_documents({"status": "active", "created_at": {"$gte": since_24h}})
+        )
+        waitlist_suburbs = await waitlist_coll.distinct("suburb_norm", {"status": "active"})
+        waitlist_suburb_coverage_count = len(
+            [s for s in waitlist_suburbs if isinstance(s, str) and s.strip()]
+        )
+
+        published_trainer_count = int(await trainers_coll.count_documents({"published": True}))
+        verified_trainer_count = int(
+            await trainers_coll.count_documents(
+                {"published": True, "verification_status": {"$in": verified_statuses}}
+            )
+        )
+        trainer_suburbs = await trainers_coll.distinct("suburb", {"published": True})
+        trainer_suburb_coverage_count = len(
+            [s for s in trainer_suburbs if isinstance(s, str) and s.strip()]
+        )
+        return {
+            "owner_waitlist_total_active": owner_waitlist_total_active,
+            "owner_waitlist_joins_24h": owner_waitlist_joins_24h,
+            "waitlist_suburb_coverage_count": int(waitlist_suburb_coverage_count),
+            "published_trainer_count": published_trainer_count,
+            "verified_trainer_count": verified_trainer_count,
+            "trainer_suburb_coverage_count": int(trainer_suburb_coverage_count),
+            "status": "ok",
+            "reason_codes": ["kpi_prelaunch_ok"],
+        }
+    except Exception:  # noqa: BLE001
+        logger.exception("kpi_prelaunch_summary_failed")
+        return {
+            "owner_waitlist_total_active": 0,
+            "owner_waitlist_joins_24h": 0,
+            "waitlist_suburb_coverage_count": 0,
+            "published_trainer_count": 0,
+            "verified_trainer_count": 0,
+            "trainer_suburb_coverage_count": 0,
+            "status": "unavailable",
+            "reason_codes": ["kpi_prelaunch_compute_failed"],
+        }
+
+
+def _claim_policy_snapshot() -> Dict[str, Any]:
+    return {
+        "enabled": CLAIM_STATE_MODEL_ENABLED,
+        "state": CLAIM_STATE_CURRENT,
+        "model_enabled": CLAIM_STATE_MODEL_ENABLED,
+        "state_current": CLAIM_STATE_CURRENT,
+        "enforcement_mode": CLAIM_ENFORCEMENT_MODE,
+        "block_melbourne_wide_below_state_2": CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
+        "melbourne_wide_min_state": "STATE_2" if CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 else "STATE_0",
+    }
+
+
+def _suburb_meta_identity_snapshot() -> Dict[str, Any]:
+    identity: Dict[str, Any] = {
+        "list_id": None,
+        "suburb_count": None,
+        "suburb_hash_sha256_code_name": None,
+        "as_of_date_melbourne": None,
+    }
+    status = {
+        "ok": False,
+        "warn": True,
+        "level": "warn",
+        "reason_codes": ["suburb_meta_unchecked"],
+        "meta_available": False,
+    }
+    payload: Dict[str, Any] = {
+        "identity": identity,
+        "status": status,
+        "meta_path": str(SUBURB_META_PATH),
+    }
+
+    if not SUBURB_META_PATH.exists():
+        status["reason_codes"] = ["suburb_meta_file_missing"]
+        return payload
+
+    try:
+        raw = json.loads(SUBURB_META_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        status["reason_codes"] = ["suburb_meta_parse_error"]
+        return payload
+
+    identity["list_id"] = raw.get("list_id")
+    identity["suburb_count"] = raw.get("suburb_count")
+    identity["suburb_hash_sha256_code_name"] = raw.get("suburb_hash_sha256_code_name")
+    identity["as_of_date_melbourne"] = raw.get("as_of_date_melbourne")
+
+    reasons: List[str] = []
+    if not isinstance(identity["list_id"], str) or not identity["list_id"].strip():
+        reasons.append("suburb_meta_missing_list_id")
+    if not isinstance(identity["suburb_count"], int) or identity["suburb_count"] <= 0:
+        reasons.append("suburb_meta_invalid_suburb_count")
+    if not isinstance(identity["suburb_hash_sha256_code_name"], str) or not identity["suburb_hash_sha256_code_name"].strip():
+        reasons.append("suburb_meta_missing_hash")
+
+    active_list_id = raw.get("active_list_id")
+    if isinstance(active_list_id, str) and active_list_id and identity["list_id"] and active_list_id != identity["list_id"]:
+        reasons.append("suburb_meta_list_id_mismatch")
+
+    status["meta_available"] = True
+    status["reason_codes"] = reasons or ["suburb_meta_ok"]
+    status["ok"] = not reasons
+    status["warn"] = bool(reasons)
+    status["level"] = "ok" if not reasons else "warn"
+
+    return payload
+
+
+def _evaluate_claim_local(claim: str, state: str) -> Dict[str, Any]:
+    claim_norm = " ".join((claim or "").strip().lower().replace("_", " ").replace("-", " ").split())
+    is_melbourne_wide = claim_norm in {"melbourne wide", "all melbourne", "greater melbourne wide"}
+    blocks_melbourne_wide = (
+        CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2
+        and is_melbourne_wide
+        and state in {"STATE_0", "STATE_1"}
+    )
+    reason_codes: List[str] = []
+    if is_melbourne_wide:
+        reason_codes.append("claim.melbourne_wide_detected")
+    if blocks_melbourne_wide:
+        reason_codes.append("claim.melbourne_wide_requires_state_2")
+    return {
+        "allowed": not blocks_melbourne_wide,
+        "reason_codes": reason_codes,
+        "normalized_claim": claim_norm,
+        "normalized_state": state,
+    }
+
+
+async def _evaluate_claim(claim: str, state: str) -> Dict[str, Any]:
+    fallback = _evaluate_claim_local(claim, state)
+    try:
+        from services import claim_state as claim_state_service
+    except Exception:  # noqa: BLE001
+        return {**fallback, "source": "server_local_fallback", "service_available": False}
+
+    evaluator = getattr(claim_state_service, "evaluate_claim", None)
+    if not callable(evaluator):
+        return {**fallback, "source": "server_local_fallback", "service_available": False}
+
+    try:
+        result = evaluator(
+            claim=claim,
+            state=state,
+            enforcement_mode=CLAIM_ENFORCEMENT_MODE,
+            block_melbourne_wide_below_state_2=CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
+            enabled=CLAIM_STATE_MODEL_ENABLED,
+        )
+        if asyncio.iscoroutine(result):
+            result = await result
+        if not isinstance(result, dict):
+            return {**fallback, "source": "server_local_fallback", "service_available": True}
+    except TypeError:
+        try:
+            result = evaluator(claim, state)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if not isinstance(result, dict):
+                return {**fallback, "source": "server_local_fallback", "service_available": True}
+        except Exception:  # noqa: BLE001
+            return {**fallback, "source": "server_local_fallback", "service_available": True}
+    except Exception:  # noqa: BLE001
+        return {**fallback, "source": "server_local_fallback", "service_available": True}
+
+    return {
+        "allowed": bool(result.get("allowed", fallback["allowed"])),
+        "reason_codes": list(result.get("reason_codes", fallback["reason_codes"])),
+        "normalized_claim": str(result.get("normalized_claim", fallback["normalized_claim"])),
+        "normalized_state": str(result.get("normalized_state", result.get("state", fallback["normalized_state"]))),
+        "source": "services.claim_state",
+        "service_available": True,
+    }
+
+
 async def _decorate_with_pricing(trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Attach the current intro fee snapshot for each trainer's suburb."""
     suburbs = list({t.get("suburb") for t in trainers if t.get("suburb")})
@@ -298,6 +627,14 @@ async def config() -> Dict[str, Any]:
         "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
         "stripe_intro_billing_enabled": stripe_billing.billing_enabled(),
         "stripe_webhook_enabled": stripe_billing.webhook_enabled(),
+        "public_matching_enabled": PUBLIC_MATCHING_ENABLED,
+        "public_monetization_copy_mode": PUBLIC_MONETIZATION_COPY_MODE,
+        "public_hide_legacy_intro_fee_copy": PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY,
+        "public_show_founding_profile_copy": PUBLIC_SHOW_FOUNDING_PROFILE_COPY,
+        "claim_state_model_enabled": CLAIM_STATE_MODEL_ENABLED,
+        "claim_state_current": CLAIM_STATE_CURRENT,
+        "claim_enforcement_mode": CLAIM_ENFORCEMENT_MODE,
+        "claim_block_melbourne_wide_below_state_2": CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
         "suburbs": suburbs,
     }
 
@@ -305,6 +642,7 @@ async def config() -> Dict[str, Any]:
 @api.post("/match")
 async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
     """Single input → 3 trainers. The only product surface for end users."""
+    _require_public_matching("Public matching")
     if not payload.consent_match_processing:
         raise HTTPException(status_code=400, detail="Consent required to process match request.")
 
@@ -417,6 +755,7 @@ async def create_intro(
     request: Request,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ) -> Dict[str, Any]:
+    _require_public_matching("Public contact release")
     if not payload.consent_contact_release or not payload.consent_outcome_tracking:
         raise HTTPException(status_code=400, detail="Consent required before contact release.")
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
@@ -776,6 +1115,90 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     )
 
 
+@api.post("/owner-waitlist")
+async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
+    email_norm = _normalize_email_key(str(payload.email))
+    suburb_raw = (payload.suburb or "").strip()
+    suburb_norm = _normalize_suburb_key(suburb_raw)
+
+    await _record_owner_waitlist_event(
+        "owner_waitlist_started",
+        email_norm=email_norm,
+        suburb_norm=suburb_norm,
+        status="started",
+    )
+
+    reason_codes: List[str] = []
+    if not suburb_raw:
+        reason_codes.append("suburb_required")
+    if not payload.consent_owner_waitlist:
+        reason_codes.append("consent_required")
+
+    if reason_codes:
+        await _record_owner_waitlist_event(
+            "owner_waitlist_rejected",
+            email_norm=email_norm,
+            suburb_norm=suburb_norm,
+            status="rejected",
+            reason_codes=reason_codes,
+        )
+        raise HTTPException(status_code=400, detail={"code": "waitlist_rejected", "reason_codes": reason_codes})
+
+    existing = await db.owner_waitlist.find_one(
+        {"email_norm": email_norm, "suburb_norm": suburb_norm, "status": "active"},
+        {"_id": 0},
+    )
+    if existing:
+        await _record_owner_waitlist_event(
+            "owner_waitlist_duplicate",
+            email_norm=email_norm,
+            suburb_norm=suburb_norm,
+            status="duplicate",
+            reason_codes=["duplicate_active_waitlist_record"],
+            waitlist_id=existing.get("id"),
+        )
+        return {"accepted": True, "duplicate": True, "status": "duplicate", "id": existing.get("id")}
+
+    doc = {
+        "id": new_id(),
+        "email": str(payload.email).strip(),
+        "email_norm": email_norm,
+        "suburb": suburb_raw,
+        "suburb_norm": suburb_norm,
+        "consent_owner_waitlist": True,
+        "status": "active",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    try:
+        await db.owner_waitlist.insert_one(doc.copy())
+    except Exception:  # noqa: BLE001
+        existing = await db.owner_waitlist.find_one(
+            {"email_norm": email_norm, "suburb_norm": suburb_norm, "status": "active"},
+            {"_id": 0},
+        )
+        if existing:
+            await _record_owner_waitlist_event(
+                "owner_waitlist_duplicate",
+                email_norm=email_norm,
+                suburb_norm=suburb_norm,
+                status="duplicate",
+                reason_codes=["duplicate_active_waitlist_record"],
+                waitlist_id=existing.get("id"),
+            )
+            return {"accepted": True, "duplicate": True, "status": "duplicate", "id": existing.get("id")}
+        raise
+
+    await _record_owner_waitlist_event(
+        "owner_waitlist_submitted",
+        email_norm=email_norm,
+        suburb_norm=suburb_norm,
+        status="submitted",
+        waitlist_id=doc["id"],
+    )
+    return {"accepted": True, "duplicate": False, "status": "accepted", "id": doc["id"]}
+
+
 @api.get("/submissions/{submission_id}/status")
 async def get_submission_status(submission_id: str) -> Dict[str, Any]:
     sub = await db.submissions.find_one({"id": submission_id}, {"_id": 0})
@@ -1128,6 +1551,12 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     rollback_recent = await db.config_snapshots.find(
         {"rolled_back": True}, {"_id": 0}
     ).sort("rolled_back_at", -1).to_list(5)
+    suburb_dataset = _suburb_meta_identity_snapshot()
+    claim_policy = _claim_policy_snapshot()
+    suburb_identity = suburb_dataset.get("identity", {})
+    suburb_status = suburb_dataset.get("status", {})
+    waitlist_summary = await _owner_waitlist_summary()
+    kpi_prelaunch = await _kpi_prelaunch_summary()
 
     return {
         "revenue": {
@@ -1180,6 +1609,64 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "non_billable_causes": non_billable_causes,
         "notification_summary": notification_summary,
         "integrity": integrity,
+        "claim_policy": claim_policy,
+        "claim_policy_summary": {
+            "enabled": claim_policy.get("enabled"),
+            "state": claim_policy.get("state"),
+            "enforcement_mode": claim_policy.get("enforcement_mode"),
+        },
+        "dataset_identity": {
+            "list_id": suburb_identity.get("list_id"),
+            "suburb_count": suburb_identity.get("suburb_count"),
+            "hash": suburb_identity.get("suburb_hash_sha256_code_name"),
+            "as_of_date": suburb_identity.get("as_of_date_melbourne"),
+        },
+        "integrity_status": suburb_status.get("level", "warn"),
+        "integrity_reason_codes": suburb_status.get("reason_codes", []),
+        "suburb_dataset": suburb_dataset.get("identity", {}),
+        "suburb_dataset_integrity": suburb_dataset.get("status", {}),
+        "owner_waitlist_summary": waitlist_summary,
+        "kpi_prelaunch": kpi_prelaunch,
+        "ts": now_iso(),
+    }
+
+
+@api.get("/claims/validate")
+async def validate_claim(
+    claim: str = Query(..., min_length=1),
+    state: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """Read-only deterministic claim validation. Never mutates state."""
+    effective_state = _normalize_claim_state(state)
+    evaluation = await _evaluate_claim(claim, effective_state)
+    claim_policy = _claim_policy_snapshot()
+
+    allowed = bool(evaluation.get("allowed", False))
+    would_block = bool(CLAIM_STATE_MODEL_ENABLED and not allowed)
+    if CLAIM_ENFORCEMENT_MODE == "block_invalid" and would_block:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "claim_blocked",
+                "claim": claim,
+                "state": effective_state,
+                "reason_codes": evaluation.get("reason_codes", []),
+            },
+        )
+
+    return {
+        "ok": True,
+        "claim": claim,
+        "state": effective_state,
+        "allowed": allowed,
+        "would_block": would_block,
+        "enforced": CLAIM_ENFORCEMENT_MODE == "block_invalid",
+        "enforcement_mode": CLAIM_ENFORCEMENT_MODE,
+        "reason_codes": evaluation.get("reason_codes", []),
+        "normalized_claim": evaluation.get("normalized_claim"),
+        "evaluation_source": evaluation.get("source"),
+        "service_available": evaluation.get("service_available"),
+        "claim_policy": claim_policy,
         "ts": now_iso(),
     }
 
@@ -1351,6 +1838,10 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.config_snapshots.create_index("applied_at")
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
     await db.notification_events.create_index("id", unique=True, sparse=True)
+    await db.owner_waitlist.create_index([("email_norm", 1), ("suburb_norm", 1), ("status", 1)], unique=True)
+    await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
+    await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
+    await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
 
     runtime = runtime_control.resolve_loop_runtime(process_role)
     await _seed_if_empty()

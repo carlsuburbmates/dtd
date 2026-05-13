@@ -1,0 +1,21 @@
+{
+  "list_id": "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1",
+  "active_list_id": "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1",
+  "asgs_edition": "ASGS2021_ED3",
+  "effective_from": "2026-05-10",
+  "effective_to": null,
+  "supersedes": null,
+  "cutover_from_list_id": null,
+  "state_freeze_flag": false,
+  "validation_job_id": null,
+  "alert_code": "DATA_DRIFT_ALERT",
+  "definition": "SAL2021 in VIC intersecting GCCSA 2021 2GMEL (Greater Melbourne)",
+  "as_of_date_melbourne": "2026-05-10",
+  "source_endpoints": [
+    "https://geo.abs.gov.au/arcgis/rest/services/ASGS2021/GCCSA/MapServer/0/query",
+    "https://geo.abs.gov.au/arcgis/rest/services/ASGS2021/SAL/MapServer/0/query"
+  ],
+  "suburb_count": 613,
+  "suburb_hash_sha256_code_name": "72beb762ee5c7daac20bf6a89ae822085bab5656d45fbd4ed72104754c6670e6",
+  "drift_policy": "Any membership change updates hash; trigger DATA_DRIFT_ALERT and explicit version bump."
+}

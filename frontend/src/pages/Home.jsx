@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, Send, MapPin, Sparkles, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { api, audCents } from "@/lib/api";
+import { extractPublicMonetizationPolicy, resolvePublicMonetizationCopy } from "@/lib/publicPolicy";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
@@ -17,6 +18,7 @@ const TRAINER_PROFILE_2 =
 
 export default function Home() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [desc, setDesc] = useState("");
     const [suburb, setSuburb] = useState("");
     const [suburbs, setSuburbs] = useState([]);
@@ -25,7 +27,16 @@ export default function Home() {
     const [results, setResults] = useState(null);
     const [matchId, setMatchId] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [waitlistEmail, setWaitlistEmail] = useState("");
+    const [waitlistSuburb, setWaitlistSuburb] = useState("");
+    const [waitlistConsent, setWaitlistConsent] = useState(false);
+    const [waitlistState, setWaitlistState] = useState("idle");
+    const [waitlistMessage, setWaitlistMessage] = useState("");
+    const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
+    const [monetizationCopy, setMonetizationCopy] = useState(() => resolvePublicMonetizationCopy());
     const inputRef = useRef(null);
+    const campaign = (searchParams.get("campaign") || "").trim();
+    const source = (searchParams.get("source") || "").trim();
 
     useEffect(() => {
         api
@@ -33,12 +44,17 @@ export default function Home() {
             .then((r) => {
                 setSuburbs(r.data.suburbs || []);
                 setActiveRegion(r.data.active_region_default || "Greater Melbourne");
+                setPublicMatchingEnabled(Boolean(r.data.public_matching_enabled));
+                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(r.data || {})));
             })
             .catch(() => {});
     }, []);
 
     const submit = async (e) => {
         e?.preventDefault();
+        if (!publicMatchingEnabled) {
+            return;
+        }
         if (desc.trim().length < 5) {
             toast.error("Tell us a little more about your dog.");
             inputRef.current?.focus();
@@ -53,6 +69,8 @@ export default function Home() {
             const r = await api.post("/match", {
                 description: desc,
                 suburb: suburb || undefined,
+                campaign: campaign || undefined,
+                source: source || undefined,
                 consent_match_processing: consent,
             });
             setResults(r.data.matches || []);
@@ -69,6 +87,59 @@ export default function Home() {
         setMatchId(null);
         setDesc("");
         setTimeout(() => inputRef.current?.focus(), 50);
+    };
+
+    const submitWaitlist = async (e) => {
+        e?.preventDefault();
+        const email = waitlistEmail.trim();
+        const suburbValue = waitlistSuburb.trim();
+        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailValid) {
+            setWaitlistState("error");
+            setWaitlistMessage("Please enter a valid email.");
+            return;
+        }
+        if (!suburbValue) {
+            setWaitlistState("error");
+            setWaitlistMessage("Please enter your suburb.");
+            return;
+        }
+        if (!waitlistConsent) {
+            setWaitlistState("error");
+            setWaitlistMessage("Please tick consent so we can store your waitlist request.");
+            return;
+        }
+        setWaitlistState("submitting");
+        setWaitlistMessage("");
+        try {
+            const r = await api.post("/owner-waitlist", {
+                email,
+                suburb: suburbValue,
+                consent_owner_waitlist: true,
+                consent: true,
+            });
+            const status = String(r?.data?.status || "").toLowerCase();
+            const duplicate = Boolean(r?.data?.duplicate) || status === "duplicate" || status === "exists";
+            if (duplicate) {
+                setWaitlistState("duplicate");
+                setWaitlistMessage("You’re already on the waitlist for that suburb.");
+                return;
+            }
+            setWaitlistState("success");
+            setWaitlistMessage("Thanks. You’re on the prelaunch owner waitlist.");
+            setWaitlistEmail("");
+            setWaitlistSuburb("");
+            setWaitlistConsent(false);
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            if (err?.response?.status === 409) {
+                setWaitlistState("duplicate");
+                setWaitlistMessage("You’re already on the waitlist for that suburb.");
+                return;
+            }
+            setWaitlistState("error");
+            setWaitlistMessage(typeof detail === "string" && detail ? detail : "Couldn’t join the waitlist right now. Please try again.");
+        }
     };
 
     return (
@@ -89,7 +160,7 @@ export default function Home() {
                             <>
                                 <div className="small-caps inline-flex items-center gap-2 rounded-full border border-[#E5DFD3] bg-[#FAFAF7]/70 px-4 py-2">
                                     <Sparkles className="h-3.5 w-3.5" />
-                                    Outcome-ranked trainer matching
+                                    Education-first prelaunch
                                 </div>
                                 <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-[#1A3A32]">
                                     What's going on
@@ -97,9 +168,95 @@ export default function Home() {
                                     with your dog?
                                 </h1>
                                 <p className="text-[#4A615A] mt-5 text-lg max-w-lg">
-                                    One sentence is enough. Active region: {activeRegion}.
+                                    We’re preparing public matching for {activeRegion}. Use this hub to learn what to expect at launch.
                                 </p>
 
+                                {!publicMatchingEnabled ? (
+                                    <section className="card-public p-7 mt-10" data-testid="match-coming-soon">
+                                        <div className="small-caps">Education-first prelaunch</div>
+                                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Live matching is coming soon.</h2>
+                                        <p className="text-[#4A615A] mt-3 max-w-xl">
+                                            We are currently in education mode while contact and matching release gates are finalized.
+                                            Explore how it works and what to expect from launch.
+                                        </p>
+                                        <form onSubmit={submitWaitlist} className="mt-6 space-y-3" data-testid="owner-waitlist-form">
+                                            <div className="small-caps !text-[#5C6D59]">Owner waitlist</div>
+                                            <p className="text-sm text-[#4A615A]">
+                                                Join to hear when owner onboarding opens in your suburb. No booking or matching is promised yet.
+                                            </p>
+                                            <div className="grid sm:grid-cols-2 gap-2">
+                                                <label className="sr-only" htmlFor="waitlist-email">
+                                                    Email
+                                                </label>
+                                                <input
+                                                    id="waitlist-email"
+                                                    type="email"
+                                                    value={waitlistEmail}
+                                                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                                                    placeholder="you@example.com"
+                                                    className="rounded-xl border border-[#E5DFD3] bg-white px-3 py-2 text-sm text-[#1A3A32] outline-none focus:border-[#5C6D59]"
+                                                    data-testid="owner-waitlist-email"
+                                                    autoComplete="email"
+                                                />
+                                                <label className="sr-only" htmlFor="waitlist-suburb">
+                                                    Suburb
+                                                </label>
+                                                <input
+                                                    id="waitlist-suburb"
+                                                    type="text"
+                                                    value={waitlistSuburb}
+                                                    onChange={(e) => setWaitlistSuburb(e.target.value)}
+                                                    placeholder="Your suburb"
+                                                    className="rounded-xl border border-[#E5DFD3] bg-white px-3 py-2 text-sm text-[#1A3A32] outline-none focus:border-[#5C6D59]"
+                                                    data-testid="owner-waitlist-suburb"
+                                                />
+                                            </div>
+                                            <label className="flex items-start gap-2 text-xs text-[#4A615A]">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={waitlistConsent}
+                                                    onChange={(e) => setWaitlistConsent(e.target.checked)}
+                                                    className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
+                                                    data-testid="owner-waitlist-consent"
+                                                />
+                                                <span>I consent to my details being stored for prelaunch waitlist updates.</span>
+                                            </label>
+                                            {waitlistState !== "idle" && (
+                                                <div
+                                                    className={`text-sm ${
+                                                        waitlistState === "success"
+                                                            ? "text-emerald-700"
+                                                            : waitlistState === "duplicate"
+                                                              ? "text-amber-700"
+                                                              : waitlistState === "submitting"
+                                                                ? "text-[#4A615A]"
+                                                                : "text-rose-700"
+                                                    }`}
+                                                    data-testid="owner-waitlist-status"
+                                                >
+                                                    {waitlistState === "submitting" ? "Submitting..." : waitlistMessage}
+                                                </div>
+                                            )}
+                                            <button
+                                                type="submit"
+                                                className="btn-primary"
+                                                data-testid="owner-waitlist-submit"
+                                                disabled={waitlistState === "submitting"}
+                                            >
+                                                {waitlistState === "submitting" ? "Submitting..." : "Join owner waitlist"}
+                                            </button>
+                                        </form>
+                                        <div className="mt-6 flex flex-wrap gap-3">
+                                            <Link to="/how-it-works" className="btn-primary" data-testid="coming-soon-how">
+                                                How it works
+                                                <ArrowRight className="h-4 w-4" />
+                                            </Link>
+                                            <Link to="/trust" className="btn-ghost" data-testid="coming-soon-trust">
+                                                Trust &amp; safety
+                                            </Link>
+                                        </div>
+                                    </section>
+                                ) : (
                                 <form onSubmit={submit} className="mt-10" data-testid="match-form">
                                     <div className="relative rounded-2xl">
                                         <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-[#D06D4F]/25 via-[#708265]/20 to-[#1A3A32]/15 blur-md" />
@@ -181,7 +338,9 @@ export default function Home() {
                                         <span>I consent to processing this request to generate trainer matches and outcome analytics.</span>
                                     </label>
                                 </form>
+                                )}
 
+                                {publicMatchingEnabled && (
                                 <div className="mt-10 flex flex-wrap gap-2" data-testid="match-presets">
                                     {[
                                         "Reactive on leash",
@@ -203,17 +362,18 @@ export default function Home() {
                                         </button>
                                     ))}
                                 </div>
+                                )}
                                 <div className="grid grid-cols-3 gap-3 mt-8" data-testid="home-trust-metrics">
                                     <div className="card-public p-3 text-center">
-                                        <div className="small-caps !text-[#D06D4F]">Speed</div>
-                                        <div className="font-serif text-2xl text-[#1A3A32] mt-1">&lt;30s</div>
+                                        <div className="small-caps !text-[#D06D4F]">Phase</div>
+                                        <div className="font-serif text-2xl text-[#1A3A32] mt-1">Prelaunch</div>
                                     </div>
                                     <div className="card-public p-3 text-center">
-                                        <div className="small-caps !text-[#D06D4F]">Matches</div>
+                                        <div className="small-caps !text-[#D06D4F]">Launch plan</div>
                                         <div className="font-serif text-2xl text-[#1A3A32] mt-1">Top 3</div>
                                     </div>
                                     <div className="card-public p-3 text-center">
-                                        <div className="small-caps !text-[#D06D4F]">Model</div>
+                                        <div className="small-caps !text-[#D06D4F]">Focus</div>
                                         <div className="font-serif text-2xl text-[#1A3A32] mt-1">Outcome</div>
                                     </div>
                                 </div>
@@ -241,6 +401,8 @@ export default function Home() {
                                 results={results}
                                 matchId={matchId}
                                 description={desc}
+                                campaign={campaign}
+                                source={source}
                                 onReset={reset}
                             />
                         )}
@@ -293,12 +455,12 @@ function HomepageSections() {
                     <div className="relative p-7 sm:p-8">
                         <div className="small-caps">Owner journey</div>
                         <h2 className="font-serif text-4xl sm:text-5xl text-[#1A3A32] mt-2 leading-none">
-                            Fast matching,
+                            Better preparation,
                             <br />
-                            serious outcomes.
+                            stronger outcomes.
                         </h2>
                         <p className="text-[#4A615A] mt-4 max-w-lg">
-                            Describe one issue and get three ranked trainers instantly, with transparent connect pricing and trust signals.
+                            Learn how the matching system works, what quality signals matter, and how trainers are prepared before public rollout.
                         </p>
                         <Link to="/how-it-works" data-testid="home-how-link" className="btn-primary mt-6 inline-flex">
                             How it works
@@ -342,9 +504,9 @@ function HomepageSections() {
                         className="w-16 h-16 rounded-full object-cover border border-[#E5DFD3]"
                     />
                     <div>
-                        <div className="small-caps">Transparent connect</div>
+                        <div className="small-caps">Launch pricing policy</div>
                         <div className="text-[#4A615A] text-sm mt-1">
-                            Trainers pay only when owners connect, and pricing adapts by local market response.
+                            {monetizationCopy.homeLaunchPricing}
                         </div>
                     </div>
                 </article>
@@ -353,8 +515,22 @@ function HomepageSections() {
     );
 }
 
-function Results({ results, matchId, description, onReset }) {
+function Results({ results, matchId, description, campaign, source, onReset }) {
     const navigate = useNavigate();
+    const handleConnect = async (trainerId, rank) => {
+        if (matchId) {
+            try {
+                await api.post("/match/connect-click", {
+                    match_id: matchId,
+                    trainer_id: trainerId,
+                    rank,
+                    campaign: campaign || undefined,
+                    source: source || undefined,
+                });
+            } catch (_) {}
+        }
+        navigate(`/t/${trainerId}?match=${matchId}&q=${encodeURIComponent(description)}`);
+    };
     return (
         <motion.div
             data-testid="match-results"
@@ -417,7 +593,7 @@ function Results({ results, matchId, description, onReset }) {
                         </div>
                         <div className="sm:text-right flex sm:flex-col gap-3 sm:gap-2 sm:items-end items-center justify-between">
                             <button
-                                onClick={() => navigate(`/t/${t.id}?match=${matchId}&q=${encodeURIComponent(description)}`)}
+                                onClick={() => handleConnect(t.id, i + 1)}
                                 data-testid={`result-connect-${t.id}`}
                                 className="btn-primary"
                             >

@@ -1,7 +1,10 @@
 import React from "react";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
+import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 
 export default function Terms() {
+    const monetizationCopy = usePublicMonetizationCopy();
+
     return (
         <div className="App min-h-screen">
             <PublicHeader />
@@ -12,7 +15,7 @@ export default function Terms() {
                 </h1>
                 <div className="card-public p-6 mt-8 text-[#4A615A] space-y-3">
                     <p>Bark&amp;Bond provides introductions and ranking signals. Hiring outcomes remain decisions between users and trainers.</p>
-                    <p>Launch trainer pricing is fixed: first 30 days from registration are trial-free, then valid intros are billed at A$5 each.</p>
+                    <p>{monetizationCopy.termsTrainerPricing}</p>
                     <p>Trainers and the public are responsible for lawful, accurate information and conduct.</p>
                     <p>Final legal copy is controlled by governance and will be updated in place before public launch gates.</p>
                 </div>
