@@ -14,10 +14,10 @@ export default function Terms() {
                     Terms of use (launch baseline).
                 </h1>
                 <div className="card-public p-6 mt-8 text-[#4A615A] space-y-3">
-                    <p>Bark&amp;Bond provides introductions and ranking signals. Hiring outcomes remain decisions between users and trainers.</p>
+                    <p>Dog Trainers Directory is operating in prelaunch mode.</p>
+                    <p>Owners can access guidance and register interest while trainer coverage is verified suburb by suburb.</p>
                     <p>{monetizationCopy.termsTrainerPricing}</p>
                     <p>Trainers and the public are responsible for lawful, accurate information and conduct.</p>
-                    <p>Final legal copy is controlled by governance and will be updated in place before public launch gates.</p>
                 </div>
             </main>
             <PublicFooter />

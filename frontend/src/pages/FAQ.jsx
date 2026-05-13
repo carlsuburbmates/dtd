@@ -5,10 +5,10 @@ import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 export default function FAQ() {
     const monetizationCopy = usePublicMonetizationCopy();
     const faqs = [
-        { q: "Can I browse all trainers?", a: "No. Bark&Bond is a match engine, not a browse directory." },
-        { q: "How many matches do I get?", a: "The live model returns top 3 ranked options; public matching is currently in prelaunch mode." },
+        { q: "Can I browse every trainer?", a: "No. Dog Trainers Directory is prelaunch and prioritizes verified rollout by suburb." },
+        { q: "What can owners do right now?", a: "Owners can use guidance content and register waitlist interest by suburb." },
         { q: "Do trainers pay monthly?", a: monetizationCopy.faqTrainerPricing },
-        { q: "Who can access ops?", a: "Only authorized oversight access can view /ops." },
+        { q: "Are leads or bookings guaranteed?", a: "No. The platform does not guarantee leads or bookings." },
     ];
 
     return (
@@ -17,7 +17,7 @@ export default function FAQ() {
             <main className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-8">
                 <div className="small-caps">FAQ</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">
-                    Common questions.
+                    Quick answers.
                 </h1>
                 <div className="mt-8 divide-y divide-[#E5DFD3] border-y border-[#E5DFD3]">
                     {faqs.map((item) => (
