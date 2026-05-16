@@ -23,7 +23,7 @@ export default function SuburbSEO() {
             <main className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
                 <div className="small-caps flex items-center gap-2"><MapPin className="h-3 w-3" /> {page.suburb} · {page.category}</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-4">
-                    {copy.title || `Dog trainers in ${page.suburb}`}
+                    {copy.title || `Dog training guidance in ${page.suburb}`}
                 </h1>
                 <p className="mt-5 text-lg text-[#4A615A] max-w-2xl leading-relaxed">{copy.intro}</p>
 

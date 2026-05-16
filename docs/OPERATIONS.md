@@ -98,7 +98,7 @@ grep -E "loop (ranking|pricing|verification|discovery|inference|health)" /var/lo
 
 ## 6. Test credentials & sanity probes
 
-`/app/memory/test_credentials.md` contains the dev passcode.
+Use the local `ADMIN_PASS` value from `backend/.env` for oversight access in local/dev runs.
 Quick health probe:
 ```bash
 curl -s "$BACKEND/api/" && curl -s "$BACKEND/api/config"

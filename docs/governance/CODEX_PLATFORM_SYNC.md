@@ -5,7 +5,11 @@ Scope: Codex interaction workflow only (no product or feature behavior changes)
 
 ## Global source
 
-1. `/Users/carlg/Documents/AI-Coding/Carls Codex Projects/Codex desktop research/codex_knowledge_system/codex_global_updates.md`
+1. Primary (portable): repo-local Codex policy + governance files:
+   - `AGENTS.md`
+   - `.codex/skill-policy.toml`
+   - `docs/governance/CODEX_PLATFORM_SYNC.md`
+2. Optional external feed (machine-specific, when available): owner-managed global Codex update file.
 
 ## Adopted global delta
 
@@ -16,7 +20,7 @@ Scope: Codex interaction workflow only (no product or feature behavior changes)
 1. Keep global sync entries concise and date-stamped.
 2. Promote only interaction deltas that pass the Codex test pack before broader reuse.
 3. Use the global session bootstrap block when a thread needs Codex-platform sync:
-   - `Sync to latest global Codex optimization from "/Users/carlg/Documents/AI-Coding/Carls Codex Projects/Codex desktop research/codex_knowledge_system/codex_global_updates.md" and apply only Codex-platform improvements relevant to this session.`
+   - `Sync to latest available global Codex optimization source and apply only Codex-platform improvements relevant to this session. If the external global source is unavailable, use repo-local policy and governance files as authoritative.`
 
 ## Session log
 

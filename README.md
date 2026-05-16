@@ -39,7 +39,7 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 ## Repo layout
 
 ```
-/app
+.
 ├── backend/            FastAPI app + autonomous engine
 │   ├── server.py       HTTP surface (/api/*)
 │   ├── services/
@@ -114,7 +114,7 @@ cd backend && pytest -q
 # Use the testing playbook in docs/OPERATIONS.md or your preferred Playwright runner.
 ```
 
-The latest iteration's report lives at `/app/test_reports/iteration_<n>.json`.
+The latest iteration's report lives at `docs/test_reports/iteration_<n>.json`.
 
 ## Production checklist
 

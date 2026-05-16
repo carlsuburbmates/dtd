@@ -1,12 +1,9 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
-
-const HERO_IMG =
-    "https://images.unsplash.com/photo-1762077815792-ab25f29834c1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzF8MHwxfHNlYXJjaHwxfHxkb2clMjB0cmFpbmluZyUyMG91dGRvb3JzfGVufDB8fHx8MTc3NzExNTUzOHww&ixlib=rb-4.1.0&q=85";
 
 export default function Home() {
     const [waitlistEmail, setWaitlistEmail] = useState("");
@@ -71,13 +68,13 @@ export default function Home() {
     };
 
     return (
-        <div className="App min-h-screen flex flex-col relative overflow-hidden">
+        <div className="App min-h-screen flex flex-col relative overflow-x-hidden">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(208,109,79,0.12),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(112,130,101,0.1),transparent_35%)]" />
             <PublicHeader />
 
             <main className="flex-1">
-                <section className="max-w-6xl mx-auto px-6 md:px-10 pt-14 lg:pt-20 pb-12">
-                    <div className="grid lg:grid-cols-12 gap-6 items-stretch">
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-10 md:pt-14 lg:pt-20 pb-10">
+                    <div className="grid lg:grid-cols-12 gap-4 md:gap-6 items-stretch">
                         <motion.div
                             className="lg:col-span-7"
                             initial={{ opacity: 0, y: 12 }}
@@ -88,24 +85,20 @@ export default function Home() {
                                 <Sparkles className="h-3.5 w-3.5" />
                                 Prelaunch
                             </div>
-                            <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">
-                                Melbourne's verified
-                                <br />
-                                dog trainer network
-                                <br />
-                                is being built.
+                            <h1 className="editorial-h1 text-[2.5rem] leading-[0.92] sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">
+                                Melbourne's verified dog trainer network is being built.
                             </h1>
-                            <p className="text-[#4A615A] mt-5 text-lg max-w-xl">
+                            <p className="text-[#4A615A] mt-5 text-base sm:text-lg max-w-xl">
                                 Owners can learn and register interest now. Trainers can join early with verified profiles.
                             </p>
 
-                            <div className="mt-7 flex flex-wrap gap-3">
+                            <div className="mt-7 flex flex-wrap items-center gap-3">
                                 <Link to="/how-it-works" className="btn-primary" data-testid="home-owner-entry">
                                     For owners
-                                    <ArrowRight className="h-4 w-4" />
                                 </Link>
                                 <Link to="/trainers" className="btn-ghost" data-testid="home-trainer-entry">
                                     For trainers
+                                    <ArrowRight className="h-4 w-4" />
                                 </Link>
                             </div>
 
@@ -120,12 +113,12 @@ export default function Home() {
                                 </div>
                                 <div className="card-public p-4">
                                     <div className="small-caps">Local rollout</div>
-                                    <div className="text-sm text-[#4A615A] mt-2">Owner demand is tracked by suburb.</div>
+                                    <div className="text-sm text-[#4A615A] mt-2">Local owner interest helps guide where coverage grows.</div>
                                 </div>
                             </div>
                         </motion.div>
 
-                        <aside className="lg:col-span-5 card-public p-6 sm:p-7 self-start" data-testid="owner-waitlist-card">
+                        <aside className="lg:col-span-5 card-public p-5 sm:p-7 self-start" data-testid="owner-waitlist-card">
                             <div className="small-caps">Owner waitlist</div>
                             <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Register your interest.</h2>
                             <p className="text-[#4A615A] mt-3 text-sm">
@@ -193,8 +186,8 @@ export default function Home() {
                     </div>
                 </section>
 
-                <section className="max-w-6xl mx-auto px-6 md:px-10 pb-14 grid lg:grid-cols-12 gap-4" data-testid="home-secondary-sections">
-                    <article className="lg:col-span-7 card-public p-7">
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pb-10 grid lg:grid-cols-12 gap-4" data-testid="home-secondary-sections">
+                    <article className="lg:col-span-7 card-public p-6 sm:p-7">
                         <div className="small-caps">Owner education</div>
                         <h2 className="font-serif text-4xl text-[#1A3A32] mt-2 leading-tight">Practical training guidance for real problems.</h2>
                         <p className="text-[#4A615A] mt-3 max-w-xl">
@@ -205,15 +198,33 @@ export default function Home() {
                         </Link>
                     </article>
 
-                    <article className="lg:col-span-5 card-public p-7">
+                    <article className="lg:col-span-5 card-public p-6 sm:p-7">
                         <div className="small-caps">Trainer prelaunch</div>
-                        <h2 className="font-serif text-4xl text-[#1A3A32] mt-2 leading-tight">Build trusted visibility before owner demand peaks.</h2>
+                        <h2 className="font-serif text-4xl text-[#1A3A32] mt-2 leading-tight">Build trusted visibility before introductions expand.</h2>
                         <p className="text-[#4A615A] mt-3">
                             Create your profile now and complete verification ahead of broader owner onboarding.
                         </p>
                         <Link to="/submit" className="btn-primary mt-5 inline-flex" data-testid="home-trainer-apply">
                             Apply as trainer
                         </Link>
+                    </article>
+                </section>
+
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pb-16 grid md:grid-cols-3 gap-4" data-testid="home-flow-sections">
+                    <article className="card-public p-5">
+                        <div className="small-caps">Owner path</div>
+                        <h3 className="font-serif text-2xl text-[#1A3A32] mt-1">Learn</h3>
+                        <p className="text-sm text-[#4A615A] mt-2">Start with practical guidance based on your dog's situation.</p>
+                    </article>
+                    <article className="card-public p-5">
+                        <div className="small-caps">Owner path</div>
+                        <h3 className="font-serif text-2xl text-[#1A3A32] mt-1">Register</h3>
+                        <p className="text-sm text-[#4A615A] mt-2">Join the waitlist by suburb and get updates as local coverage grows.</p>
+                    </article>
+                    <article className="card-public p-5">
+                        <div className="small-caps">Trainer path</div>
+                        <h3 className="font-serif text-2xl text-[#1A3A32] mt-1">Apply early</h3>
+                        <p className="text-sm text-[#4A615A] mt-2">Create a verified profile before broader owner onboarding.</p>
                     </article>
                 </section>
             </main>
