@@ -8,6 +8,8 @@ Scope: Codex interaction workflow only (no product or feature behavior changes)
 1. Primary (portable): repo-local Codex policy + governance files:
    - `AGENTS.md`
    - `.codex/skill-policy.toml`
+   - `docs/governance/CODEX_CAPABILITY_ROUTING_MATRIX.md`
+   - `docs/governance/CODEX_EXECUTION_PLAYBOOK.md`
    - `docs/governance/CODEX_PLATFORM_SYNC.md`
 2. Optional external feed (machine-specific, when available): owner-managed global Codex update file.
 

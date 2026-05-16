@@ -25,6 +25,8 @@ At the start of each new task:
 2. Read these files before acting:
    - `AGENTS.md`
    - `.codex/skill-policy.toml` (if present)
+   - `docs/governance/CODEX_CAPABILITY_ROUTING_MATRIX.md`
+   - `docs/governance/CODEX_EXECUTION_PLAYBOOK.md`
    - relevant workflow/process docs in `docs/` for the task domain
 3. Treat the current session's available skills/plugins/tools as the source of truth.
 4. Do not assume a globally installed skill is callable unless it is available in-session.
@@ -34,6 +36,7 @@ At the start of each new task:
    - what will be skipped
    - why skipped items are not needed
    - key risks/dependencies for chosen tools
+6. Route capability selection through `docs/governance/CODEX_CAPABILITY_ROUTING_MATRIX.md` and use fallback logic if a listed capability is unavailable in-session.
 
 ## 2) Skill Suggestions (required before optional skill use)
 
@@ -102,6 +105,7 @@ Before finishing a task:
    - how output affected implementation decisions
    - supporting evidence
 5. If available capabilities were not used, explain why.
+6. Prefer response structure from `.codex/templates/FINAL_EVIDENCE_TEMPLATE.md`.
 
 ## 8) Turn Summary Requirement
 

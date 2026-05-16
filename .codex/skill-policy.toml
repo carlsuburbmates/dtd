@@ -1,5 +1,5 @@
 version = 1
-mode = "suggest_then_approve"
+mode = "suggest_then_auto_use"
 require_explicit_composio_invocation = true
 
 blocked_skills = []

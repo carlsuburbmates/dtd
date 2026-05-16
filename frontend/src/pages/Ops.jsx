@@ -100,7 +100,7 @@ function Login({ onPass }) {
                 <div className="w-full">
                     <div className="flex items-center gap-2 small-caps !text-[#8B9E98] mb-6"><Terminal className="h-4 w-4" /> Oversight</div>
                     <h1 className="font-serif text-4xl tracking-tight">Read-only console</h1>
-                    <p className="text-sm text-[#8B9E98] mt-2 font-mono">No buttons mutate the system. The system runs itself.</p>
+                    <p className="text-sm text-[#8B9E98] mt-2 font-mono">This screen is read-only. Use it to monitor current status and trends.</p>
                     <form onSubmit={submit} className="admin-card p-5 mt-8" data-testid="ops-login-form">
                         <label htmlFor="ops-pass-input" className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] flex items-center gap-2"><Lock className="h-3 w-3" /> Passcode</label>
                         <input id="ops-pass-input" type="password" data-testid="ops-pass-input" className="admin-input mt-2" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
@@ -409,7 +409,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
 
                 <div className="grid md:grid-cols-2 gap-6">
                     {/* Loops */}
-                    <Section title="Autonomous loops" testid="ops-loops">
+                    <Section title="Automation health" testid="ops-loops">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                             <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" />
                             <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" />
@@ -426,7 +426,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                     </Section>
 
                     {/* Discovery + Submissions */}
-                    <Section title="Pipeline · auto-handled" testid="ops-pipeline">
+                    <Section title="Pipeline overview" testid="ops-pipeline">
                         <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Submissions</div>
                         <div className="grid grid-cols-3 gap-3">
                             <Tile label="Auto-published" value={submissions.auto_published ?? 0} accent="green" />
@@ -440,7 +440,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             <Tile label="Duplicate" value={(snap.discovery_summary || {}).duplicate ?? 0} accent="mute" />
                             <Tile label="Discarded" value={(snap.discovery_summary || {}).discarded ?? 0} accent="amber" />
                         </div>
-                        <div className="text-xs font-mono text-[#8B9E98] mt-3">No buttons — the system decides on score and source.</div>
+                        <div className="text-xs font-mono text-[#8B9E98] mt-3">No controls on this page. Use this snapshot to review pipeline movement only.</div>
                     </Section>
                 </div>
 
@@ -506,7 +506,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                                     </tr>
                                 ))}
                                 {pricingState.length === 0 && (
-                                    <tr><td colSpan={4} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No pricing state yet — loop runs every 90s.</td></tr>
+                                    <tr><td colSpan={4} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No pricing snapshot yet. Refresh in a minute.</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -551,7 +551,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                 </Section>
 
                 {/* Audit */}
-                <Section title="Recent system actions" testid="ops-audit">
+                <Section title="Recent activity" testid="ops-audit">
                     <div className="font-mono text-xs space-y-1.5 max-h-80 overflow-auto">
                         {auditRecent.map((a) => (
                             <div key={a.id} className="flex gap-3 text-[#cfd6d3]">

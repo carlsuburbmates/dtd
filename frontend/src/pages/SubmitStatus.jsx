@@ -53,7 +53,7 @@ export default function SubmitStatus() {
                         <section className="card-public p-6" data-testid="submit-status-summary">
                             <div className="flex items-center gap-2">
                                 {data.status === "published" ? (
-                                    <span className="pill pill-verified"><CheckCircle2 className="h-3 w-3" /> published</span>
+                                    <span className="pill pill-verified"><CheckCircle2 className="h-3 w-3" /> listed</span>
                                 ) : (
                                     <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> {data.status}</span>
                                 )}
@@ -65,7 +65,7 @@ export default function SubmitStatus() {
                                 {data?.trainer?.name || "Your listing"}
                             </h2>
                             <p className="text-sm text-[#4A615A] mt-2">
-                                Billing profile: <strong>{data.billing_profile_status || "unknown"}</strong>
+                                Billing setup status: <strong>{data.billing_profile_status || "unknown"}</strong>
                             </p>
                         </section>
 
@@ -92,7 +92,7 @@ export default function SubmitStatus() {
                                     className="btn-primary"
                                     data-testid="submit-status-fix-billing"
                                 >
-                                    Fix billing
+                                    Review billing setup
                                 </Link>
                                 <a
                                     href={`mailto:${SUPPORT_EMAIL}?subject=Submission%20Support%20${encodeURIComponent(submissionId || "")}`}

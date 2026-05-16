@@ -85,7 +85,7 @@ export default function Home() {
                                 <Sparkles className="h-3.5 w-3.5" />
                                 Prelaunch
                             </div>
-                            <h1 className="editorial-h1 text-[2.5rem] leading-[0.92] sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">
+                            <h1 className="editorial-h1 text-[2.25rem] leading-[0.92] sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">
                                 Melbourne's verified dog trainer network is being built.
                             </h1>
                             <p className="text-[#4A615A] mt-5 text-base sm:text-lg max-w-xl">
@@ -122,7 +122,7 @@ export default function Home() {
                             <div className="small-caps">Owner waitlist</div>
                             <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Register your interest.</h2>
                             <p className="text-[#4A615A] mt-3 text-sm">
-                                Join by suburb now to receive updates as verified coverage expands.
+                                Share your suburb now to receive prelaunch updates as verified coverage grows.
                             </p>
 
                             <form onSubmit={submitWaitlist} className="mt-5 space-y-3" data-testid="owner-waitlist-form">

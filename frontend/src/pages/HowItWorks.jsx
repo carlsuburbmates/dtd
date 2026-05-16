@@ -11,12 +11,12 @@ const STEPS = [
     {
         id: "02",
         title: "Register",
-        copy: "Join the owner waitlist by suburb so we can prioritize verified coverage.",
+        copy: "Join the owner waitlist and share your suburb for local prelaunch updates.",
     },
     {
         id: "03",
         title: "Prepare",
-        copy: "Receive updates as introductions open in your area.",
+        copy: "Receive updates as verified trainer coverage grows.",
     },
 ];
 
@@ -30,7 +30,7 @@ export default function HowItWorks() {
                     Clear steps during prelaunch.
                 </h1>
                 <p className="text-[#4A615A] mt-4 max-w-2xl">
-                    Use this path to learn what to do now, register your suburb interest, and prepare for trainer introductions when rollout opens locally.
+                    Use this path to learn what to do now, share your local interest, and prepare for trainer introductions as rollout expands.
                 </p>
                 <div className="grid md:grid-cols-3 gap-4 mt-10">
                     {STEPS.map((s) => (
@@ -48,14 +48,14 @@ export default function HowItWorks() {
                         <ul className="mt-3 text-sm text-[#4A615A] space-y-2">
                             <li>• Practical guidance for common training problems</li>
                             <li>• Clear expectations before introductions open</li>
-                            <li>• Local waitlist updates by suburb</li>
+                            <li>• Local prelaunch updates tailored to your suburb</li>
                         </ul>
                     </article>
                     <article className="card-public p-6">
                         <div className="small-caps">Next step</div>
                         <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Register interest</h2>
                         <p className="text-sm text-[#4A615A] mt-3">
-                            Register your suburb and we will notify you as verified coverage expands.
+                            Share your suburb and we will send prelaunch updates as verified coverage grows.
                         </p>
                     </article>
                 </section>

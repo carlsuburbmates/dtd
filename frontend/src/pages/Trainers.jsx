@@ -40,7 +40,7 @@ export default function Trainers() {
                     <article className="card-public p-5">
                         <div className="small-caps">Step 3</div>
                         <h2 className="font-serif text-2xl text-[#1A3A32] mt-1">Prepare</h2>
-                        <p className="text-sm text-[#4A615A] mt-2">Be ready as owner demand expands suburb by suburb.</p>
+                        <p className="text-sm text-[#4A615A] mt-2">Be ready as more owners join the prelaunch waitlist.</p>
                     </article>
                 </div>
 
