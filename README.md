@@ -20,8 +20,6 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 - **Operations / troubleshooting** → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - **Deployment + portability** → [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - **Codex platform sync protocol** → [`docs/governance/CODEX_PLATFORM_SYNC.md`](docs/governance/CODEX_PLATFORM_SYNC.md)
-- **Codex capability routing matrix** → [`docs/governance/CODEX_CAPABILITY_ROUTING_MATRIX.md`](docs/governance/CODEX_CAPABILITY_ROUTING_MATRIX.md)
-- **Codex execution playbook** → [`docs/governance/CODEX_EXECUTION_PLAYBOOK.md`](docs/governance/CODEX_EXECUTION_PLAYBOOK.md)
 - **Design continuity (start here for UI/design sessions)** → [`docs/design/README.md`](docs/design/README.md)
 
 ## Public website routes

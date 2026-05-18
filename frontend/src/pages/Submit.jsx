@@ -62,7 +62,7 @@ export default function Submit() {
                 categories: form.categories ? form.categories.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [],
             });
             setResult(r.data);
-            toast.success(r.data.status === "published" ? "Listed for prelaunch visibility." : r.data.status === "held" ? "Held — needs more evidence." : "Submitted.");
+            toast.success(r.data.status === "published" ? "Live now." : r.data.status === "held" ? "Held — needs more evidence." : "Submitted.");
         } catch (err) {
             const detail = err?.response?.data?.detail;
             toast.error(typeof detail === "string" && detail ? detail : "Submit failed.");
@@ -99,7 +99,7 @@ export default function Submit() {
                             className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
                             data-testid="submit-consent-public"
                         />
-                        <span>I agree this listing may be shown on the prelaunch website if checks pass.</span>
+                        <span>I agree this listing may be published if checks pass.</span>
                     </label>
                     <label className="sm:col-span-2 flex items-start gap-2 text-xs text-[#4A615A]">
                         <input
@@ -128,7 +128,7 @@ export default function Submit() {
                     </div>
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
-                        <span className="text-xs font-mono text-[#5C6D59]">Profiles that pass checks may be shown during prelaunch.</span>
+                        <span className="text-xs font-mono text-[#5C6D59]">Profiles that pass checks are published.</span>
                         <button type="submit" disabled={busy} data-testid="submit-go" className="btn-primary disabled:opacity-50">
                             {busy ? "Scoring…" : "Submit"}
                         </button>
@@ -139,7 +139,7 @@ export default function Submit() {
                     <div className="mt-8 card-public p-6" data-testid="submit-result">
                         <div className="flex items-center gap-2">
                             {result.status === "published" ? (
-                                <span className="pill pill-verified"><ShieldCheck className="h-3 w-3" /> Listed for prelaunch</span>
+                                <span className="pill pill-verified"><ShieldCheck className="h-3 w-3" /> Live now</span>
                             ) : result.status === "held" ? (
                                 <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> Held — more evidence needed</span>
                             ) : (
@@ -161,7 +161,7 @@ export default function Submit() {
                         {result.status === "published" && result.trainer_id && (
                             <div className="mt-3">
                                 <Link to={`/t/${result.trainer_id}`} className="inline-flex text-sm text-[#1A3A32] underline underline-offset-2">
-                                    View prelaunch profile
+                                    View public listing
                                 </Link>
                             </div>
                         )}
