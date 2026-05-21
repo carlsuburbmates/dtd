@@ -32,8 +32,8 @@
 4. VATC is primary north-star metric.
 5. Public claims are state-gated (`STATE_0..STATE_4`).
 6. “Melbourne-wide” claim only at `STATE_2+`.
-7. Monetization now: free core + optional Founding Verified Profile (`A$12/mo` or `A$99/yr`).
-8. No lead/success fees until post-gate reliability.
+7. Monetization now: intro-first billing path with launch default `CONVERSION_BILLING_MODE=track_only`; optional subscription experiments require explicit owner approval and feature gating.
+8. No conversion/success fees billed until post-gate reliability and explicit owner approval.
 9. Automation-first with minimal human exception loop.
 10. No guaranteed leads/bookings claims.
 11. Canonical suburb list changes require versioned migration + rollback.
@@ -100,7 +100,7 @@
 | Market monitoring jobs | `READY` |
 | Auth/RBAC replacement | `VERIFY FIRST` |
 | Subscription activation in production | `APPROVAL REQUIRED` |
-| Billing model cutover from old A$5 intro logic | `APPROVAL REQUIRED` |
+| Billing model cutover away from intro-first launch defaults | `APPROVAL REQUIRED` |
 | Legal policy final copy | `LEGAL/PRIVACY REVIEW REQUIRED` |
 | Public matching unlock / production activation | `DO NOT BUILD YET` |
 | SMS expansion | `OPTIONAL LATER` |
@@ -114,7 +114,7 @@
 | Canonical suburb data | Geographic truth source | CSV + meta | active list + drift checks | High | Low | hash/count match | None |
 | Owner waitlist | Demand capture | lead schema + consent + suburbs | qualified leads by suburb | High | Medium (policy edits) | step1/step2 deterministic | legal wording |
 | Trainer onboarding/verification | Supply quality | verification criteria | verified active trainer counts | High | Medium/High | deterministic status transitions | external verification policy edge cases |
-| Monetization | Sustainable prelaunch revenue | plan + entitlements | subscription states + audit | Medium/High | High | no old A$5 behavior in new mode | cutover approval |
+| Monetization | Sustainable launch/prelaunch revenue | intro billing + conversion tracking mode | billing states + audit | Medium/High | High | intro-first behavior must remain deterministic unless approved cutover | cutover approval |
 | State gates/matching lock | Launch integrity | thresholds + metrics | state + lock status | High | High-risk overrides only | cannot unlock without criteria | override policy finalization |
 | Public claim control | Prevent overclaiming | state->copy rules | allowed claims + blocked attempts | High | Medium | “Melbourne-wide” blocked below STATE_2 | final approved copy set |
 | Admin/operator panel | Non-technical control | KPI + alerts + decisions | readable daily control UI | Medium | Medium/High | operator can act safely | auth migration |
@@ -132,7 +132,7 @@
 - Do not activate production subscription billing without owner approval.
 - Do not remove legacy billing paths until migration + rollback are tested.
 - No guaranteed leads/bookings in any paid plan text, API, or UI.
-- Old `A$5 intro-fee` logic must be isolated behind migration flags during transition.
+- Any pricing-mode migration away from intro-first must be isolated behind migration flags during transition.
 
 ### Matching guardrails
 - Matching remains locked until eligibility gate pass.
@@ -159,7 +159,7 @@
 ---
 
 ## 8) Repo verification checklist (`VERIFY FIRST`)
-1. Confirm current frontend/backend/docs still contain old `A$5 intro` pricing references.
+1. Confirm frontend/backend/docs align on canonical monetization mode and migration state.
 2. Confirm matching gate is currently enforced (`PUBLIC_MATCHING_ENABLED` + `403`).
 3. Confirm `/ops` remains read-only + passcode-based.
 4. Reconfirm canonical suburb CSV/meta hash and count.

@@ -5,10 +5,13 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
+const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
+
 export default function TrainerReactivate() {
     const [search] = useSearchParams();
     const trainerId = search.get("trainerId") || "";
     const submissionId = search.get("submissionId") || "";
+    const trainerActionToken = search.get("token") || "";
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [data, setData] = useState(null);
@@ -16,7 +19,13 @@ export default function TrainerReactivate() {
 
     const load = () => {
         setLoading(true);
-        api.get("/trainer/reactivate", { params: { trainer_id: trainerId || undefined, submission_id: submissionId || undefined } })
+        api.get("/trainer/reactivate", {
+            params: {
+                trainer_id: trainerId || undefined,
+                submission_id: submissionId || undefined,
+                trainer_action_token: trainerActionToken || undefined,
+            },
+        })
             .then((r) => {
                 setData(r.data);
                 setError("");
@@ -31,7 +40,7 @@ export default function TrainerReactivate() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [trainerId, submissionId]);
+    }, [trainerId, submissionId, trainerActionToken]);
 
     const reactivate = async () => {
         setBusy(true);
@@ -39,6 +48,7 @@ export default function TrainerReactivate() {
             const r = await api.post("/trainer/reactivate", {
                 trainer_id: trainerId || undefined,
                 submission_id: submissionId || undefined,
+                trainer_action_token: trainerActionToken || undefined,
             });
             toast.success(r.data.published ? "Listing reactivated." : "Listing still below confidence threshold.");
             load();
@@ -85,12 +95,15 @@ export default function TrainerReactivate() {
                                     </li>
                                 ))}
                             </ul>
+                            <div className="mt-5 rounded-2xl border border-[#E5DFD3] bg-[#F8F5EF] p-4 text-sm text-[#4A615A]">
+                                Start with billing if the listing shows a billing blocker. Use reactivation only after billing and profile blockers are cleared.
+                            </div>
                             <div className="mt-6 flex flex-wrap gap-3">
-                                <Link to={`/submit${submissionId ? `?submissionId=${submissionId}` : ""}`} className="btn-ghost" data-testid="trainer-reactivate-refresh-profile">
-                                    Refresh profile
+                                <Link to={`/submit/status/${submissionId || ""}`} className="btn-ghost" data-testid="trainer-reactivate-refresh-profile">
+                                    Back to status
                                 </Link>
                                 <Link
-                                    to={`/trainer/billing?${trainerId ? `trainerId=${trainerId}` : ""}${trainerId && submissionId ? "&" : ""}${submissionId ? `submissionId=${submissionId}` : ""}`}
+                                    to={`/trainer/billing?${trainerId ? `trainerId=${trainerId}` : ""}${trainerId && submissionId ? "&" : ""}${submissionId ? `submissionId=${submissionId}` : ""}${(trainerId || submissionId) && trainerActionToken ? "&" : ""}${trainerActionToken ? `token=${encodeURIComponent(trainerActionToken)}` : ""}`}
                                     className="btn-primary"
                                     data-testid="trainer-reactivate-fix-billing"
                                 >
@@ -100,6 +113,13 @@ export default function TrainerReactivate() {
                                     <RotateCcw className="h-4 w-4" />
                                     Reactivate listing
                                 </button>
+                                <a
+                                    href={`mailto:${SUPPORT_EMAIL}?subject=Trainer%20Reactivation%20${encodeURIComponent(data?.trainer?.id || submissionId || "")}`}
+                                    className="btn-accent"
+                                    data-testid="trainer-reactivate-support"
+                                >
+                                    Contact support
+                                </a>
                             </div>
                         </section>
                     </div>

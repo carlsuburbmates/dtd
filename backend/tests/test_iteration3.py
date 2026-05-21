@@ -43,6 +43,13 @@ def session():
     return s
 
 
+@pytest.fixture(scope="module", autouse=True)
+def require_public_matching(session):
+    r = session.get(f"{API}/config", timeout=60)
+    if r.status_code != 200 or not bool(r.json().get("public_matching_enabled")):
+        pytest.skip("Iteration 3 live matching/intros tests require PUBLIC_MATCHING_ENABLED=true")
+
+
 @pytest.fixture(scope="module")
 def trainer_id(session):
     """Pick a published trainer id via match (preferred) or oversight."""

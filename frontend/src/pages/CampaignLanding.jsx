@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { api, buildAttributionSearch } from "@/lib/api";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 function prettyCampaign(raw) {
@@ -14,13 +15,23 @@ export default function CampaignLanding() {
     const navigate = useNavigate();
     const cleanCampaign = (campaign || "direct").trim().toLowerCase();
 
+    useEffect(() => {
+        api.post("/attribution/entry", {
+            kind: "campaign_landing",
+            campaign: cleanCampaign,
+            source: "lp",
+            path: `/lp/${cleanCampaign}`,
+        }).catch(() => {
+            // Keep landing non-blocking.
+        });
+    }, [cleanCampaign]);
+
     const goToHome = () => {
-        const params = new URLSearchParams({
+        navigate(`/${buildAttributionSearch({
             campaign: cleanCampaign,
             source: "lp",
             from: "landing",
-        });
-        navigate(`/?${params.toString()}`);
+        })}`);
     };
 
     return (

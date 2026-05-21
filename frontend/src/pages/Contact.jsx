@@ -17,6 +17,9 @@ export default function Contact() {
                     <a href="mailto:info@dogtrainersdirectory.com.au" data-testid="contact-email" className="btn-primary mt-4 inline-flex">
                         info@dogtrainersdirectory.com.au
                     </a>
+                    <p className="text-xs text-[#4A615A] mt-3">
+                        This single mailbox is the canonical support address for billing, onboarding, and general contact.
+                    </p>
                 </div>
             </main>
             <PublicFooter />

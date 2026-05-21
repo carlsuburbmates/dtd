@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
-const SUPPORT_EMAIL = "support@dogtrainersdirectory.com.au";
+const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 
 export default function SubmitStatus() {
     const { submissionId } = useParams();
@@ -33,6 +33,20 @@ export default function SubmitStatus() {
             active = false;
         };
     }, [submissionId]);
+
+    const nextStepCopy = useMemo(() => {
+        const activation = data?.activation_state;
+        if (activation === "intro_ready") return "Listing is live and ready for intros.";
+        if (activation === "needs_billing_profile") return "Add or confirm a billing email so intro collection can resume.";
+        if (activation === "needs_billing_consent") return "Billing consent is still required before collection can activate.";
+        if (activation === "billing_system_blocked") return "Billing is blocked by an integration issue and needs support review.";
+        if (activation === "held_for_review") return "Submission is held. Stronger evidence or contact detail may be needed.";
+        if (activation === "pending_autonomous_review") return "Autonomous review is still in progress.";
+        return "Review the current blockers and choose the closest remediation path below.";
+    }, [data]);
+
+    const trainerBillingHref = `/trainer/billing?submissionId=${submissionId}${data?.trainer?.id ? `&trainerId=${data.trainer.id}` : ""}${data?.trainer_action_token ? `&token=${encodeURIComponent(data.trainer_action_token)}` : ""}`;
+    const trainerReactivateHref = `/trainer/reactivate?submissionId=${submissionId}${data?.trainer?.id ? `&trainerId=${data.trainer.id}` : ""}${data?.trainer_action_token ? `&token=${encodeURIComponent(data.trainer_action_token)}` : ""}`;
 
     return (
         <div className="App min-h-screen">
@@ -67,6 +81,10 @@ export default function SubmitStatus() {
                             <p className="text-sm text-[#4A615A] mt-2">
                                 Billing profile: <strong>{data.billing_profile_status || "unknown"}</strong>
                             </p>
+                            <p className="text-sm text-[#4A615A] mt-1">
+                                Activation state: <strong>{data.activation_state || "unknown"}</strong>
+                            </p>
+                            <p className="text-sm text-[#4A615A] mt-3">{nextStepCopy}</p>
                         </section>
 
                         <section className="card-public p-6" data-testid="submit-status-blockers">
@@ -83,12 +101,18 @@ export default function SubmitStatus() {
                             ) : (
                                 <p className="text-sm text-[#4A615A] mt-3">No hard blockers detected.</p>
                             )}
+                            <div className="mt-5 rounded-2xl border border-[#E5DFD3] bg-[#F8F5EF] p-4">
+                                <div className="small-caps">Recommended next action</div>
+                                <p className="text-sm text-[#4A615A] mt-2">
+                                    Use the targeted path that matches your current activation state. Avoid creating a new submission unless you need to start over with materially different details.
+                                </p>
+                            </div>
                             <div className="mt-6 flex flex-wrap gap-3">
-                                <Link to={`/submit?submissionId=${submissionId}`} className="btn-ghost" data-testid="submit-status-update">
-                                    Update details
+                                <Link to={trainerReactivateHref} className="btn-ghost" data-testid="submit-status-update">
+                                    Review activation steps
                                 </Link>
                                 <Link
-                                    to={`/trainer/billing?submissionId=${submissionId}${data?.trainer?.id ? `&trainerId=${data.trainer.id}` : ""}`}
+                                    to={trainerBillingHref}
                                     className="btn-primary"
                                     data-testid="submit-status-fix-billing"
                                 >
@@ -102,6 +126,9 @@ export default function SubmitStatus() {
                                     Contact support
                                 </a>
                             </div>
+                            <p className="mt-4 text-xs text-[#4A615A]">
+                                Support and billing replies route through <strong>{SUPPORT_EMAIL}</strong> under the current single-mailbox policy.
+                            </p>
                         </section>
                     </div>
                 )}

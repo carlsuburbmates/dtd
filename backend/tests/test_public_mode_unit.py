@@ -157,6 +157,19 @@ class _Collection:
     def aggregate(self, *_args, **_kwargs):
         return _Cursor(self.aggregate_rows)
 
+    async def distinct(self, field, filt=None):
+        filt = filt or {}
+        values = []
+        for row in self.rows:
+            matched = True
+            for key, expected in filt.items():
+                if row.get(key) != expected:
+                    matched = False
+                    break
+            if matched and row.get(field) not in values:
+                values.append(row.get(field))
+        return values
+
 
 def _fake_oversight_db():
     trainers = _Collection(
@@ -218,6 +231,8 @@ def _fake_oversight_db():
         audit_log=empty,
         config_snapshots=empty,
         system_state=system_state,
+        source_ingestion_state=empty,
+        reactivation_candidates=empty,
     )
 
 
@@ -556,6 +571,124 @@ def test_oversight_exposes_kpi_prelaunch_contract_fields_and_types(monkeypatch):
     assert isinstance(kpi.get("reason_codes"), list)
 
 
+def test_oversight_exposes_growth_and_reactivation_summary_contract(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+
+    out = asyncio.run(server.oversight(None))
+    growth = out.get("growth_attribution_summary")
+    react = out.get("reactivation_summary")
+
+    assert isinstance(growth, dict)
+    assert isinstance(react, dict)
+    assert "status" in growth
+    assert "reason_codes" in growth
+    assert "status" in react
+    assert "reason_codes" in react
+
+
+def test_oversight_exposes_ops_investigation_contract(monkeypatch):
+    fake_db = _fake_oversight_db()
+    fake_db.intros = _Collection(
+        rows=[
+            {
+                "id": "intro_ops_1",
+                "trainer_id": "t_1",
+                "billing_status": "billed",
+                "billing_collection_status": "payment_failed",
+                "billing_retry_state": "retry_exhausted",
+                "billing_retry_attempts": 3,
+                "billing_last_retry_at": "2026-05-20T00:00:00+00:00",
+                "intro_fee_cents": 500,
+                "created_at": "2026-05-19T00:00:00+00:00",
+            }
+        ],
+        aggregate_rows=[{"_id": "payment_failed", "n": 1}],
+    )
+    fake_db.system_state = _Collection(
+        rows=[
+            {"key": "health", "alerts": [{"severity": "high", "type": "intro_drop", "message": "drop detected"}], "last_run": "2026-05-20T00:00:00+00:00"},
+            {"key": "ranking", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "pricing", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "verification", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "discovery", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "inference", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "source_ingestion", "last_run": "2026-05-20T00:00:30+00:00", "alerts": [{"severity": "medium", "type": "source_ingestion_failures"}]},
+            {"key": "outreach", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "billing_recovery", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "nurture", "last_run": "2026-05-20T00:00:30+00:00"},
+            {"key": "reactivation_route", "last_run": "2026-05-20T00:00:30+00:00"},
+        ]
+    )
+    fake_db.source_ingestion_state = _Collection(
+        rows=[
+            {
+                "source_url": "https://source.example.com",
+                "consecutive_failures": 2,
+                "suppressed_until": "2026-05-21T00:00:00+00:00",
+                "last_error_code": "source_request_failed",
+                "last_ok_at": "2026-05-19T00:00:00+00:00",
+            }
+        ]
+    )
+    fake_db.reactivation_candidates = _Collection(
+        rows=[
+            {
+                "trainer_id": "t_1",
+                "trainer_name": "Trainer One",
+                "status": "open",
+                "reasons": ["Billing profile has unresolved blockers."],
+                "last_notified_at": "2026-05-20T00:00:00+00:00",
+                "last_notification_status": "sent",
+            }
+        ]
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    out = asyncio.run(server.oversight(None))
+    ops = out.get("ops_investigation")
+
+    assert isinstance(ops, dict)
+    assert isinstance(ops.get("loop_statuses"), dict)
+    assert isinstance(ops.get("billing_recovery_cases"), list)
+    assert isinstance(ops.get("reactivation_cases"), list)
+    assert isinstance(ops.get("source_ingestion_sources"), list)
+    assert isinstance(ops.get("discovery_alerts"), list)
+    assert ops["billing_recovery_cases"][0]["billing_retry_state"] == "retry_exhausted"
+    assert ops["reactivation_cases"][0]["trainer_name"] == "Trainer One"
+    assert ops["source_ingestion_sources"][0]["source_url"] == "https://source.example.com"
+    assert ops["loop_statuses"]["ranking"]["status"] in {"ok", "investigate", "escalate", "warn"}
+
+
+def test_oversight_billing_summary_semantics_include_at_risk_and_collected(monkeypatch):
+    fake_db = _fake_oversight_db()
+    fake_db.intros = _Collection(
+        rows=[
+            {"billing_status": "billed", "intro_fee_cents": 500, "billing_collection_status": "paid", "created_at": "2026-05-12T00:00:00+00:00"},
+            {"billing_status": "billed", "intro_fee_cents": 500, "billing_collection_status": "payment_failed", "created_at": "2026-05-12T00:00:00+00:00"},
+            {"billing_status": "billed", "intro_fee_cents": 500, "billing_collection_status": "disputed", "created_at": "2026-05-12T00:00:00+00:00"},
+            {"billing_status": "billed", "intro_fee_cents": 0, "billing_collection_status": "trial_free", "created_at": "2026-05-12T00:00:00+00:00"},
+        ],
+        aggregate_rows=[
+            {"_id": "paid", "n": 1},
+            {"_id": "payment_failed", "n": 1},
+            {"_id": "disputed", "n": 1},
+            {"_id": "trial_free", "n": 1},
+        ],
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    out = asyncio.run(server.oversight(None))
+
+    billing = out["billing_summary"]
+    revenue = out["revenue"]
+    assert billing["paid"] == 1
+    assert billing["payment_failed"] == 1
+    assert billing["disputed"] == 1
+    assert billing["trial_free"] == 1
+    assert revenue["collected_revenue_cents"] == 500
+    assert revenue["at_risk_revenue_cents"] == 1000
+
+
 def _waitlist_post_path() -> str:
     for route in server.app.routes:
         path = str(getattr(route, "path", ""))
@@ -653,6 +786,8 @@ def _make_waitlist_test_client_db():
         waitlist=coll,
         owner_waitlist_events=_Collection(rows=[]),
         waitlist_events=_Collection(rows=[]),
+        growth_attribution=_Collection(rows=[]),
+        attribution_entries=_Collection(rows=[]),
         intros=empty,
         conversions=empty,
         engagements=empty,

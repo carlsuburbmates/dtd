@@ -20,6 +20,9 @@ Conventions:
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -33,6 +36,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request,
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
@@ -93,6 +97,10 @@ CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = (
     (os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
 SUBURB_META_PATH = ROOT_DIR.parent / "docs" / "strategy" / "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json"
+TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") or "1209600").strip() or "1209600")
+OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
+OVERSIGHT_AUTH_WINDOW_S = int((os.environ.get("OVERSIGHT_AUTH_WINDOW_S") or "600").strip() or "600")
+OVERSIGHT_AUTH_LOCK_S = int((os.environ.get("OVERSIGHT_AUTH_LOCK_S") or "900").strip() or "900")
 
 
 def now_iso() -> str:
@@ -118,16 +126,71 @@ def _require_public_matching(path_label: str) -> None:
 
 
 async def _audit(action: str, target: str, before: Any = None, after: Any = None, actor: str = "system") -> None:
-    await db.audit_log.insert_one(
+    try:
+        await db.audit_log.insert_one(
+            {
+                "id": new_id(),
+                "action": action,
+                "target": target,
+                "before": before,
+                "after": after,
+                "actor": actor,
+                "ts": now_iso(),
+            }
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("audit write failed action=%s target=%s actor=%s", action, target, actor)
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+async def _oversight_auth_blocked(ip: str) -> bool:
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    row = await db.auth_attempts.find_one({"key": f"oversight:{ip}"}, {"_id": 0})
+    if not row:
+        return False
+    return int(row.get("locked_until_epoch") or 0) > now_epoch
+
+
+async def _record_oversight_auth_attempt(ip: str, *, success: bool) -> None:
+    key = f"oversight:{ip}"
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    if success:
+        await db.auth_attempts.delete_one({"key": key})
+        return
+
+    row = await db.auth_attempts.find_one({"key": key}, {"_id": 0}) or {}
+    window_started = int(row.get("window_started_epoch") or now_epoch)
+    failures = int(row.get("failures") or 0)
+    if now_epoch - window_started > max(OVERSIGHT_AUTH_WINDOW_S, 1):
+        window_started = now_epoch
+        failures = 0
+    failures += 1
+    locked_until_epoch = int(row.get("locked_until_epoch") or 0)
+    if failures >= max(OVERSIGHT_AUTH_MAX_ATTEMPTS, 1):
+        locked_until_epoch = now_epoch + max(OVERSIGHT_AUTH_LOCK_S, 30)
+        failures = 0
+        window_started = now_epoch
+
+    await db.auth_attempts.update_one(
+        {"key": key},
         {
-            "id": new_id(),
-            "action": action,
-            "target": target,
-            "before": before,
-            "after": after,
-            "actor": actor,
-            "ts": now_iso(),
-        }
+            "$set": {
+                "key": key,
+                "window_started_epoch": window_started,
+                "failures": failures,
+                "locked_until_epoch": locked_until_epoch,
+                "updated_at": now_iso(),
+            }
+        },
+        upsert=True,
     )
 
 
@@ -136,10 +199,15 @@ async def _audit(action: str, target: str, before: Any = None, after: Any = None
 # ---------------------------------------------------------------------------
 
 
-def require_oversight(x_admin_pass: Optional[str] = Header(default=None)) -> None:
+async def require_oversight(request: Request, x_admin_pass: Optional[str] = Header(default=None)) -> None:
+    ip = _client_ip(request)
+    if await _oversight_auth_blocked(ip):
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
     expected = os.environ.get("ADMIN_PASS")
     if not expected or x_admin_pass != expected:
+        await _record_oversight_auth_attempt(ip, success=False)
         raise HTTPException(status_code=401, detail="Invalid passcode.")
+    await _record_oversight_auth_attempt(ip, success=True)
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +293,20 @@ class OwnerWaitlistJoinIn(BaseModel):
     email: EmailStr
     suburb: str = Field(min_length=1)
     consent_owner_waitlist: bool = False
+    campaign: Optional[str] = ""
+    source: Optional[str] = ""
+    utm_medium: Optional[str] = ""
+    utm_campaign: Optional[str] = ""
+
+
+class AttributionEntryIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    kind: str = "generic_entry"  # seo_landing | campaign_landing | home_entry | generic_entry
+    campaign: Optional[str] = ""
+    source: Optional[str] = ""
+    suburb: Optional[str] = ""
+    path: Optional[str] = ""
+    session_id: Optional[str] = ""
 
 
 class OversightLogin(BaseModel):
@@ -242,12 +324,14 @@ class TrainerBillingActionIn(BaseModel):
     trainer_id: Optional[str] = None
     submission_id: Optional[str] = None
     billing_email: Optional[EmailStr] = None
+    trainer_action_token: Optional[str] = None
 
 
 class TrainerReactivateIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     trainer_id: Optional[str] = None
     submission_id: Optional[str] = None
+    trainer_action_token: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +391,74 @@ def _normalize_email_key(raw_email: Optional[str]) -> str:
     return (raw_email or "").strip().lower()
 
 
+def _trainer_action_secret() -> str:
+    secret = (os.environ.get("TRAINER_ACTION_TOKEN_SECRET") or "").strip()
+    if secret:
+        return secret
+    admin_fallback = (os.environ.get("ADMIN_PASS") or "").strip()
+    if admin_fallback:
+        return admin_fallback
+    raise RuntimeError("TRAINER_ACTION_TOKEN_SECRET or ADMIN_PASS is required for trainer action tokens.")
+
+
+def _token_b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+
+def _token_unb64(raw: str) -> bytes:
+    padded = raw + "=" * (-len(raw) % 4)
+    return base64.urlsafe_b64decode(padded.encode("ascii"))
+
+
+def _issue_trainer_action_token(*, trainer_id: str, submission_id: str = "", ttl_s: int = TRAINER_ACTION_TOKEN_TTL_S) -> str:
+    exp_epoch = int(datetime.now(timezone.utc).timestamp()) + max(60, ttl_s)
+    payload = {
+        "trainer_id": trainer_id,
+        "submission_id": submission_id or "",
+        "exp": exp_epoch,
+    }
+    payload_blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    sig = hmac.new(_trainer_action_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    return f"{_token_b64(payload_blob)}.{_token_b64(sig)}"
+
+
+def _verify_trainer_action_token(
+    token: str,
+    *,
+    trainer_id: str,
+    submission_id: Optional[str] = None,
+) -> None:
+    raw = (token or "").strip()
+    if "." not in raw:
+        raise HTTPException(status_code=401, detail="Missing or invalid trainer action token.")
+    payload_part, sig_part = raw.split(".", 1)
+    try:
+        payload_blob = _token_unb64(payload_part)
+        provided_sig = _token_unb64(sig_part)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid trainer action token encoding.") from exc
+
+    expected_sig = hmac.new(_trainer_action_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    if not hmac.compare_digest(provided_sig, expected_sig):
+        raise HTTPException(status_code=401, detail="Invalid trainer action token signature.")
+
+    try:
+        payload = json.loads(payload_blob.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid trainer action token payload.") from exc
+
+    token_trainer_id = str(payload.get("trainer_id") or "")
+    token_submission_id = str(payload.get("submission_id") or "")
+    token_exp = int(payload.get("exp") or 0)
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    if token_exp <= now_epoch:
+        raise HTTPException(status_code=401, detail="Trainer action token expired.")
+    if token_trainer_id != trainer_id:
+        raise HTTPException(status_code=403, detail="Trainer action token does not match trainer context.")
+    if submission_id and token_submission_id and token_submission_id != submission_id:
+        raise HTTPException(status_code=403, detail="Trainer action token does not match submission context.")
+
+
 async def _record_owner_waitlist_event(
     event_type: str,
     *,
@@ -315,6 +467,10 @@ async def _record_owner_waitlist_event(
     status: str,
     reason_codes: Optional[List[str]] = None,
     waitlist_id: Optional[str] = None,
+    campaign: str = "",
+    source: str = "",
+    utm_medium: str = "",
+    utm_campaign: str = "",
 ) -> None:
     normalized = event_contract.normalize_prelaunch_event(
         event_type,
@@ -324,6 +480,10 @@ async def _record_owner_waitlist_event(
             "status": status,
             "reason_codes": reason_codes or [],
             "waitlist_id": waitlist_id,
+            "campaign": campaign,
+            "source": source,
+            "utm_medium": utm_medium,
+            "utm_campaign": utm_campaign,
         },
     )
     payload = normalized["payload"]
@@ -336,6 +496,10 @@ async def _record_owner_waitlist_event(
             "status": payload.get("status") or "unknown",
             "reason_codes": payload.get("reason_codes") or [],
             "waitlist_id": payload.get("waitlist_id"),
+            "campaign": payload.get("campaign") or "",
+            "source": payload.get("source") or "",
+            "utm_medium": payload.get("utm_medium") or "",
+            "utm_campaign": payload.get("utm_campaign") or "",
             "contract_status": normalized["contract_status"],
             "contract_reason_codes": normalized["contract_reason_codes"],
             "created_at": now_iso(),
@@ -440,6 +604,161 @@ async def _kpi_prelaunch_summary() -> Dict[str, Any]:
         }
 
 
+def _activation_state_for_submission(*, submission_status: str, billing_profile_status: str) -> str:
+    status = (submission_status or "").strip().lower()
+    billing = (billing_profile_status or "").strip().lower()
+    if status == "held":
+        return "held_for_review"
+    if status == "pending":
+        return "pending_autonomous_review"
+    if billing in {"missing_email", "profile_incomplete"}:
+        return "needs_billing_profile"
+    if billing == "consent_required":
+        return "needs_billing_consent"
+    if billing in {"stripe_unconfigured", "stripe_error"}:
+        return "billing_system_blocked"
+    if status == "published":
+        return "intro_ready"
+    return "unknown"
+
+
+async def _growth_attribution_summary() -> Dict[str, Any]:
+    growth_coll = getattr(db, "growth_attribution", None)
+    entries_coll = getattr(db, "attribution_entries", None)
+    if growth_coll is None and entries_coll is None:
+        return {
+            "status": "unavailable",
+            "reason_codes": ["growth_attribution_collections_unavailable"],
+            "cohorts": [],
+            "totals": {},
+        }
+
+    since_30d = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    cohorts: List[Dict[str, Any]] = []
+    if growth_coll is not None:
+        rows = await growth_coll.find({}, {"_id": 0}).to_list(100)
+        for row in rows:
+            cohorts.append(
+                {
+                    "campaign": str(row.get("campaign") or "unknown"),
+                    "source": str(row.get("source") or "unknown"),
+                    "matched": int(row.get("matched") or 0),
+                    "connected": int(row.get("connected") or 0),
+                    "converted": int(row.get("converted") or 0),
+                    "remarketing_candidates": int(row.get("remarketing_candidates") or 0),
+                    "conversion_gap_candidates": int(row.get("conversion_gap_candidates") or 0),
+                    "entry_events_30d": int(row.get("entry_events_30d") or 0),
+                    "waitlist_joins_30d": int(row.get("waitlist_joins_30d") or 0),
+                    "updated_at": row.get("updated_at"),
+                }
+            )
+        cohorts.sort(
+            key=lambda x: (
+                int(x.get("entry_events_30d", 0)),
+                int(x.get("matched", 0)),
+                int(x.get("connected", 0)),
+            ),
+            reverse=True,
+        )
+
+    entry_events_30d = 0
+    if entries_coll is not None:
+        entry_events_30d = int(await entries_coll.count_documents({"created_at": {"$gte": since_30d}}))
+
+    totals = {
+        "entry_events_30d": entry_events_30d,
+        "cohort_count": len(cohorts),
+        "matched_30d": sum(int(c.get("matched", 0)) for c in cohorts),
+        "connected_30d": sum(int(c.get("connected", 0)) for c in cohorts),
+        "converted_30d": sum(int(c.get("converted", 0)) for c in cohorts),
+        "waitlist_joins_30d": sum(int(c.get("waitlist_joins_30d", 0)) for c in cohorts),
+    }
+    return {
+        "status": "ok",
+        "reason_codes": ["growth_attribution_summary_ok"],
+        "cohorts": cohorts[:10],
+        "totals": totals,
+    }
+
+
+async def _reactivation_summary() -> Dict[str, Any]:
+    candidates_coll = getattr(db, "reactivation_candidates", None)
+    trainers_coll = getattr(db, "trainers", None)
+    if candidates_coll is None:
+        return {
+            "status": "unavailable",
+            "reason_codes": ["reactivation_candidates_collection_unavailable"],
+        }
+
+    since_7d = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    open_count = int(await candidates_coll.count_documents({"status": "open"}))
+    resolved_recent_rows = await candidates_coll.find(
+        {"status": "resolved", "resolved_at": {"$gte": since_7d}},
+        {"_id": 0, "trainer_id": 1},
+    ).to_list(1000)
+    notified_7d = int(await candidates_coll.count_documents({"last_notified_at": {"$gte": since_7d}}))
+    resolved_7d = len(resolved_recent_rows)
+    active_after_resolution_7d = 0
+    if trainers_coll is not None and resolved_recent_rows:
+        for row in resolved_recent_rows:
+            trainer_id = str(row.get("trainer_id") or "")
+            if not trainer_id:
+                continue
+            trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0, "published": 1, "confidence_score": 1})
+            if trainer and bool(trainer.get("published")) and float(trainer.get("confidence_score") or 0.0) >= HOLD_THRESHOLD:
+                active_after_resolution_7d += 1
+
+    return {
+        "status": "ok",
+        "reason_codes": ["reactivation_summary_ok"],
+        "open_candidates": open_count,
+        "resolved_7d": resolved_7d,
+        "notified_7d": notified_7d,
+        "active_after_resolution_7d": active_after_resolution_7d,
+    }
+
+
+def _loop_interval_seconds() -> Dict[str, int]:
+    return {
+        "ranking": autonomy.RANKING_INTERVAL_S,
+        "pricing": autonomy.PRICING_INTERVAL_S,
+        "verification": autonomy.VERIFICATION_INTERVAL_S,
+        "discovery": autonomy.DISCOVERY_INTERVAL_S,
+        "inference": autonomy.INFERENCE_INTERVAL_S,
+        "health": autonomy.HEALTH_INTERVAL_S,
+        "source_ingestion": autonomy.SOURCE_INGEST_INTERVAL_S,
+        "outreach": autonomy.OUTREACH_INTERVAL_S,
+        "billing_recovery": autonomy.BILLING_RECOVERY_INTERVAL_S,
+        "nurture": autonomy.NURTURE_INTERVAL_S,
+        "reactivation_route": autonomy.REACTIVATION_ROUTE_INTERVAL_S,
+    }
+
+
+def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Dict[str, Any]:
+    interval_s = int(_loop_interval_seconds().get(loop_key) or 0)
+    last_run = str(loop.get("last_run") or "")
+    try:
+        last_dt = datetime.fromisoformat(last_run) if last_run else None
+    except Exception:  # noqa: BLE001
+        last_dt = None
+    age_s = None
+    status = "warn"
+    if last_dt and interval_s > 0:
+        age_s = max(0, int((now_dt - last_dt).total_seconds()))
+        if age_s <= interval_s:
+            status = "ok"
+        elif age_s <= interval_s * 2:
+            status = "investigate"
+        else:
+            status = "escalate"
+    return {
+        "status": status,
+        "interval_s": interval_s,
+        "age_s": age_s,
+        "stale_after_s": interval_s * 2 if interval_s > 0 else None,
+    }
+
+
 def _claim_policy_snapshot() -> Dict[str, Any]:
     return {
         "enabled": CLAIM_STATE_MODEL_ENABLED,
@@ -506,6 +825,15 @@ def _suburb_meta_identity_snapshot() -> Dict[str, Any]:
     status["level"] = "ok" if not reasons else "warn"
 
     return payload
+
+
+def _require_trainer_action_token(
+    *,
+    token: Optional[str],
+    trainer_id: str,
+    submission_id: Optional[str] = None,
+) -> None:
+    _verify_trainer_action_token(token or "", trainer_id=trainer_id, submission_id=submission_id)
 
 
 def _evaluate_claim_local(claim: str, state: str) -> Dict[str, Any]:
@@ -811,7 +1139,22 @@ async def create_intro(
             intro["match_created_at"] = match_event.get("created_at")
     if idem:
         intro["idempotency_key"] = idem
-    await db.intros.insert_one(intro.copy())
+    try:
+        await db.intros.insert_one(intro.copy())
+    except DuplicateKeyError:
+        if idem:
+            existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
+            if existing:
+                existing_trainer = await db.trainers.find_one({"id": existing["trainer_id"]}, {"_id": 0})
+                contact_existing = {
+                    "name": existing_trainer.get("name") if existing_trainer else existing.get("trainer_name"),
+                    "website": existing_trainer.get("website") if existing_trainer else None,
+                    "phone": existing_trainer.get("phone") if existing_trainer else None,
+                    "email": existing_trainer.get("email") if existing_trainer else None,
+                    "suburb": existing_trainer.get("suburb") if existing_trainer else existing.get("suburb"),
+                }
+                return _scrub({**existing, "contact": contact_existing})
+        raise
     await _audit("intro", trainer["id"], after={"intro_id": intro["id"], "billing_status": fraud["billing_status"], "reasons": fraud["reasons"]}, actor="user")
 
     # Bill the trainer side in Stripe (fail-soft). User-facing connect flow must
@@ -1083,13 +1426,23 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             trainer_doc,
             consent_granted=payload.consent_intro_billing_terms,
         )
+        trainer_action_token = _issue_trainer_action_token(
+            trainer_id=trainer_id,
+            submission_id=sub_doc["id"],
+        )
         sub_doc["status"] = "published"
         sub_doc["trainer_id"] = trainer_id
         sub_doc["billing_profile_status"] = billing_profile.get("billing_profile_status")
+        sub_doc["trainer_action_token"] = trainer_action_token
     else:
         sub_doc["status"] = "held"
 
-    await db.submissions.insert_one(sub_doc.copy())
+    try:
+        await db.submissions.insert_one(sub_doc.copy())
+    except Exception:
+        if trainer_id:
+            await db.trainers.delete_one({"id": trainer_id, "via_submission_id": sub_doc["id"]})
+        raise
 
     try:
         submission_notif = await notifications_service.notify_submitter_result(db, sub_doc)
@@ -1111,6 +1464,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "trainer_id": trainer_id,
             "billing_profile_status": sub_doc.get("billing_profile_status"),
             "submitter_notification_status": sub_doc.get("submitter_notification_status"),
+            "trainer_action_token": sub_doc.get("trainer_action_token"),
         }
     )
 
@@ -1120,12 +1474,20 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
     email_norm = _normalize_email_key(str(payload.email))
     suburb_raw = (payload.suburb or "").strip()
     suburb_norm = _normalize_suburb_key(suburb_raw)
+    campaign = (payload.campaign or "").strip()
+    source = (payload.source or "").strip()
+    utm_medium = (payload.utm_medium or "").strip()
+    utm_campaign = (payload.utm_campaign or "").strip()
 
     await _record_owner_waitlist_event(
         "owner_waitlist_started",
         email_norm=email_norm,
         suburb_norm=suburb_norm,
         status="started",
+        campaign=campaign,
+        source=source,
+        utm_medium=utm_medium,
+        utm_campaign=utm_campaign,
     )
 
     reason_codes: List[str] = []
@@ -1141,6 +1503,10 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
             suburb_norm=suburb_norm,
             status="rejected",
             reason_codes=reason_codes,
+            campaign=campaign,
+            source=source,
+            utm_medium=utm_medium,
+            utm_campaign=utm_campaign,
         )
         raise HTTPException(status_code=400, detail={"code": "waitlist_rejected", "reason_codes": reason_codes})
 
@@ -1156,6 +1522,10 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
             status="duplicate",
             reason_codes=["duplicate_active_waitlist_record"],
             waitlist_id=existing.get("id"),
+            campaign=campaign,
+            source=source,
+            utm_medium=utm_medium,
+            utm_campaign=utm_campaign,
         )
         return {"accepted": True, "duplicate": True, "status": "duplicate", "id": existing.get("id")}
 
@@ -1167,6 +1537,10 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
         "suburb_norm": suburb_norm,
         "consent_owner_waitlist": True,
         "status": "active",
+        "campaign": campaign,
+        "source": source,
+        "utm_medium": utm_medium,
+        "utm_campaign": utm_campaign,
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
@@ -1185,6 +1559,10 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
                 status="duplicate",
                 reason_codes=["duplicate_active_waitlist_record"],
                 waitlist_id=existing.get("id"),
+                campaign=campaign,
+                source=source,
+                utm_medium=utm_medium,
+                utm_campaign=utm_campaign,
             )
             return {"accepted": True, "duplicate": True, "status": "duplicate", "id": existing.get("id")}
         raise
@@ -1195,8 +1573,73 @@ async def join_owner_waitlist(payload: OwnerWaitlistJoinIn) -> Dict[str, Any]:
         suburb_norm=suburb_norm,
         status="submitted",
         waitlist_id=doc["id"],
+        campaign=campaign,
+        source=source,
+        utm_medium=utm_medium,
+        utm_campaign=utm_campaign,
+    )
+    await db.growth_attribution.update_one(
+        {"campaign": campaign or "unknown", "source": source or "unknown"},
+        {
+            "$setOnInsert": {
+                "campaign": campaign or "unknown",
+                "source": source or "unknown",
+                "matched": 0,
+                "connected": 0,
+                "converted": 0,
+                "remarketing_candidates": 0,
+                "conversion_gap_candidates": 0,
+                "entry_events_30d": 0,
+            },
+            "$inc": {"waitlist_joins_30d": 1},
+            "$set": {"updated_at": now_iso()},
+        },
+        upsert=True,
     )
     return {"accepted": True, "duplicate": False, "status": "accepted", "id": doc["id"]}
+
+
+@api.post("/attribution/entry")
+async def record_attribution_entry(payload: AttributionEntryIn) -> Dict[str, Any]:
+    campaign = (payload.campaign or "").strip().lower() or "unknown"
+    source = (payload.source or "").strip().lower() or "unknown"
+    kind = (payload.kind or "").strip().lower() or "generic_entry"
+    path = (payload.path or "").strip()
+    suburb = (payload.suburb or "").strip()
+    session_id = (payload.session_id or "").strip()
+    now_ts = now_iso()
+
+    entry = {
+        "id": new_id(),
+        "kind": kind,
+        "campaign": campaign,
+        "source": source,
+        "suburb": suburb,
+        "path": path,
+        "session_id": session_id,
+        "created_at": now_ts,
+    }
+    await db.attribution_entries.insert_one(entry.copy())
+
+    await db.growth_attribution.update_one(
+        {"campaign": campaign, "source": source},
+        {
+            "$setOnInsert": {
+                "campaign": campaign,
+                "source": source,
+                "matched": 0,
+                "connected": 0,
+                "converted": 0,
+                "remarketing_candidates": 0,
+                "conversion_gap_candidates": 0,
+                "waitlist_joins_30d": 0,
+            },
+            "$inc": {"entry_events_30d": 1},
+            "$set": {"last_entry_at": now_ts, "updated_at": now_ts},
+        },
+        upsert=True,
+    )
+    return {"ok": True, "id": entry["id"]}
 
 
 @api.get("/submissions/{submission_id}/status")
@@ -1206,9 +1649,11 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Submission not found.")
 
     trainer = await _resolve_trainer(trainer_id=sub.get("trainer_id"), submission_id=submission_id)
+    # Prefer live trainer state so remediation/reconnect actions are reflected
+    # immediately in the submission status surface.
     billing_profile_status = (
-        sub.get("billing_profile_status")
-        or (trainer or {}).get("billing_profile_status")
+        (trainer or {}).get("billing_profile_status")
+        or sub.get("billing_profile_status")
         or "unknown"
     )
     blockers: List[Dict[str, str]] = []
@@ -1220,6 +1665,10 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
         blockers.append({"code": "billing_consent", "message": "Billing consent is required to activate collection."})
     if billing_profile_status in {"stripe_unconfigured", "stripe_error"}:
         blockers.append({"code": "billing_integration", "message": "Billing integration needs remediation before collection."})
+    activation_state = _activation_state_for_submission(
+        submission_status=str(sub.get("status") or ""),
+        billing_profile_status=str(billing_profile_status or ""),
+    )
 
     return {
         "id": sub["id"],
@@ -1228,6 +1677,7 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
         "verification_status": sub.get("verification_status"),
         "confidence_score": sub.get("confidence_score"),
         "billing_profile_status": billing_profile_status,
+        "activation_state": activation_state,
         "submitter_notification_status": sub.get("submitter_notification_status"),
         "trainer": {
             "id": (trainer or {}).get("id"),
@@ -1235,6 +1685,14 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
             "published": bool((trainer or {}).get("published")) if trainer else sub.get("status") == "published",
             "verification_status": (trainer or {}).get("verification_status") or sub.get("verification_status"),
         },
+        "trainer_action_token": (
+            _issue_trainer_action_token(
+                trainer_id=(trainer or {}).get("id"),
+                submission_id=submission_id,
+            )
+            if trainer and (trainer or {}).get("id")
+            else None
+        ),
         "blockers": blockers,
     }
 
@@ -1243,11 +1701,17 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
 async def get_trainer_billing_health(
     trainer_id: Optional[str] = Query(default=None),
     submission_id: Optional[str] = Query(default=None),
+    trainer_action_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     trainer = await _resolve_trainer(trainer_id=trainer_id, submission_id=submission_id)
     sub = await _resolve_submission(submission_id)
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer context not found.")
+    _require_trainer_action_token(
+        token=trainer_action_token,
+        trainer_id=str(trainer.get("id") or ""),
+        submission_id=submission_id,
+    )
 
     intros = await db.intros.find(
         {"trainer_id": trainer.get("id")},
@@ -1303,6 +1767,11 @@ async def reconnect_trainer_billing(payload: TrainerBillingActionIn) -> Dict[str
     trainer = await _resolve_trainer(trainer_id=payload.trainer_id, submission_id=payload.submission_id)
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer context not found.")
+    _require_trainer_action_token(
+        token=payload.trainer_action_token,
+        trainer_id=str(trainer.get("id") or ""),
+        submission_id=payload.submission_id,
+    )
 
     update_fields: Dict[str, Any] = {}
     if payload.billing_email:
@@ -1320,10 +1789,16 @@ async def reconnect_trainer_billing(payload: TrainerBillingActionIn) -> Dict[str
 async def get_trainer_reactivation_health(
     trainer_id: Optional[str] = Query(default=None),
     submission_id: Optional[str] = Query(default=None),
+    trainer_action_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     trainer = await _resolve_trainer(trainer_id=trainer_id, submission_id=submission_id)
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer context not found.")
+    _require_trainer_action_token(
+        token=trainer_action_token,
+        trainer_id=str(trainer.get("id") or ""),
+        submission_id=submission_id,
+    )
 
     billing_status = str(trainer.get("billing_profile_status") or "")
     reasons: List[Dict[str, str]] = []
@@ -1357,6 +1832,11 @@ async def reactivate_trainer_listing(payload: TrainerReactivateIn) -> Dict[str, 
     trainer = await _resolve_trainer(trainer_id=payload.trainer_id, submission_id=payload.submission_id)
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer context not found.")
+    _require_trainer_action_token(
+        token=payload.trainer_action_token,
+        trainer_id=str(trainer.get("id") or ""),
+        submission_id=payload.submission_id,
+    )
 
     score = await ai_service.score_trainer(_verification_payload(trainer))
     conf = float(score.get("confidence") or 0)
@@ -1405,10 +1885,15 @@ async def get_seo(slug: str) -> Dict[str, Any]:
 
 
 @api.post("/oversight/login")
-async def oversight_login(payload: OversightLogin) -> Dict[str, Any]:
+async def oversight_login(payload: OversightLogin, request: Request) -> Dict[str, Any]:
+    ip = _client_ip(request)
+    if await _oversight_auth_blocked(ip):
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
     expected = os.environ.get("ADMIN_PASS")
     if not expected or payload.passcode != expected:
+        await _record_oversight_auth_attempt(ip, success=False)
         raise HTTPException(status_code=401, detail="Invalid passcode")
+    await _record_oversight_auth_attempt(ip, success=True)
     return {"ok": True}
 
 
@@ -1557,6 +2042,92 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     suburb_status = suburb_dataset.get("status", {})
     waitlist_summary = await _owner_waitlist_summary()
     kpi_prelaunch = await _kpi_prelaunch_summary()
+    growth_attribution_summary = await _growth_attribution_summary()
+    reactivation_summary = await _reactivation_summary()
+    now_dt = datetime.now(timezone.utc)
+    source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
+    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).to_list(20) if source_ingestion_state_coll is not None else []
+    source_ingestion_state_rows.sort(
+        key=lambda row: (
+            int(row.get("consecutive_failures") or 0),
+            str(row.get("suppressed_until") or ""),
+            str(row.get("source_url") or ""),
+        ),
+        reverse=True,
+    )
+    billing_recovery_cases = await db.intros.find(
+        {
+            "billing_status": "billed",
+            "billing_retry_state": {"$in": ["retry_exhausted", "retry_failed", "needs_remediation", "retry_sent"]},
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "trainer_id": 1,
+            "billing_collection_status": 1,
+            "billing_retry_state": 1,
+            "billing_retry_attempts": 1,
+            "billing_last_retry_at": 1,
+            "intro_fee_cents": 1,
+            "created_at": 1,
+        },
+    ).to_list(20)
+    trainer_ids_for_cases = sorted({str(row.get("trainer_id") or "") for row in billing_recovery_cases if row.get("trainer_id")})
+    trainer_rows = await db.trainers.find(
+        {"id": {"$in": trainer_ids_for_cases}},
+        {"_id": 0, "id": 1, "name": 1, "billing_profile_status": 1, "published": 1, "confidence_score": 1},
+    ).to_list(max(1, len(trainer_ids_for_cases))) if trainer_ids_for_cases else []
+    trainers_by_id = {str(row.get("id") or ""): row for row in trainer_rows}
+    billing_recovery_case_rows = []
+    for row in billing_recovery_cases:
+        trainer = trainers_by_id.get(str(row.get("trainer_id") or ""), {})
+        trainer_id = str(row.get("trainer_id") or "")
+        billing_recovery_case_rows.append(
+            {
+                "intro_id": row.get("id"),
+                "trainer_id": trainer_id,
+                "trainer_name": trainer.get("name") or trainer_id or "unknown",
+                "billing_collection_status": row.get("billing_collection_status") or "unknown",
+                "billing_retry_state": row.get("billing_retry_state") or "unknown",
+                "billing_retry_attempts": int(row.get("billing_retry_attempts") or 0),
+                "billing_last_retry_at": row.get("billing_last_retry_at"),
+                "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
+                "intro_fee_cents": int(row.get("intro_fee_cents") or 0),
+                "created_at": row.get("created_at"),
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+            }
+        )
+    reactivation_candidates_coll = getattr(db, "reactivation_candidates", None)
+    reactivation_case_rows_raw = await reactivation_candidates_coll.find(
+        {"status": "open"},
+        {"_id": 0, "trainer_id": 1, "trainer_name": 1, "email": 1, "reasons": 1, "last_notified_at": 1, "last_notification_status": 1, "updated_at": 1},
+    ).to_list(20) if reactivation_candidates_coll is not None else []
+    reactivation_case_rows = []
+    for row in reactivation_case_rows_raw:
+        trainer_id = str(row.get("trainer_id") or "")
+        reactivation_case_rows.append(
+            {
+                **row,
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+            }
+        )
+    discovery_alerts = list(source_ingestion.get("alerts") or [])
+    loop_statuses = {
+        key: _loop_status(key, loop, now_dt=now_dt)
+        for key, loop in {
+            "ranking": ranking,
+            "pricing": pricing,
+            "verification": verification,
+            "discovery": discovery,
+            "inference": inference,
+            "source_ingestion": source_ingestion,
+            "outreach": outreach,
+            "health": health,
+            "billing_recovery": billing_recovery,
+            "nurture": nurture,
+            "reactivation_route": reactivation_route,
+        }.items()
+    }
 
     return {
         "revenue": {
@@ -1627,6 +2198,15 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "suburb_dataset_integrity": suburb_dataset.get("status", {}),
         "owner_waitlist_summary": waitlist_summary,
         "kpi_prelaunch": kpi_prelaunch,
+        "growth_attribution_summary": growth_attribution_summary,
+        "reactivation_summary": reactivation_summary,
+        "ops_investigation": {
+            "loop_statuses": loop_statuses,
+            "billing_recovery_cases": billing_recovery_case_rows,
+            "reactivation_cases": reactivation_case_rows,
+            "source_ingestion_sources": source_ingestion_state_rows,
+            "discovery_alerts": discovery_alerts,
+        },
         "ts": now_iso(),
     }
 
@@ -1680,17 +2260,27 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Stripe webhook rejected: {str(exc)}")
 
-    event_id = str(event.get("id") or "")
-    if event_id:
-        if await db.stripe_events.find_one({"id": event_id}, {"_id": 0, "id": 1}):
-            return {"ok": True, "duplicate": True}
-
     event_type = str(event.get("type") or "")
     obj = (event.get("data") or {}).get("object") or {}
     invoice_id = stripe_billing.extract_invoice_id(event_type, obj)
     if not invoice_id and event_type.startswith("charge.dispute"):
         charge_id = str(obj.get("charge") or "")
         invoice_id = stripe_billing.invoice_id_from_charge(charge_id)
+    event_id = str(event.get("id") or "")
+    if event_id:
+        try:
+            await db.stripe_events.insert_one(
+                {
+                    "id": event_id,
+                    "type": event_type,
+                    "invoice_id": invoice_id,
+                    "status": "processing",
+                    "created_at": now_iso(),
+                }
+            )
+        except DuplicateKeyError:
+            return {"ok": True, "duplicate": True}
+
     intro_id = str(((obj.get("metadata") or {}).get("intro_id")) or "")
     updates: Dict[str, Any] = {"stripe_last_event_type": event_type, "stripe_last_event_at": now_iso()}
     updates.update(stripe_billing.billing_updates_for_event(event_type, obj))
@@ -1701,13 +2291,9 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
         await db.intros.update_many({"id": intro_id}, {"$set": updates})
 
     if event_id:
-        await db.stripe_events.insert_one(
-            {
-                "id": event_id,
-                "type": event_type,
-                "invoice_id": invoice_id,
-                "created_at": now_iso(),
-            }
+        await db.stripe_events.update_one(
+            {"id": event_id},
+            {"$set": {"status": "processed", "processed_at": now_iso()}},
         )
     return {"ok": True}
 
@@ -1838,6 +2424,8 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.config_snapshots.create_index("applied_at")
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
     await db.notification_events.create_index("id", unique=True, sparse=True)
+    await db.auth_attempts.create_index("key", unique=True)
+    await db.auth_attempts.create_index("updated_at")
     await db.owner_waitlist.create_index([("email_norm", 1), ("suburb_norm", 1), ("status", 1)], unique=True)
     await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
     await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
@@ -1848,7 +2436,22 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await _seed_discovery_if_empty()
 
     # Only the active owner process should execute initial autonomy writes.
-    if allow_loop_schedule and runtime.should_schedule_loops:
+    startup_holder = runtime.should_schedule_loops
+    if runtime.lease_enabled and startup_holder:
+        lease_probe = autonomy.LoopLease(
+            db,
+            owner_id=runtime.owner_id,
+            ttl_s=runtime.lease_ttl_s,
+            renew_s=runtime.lease_renew_s,
+        )
+        startup_holder = await lease_probe.heartbeat()
+        if not startup_holder:
+            logger.info(
+                "initial loop pass skipped: lease not held by owner_id=%s (current_owner=%s)",
+                runtime.owner_id,
+                lease_probe.last_seen_owner,
+            )
+    if allow_loop_schedule and startup_holder:
         try:
             await autonomy.recompute_ranking(db)
             await autonomy.recompute_pricing(db)

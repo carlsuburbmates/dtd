@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -409,12 +410,14 @@ async def process_discovery_queue(db, ai_service, batch: int = 3) -> Dict[str, A
         existing = None
         if url:
             domain = url.split("/")[2] if "://" in url else url.split("/")[0]
+            domain_pattern = re.escape(domain)
             existing = await db.trainers.find_one(
-                {"website": {"$regex": domain, "$options": "i"}}, {"_id": 0}
+                {"website": {"$regex": domain_pattern, "$options": "i"}}, {"_id": 0}
             )
         if not existing and name:
+            name_pattern = re.escape(name)
             existing = await db.trainers.find_one(
-                {"name": {"$regex": f"^{name}$", "$options": "i"}}, {"_id": 0}
+                {"name": {"$regex": f"^{name_pattern}$", "$options": "i"}}, {"_id": 0}
             )
         if existing:
             await db.discovery_queue.update_one(
@@ -1002,13 +1005,55 @@ class LoopLease:
         return self.is_holder
 
 
-async def _run_loop_with_lease(name: str, fn, interval: int, lease: Optional[LoopLease]) -> None:
+async def _mark_loop_success(db, name: str) -> None:
+    await db.system_state.update_one(
+        {"key": f"loop_status:{name}"},
+        {
+            "$set": {
+                "key": f"loop_status:{name}",
+                "name": name,
+                "last_success": now_iso(),
+                "last_error": "",
+            },
+            "$setOnInsert": {
+                "consecutive_failures": 0,
+            },
+        },
+        upsert=True,
+    )
+    await db.system_state.update_one(
+        {"key": f"loop_status:{name}"},
+        {"$set": {"consecutive_failures": 0}},
+    )
+
+
+async def _mark_loop_failure(db, name: str, error: str) -> None:
+    row = await db.system_state.find_one({"key": f"loop_status:{name}"}, {"_id": 0}) or {}
+    failures = int(row.get("consecutive_failures") or 0) + 1
+    await db.system_state.update_one(
+        {"key": f"loop_status:{name}"},
+        {
+            "$set": {
+                "key": f"loop_status:{name}",
+                "name": name,
+                "last_failure": now_iso(),
+                "last_error": error[:400],
+                "consecutive_failures": failures,
+            }
+        },
+        upsert=True,
+    )
+
+
+async def _run_loop_with_lease(name: str, fn, interval: int, lease: Optional[LoopLease], db) -> None:
     while True:
         try:
             if lease is None or lease.is_holder:
                 await fn()
+                await _mark_loop_success(db, name)
         except Exception:  # noqa: BLE001
             logger.exception("loop %s failed", name)
+            await _mark_loop_failure(db, name, f"loop {name} failed")
         await asyncio.sleep(interval)
 
 
@@ -1047,17 +1092,17 @@ def schedule_all(
         renew_s=lease_renew_s,
     ) if lease_enabled else None
     tasks = [
-        asyncio.create_task(_run_loop_with_lease("ranking", lambda: recompute_ranking(db), RANKING_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("pricing", lambda: recompute_pricing(db), PRICING_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("verification", lambda: reverify_listings(db, ai_service), VERIFICATION_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("discovery", lambda: process_discovery_queue(db, ai_service), DISCOVERY_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("inference", lambda: promote_inferred_conversions(db), INFERENCE_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("health", lambda: update_health(db), HEALTH_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("billing_recovery", lambda: run_billing_recovery(db), BILLING_RECOVERY_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("nurture", lambda: run_growth_nurture(db), NURTURE_INTERVAL_S, lease)),
-        asyncio.create_task(_run_loop_with_lease("reactivation_route", lambda: run_reactivation_routing(db), REACTIVATION_ROUTE_INTERVAL_S, lease)),
+        asyncio.create_task(_run_loop_with_lease("ranking", lambda: recompute_ranking(db), RANKING_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("pricing", lambda: recompute_pricing(db), PRICING_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("verification", lambda: reverify_listings(db, ai_service), VERIFICATION_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("discovery", lambda: process_discovery_queue(db, ai_service), DISCOVERY_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("inference", lambda: promote_inferred_conversions(db), INFERENCE_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("health", lambda: update_health(db), HEALTH_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("source_ingestion", lambda: ingest_sources(db), SOURCE_INGEST_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("outreach", lambda: send_outreach(db), OUTREACH_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("billing_recovery", lambda: run_billing_recovery(db), BILLING_RECOVERY_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("nurture", lambda: run_growth_nurture(db), NURTURE_INTERVAL_S, lease, db)),
+        asyncio.create_task(_run_loop_with_lease("reactivation_route", lambda: run_reactivation_routing(db), REACTIVATION_ROUTE_INTERVAL_S, lease, db)),
     ]
     if lease is not None:
         tasks.append(asyncio.create_task(_lease_heartbeat_task(lease)))

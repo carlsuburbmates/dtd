@@ -94,7 +94,11 @@ export default function TrainerDetail() {
 
     const trackEngagement = (kind) => {
         if (!introId) return;
-        api.post("/engagements", { intro_id: introId, kind }).catch(() => {});
+        api.post("/engagements", { intro_id: introId, kind }).catch(() => {
+            setTimeout(() => {
+                api.post("/engagements", { intro_id: introId, kind }).catch(() => {});
+            }, 750);
+        });
     };
 
     if (loading)

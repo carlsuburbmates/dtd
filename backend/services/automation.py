@@ -79,6 +79,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
     skipped_suppressed = 0
     suppressed_now = 0
     alerts: List[Dict[str, Any]] = []
+    reason_codes: List[str] = []
     now_dt = _now()
     for src in sources:
         state = await db.source_ingestion_state.find_one({"source_url": src}, {"_id": 0}) or {}
@@ -86,6 +87,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
         if suppressed_until and suppressed_until > now_dt:
             skipped_suppressed += 1
             suppressed_now += 1
+            reason_codes.append("source_suppressed")
             continue
 
         scanned += 1
@@ -127,12 +129,14 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
             )
         except Exception:
             failed += 1
+            reason_codes.append("source_request_failed")
             prev_failures = int(state.get("consecutive_failures") or 0)
             new_failures = prev_failures + 1
             suppressed_until_value = ""
             if new_failures >= suppress_after_failures:
                 suppressed_until_value = (now_dt + timedelta(hours=suppress_hours)).isoformat()
                 suppressed_now += 1
+                reason_codes.append("source_auto_suppressed")
             if new_failures >= alert_after_failures:
                 alerts.append(
                     {
@@ -149,6 +153,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
                     "source_url": src,
                     "last_checked_at": _now_iso(),
                     "last_error": "request_failed",
+                    "last_error_code": "source_request_failed",
                     "last_http_status": 0,
                     "consecutive_failures": new_failures,
                     "suppressed_until": suppressed_until_value,
@@ -160,6 +165,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
         "ok": True,
         "skipped": False,
         "reason": "",
+        "reason_codes": list(dict.fromkeys(reason_codes)),
         "sources": scanned,
         "failed_sources": failed,
         "skipped_suppressed": skipped_suppressed,

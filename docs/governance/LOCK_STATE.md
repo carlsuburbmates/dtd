@@ -1,6 +1,6 @@
 # Lock State Snapshot
 
-Date: 2026-05-07
+Date: 2026-05-20
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Locked decisions (active)
@@ -18,6 +18,13 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 - DB lease lock `system_state.autonomy_loop_lease` ensures a single active executor across processes
 7. Codex platform-interaction sync rules are governed by:
 - `docs/governance/CODEX_PLATFORM_SYNC.md`
+8. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
+- actions that can change locked runtime policy are always `technical-owner mode`
+- only reversible, bounded, policy-safe actions may be treated as `operator mode`
+9. Operational ownership remains one-man and mode-based:
+- primary operator owner is `carlg`
+- `Monitor`, `Investigate`, and `Escalate` are operating modes within the same ownership model, not separate team roles
+- escalation routes into `technical-owner mode` when the action crosses the hard boundary rule
 
 ## Implemented completion blocks
 
@@ -29,9 +36,14 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Verification evidence (latest local run)
 
-1. `python3 -m compileall backend` → pass.
-2. `npm --prefix frontend run build` → pass.
-3. `python -m pytest -q backend/tests` → pass (`45 passed`).
+1. `python3 -m compileall backend` -> pass.
+2. `cd backend && ../.venv/bin/pytest -q` -> pass (`115 passed, 12 skipped`).
+3. `cd backend && ../.venv/bin/pytest -q tests/test_gap_closure_unit.py tests/test_w8_billing_unit.py tests/test_public_mode_unit.py` -> pass (`62 passed`).
+4. `cd frontend && CI=true npm test -- --watch=false --runInBand` -> pass (`2 suites, 8 tests`).
+5. `cd frontend && npm run build` -> pass (`Compiled successfully`).
+6. `cd backend && ../.venv/bin/pytest -q tests/test_lifecycle_endpoints_unit.py tests/test_public_mode_unit.py` -> pass (`54 passed`).
+7. `cd frontend && CI=true npm test -- --watch=false --runInBand` -> pass (`2 suites, 9 tests`).
+8. `cd frontend && npm run build` -> pass (`Compiled successfully`) after operator-takeover UI updates.
 
 ## Launch evidence status (non-code configuration/evidence)
 
@@ -39,6 +51,15 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 2. Stage D evidence pack is complete (domain/TLS/edge).
 3. Stage E evidence pack is complete (repeatable deploy/redeploy and route smoke are evidenced).
 4. Runtime loop-output reasons are cleared in live checks; `source_ingestion.failed_sources=1` remains only as historical count until the next successful cycle.
+5. Live runtime snapshot refreshed on `2026-05-21T07:08:57Z`:
+- `curl -sS https://dtd-api.onrender.com/api/config` -> `public_matching_enabled=false`, `conversion_billing_mode=track_only`.
+- `curl -sS -H "X-Admin-Pass: change-me" https://dtd-api.onrender.com/api/oversight` -> loops present and current; no unresolved `severity:high` alerts in the sampled snapshot; one medium `fraud_suppressed` alert remains.
+- `vercel curl / --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
+- `vercel curl /trainers --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
+- `vercel curl /ops --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
+6. Local implementation/closeout work is currently clear: roadmap-authority alignment is closed and `docs/governance/ROADMAP.md` no longer carries open `Must-Finish Before Launch` blockers.
+7. Matching-enabled release evidence remains open because the live runtime still reports `public_matching_enabled=false`.
+8. Final Go/No-Go remains pending; this file does not record owner approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 

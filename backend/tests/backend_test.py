@@ -43,6 +43,18 @@ ADMIN_PASS = os.environ.get("ADMIN_PASS", "melbourne-bark-2026")
 HDR = {"X-Admin-Pass": ADMIN_PASS}
 
 
+def _public_matching_enabled(session) -> bool:
+    r = session.get(f"{API}/config", timeout=60)
+    if r.status_code != 200:
+        return False
+    return bool(r.json().get("public_matching_enabled"))
+
+
+def _require_public_matching_or_skip(session) -> None:
+    if not _public_matching_enabled(session):
+        pytest.skip("Public matching is disabled in education-first prelaunch mode.")
+
+
 def assert_no_id(obj):
     if isinstance(obj, dict):
         assert "_id" not in obj, f"_id leaked: {list(obj.keys())[:8]}"
@@ -85,6 +97,7 @@ class TestConfig:
 
 class TestMatch:
     def test_match_returns_up_to_three(self, session):
+        _require_public_matching_or_skip(session)
         r = session.post(
             f"{API}/match",
             json={"description": "Reactive 6-month border collie pup that pulls hard on lead in Fitzroy.", "consent_match_processing": True},
@@ -140,6 +153,7 @@ class TestTrainerDetail:
 
 class TestIntrosConversions:
     def test_intro_then_conversion_idempotent(self, session):
+        _require_public_matching_or_skip(session)
         tid = getattr(pytest, "last_trainer_id", None)
         match_id = getattr(pytest, "last_match_id", None)
         assert tid, "match must have produced a trainer id"
@@ -182,6 +196,7 @@ class TestIntrosConversions:
         assert c2.get("billed") is False
 
     def test_intro_for_unknown_trainer_404(self, session):
+        _require_public_matching_or_skip(session)
         r = session.post(
             f"{API}/intros",
             json={

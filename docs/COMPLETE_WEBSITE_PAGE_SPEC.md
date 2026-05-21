@@ -1,13 +1,14 @@
 # Complete Website Page Spec
 
-Date: 2026-05-09  
+Date: 2026-05-20
 Scope: UI/UX completeness contract for all website pages and key interactions.
 
-Current launch mode (2026-05-09):
-1. Public surface is education-first.
-2. Public owner matching and trainer-contact reveal are intentionally deferred until trainer supply readiness gate is met.
-3. Trainer onboarding remains open.
-4. Route reality: deferred owner flows still exist as implemented routes/APIs; deferment is enforced by entry gating (`PUBLIC_MATCHING_ENABLED`) rather than route removal.
+Current launch mode model (2026-05-20):
+1. Public home entry is mode-gated by `PUBLIC_MATCHING_ENABLED`.
+2. `PUBLIC_MATCHING_ENABLED=false`: education-first owner waitlist surface is primary on `/`.
+3. `PUBLIC_MATCHING_ENABLED=true`: live owner matching surface is primary on `/`.
+4. Trainer onboarding remains open in both modes.
+5. Matching/contact lifecycle routes and APIs remain implemented in both modes; home entry controls public exposure.
 
 ## 1) Is this different from workflows?
 Yes.
@@ -74,8 +75,9 @@ flowchart TD
 1. `Home /`
 - Header
 - Knowledge hub hero/value statement
-- Launch status (“coming soon” matching)
+- Mode status (“prelaunch waitlist” or “matching live”)
 - Guides/high-value owner content blocks
+- Owner waitlist form (prelaunch mode) or owner match form/results (matching mode)
 - Trainer onboarding CTA
 - Footer
 
@@ -151,9 +153,10 @@ Component file:
 
 Required sections:
 1. Hero/value proposition.
-2. Launch status (matching deferred).
+2. Mode status badge (`Prelaunch` or `Matching live`).
 3. Practical content/guides blocks.
-4. CTAs to guides, FAQ, trainers, contact.
+4. Owner interaction card (waitlist or match form, mode-dependent).
+5. CTAs to guides, FAQ, trainers, contact.
 
 Required controls:
 1. Guides CTA.
@@ -161,9 +164,9 @@ Required controls:
 3. FAQ/contact CTAs.
 
 Expected behavior:
-1. Page clearly communicates that public matching is coming soon.
-2. Owners are not routed into active matching/contact reveal flows.
-3. Trainers can still enter onboarding flow.
+1. If `PUBLIC_MATCHING_ENABLED=false`, waitlist submission is primary and direct matching is not exposed from home.
+2. If `PUBLIC_MATCHING_ENABLED=true`, owner matching flow runs from home and can route to trainer detail.
+3. Trainers can still enter onboarding flow in both modes.
 
 Buttons/CTAs expected:
 1. `Explore guides` (or equivalent)
@@ -349,6 +352,7 @@ Required controls:
 
 Expected behavior:
 1. Attribution survives handoff into match request.
+2. Campaign/source cohort becomes visible in oversight attribution reporting.
 
 ## `/melbourne/:suburb` (SEO page)
 Purpose: SEO demand capture for suburb intent.
@@ -365,6 +369,7 @@ Required controls:
 
 Expected behavior:
 1. Visitor can move directly into match flow.
+2. SEO attribution survives CTA handoff into home submissions and nurture reporting.
 
 ## `/pricing`, `/trust`, `/faq`, `/about`, `/contact`, `/privacy`, `/terms`
 Purpose: informational/legal confidence pages.

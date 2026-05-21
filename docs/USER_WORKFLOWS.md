@@ -4,7 +4,7 @@
 - Goal: identify all project workflows and organize them by user type.
 - Scope: current implemented product surfaces (`frontend/src/pages/*`) plus active API workflows (`backend/server.py`) and autonomous loops documented in architecture.
 - Exclusions: deprecated legacy `/admin/*` and directory browse/list endpoints (explicitly removed).
-- Mode lock note (2026-05-10): education-first prelaunch is enforced on the home entry path via `PUBLIC_MATCHING_ENABLED` (`/api/config` + `Home.jsx`), while owner/trainer lifecycle routes and APIs still exist in code.
+- Mode lock note (2026-05-20): home entry behavior is enforced via `PUBLIC_MATCHING_ENABLED` (`/api/config` + `Home.jsx`) while owner/trainer lifecycle routes and APIs still exist in code.
 
 ## Workflow Inventory By User Type
 
@@ -24,6 +24,18 @@ Technical skeleton companion:
   - Success: ranked results rendered, `match_id` created.
   - Failure: validation/processing error toast; user retries.
 - Surfaces: `/`, `/how-it-works`, `/faq`, `/trust`.
+
+#### W20. Owner waitlist enrollment (prelaunch demand capture)
+- Scope: capture owner demand while public matching is gated.
+- Entry: owner submits waitlist form on `/` (when `PUBLIC_MATCHING_ENABLED=false`) or campaign-driven entry (`/lp/:campaign`).
+- Main path:
+  1. Submit waitlist (`POST /api/owner-waitlist`) with email, suburb, consent, campaign/source metadata.
+  2. System records normalized lifecycle events (`started`, `submitted`, `duplicate`, `rejected`).
+- Exit outcomes:
+  - Accepted waitlist enrollment.
+  - Duplicate acknowledgement.
+  - Rejected enrollment with explicit reason codes.
+- Surfaces: `/`, `/lp/:campaign`.
 
 #### W2. Connect to trainer (conversion gateway)
 - Scope: release contact details and create intro record.
@@ -48,9 +60,9 @@ Technical skeleton companion:
 
 #### W4. Outcome confirmation
 - Scope: explicit hire confirmation.
-- Entry: owner clicks “I hired them”.
+- Entry: owner uses follow-up outcome action (`/follow-up/:token`) or explicit conversion API call.
 - Main path:
-  1. Submit conversion (`POST /api/conversions`).
+  1. Submit follow-up outcome (`POST /api/follow-up/{token}/outcome`, action=`hired`) or direct conversion (`POST /api/conversions`).
   2. System marks tracked/billed/suspicious (mode + fraud dependent).
 - Exit outcomes:
   - First confirmation recorded.
@@ -99,52 +111,73 @@ Technical skeleton companion:
   3. Stripe webhook reconciles invoice state (`POST /api/stripe/webhook`).
 - Exit outcomes:
   - Intro billing status updated (`invoice_sent`, `paid`, `failed`, etc.).
+- Current status: complete (webhook lifecycle outcomes, idempotency path, and oversight billing semantics are test-backed and documented).
 
-### 6) Growth + lifecycle operations (cross-actor, partially implemented)
+### 6) Growth + lifecycle operations (cross-actor, implemented)
 
 #### W15. Demand acquisition and attribution
 - Scope: track how demand arrives before W1 demand capture.
 - Entry: external traffic source lands on public pages (`/`, `/how-it-works`, `/pricing`, `/faq`).
 - Main path:
-  1. User enters through channel-driven landing surface.
-  2. User proceeds to W1 match request.
-  3. Attribution evidence is retained for channel performance analysis.
+  1. User enters through channel-driven landing surface or campaign page (`/lp/:campaign`, `/melbourne/:suburb`, query-attributed `/`).
+  2. Frontend posts attribution entry (`POST /api/attribution/entry`) and forwards campaign/source metadata into waitlist or match flows.
+  3. Attribution evidence is retained in `attribution_entries` / `growth_attribution` for channel performance analysis.
 - Exit outcomes:
   - Attributed demand-source visibility for top-of-funnel traffic.
-- Current status: planned (governed target; not yet complete as a first-class measured workflow).
+- Attribution schema:
+  - `attribution_entries`: immutable entry events keyed by `kind`, `campaign`, `source`, `suburb`, `path`, `session_id`, `created_at`
+  - `growth_attribution`: cohort rollup keyed by `campaign + source` with `entry_events_30d`, `waitlist_joins_30d`, `matched`, `connected`, `converted`, `remarketing_candidates`, `conversion_gap_candidates`
+- Reporting surface:
+  - `/ops` exposes `growth_attribution_summary` totals and top cohorts.
+- Current status: complete (canonical entry writes, schema, and reporting surface are implemented and evidenced).
 
 #### W16. Programmatic SEO and nurture loop
 - Scope: generate and reuse SEO surfaces for ongoing demand generation.
 - Entry: user lands on generated SEO pages (`/seo/{slug}` backend surface + routed frontend pages).
 - Main path:
   1. SEO copy is generated/cached on demand (`GET /api/seo/{slug}`).
-  2. Visitor follows CTA path into W1/W2 flows.
-  3. Follow-up or nurture pathways are measured for optimization.
+  2. SEO landing posts an attribution entry and forwards campaign/source metadata into the home CTA path.
+  3. Growth nurture cohorts aggregate campaign/source performance for remarketing and conversion-gap review.
 - Exit outcomes:
   - Search-sourced demand path is measurable and improvable.
-- Current status: partial (SEO route exists; full attribution+nurture measurement remains incomplete).
+- Measured path:
+  1. `GET /api/seo/{slug}` generates or loads the SEO page.
+  2. `/melbourne/:suburb` posts `seo_landing` attribution.
+  3. SEO CTA forwards `campaign/source/utm_*` into `/`.
+  4. Home propagates those fields into waitlist or match requests.
+  5. Match, intro, conversion, and nurture reporting preserve the SEO cohort.
+- Reporting surface:
+  - `/ops` exposes SEO-attributed cohorts through `growth_attribution_summary`.
+- Current status: complete (SEO entry, CTA propagation, attribution carry-through, and nurture reporting path are documented and test-backed).
 
 #### W17. Trainer onboarding completion and activation
 - Scope: advance newly submitted trainers from publish decision to intro-ready state.
 - Entry: W7 publish result + billing readiness outcomes.
 - Main path:
   1. Submission publishes as verified/unverified or holds.
-  2. Billing profile state (`ready`, `profile_incomplete`, etc.) is set.
-  3. Trainer progresses toward first-intro readiness and activation.
+  2. Billing profile state (`ready`, `profile_incomplete`, etc.) is exposed through `/submit/status/:submissionId` with deterministic `activation_state` and blocker codes.
+  3. Trainer can enter billing remediation via `/trainer/billing`, and live trainer billing state feeds back into submission status.
+- Activation states:
+  - `held_for_review`
+  - `pending_autonomous_review`
+  - `needs_billing_profile`
+  - `needs_billing_consent`
+  - `billing_system_blocked`
+  - `intro_ready`
 - Exit outcomes:
   - Trainer reaches intro-eligible state or enters remediation path.
-- Current status: partial (`/submit/status/:submissionId` and billing/remediation links exist; end-to-end lifecycle orchestration is limited).
+- Current status: complete (submission-status transitions and billing recovery path are deterministic and test-backed).
 
 #### W18. Revenue recovery and billing remediation
 - Scope: recover revenue when collection path degrades.
 - Entry: failed/uncollectible/disputed/profile-incomplete invoice outcomes.
 - Main path:
   1. Billing states are observed via webhook and oversight.
-  2. Recovery actions are triggered (notify, fix profile, retry policy, or suppress).
-  3. Recovered rows return to collectible path or move to at-risk reporting.
+  2. Recovery loop applies bounded retry/backoff policy and marks rows as `retry_sent`, `retry_failed`, `retry_exhausted`, or `needs_remediation`.
+  3. Operator uses `/trainer/billing` and `/ops` to distinguish collectible recovery from at-risk/remediation states.
 - Exit outcomes:
   - Revenue risk and recovery are explicit and measurable.
-- Current status: partial (webhook + recovery loop exist; policy/runbook hardening still in progress).
+- Current status: complete (bounded retry policy, operator actions, and retry-state tests are in place).
 
 #### W19. Trainer reactivation and retention
 - Scope: re-activate low-activity or billing-blocked trainers.
@@ -152,10 +185,25 @@ Technical skeleton companion:
 - Main path:
   1. Detect reactivation candidates from oversight and loop outputs.
   2. Trigger remediation sequence (listing refresh, billing repair, outreach).
-  3. Return trainer to intro-ready/active state.
+  3. Track resolved candidates and `active_after_resolution_7d` return-to-active outcomes in oversight.
 - Exit outcomes:
   - Recoverable trainers re-enter live demand flow.
-- Current status: partial (`/trainer/reactivate` APIs/UI and reactivation loop exist; closed-loop effectiveness criteria are still maturing).
+- Success criteria:
+  - Monitor: fewer than 5 resolved cases in 7 days, or return-to-active rate is at least 50%.
+  - Investigate: 5 or more resolved cases in 7 days and return-to-active rate falls below 50%.
+  - Escalate: return-to-active rate falls below 25% across two consecutive daily checks, or open candidates rise while resolved stays flat.
+- Current status: complete (`/trainer/reactivate` APIs/UI, return-to-active measurement, and operator success thresholds are now aligned).
+
+#### W21. Public claim validation control
+- Scope: deterministic validation for public claim wording under claim-state policy.
+- Entry: internal or external caller hits read-only claim validation endpoint.
+- Main path:
+  1. Validate claim against current state (`GET /api/claims/validate`).
+  2. Evaluate allow/block using configured enforcement mode.
+- Exit outcomes:
+  - Allowed claim with policy reason codes.
+  - Blocked claim (`403`) when enforcement mode is `block_invalid`.
+- Current status: complete (read-only policy endpoint implemented).
 
 ### 3) Oversight operator (internal observer)
 
@@ -209,6 +257,7 @@ Technical skeleton companion:
   3. Optionally ingest configured source URLs into queue.
 - Exit outcomes:
   - Listing status maintained; new candidates promoted where valid.
+- Current status: complete (failure reason codes, suppression/remediation path, loop-heartbeat writes, and failure-to-recovery behavior are test-backed).
 
 #### W14. Conversion inference, outreach, and health protection
 - Scope: infer outcomes, collect lagging signals, protect system integrity.
@@ -221,7 +270,7 @@ Technical skeleton companion:
   - More complete outcome signal set and stabilized ops state.
 
 ## Workflow Scope Map (quick grouping)
-- `Demand generation`: W15, W16.
+- `Demand generation`: W15, W16, W20.
 - `Demand capture`: W1.
 - `Supply capture`: W6, W11.
 - `Activation`: W2, W7, W9.
@@ -230,6 +279,7 @@ Technical skeleton companion:
 - `Retention/Reactivation`: W5, W19.
 - `Supply growth`: W13, W17.
 - `Autonomous optimization`: W12, W14.
+- `Policy controls`: W21.
 
 ## Decision Log
 - Chosen actor model includes human and non-human actors because the product is explicitly autonomous.
@@ -239,5 +289,5 @@ Technical skeleton companion:
 ## Execution Readiness
 - Design artifact completeness: complete (Understanding Lock + workflow map + decision log).
 - Technical traceability: complete via `docs/WORKFLOW_TRACE_SHEET.md`.
-- Current implementation status: mixed (`complete` + `partial` + `planned` + `missing`), no fully broken core workflow paths identified in existing implemented routes.
-- Next step: execute the priority fix queue from `docs/WORKFLOW_TRACE_SHEET.md` to move all partial workflows to complete.
+- Current implementation status: complete for W1-W21 (no `partial`, `planned`, `missing`, or `broken` rows in the workflow trace sheet).
+- Next step: maintain completeness with regression checks and governance evidence updates whenever workflow-affecting changes are introduced.

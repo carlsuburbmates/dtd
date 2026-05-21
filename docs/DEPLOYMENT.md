@@ -2,29 +2,13 @@
 
 The system is intentionally portable and vendor-neutral.
 
-## 1. Run on the current preview environment
+## 1. Local-first baseline
 
-You don't need to do anything — the project is wired into supervisor:
+Use this repo checkout as the source of truth. Keep runtime/env changes versioned with docs whenever behavior changes.
 
-```bash
-sudo supervisorctl status backend frontend
-sudo supervisorctl restart backend       # if you change .env or install deps
-```
+## 2. Optional host-specific operations
 
-Hot reload is enabled for both services.
-
-## 2. Export to GitHub
-
-```bash
-cd /app
-git init
-git add .
-git commit -m "Bark&Bond v2.1"
-git remote add origin git@github.com:YOUR_ORG/barkbond.git
-git push -u origin main
-```
-
-Nothing in this repo depends on the build environment.
+If your host uses Supervisor or similar process managers, apply host runbooks there. This document only covers portable project behavior.
 
 ## 3. Run locally — Docker
 
@@ -61,9 +45,15 @@ yarn start
 
 | Platform | Notes |
 |---|---|
-| **Railway / Render / Fly** | One-click Python service. Use `uvicorn server:app --host 0.0.0.0 --port $PORT`. |
-| **Vercel** | Use Serverless Python with `@vercel/python`. Background loops require a long-lived worker — switch to Railway/Fly for autonomy, OR run the loops on a tiny Cron-like worker that calls `engine.recompute_*` every N seconds. |
-| **VPS** | systemd unit running `uvicorn`. |
+| **Railway / Render / Fly** | One-click Python service. Use `uvicorn server:app --host 0.0.0.0 --port $PORT` for API and run a separate long-lived worker when `AUTONOMY_LOOP_OWNER=worker`. |
+| **Vercel** | Use Serverless Python with `@vercel/python` only for non-loop API hosting; autonomous loops still require a separate long-lived owner process. |
+| **VPS** | systemd or supervisor units for API plus an optional separate worker process. |
+
+Single-owner loop topology rule:
+1. Exactly one process owns loops via `AUTONOMY_LOOP_OWNER`.
+2. Allowed values: `api`, `worker`, `none`.
+3. The DB lease is a safety guard, not the primary topology choice.
+4. `/ops` remains read-only regardless of ownership topology.
 
 ### Frontend (Create React App)
 
@@ -102,8 +92,10 @@ Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-
    - `TRAINER_FREE_INTRO_DAYS=30`
    - `FIXED_INTRO_FEE_CENTS=500`
 5. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
-6. Bump `ADMIN_PASS` to a strong secret; document it only in the password manager.
-7. Verify all configured loops surface in `/ops` after deploy.
+6. Set `AUTONOMY_LOOP_OWNER` explicitly (`api` or `worker`) and keep `RUN_AUTONOMY_IN_API` consistent only if legacy compatibility is needed.
+7. Set `PUBLIC_MATCHING_ENABLED` according to current mode lock (`0` for education-first prelaunch).
+8. Bump `ADMIN_PASS` and `TRAINER_ACTION_TOKEN_SECRET` to strong secrets; document only in your password manager.
+9. Verify all configured loops surface in `/ops` after deploy.
 
 ## 9. Code ownership / portability
 

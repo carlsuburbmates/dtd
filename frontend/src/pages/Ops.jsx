@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react";
-import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
+import { setAdminPass, getAdminPass, opsApi, audCents, appendOpsNote, getOpsNotes } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function Ops() {
@@ -10,6 +10,7 @@ export default function Ops() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const mountedRef = useRef(true);
+    const failureCountRef = useRef(0);
 
     useEffect(() => {
         document.documentElement.setAttribute("data-theme", "admin");
@@ -27,6 +28,8 @@ export default function Ops() {
             const r = await opsApi.get("/oversight");
             if (!mountedRef.current) return;
             setSnap(r.data);
+            failureCountRef.current = 0;
+            return true;
         } catch (err) {
             if (!mountedRef.current) return;
             if (err?.response?.status === 401) {
@@ -35,9 +38,11 @@ export default function Ops() {
                 setError("");
                 setAuthed(false);
                 toast.error("Session expired");
-                return;
+                return false;
             }
+            failureCountRef.current += 1;
             setError("Unable to load oversight snapshot. Auto-retry continues.");
+            return false;
         } finally {
             if (!mountedRef.current) return;
             setLoading(false);
@@ -50,9 +55,24 @@ export default function Ops() {
             setError("");
             return;
         }
-        fetchSnap();
-        const id = setInterval(fetchSnap, 15_000);
-        return () => clearInterval(id);
+        let cancelled = false;
+        let timerId = null;
+        const pump = async () => {
+            if (cancelled) return;
+            if (document.hidden) {
+                timerId = setTimeout(pump, 10_000);
+                return;
+            }
+            await fetchSnap();
+            const failures = Math.max(0, failureCountRef.current);
+            const delay = Math.min(60_000, 15_000 * (failures + 1));
+            timerId = setTimeout(pump, delay);
+        };
+        pump();
+        return () => {
+            cancelled = true;
+            if (timerId) clearTimeout(timerId);
+        };
     }, [authed, fetchSnap]);
 
     if (!authed) return <Login onPass={() => setAuthed(true)} />;
@@ -139,6 +159,11 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const claimPolicy = snap.claim_policy || {};
     const ownerWaitlistSummary = snap.owner_waitlist_summary || {};
     const prelaunchKpi = snap.kpi_prelaunch || {};
+    const growthAttributionSummary = snap.growth_attribution_summary || {};
+    const reactivationSummary = snap.reactivation_summary || {};
+    const opsInvestigation = snap.ops_investigation || {};
+    const [opsNotes, setOpsNotes] = useState(() => getOpsNotes());
+    const [noteDraft, setNoteDraft] = useState("");
     const datasetIdentity = snap.dataset_identity || integrity.dataset_identity || {};
     const datasetListId = datasetIdentity.list_id || integrity.list_id || "unknown";
     const datasetSuburbCount = typeof datasetIdentity.suburb_count === "number"
@@ -196,12 +221,44 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
         : prelaunchKpiReasonCodes.length > 0
           ? `Some KPI signals are limited: ${prelaunchKpiReasonCodes.join(", ")}`
           : "Prelaunch KPI tracking is temporarily unavailable.";
+    const growthStatusRaw = typeof growthAttributionSummary.status === "string" ? growthAttributionSummary.status : "unavailable";
+    const growthStatus = growthStatusRaw === "ok" ? "ok" : "warn";
+    const growthReasonCodes = Array.isArray(growthAttributionSummary.reason_codes) ? growthAttributionSummary.reason_codes : [];
+    const growthTotals = growthAttributionSummary.totals || {};
+    const growthCohorts = Array.isArray(growthAttributionSummary.cohorts) ? growthAttributionSummary.cohorts.slice(0, 5) : [];
+    const growthStatusExplanation = growthStatus === "ok"
+        ? "Campaign and source attribution cohorts are available."
+        : growthReasonCodes.length > 0
+          ? `Growth attribution is limited: ${growthReasonCodes.join(", ")}`
+          : "Growth attribution is temporarily unavailable.";
+    const reactivationStatusRaw = typeof reactivationSummary.status === "string" ? reactivationSummary.status : "unavailable";
+    const reactivationStatus = reactivationStatusRaw === "ok" ? "ok" : "warn";
+    const reactivationReasonCodes = Array.isArray(reactivationSummary.reason_codes) ? reactivationSummary.reason_codes : [];
+    const resolved7d = typeof reactivationSummary.resolved_7d === "number" ? reactivationSummary.resolved_7d : 0;
+    const activeAfterResolution7d = typeof reactivationSummary.active_after_resolution_7d === "number" ? reactivationSummary.active_after_resolution_7d : 0;
+    const reactivationReturnRate = resolved7d > 0 ? `${Math.round((activeAfterResolution7d / resolved7d) * 100)}%` : "n/a";
+    const reactivationStatusExplanation = reactivationStatus === "ok"
+        ? "Reactivation routing and return-to-active tracking are available."
+        : reactivationReasonCodes.length > 0
+          ? `Reactivation tracking is limited: ${reactivationReasonCodes.join(", ")}`
+          : "Reactivation tracking is temporarily unavailable.";
+    const loopStatuses = opsInvestigation.loop_statuses || {};
+    const billingCases = Array.isArray(opsInvestigation.billing_recovery_cases) ? opsInvestigation.billing_recovery_cases.slice(0, 5) : [];
+    const reactivationCases = Array.isArray(opsInvestigation.reactivation_cases) ? opsInvestigation.reactivation_cases.slice(0, 5) : [];
+    const sourceIngestionSources = Array.isArray(opsInvestigation.source_ingestion_sources) ? opsInvestigation.source_ingestion_sources.slice(0, 5) : [];
+    const discoveryAlerts = Array.isArray(opsInvestigation.discovery_alerts) ? opsInvestigation.discovery_alerts : [];
     const hasDatasetIdentity = datasetListId !== "unknown" && datasetSuburbCount !== "unknown" && datasetHash !== "unknown";
     const statusExplanation = integrityStatus === "ok" && hasDatasetIdentity
         ? "Dataset identity and claim policy are present."
         : integrityReasonCodes.length > 0
           ? `Attention needed: ${integrityReasonCodes.join(", ")}`
           : "Some integrity fields are missing from the latest snapshot.";
+
+    const addNote = () => {
+        const next = appendOpsNote(noteDraft);
+        setOpsNotes(next);
+        setNoteDraft("");
+    };
 
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
@@ -228,14 +285,21 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                     </div>
                 )}
 
-                {/* North star */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-northstar">
+                <div className="grid md:grid-cols-4 gap-4" data-testid="ops-first-checks">
                     <Metric
-                        label="Revenue · booked"
-                        value={audCents(rev.booked_revenue_cents ?? rev.total_cents)}
-                        sub={`collected ${audCents(rev.collected_revenue_cents)} · at risk ${audCents(rev.at_risk_revenue_cents)}`}
+                        label="Revenue · at risk"
+                        value={audCents(rev.at_risk_revenue_cents)}
+                        sub="Investigate if rising. Escalate if it rises across consecutive checks."
                         testid="metric-revenue"
                     />
+                    <Metric label="Loop cards" value={Object.keys(loopStatuses).length} sub="Escalate if any core loop is stale beyond 2x interval." testid="metric-loops-priority" />
+                    <Metric label="Alerts" value={alerts.length} sub="Escalate if a high-severity alert persists after refresh." testid="metric-alerts-priority" />
+                    <Metric label="Discovery pending" value={(snap.discovery_summary || {}).pending ?? 0} sub="Investigate if backlog keeps rising without recovery." testid="metric-discovery-priority" />
+                </div>
+
+                {/* North star */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-northstar">
+                    <Metric label="Revenue · booked" value={audCents(rev.booked_revenue_cents ?? rev.total_cents)} sub={`collected ${audCents(rev.collected_revenue_cents)} · trial free ${billingSummary.trial_free ?? 0}`} testid="metric-revenue-booked" />
                     <Metric label="Intros · 24h" value={tp.intros_24h ?? 0} sub={`7d ${tp.intros_7d ?? 0}`} testid="metric-intros" />
                     <Metric label="Conversions · 24h" value={tp.conversions_24h ?? 0} sub={`rate ${((tp.intro_to_conversion_rate || 0) * 100).toFixed(0)}%`} testid="metric-conversions" />
                     <Metric label="Live listings" value={integrity.live_total ?? 0} sub={`${integrity.verified ?? 0} verified · ${integrity.hidden ?? 0} held`} testid="metric-listings" />
@@ -261,11 +325,72 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                                     <SeverityTag s={a.severity} />
                                     <span className="font-mono text-xs text-[#8B9E98]">{a.type}</span>
                                     <span>{a.message}</span>
+                                    {a.severity === "high" && <span className="text-xs font-mono text-[#F87171]">Escalate if still present after refresh.</span>}
                                 </li>
                             ))}
                         </ul>
                     )}
                 </Section>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                    <Section title="Loop cards" testid="ops-loop-priority">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" statusMeta={loopStatuses.ranking} />
+                            <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" statusMeta={loopStatuses.pricing} />
+                            <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" statusMeta={loopStatuses.verification} />
+                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" statusMeta={loopStatuses.discovery} />
+                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" statusMeta={loopStatuses.inference} />
+                            <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" statusMeta={loopStatuses.health} />
+                        </div>
+                    </Section>
+
+                    <Section title="Investigation queue" testid="ops-investigation-queue">
+                        <div className="space-y-4 text-sm font-mono text-[#F5F2EB]">
+                            <div>
+                                <div className="text-xs uppercase tracking-wider text-[#8B9E98] mb-2">Billing recovery</div>
+                                {billingCases.length === 0 ? <div className="text-[#8B9E98]">No trainer billing cases need investigation.</div> : (
+                                    <ul className="space-y-2">
+                                        {billingCases.map((row) => (
+                                            <li key={row.intro_id} className="rounded border border-[#243631] p-3">
+                                                <div>{row.trainer_name} · {row.billing_retry_state}</div>
+                                                <div className="text-[#8B9E98]">{row.billing_collection_status} · attempts {row.billing_retry_attempts} · {audCents(row.intro_fee_cents)}</div>
+                                                {row.trainer_id && row.trainer_action_token && (
+                                                    <Link
+                                                        to={`/trainer/billing?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
+                                                        className="inline-flex text-xs text-[#F5F2EB] underline underline-offset-2 mt-2"
+                                                    >
+                                                        Open billing remediation
+                                                    </Link>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                            <div>
+                                <div className="text-xs uppercase tracking-wider text-[#8B9E98] mb-2">Reactivation</div>
+                                {reactivationCases.length === 0 ? <div className="text-[#8B9E98]">No open reactivation candidates.</div> : (
+                                    <ul className="space-y-2">
+                                        {reactivationCases.map((row) => (
+                                            <li key={row.trainer_id} className="rounded border border-[#243631] p-3">
+                                                <div>{row.trainer_name}</div>
+                                                <div className="text-[#8B9E98]">{(row.reasons || []).join(" | ") || "No reasons recorded."}</div>
+                                                {row.trainer_id && row.trainer_action_token && (
+                                                    <Link
+                                                        to={`/trainer/reactivate?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
+                                                        className="inline-flex text-xs text-[#F5F2EB] underline underline-offset-2 mt-2"
+                                                    >
+                                                        Open reactivation flow
+                                                    </Link>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    </Section>
+                </div>
 
                 {/* Claim policy */}
                 <Section title="Claim policy · read-only" testid="ops-claim-policy">
@@ -408,20 +533,75 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                 </Section>
 
                 <div className="grid md:grid-cols-2 gap-6">
+                    <Section title="Growth attribution" testid="ops-growth-attribution">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <Tile label="Entry events 30d" value={growthTotals.entry_events_30d ?? 0} accent="mute" />
+                            <Tile label="Matched 30d" value={growthTotals.matched_30d ?? 0} accent="mute" />
+                            <Tile label="Connected 30d" value={growthTotals.connected_30d ?? 0} accent="mute" />
+                            <Tile label="Converted 30d" value={growthTotals.converted_30d ?? 0} accent="green" />
+                            <Tile label="Waitlist joins 30d" value={growthTotals.waitlist_joins_30d ?? 0} accent="amber" />
+                            <Tile label="Cohorts" value={growthTotals.cohort_count ?? 0} accent="mute" />
+                        </div>
+                        <div className="mt-4 text-xs font-mono uppercase tracking-wider text-[#8B9E98]">Top cohorts</div>
+                        <div className="mt-2 font-mono text-sm text-[#F5F2EB]">
+                            {growthCohorts.length === 0 ? (
+                                <div className="text-[#8B9E98]">No attributed cohorts yet.</div>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {growthCohorts.map((cohort) => (
+                                        <li key={`${cohort.campaign}:${cohort.source}`} className="flex items-center justify-between gap-3">
+                                            <span className="truncate text-[#8B9E98]">{cohort.campaign} · {cohort.source}</span>
+                                            <span className="shrink-0">
+                                                matched {cohort.matched ?? 0} · connected {cohort.connected ?? 0} · converted {cohort.converted ?? 0}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="mt-4">
+                            <span className={`admin-tag ${growthStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
+                                {growthStatus === "ok" ? "OK" : "WARN"}
+                            </span>
+                        </div>
+                        <div className="font-mono text-xs text-[#8B9E98] mt-2">{growthStatusExplanation}</div>
+                    </Section>
+
+                    <Section title="Trainer reactivation" testid="ops-reactivation-summary">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <Tile label="Open candidates" value={reactivationSummary.open_candidates ?? 0} accent="amber" />
+                            <Tile label="Notified 7d" value={reactivationSummary.notified_7d ?? 0} accent="mute" />
+                            <Tile label="Resolved 7d" value={resolved7d} accent="mute" />
+                            <Tile label="Active after resolve" value={activeAfterResolution7d} accent="green" />
+                            <Tile label="Return to active" value={reactivationReturnRate} accent="green" />
+                        </div>
+                        <div className="mt-4">
+                            <span className={`admin-tag ${reactivationStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
+                                {reactivationStatus === "ok" ? "OK" : "WARN"}
+                            </span>
+                        </div>
+                        <div className="font-mono text-xs text-[#8B9E98] mt-2">{reactivationStatusExplanation}</div>
+                        <div className="font-mono text-xs text-[#8B9E98] mt-3">
+                            Monitor below 5 resolved cases in 7d or when return-to-active is at least 50%. Investigate when resolved volume is meaningful and the rate drops below 50%. Escalate if the rate stays below 25% across two daily checks.
+                        </div>
+                    </Section>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
                     {/* Loops */}
                     <Section title="Autonomous loops" testid="ops-loops">
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" />
-                            <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" />
-                            <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" />
-                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" />
-                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" />
-                            <LoopCard name="SourceIngest" loop={loops.source_ingestion} unit="queued urls" countKey="queued" />
-                            <LoopCard name="Outreach" loop={loops.outreach} unit="emails sent" countKey="sent" />
-                            <LoopCard name="BillingRecovery" loop={loops.billing_recovery} unit="retries" countKey="retried" />
-                            <LoopCard name="Nurture" loop={loops.nurture} unit="cohorts" countKey="cohorts" />
-                            <LoopCard name="Reactivation" loop={loops.reactivation_route} unit="candidates" countKey="open_candidates" />
-                            <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" />
+                            <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" statusMeta={loopStatuses.ranking} />
+                            <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" statusMeta={loopStatuses.pricing} />
+                            <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" statusMeta={loopStatuses.verification} />
+                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" statusMeta={loopStatuses.discovery} />
+                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" statusMeta={loopStatuses.inference} />
+                            <LoopCard name="SourceIngest" loop={loops.source_ingestion} unit="queued urls" countKey="queued" statusMeta={loopStatuses.source_ingestion} />
+                            <LoopCard name="Outreach" loop={loops.outreach} unit="emails sent" countKey="sent" statusMeta={loopStatuses.outreach} />
+                            <LoopCard name="BillingRecovery" loop={loops.billing_recovery} unit="retries" countKey="retried" statusMeta={loopStatuses.billing_recovery} />
+                            <LoopCard name="Nurture" loop={loops.nurture} unit="cohorts" countKey="cohorts" statusMeta={loopStatuses.nurture} />
+                            <LoopCard name="Reactivation" loop={loops.reactivation_route} unit="candidates" countKey="open_candidates" statusMeta={loopStatuses.reactivation_route} />
+                            <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" statusMeta={loopStatuses.health} />
                         </div>
                     </Section>
 
@@ -440,7 +620,7 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             <Tile label="Duplicate" value={(snap.discovery_summary || {}).duplicate ?? 0} accent="mute" />
                             <Tile label="Discarded" value={(snap.discovery_summary || {}).discarded ?? 0} accent="amber" />
                         </div>
-                        <div className="text-xs font-mono text-[#8B9E98] mt-3">No buttons — the system decides on score and source.</div>
+                        <div className="text-xs font-mono text-[#8B9E98] mt-3">Investigate if pending rises across checks. Escalate if the queue keeps growing without recovery.</div>
                     </Section>
                 </div>
 
@@ -483,6 +663,47 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                         </div>
                     </div>
                 </Section>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                    <Section title="Source ingestion detail" testid="ops-source-detail">
+                        {sourceIngestionSources.length === 0 ? (
+                            <div className="text-sm font-mono text-[#8B9E98]">No source-ingestion detail available.</div>
+                        ) : (
+                            <ul className="space-y-2 text-sm font-mono">
+                                {sourceIngestionSources.map((row) => (
+                                    <li key={row.source_url} className="rounded border border-[#243631] p-3">
+                                        <div className="text-[#F5F2EB] truncate">{row.source_url}</div>
+                                        <div className="text-[#8B9E98] mt-1">failures {row.consecutive_failures || 0} · error {row.last_error_code || "none"}</div>
+                                        <div className="text-[#8B9E98]">suppressed until {row.suppressed_until || "not suppressed"}</div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </Section>
+
+                    <Section title="Operator notes" testid="ops-notes">
+                        <div className="space-y-3">
+                            <textarea
+                                className="admin-input min-h-[100px]"
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                placeholder="What changed, what action was taken, and whether follow-up is needed."
+                                data-testid="ops-note-input"
+                            />
+                            <button onClick={addNote} className="admin-btn admin-btn-accent" data-testid="ops-note-save" disabled={!noteDraft.trim()}>
+                                Save note
+                            </button>
+                            <div className="space-y-2 text-sm font-mono">
+                                {opsNotes.length === 0 ? <div className="text-[#8B9E98]">No operator notes saved yet.</div> : opsNotes.map((note) => (
+                                    <div key={note.id} className="rounded border border-[#243631] p-3">
+                                        <div className="text-[#8B9E98] text-xs">{note.createdAt?.slice(0, 19).replace("T", " ")}</div>
+                                        <div className="text-[#F5F2EB] mt-1">{note.text}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </Section>
+                </div>
 
                 {/* Pricing state */}
                 <Section title="Intro fee state · per suburb" testid="ops-pricing">
@@ -590,19 +811,23 @@ function Metric({ label, value, sub, testid }) {
     );
 }
 
-function LoopCard({ name, loop, unit, countKey }) {
+function LoopCard({ name, loop, unit, countKey, statusMeta }) {
     const last = loop?.last_run;
     const lastMs = last ? new Date(last).getTime() : Number.NaN;
     const ago = Number.isFinite(lastMs) ? Math.max(0, Math.floor((Date.now() - lastMs) / 1000)) : null;
     const count = countKey ? (loop?.[countKey] ?? "—") : "live";
+    const status = statusMeta?.status || "warn";
+    const tone = status === "ok" ? "text-[#10B981]" : status === "investigate" ? "text-[#FBBF24]" : "text-[#F87171]";
+    const thresholdCopy = statusMeta?.stale_after_s ? ` · stale>${statusMeta.stale_after_s}s` : "";
     return (
         <div className="bg-[#0D1412] border border-[#243631] rounded p-3" data-testid={`loop-${name.toLowerCase()}`}>
             <div className="flex items-center gap-2">
-                <Activity className="h-3 w-3 text-[#10B981]" />
+                <Activity className={`h-3 w-3 ${tone}`} />
                 <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">{name}</div>
             </div>
             <div className="font-mono text-lg mt-1">{count}</div>
-            <div className="text-[10px] font-mono text-[#8B9E98] mt-0.5">{unit}{ago !== null ? ` · ${ago}s ago` : ""}</div>
+            <div className="text-[10px] font-mono text-[#8B9E98] mt-0.5">{unit}{ago !== null ? ` · ${ago}s ago` : ""}{thresholdCopy}</div>
+            <div className={`text-[10px] font-mono mt-1 ${tone}`}>{status === "ok" ? "Monitor" : status === "investigate" ? "Investigate" : "Escalate"}</div>
         </div>
     );
 }

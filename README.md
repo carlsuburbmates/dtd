@@ -6,8 +6,8 @@
 ## What this is
 
 Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
-- accepts a one-line problem from a dog owner (`/`),
-- returns 3 ranked trainer matches (deterministic relevance + outcome score),
+- uses mode-gated home entry (`PUBLIC_MATCHING_ENABLED`): owner waitlist in prelaunch, or live matching when enabled,
+- accepts a one-line problem from a dog owner and returns 3 ranked trainer matches (deterministic relevance + outcome score) when matching is enabled,
 - records an intro on **Connect** and issues Stripe invoice collection when trainer billing profile is ready,
 - launch defaults to `track_only` conversion tracking,
 - tracks conversions as quality signals by default, with bill-mode available later,
@@ -24,7 +24,7 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 
 ## Public website routes
 
-- `/` match flow
+- `/` owner waitlist or match flow (mode-gated)
 - `/how-it-works`
 - `/about`
 - `/pricing`
@@ -91,7 +91,10 @@ docker compose up --build
 | `ADMIN_PASS` | backend | Passcode for `/api/oversight/login` |
 | `ACTIVE_REGION` | backend | Launch scope region (default `Greater Melbourne`) |
 | `ACTIVE_REGIONS` | backend | Comma-separated allowed regions |
-| `RUN_AUTONOMY_IN_API` | backend | `1` = API owns loops, `0` = worker owns loops |
+| `AUTONOMY_LOOP_OWNER` | backend | Primary loop-owner selector: `api`, `worker`, or `none` |
+| `RUN_AUTONOMY_IN_API` | backend | Legacy compatibility flag; must not conflict with `AUTONOMY_LOOP_OWNER` |
+| `PUBLIC_MATCHING_ENABLED` | backend | `1` enables public `/match` and `/intros`; `0` keeps prelaunch gating |
+| `TRAINER_ACTION_TOKEN_SECRET` | backend | HMAC secret for trainer billing/reactivation action tokens |
 | `CONVERSION_BILLING_MODE` | backend | `track_only` (default) or `bill` |
 | `DISCOVERY_SOURCE_URLS` | backend | Comma-separated source pages scanned for candidate trainer links |
 | `RESEND_API_KEY` | backend | Required for T+7 outreach delivery |
@@ -125,4 +128,4 @@ The latest iteration's report lives at `docs/test_reports/iteration_<n>.json`.
 5. Configure `CORS_ORIGINS` to your real domain(s).
 6. Front the API with HTTPS at the platform layer.
 
-The system is designed to keep working at every step — none of these are blockers for revenue.
+The runtime is fail-soft, but launch progression is still governed by explicit human gates in [`docs/governance/LOCK_STATE.md`](docs/governance/LOCK_STATE.md) and [`docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md`](docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md).

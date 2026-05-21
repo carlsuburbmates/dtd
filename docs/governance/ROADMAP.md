@@ -3,6 +3,7 @@
 Rule: current-state only. Keep this file aligned to the code and infra that actually exist.
 Execution handoff reference: `docs/governance/NEXT_SESSION_HANDOFF.md`.
 Status updates in this file must include evidence references.
+Authority index: `docs/governance/CURRENT_TRUTH_INDEX.md`.
 
 ## Goal
 
@@ -10,6 +11,55 @@ Launch Bark&Bond in Greater Melbourne with:
 1. One input -> best matches.
 2. Intro-first commercial model.
 3. Automation-first operations with minimal manual overhead.
+
+## Launch Definition Of Done (authoritative)
+
+A launch-ready, robustly autonomous state is reached only when all criteria below are satisfied with evidence in-repo.
+
+| Area | Done criterion | Evidence source |
+|---|---|---|
+| Workflow completeness | `docs/WORKFLOW_TRACE_SHEET.md` shows no `partial`, `planned`, `missing`, or `broken` rows (all workflows complete). | `docs/WORKFLOW_TRACE_SHEET.md` |
+| Runtime autonomy | Loop ownership is single-owner and lease-guarded, and active loops remain fresh (no stale loop beyond 2x interval during evidence window). | `/api/oversight` snapshot evidence + `docs/governance/NEXT_SESSION_HANDOFF.md` log |
+| Operational health | No unresolved high-severity health alerts in the launch evidence window. | `/api/oversight` health/alerts evidence |
+| Commercial reliability | Intro billing lifecycle is proven end-to-end (send, paid/failed, retry, webhook reconciliation) with explicit at-risk visibility. | `docs/OPERATIONS.md` KPI semantics + test/runtime evidence |
+| Product path reliability | Home mode behavior is explicit (`PUBLIC_MATCHING_ENABLED`), owner/trainer lifecycle paths are non-dead and consistent. | `frontend/src/pages/*`, `frontend/src/App.js`, route smoke evidence |
+| Security controls | Oversight auth protection, webhook idempotency, intro idempotency, and trainer action-token controls are active and tested. | backend tests + `backend/server.py` |
+| Quality gates | Backend tests pass, frontend tests pass, frontend build passes for the release candidate. | `docs/governance/LOCK_STATE.md` verification evidence |
+| Doc-code sync | README/Architecture/Operations/Workflows/Governance docs reflect current runtime truth without contradictions. | `docs/governance/CURRENT_TRUTH_INDEX.md` + doc consistency pass |
+| Governance gates | H-01..H-04 are completed and Final Go/No-Go remains an explicit, recorded decision. | `docs/governance/LOCK_STATE.md`, `docs/governance/NEXT_SESSION_HANDOFF.md` |
+
+Rule: if any criterion above is not met, status remains `not launch-ready`.
+
+## Completion Decisions (populated from current code/docs)
+
+These defaults are the active completion contract unless explicitly superseded in this file.
+
+1. Scope confirmation:
+- Completion scope included closing previously non-complete workflows `W8` and `W13`; this scope is now satisfied with objective evidence.
+
+2. Pass criteria source:
+- Workflow pass criteria and closure evidence are recorded in `docs/WORKFLOW_TRACE_SHEET.md` and synchronized in governance evidence logs.
+
+3. Operator ownership and response times:
+- Primary operator owner: solo founder/owner (`carlg`) per one-man operating model.
+- Response-time standard:
+  - `Monitor`: same day logging.
+  - `Investigate`: begin within 4 hours of trigger.
+  - `Escalate`: immediate (same check window) to technical owner path.
+
+4. Final Go/No-Go authority:
+- Final launch approval authority is the owner (`carlg`), recorded in governance evidence (`LOCK_STATE.md` + `NEXT_SESSION_HANDOFF.md` execution log).
+
+5. Guarded policy defaults (no approval required to keep defaults):
+- `CONVERSION_BILLING_MODE=track_only` remains default.
+- `PUBLIC_MATCHING_ENABLED` remains mode-gated by current launch state.
+- No auth replacement.
+- No billing model cutover away from intro-first defaults.
+- Any change to the above remains approval-required by existing guardrails.
+
+6. Runtime verification access assumption:
+- Local completion evidence can be produced from code/tests/docs.
+- Live verification evidence uses existing runbook + platform checks when available; missing live credentials/access blocks only live-go decision, not local completion readiness assessment.
 
 ## Operating Model (locked for now)
 
@@ -20,8 +70,11 @@ Launch Bark&Bond in Greater Melbourne with:
 5. No required PR review gate.
 6. No archive docs. Update or delete in place when truth changes.
 
-## Current System Truth (2026-05-02)
-Reconciled addendum (2026-05-10): public matching deferment is currently enforced at home-entry UI/runtime flag level (`PUBLIC_MATCHING_ENABLED`), while matching/contact lifecycle routes and APIs remain implemented in code.
+## Current System Truth (2026-05-20)
+Public home-entry mode is enforced by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`):
+- `false` => owner waitlist on `/`.
+- `true` => live matching on `/`.
+Matching/contact lifecycle routes and APIs remain implemented in both modes.
 
 ### Code reality
 
@@ -95,6 +148,58 @@ Done when:
 2. Observe intro event quality, suppression patterns, and incident trends.
 3. Tune thresholds/policies only with explicit evidence updates in docs.
 
+### Remaining Completion Checklist (strict order)
+
+This checklist is the canonical execution order for the remaining project work after workflow closure. Items in `Must-Finish Before Launch` are implementation or closeout blockers that must be finished before the final live-verification phase begins. `Post-Feature Launch Verification` is the final evidence-and-decision block and should start only after the feature/completion work is confirmed done. `Should-Finish For Operator Takeover` improves the non-technical operating model but does not override the launch gate unless a checklist item also maps to the Launch Definition Of Done above.
+
+#### Must-Finish Before Launch
+
+Status: no open implementation or closeout blockers remain after the `2026-05-21` local closeout pass. Final launch readiness still depends on the `Post-Feature Launch Verification` block below.
+
+Closure evidence:
+1. Security-control evidence gaps were closed locally on `2026-05-21` with oversight lockout and trainer action-token negative-path coverage in `backend/tests/test_lifecycle_endpoints_unit.py`, with targeted validation recorded in governance evidence.
+2. Roadmap-authority alignment closeout was completed on `2026-05-21` by normalizing `ROADMAP.md` to carry the canonical execution order, current authority references, and the deferred final-verification block as the only remaining launch-work phase.
+
+#### Post-Feature Launch Verification
+
+Do not start this block until the project’s feature/completion work is confirmed finished.
+
+1. Capture a launch evidence window proving both:
+   - no stale core loop beyond `2x` interval; and
+   - no unresolved `severity:high` alerts during that window.
+   - Evidence anchors: `/api/oversight` snapshot evidence, `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
+2. Complete `P2 - Controlled go-live` with explicit evidence.
+3. Produce release-level evidence for the matching-enabled public path (`PUBLIC_MATCHING_ENABLED=true`).
+   - Unit coverage already exists; the remaining gap is release evidence, route smoke, and governance evidence for the enabled-mode public path.
+   - Evidence anchors: `backend/tests/test_public_mode_unit.py`, `frontend/src/App.js`, route smoke evidence, governance execution log.
+4. Record the explicit `Final Go/No-Go` decision in governance evidence.
+   - Evidence anchors: `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/LOCK_STATE.md`.
+
+#### Should-Finish For Operator Takeover
+
+1. Reorder `/ops` so the documented first-check sequence is reflected in the UI:
+   - `Revenue · at risk`
+   - `Loop cards`
+   - `Alerts`
+   - `Discovery pending`
+2. Surface `Monitor` / `Investigate` / `Escalate` thresholds directly in `/ops`, not only in docs.
+3. Improve case-level investigation depth from `/ops` for:
+   - billing recovery,
+   - reactivation,
+   - discovery/source-ingestion, and
+   - alert context.
+4. Add clearer bounded remediation paths from `/ops` into operator-safe flows.
+5. Replace misleading resubmission/update CTAs so trainer lifecycle flows are contextual rather than pseudo-new submissions.
+6. Unify support routing language across public and trainer-support surfaces.
+
+#### Nice-To-Have Cleanup
+
+1. Add in-product operator note logging for daily checks.
+2. Improve `/ops` severity visuals for stale loops and aging alerts.
+3. Clean stale evidence artifacts that can confuse current-proof review.
+4. Tighten deployment/runtime docs so single-owner loop topology is completely unambiguous.
+5. Expand submission-status UI clarity for activation state and next-step guidance.
+
 ### P3 - Website completion (public + trainer UX only)
 
 Status: completed (IA/routes/UX baseline complete; does not imply workflow completeness or that all routes are publicly promoted in current mode lock).
@@ -130,17 +235,23 @@ Done when:
 
 ### P4 - Business workflow completeness (demand/supply/revenue lifecycle)
 
-Status: in progress.
+Status: completed.
 
 Evidence gates:
-1. `docs/USER_WORKFLOWS.md` includes `W1-W19` with demand generation, onboarding completion, and revenue recovery workflows.
+1. `docs/USER_WORKFLOWS.md` includes `W1-W21` with demand generation, owner waitlist capture, onboarding completion, revenue recovery, and claim-policy control workflows.
 2. `docs/WORKFLOW_TRACE_SHEET.md` assigns explicit status (`complete|partial|planned|missing`) for each workflow.
 3. Oversight KPI semantics separate booked revenue from collected/at-risk collection outcomes.
 4. Operations runbook defines KPI meanings with no terminology conflicts.
+5. Non-technical operator routine is documented with clear monitor/investigate/escalate actions.
 
 Done when:
 1. All `R1-R6` recommendations in `SESSION_IMPLEMENTATION_REPORT_2026-05-08.md` are implemented or explicitly closed with evidence.
 2. No remaining contradictions between roadmap claims and workflow/operations evidence.
+
+Completion evidence (2026-05-20):
+1. `docs/WORKFLOW_TRACE_SHEET.md` now reports W1-W21 all `complete`.
+2. `docs/USER_WORKFLOWS.md` and `docs/OPERATIONS.md` are synchronized to the closed workflow state and operator action model.
+3. Verification evidence recorded in `docs/governance/LOCK_STATE.md` includes backend tests, frontend tests, frontend build, and targeted W8/W13 closure tests.
 
 ## Repo Task Backlog (codebase-derived)
 

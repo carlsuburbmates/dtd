@@ -5,22 +5,31 @@ import { api, audCents } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
-const SUPPORT_EMAIL = "billing@dogtrainersdirectory.com.au";
+const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 
 export default function TrainerBilling() {
     const [search] = useSearchParams();
     const trainerId = search.get("trainerId") || "";
     const submissionId = search.get("submissionId") || "";
+    const trainerActionToken = search.get("token") || "";
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [data, setData] = useState(null);
     const [error, setError] = useState("");
+    const [billingEmail, setBillingEmail] = useState("");
 
     const load = () => {
         setLoading(true);
-        api.get("/trainer/billing", { params: { trainer_id: trainerId || undefined, submission_id: submissionId || undefined } })
+        api.get("/trainer/billing", {
+            params: {
+                trainer_id: trainerId || undefined,
+                submission_id: submissionId || undefined,
+                trainer_action_token: trainerActionToken || undefined,
+            },
+        })
             .then((r) => {
                 setData(r.data);
+                setBillingEmail(r?.data?.trainer?.billing_email || "");
                 setError("");
             })
             .catch((err) => {
@@ -33,7 +42,7 @@ export default function TrainerBilling() {
     useEffect(() => {
         load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [trainerId, submissionId]);
+    }, [trainerId, submissionId, trainerActionToken]);
 
     const reconnect = async () => {
         setBusy(true);
@@ -41,6 +50,8 @@ export default function TrainerBilling() {
             await api.post("/trainer/billing/reconnect", {
                 trainer_id: trainerId || undefined,
                 submission_id: submissionId || undefined,
+                billing_email: billingEmail.trim() || undefined,
+                trainer_action_token: trainerActionToken || undefined,
             });
             toast.success("Billing profile refresh requested.");
             load();
@@ -106,8 +117,8 @@ export default function TrainerBilling() {
                                 ))}
                             </div>
                             <div className="mt-6 flex flex-wrap gap-3">
-                                <Link to={`/submit${submissionId ? `?submissionId=${submissionId}` : ""}`} className="btn-ghost" data-testid="trainer-billing-update-email">
-                                    Update billing email
+                                <Link to={`/trainer/reactivate?${trainerId ? `trainerId=${trainerId}` : ""}${trainerId && submissionId ? "&" : ""}${submissionId ? `submissionId=${submissionId}` : ""}${(trainerId || submissionId) && trainerActionToken ? "&" : ""}${trainerActionToken ? `token=${encodeURIComponent(trainerActionToken)}` : ""}`} className="btn-ghost" data-testid="trainer-billing-update-email">
+                                    Review reactivation status
                                 </Link>
                                 <button onClick={reconnect} disabled={busy} className="btn-primary" data-testid="trainer-billing-reconnect">
                                     <RefreshCcw className="h-4 w-4" />
@@ -123,6 +134,20 @@ export default function TrainerBilling() {
                             </div>
                             <p className="mt-4 text-xs text-[#4A615A]">
                                 Auto-retry policy: up to {data?.retry_policy?.max_attempts || 0} attempts with {data?.retry_policy?.base_delay_hours || 0}h base backoff.
+                            </p>
+                            <label className="mt-5 block text-sm text-[#4A615A]">
+                                Billing email
+                                <input
+                                    type="email"
+                                    value={billingEmail}
+                                    onChange={(e) => setBillingEmail(e.target.value)}
+                                    className="input-public mt-2"
+                                    placeholder="billing@example.com"
+                                    data-testid="trainer-billing-email"
+                                />
+                            </label>
+                            <p className="mt-3 text-xs text-[#4A615A]">
+                                Update the billing email here before reconnecting if the current address is missing or wrong.
                             </p>
                         </section>
                     </div>

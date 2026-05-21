@@ -1,13 +1,13 @@
 # Architecture
 
-Current mode-lock context (2026-05-10): education-first prelaunch. Public matching from home is gated by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`), while owner/trainer lifecycle routes and APIs remain implemented.
+Current mode-lock context (2026-05-20): home entry is mode-gated by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`) while owner/trainer lifecycle routes and APIs remain implemented.
 
 ## 1. Final product model
 
 | Layer | What it is | Where |
 |---|---|---|
-| Product surface | Technical path: one input → 3 ranked trainers → Connect → contact reveal → hire. Current public entry may be deferred by mode-lock flag. | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
-| Lifecycle surfaces | Follow-up confirmation, trainer onboarding status, billing remediation, reactivation, campaign entry | `frontend/src/pages/FollowUp.jsx`, `SubmitStatus.jsx`, `TrainerBilling.jsx`, `TrainerReactivate.jsx`, `CampaignLanding.jsx` |
+| Product surface | Technical path: mode-gated home entry (owner waitlist or live matching) → trainer detail connect → contact reveal → hire signal. | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
+| Lifecycle surfaces | Owner waitlist capture, follow-up confirmation, trainer onboarding status, billing remediation, reactivation, campaign entry | `frontend/src/pages/FollowUp.jsx`, `SubmitStatus.jsx`, `TrainerBilling.jsx`, `TrainerReactivate.jsx`, `CampaignLanding.jsx` |
 | Match decision | Deterministic heuristic relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
 | Monetisation | Intro-first; `/api/intros` meters lead fee. Submission-registered trainers receive `trial_free` intros for first 30 days, then Stripe invoice collection begins. Launch defaults to `track_only` conversion tracking. | `POST /api/intros`, `POST /api/stripe/webhook`, `POST /api/conversions` |
 | Trust | Bayesian outcome score; multi-signal conversion inference | `engine.py` |
@@ -94,6 +94,8 @@ Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 | `system_state` | last-run summary per loop (`key` ∈ {ranking, pricing, …}) |
 | `stripe_events` | webhook idempotency + latest Stripe event receipts |
 | `audit_log` | every state-mutating action with before/after |
+| `owner_waitlist` | prelaunch owner waitlist enrollment rows (email/suburb/campaign/source) |
+| `owner_waitlist_events` | normalized waitlist lifecycle events (`started/submitted/duplicate/rejected`) |
 | `evidence` | (reserved) cross-source confidence bonus inputs |
 | `config_snapshots` | (reserved for prod) snapshots used by health auto-rollback |
 | `seo_pages` | auto-generated suburb landing pages |
@@ -109,12 +111,14 @@ The system *reacts* to signals, it doesn't sit in static rules:
 - **User clicks Connect** → fraud module evaluates → bills or suppresses → ranking loop re-scores trainer in the next pass.
 - **Stripe webhook arrives** (`invoice.sent`, `invoice.paid`, `invoice.payment_failed`) → intro row `billing_collection_status` is reconciled.
 - **User clicks Connect from result list** → explicit pre-intro engagement logged (`result_connect_click`).
+- **Owner joins prelaunch waitlist** → `/api/owner-waitlist` writes waitlist row plus normalized waitlist event timeline.
 - **User clicks website / phone / email** → engagement recorded → if 2+ distinct kinds within an intro: inferred conversion logged.
 - **T+7 follow-up email click** → `/follow-up/:token` → explicit hired/still-deciding/rematch outcome path.
 - **Collection fails** (`payment_failed` / `uncollectible` / `invoice_error`) → billing recovery loop retries with bounded exponential backoff.
 - **Campaign/source cohorts underperform** → nurture loop updates remarketing candidate totals for growth ops.
 - **Trainer drifts inactive or blocked** → reactivation routing loop creates/updates candidate and can notify trainer.
 - **24-h conversion drop ≥50 %** → health loop rolls back the most recent `config_snapshots` row (if any) and emits an `auto_rollback` alert.
+- **Public claim copy check** → `/api/claims/validate` provides deterministic read-only allow/block evaluation under current claim-state policy.
 
 ## 6. Anti-gaming
 
