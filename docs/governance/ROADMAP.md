@@ -7,10 +7,15 @@ Authority index: `docs/governance/CURRENT_TRUTH_INDEX.md`.
 
 ## Goal
 
-Launch Bark&Bond in Greater Melbourne with:
+Launch DTD / Dog Trainers Directory in Greater Melbourne with:
 1. One input -> best matches.
 2. Intro-first commercial model.
 3. Automation-first operations with minimal manual overhead.
+
+Standards target rule:
+1. this roadmap remains current-state only
+2. the committed Standards Set now defines the supply-first launch target
+3. this roadmap must distinguish current state from that supply-first target until runtime/code alignment is complete
 
 ## Launch Definition Of Done (authoritative)
 
@@ -18,11 +23,19 @@ A launch-ready, robustly autonomous state is reached only when all criteria belo
 
 | Area | Done criterion | Evidence source |
 |---|---|---|
-| Workflow completeness | `docs/WORKFLOW_TRACE_SHEET.md` shows no `partial`, `planned`, `missing`, or `broken` rows (all workflows complete). | `docs/WORKFLOW_TRACE_SHEET.md` |
+| Supply readiness | Trainer supply readiness is proven for the current launch phase. | `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`, `/ops` evidence, governance logs |
+| Intro-ready threshold | Intro-ready trainer threshold is defined and evidenced. | readiness evidence + `/ops` visibility |
+| Blocked trainer visibility | Blocked trainer count and blocker reasons are visible. | `/ops` evidence |
+| Launch phase state | Current launch phase is explicit and separate from public live matching exposure. | phase state evidence |
+| Readiness snapshots | `phase_readiness_snapshots` exist and are current enough for decisions. | readiness records + governance evidence |
+| Transition decisions | `phase_transition_decisions` exist for any claimed phase transition. | governance evidence + audit history |
+| `/ops` phase and readiness view | `/ops` shows phase, readiness, recommendation, and blockers to next phase. | `/ops` evidence |
+| Data sufficiency | Launch-critical records are product-backed and sufficient for decisions. | product-backed evidence |
+| CSV/export rule | CSV/export is available for proof only and is not the operating source of truth. | standards and evidence model alignment |
 | Runtime autonomy | Loop ownership is single-owner and lease-guarded, and active loops remain fresh (no stale loop beyond 2x interval during evidence window). | `/api/oversight` snapshot evidence + `docs/governance/NEXT_SESSION_HANDOFF.md` log |
 | Operational health | No unresolved high-severity health alerts in the launch evidence window. | `/api/oversight` health/alerts evidence |
 | Commercial reliability | Intro billing lifecycle is proven end-to-end (send, paid/failed, retry, webhook reconciliation) with explicit at-risk visibility. | `docs/OPERATIONS.md` KPI semantics + test/runtime evidence |
-| Product path reliability | Home mode behavior is explicit (`PUBLIC_MATCHING_ENABLED`), owner/trainer lifecycle paths are non-dead and consistent. | `frontend/src/pages/*`, `frontend/src/App.js`, route smoke evidence |
+| Product path reliability | Home mode behavior is explicit (`PUBLIC_MATCHING_ENABLED`), launch phase is separate from matching exposure, and owner/trainer lifecycle paths are non-dead and consistent. | `frontend/src/pages/*`, `frontend/src/App.js`, route smoke evidence |
 | Security controls | Oversight auth protection, webhook idempotency, intro idempotency, and trainer action-token controls are active and tested. | backend tests + `backend/server.py` |
 | Quality gates | Backend tests pass, frontend tests pass, frontend build passes for the release candidate. | `docs/governance/LOCK_STATE.md` verification evidence |
 | Doc-code sync | README/Architecture/Operations/Workflows/Governance docs reflect current runtime truth without contradictions. | `docs/governance/CURRENT_TRUTH_INDEX.md` + doc consistency pass |
@@ -45,7 +58,7 @@ These defaults are the active completion contract unless explicitly superseded i
 - Response-time standard:
   - `Monitor`: same day logging.
   - `Investigate`: begin within 4 hours of trigger.
-  - `Escalate`: immediate (same check window) to technical owner path.
+  - `Escalate`: immediate (same check window) into `technical-owner mode` for the same owner.
 
 4. Final Go/No-Go authority:
 - Final launch approval authority is the owner (`carlg`), recorded in governance evidence (`LOCK_STATE.md` + `NEXT_SESSION_HANDOFF.md` execution log).
@@ -75,6 +88,11 @@ Public home-entry mode is enforced by `PUBLIC_MATCHING_ENABLED` (`/api/config` c
 - `false` => owner waitlist on `/`.
 - `true` => live matching on `/`.
 Matching/contact lifecycle routes and APIs remain implemented in both modes.
+
+Current-state note:
+1. the Standards Set now defines a supply-first launch target
+2. this roadmap must not treat matching-enabled public release evidence as the immediate supply-first launch requirement
+3. controlled live matching evidence belongs to a later phase after supply-first verification
 
 ### Code reality
 
@@ -112,7 +130,7 @@ Evidence references for infrastructure status:
 
 ## Priority Order (next work)
 
-### P0 - Governance and architecture alignment
+### P0A - Standards Set alignment
 
 Status: completed.
 Evidence references:
@@ -127,22 +145,50 @@ Locked decisions now implemented:
 4. Scope: region-based enforcement with one active region set.
 5. Consent: required before matching, contact reveal, and submission publish path.
 
-### P1 - Launch-readiness evidence completion
+### P0B - Derivative-doc alignment
 
-Status: completed.
+Status: in progress.
 
-1. Stage D evidence pack:
-- Command-level domain/TLS/edge proof is recorded in the runbook and execution log.
+Scope:
+1. align derivative docs to the committed supply-first Standards Set
+2. align derivative docs to `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+3. remove stale demand-first and legacy naming drift where not historical
 
-2. Stage E evidence pack:
-- Repeatable deploy/redeploy path has command-level proof (`dpl_CBoYcSJxiJprePuwDjUaQaLp9k5H` then `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`), and authenticated deployment-route smoke verifies required routes render (`HTTP 200` via `vercel curl`).
+### P0C - Runtime/code alignment
+
+Status: pending.
+
+Scope:
+1. align runtime and code surfaces to the committed supply-first standards where not already aligned
+2. align `/ops` evidence views, phase records, and readiness visibility where implemented
+3. keep `PUBLIC_MATCHING_ENABLED` separate from launch phase or equivalent persisted phase state
+
+### P1 - Supply-first launch verification
+
+Status: pending.
 
 Done when:
-1. Stage D and Stage E both have command-level evidence in runbook.
-2. Public domains are attached and return live launch responses.
-3. The session that changed P1 status appended matching evidence entries in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
+1. supply readiness is evidenced for the current phase.
+2. intro-ready threshold is evidenced.
+3. blocked trainer visibility is evidenced.
+4. launch phase state is explicit.
+5. readiness snapshots exist.
+6. phase transition decisions exist when needed.
+7. `/ops` phase/readiness/blocker visibility is evidenced.
+8. data sufficiency is evidenced.
 
-### P2 - Controlled go-live
+### P2 - Owner waitlist push
+
+Status: later.
+
+Purpose:
+1. increase passive owner demand only after supply-first evidence is sufficient
+2. keep owner demand passive and phase-aware
+3. avoid implying broad live matching before approved transition
+
+### P3 - Controlled live matching
+
+Status: later.
 
 1. Run production in intro-first mode with conservative safeguards.
 2. Observe intro event quality, suppression patterns, and incident trends.
@@ -168,20 +214,25 @@ Do not start this block until the project’s feature/completion work is confirm
    - no stale core loop beyond `2x` interval; and
    - no unresolved `severity:high` alerts during that window.
    - Evidence anchors: `/api/oversight` snapshot evidence, `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
-2. Complete `P2 - Controlled go-live` with explicit evidence.
-3. Produce release-level evidence for the matching-enabled public path (`PUBLIC_MATCHING_ENABLED=true`).
-   - Unit coverage already exists; the remaining gap is release evidence, route smoke, and governance evidence for the enabled-mode public path.
-   - Evidence anchors: `backend/tests/test_public_mode_unit.py`, `frontend/src/App.js`, route smoke evidence, governance execution log.
+2. Complete `P1 - Supply-first launch verification` with explicit evidence.
+3. Defer release-level evidence for the matching-enabled public path (`PUBLIC_MATCHING_ENABLED=true`) to `P3 - Controlled live matching`.
+   - Matching-enabled public-path release evidence is not the immediate supply-first launch gate.
+   - It becomes relevant only for the later controlled live-matching phase.
 4. Record the explicit `Final Go/No-Go` decision in governance evidence.
    - Evidence anchors: `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/LOCK_STATE.md`.
 
 #### Should-Finish For Operator Takeover
 
 1. Reorder `/ops` so the documented first-check sequence is reflected in the UI:
-   - `Revenue · at risk`
-   - `Loop cards`
-   - `Alerts`
-   - `Discovery pending`
+    - current launch phase
+    - public matching exposure state
+    - supply readiness
+    - trainer submissions
+    - intro-ready trainers
+    - blocked trainers
+    - readiness recommendation
+    - blockers to next phase
+    - then revenue, loops, alerts, discovery/source-ingestion
 2. Surface `Monitor` / `Investigate` / `Escalate` thresholds directly in `/ops`, not only in docs.
 3. Improve case-level investigation depth from `/ops` for:
    - billing recovery,
@@ -200,7 +251,7 @@ Do not start this block until the project’s feature/completion work is confirm
 4. Tighten deployment/runtime docs so single-owner loop topology is completely unambiguous.
 5. Expand submission-status UI clarity for activation state and next-step guidance.
 
-### P3 - Website completion (public + trainer UX only)
+### P4 - Website completion (public + trainer UX only)
 
 Status: completed (IA/routes/UX baseline complete; does not imply workflow completeness or that all routes are publicly promoted in current mode lock).
 Evidence references:
@@ -233,7 +284,7 @@ Done when:
 2. Primary CTAs are wired and non-dead.
 3. Frontend build passes in CI/local.
 
-### P4 - Business workflow completeness (demand/supply/revenue lifecycle)
+### P5 - Business workflow completeness (demand/supply/revenue lifecycle)
 
 Status: completed.
 

@@ -2,6 +2,30 @@
 
 The system is autonomous; this document explains how to read it and how to recover when a loop misbehaves.
 
+## Authority And Alignment
+
+This document is a derivative operations guide.
+It is not the canonical authority for launch sequencing, launch gating, or `/ops` responsibility boundaries.
+
+Canonical authorities for this document are:
+1. `docs/standards/SSOT.md`
+2. `docs/standards/BUILD_CHECKLIST.md`
+3. `docs/standards/LAUNCH_GATE.md`
+4. `docs/standards/INTEGRITY_AUDIT.md`
+5. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+6. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
+7. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
+
+If this document conflicts with those authorities, the canonical documents govern.
+
+## Core Data Rule
+
+Use this rule in all operating decisions:
+1. `Database = truth`
+2. `/ops = readable operating view`
+3. `audit_log = decision trail`
+4. `CSV/export = proof only`
+
 ## 0. Non-technical operator routine (default)
 
 This routine is for an operator with no coding background. Use `/ops` as the primary control view.
@@ -9,7 +33,8 @@ This routine is for an operator with no coding background. Use `/ops` as the pri
 ### Ownership and response times
 
 1. Primary operator owner: solo founder/owner (`carlg`).
-2. Response-time standard:
+2. `Operator mode` and `technical-owner mode` are two operating modes used by the same owner.
+3. Response-time standard:
 - `Monitor`: note same day.
 - `Investigate`: start within 4 hours.
 - `Escalate`: immediate in the same check window.
@@ -25,29 +50,47 @@ Interpretation:
 - `Operator mode`: safe day-to-day operations, bounded remediation, and read-only oversight.
 - `Technical-owner mode`: infra/runtime intervention, policy changes, or any action that can alter locked decisions in `docs/governance/LOCK_STATE.md`.
 
+Technical-Owner Mode is also required for:
+1. public exposure or launch-mode changes
+2. billing, pricing, or trial-policy changes
+3. provider intervention
+4. deployment, redeploy, rollback, or runtime restart
+5. legal takedown, refund, poisoned batch wipe, or direct DB repair
+6. env/config changes or other production-behaviour changes
+
 ### Daily routine
 
 1. Open `/ops` at start of day.
 2. Check these cards first:
+- `Current launch phase`
+- `Public matching exposure`
+- `Supply readiness`
+- `Trainer submissions`
+- `Intro-ready trainers`
+- `Blocked trainers`
+- `Readiness recommendation`
+- `Blockers to next phase`
+3. Then check:
 - `Revenue · at risk`
 - `Loop cards`
 - `Alerts`
-- `Discovery pending`
-3. At midday and end of day, refresh `/ops` and re-check the same cards.
-4. Log one short note in `/ops`: what changed, what action was taken, and whether follow-up is needed.
+- `Discovery pending` / source-ingestion state
+4. At midday and end of day, refresh `/ops` and re-check the same sequence.
+5. Log one short note in `/ops`: what changed, what action was taken, and whether follow-up is needed.
 
 ### Weekly routine
 
-1. Review 7-day trends for intros, conversions, suppressed intros, and at-risk revenue.
-2. Confirm no loop has been stale repeatedly.
-3. Confirm unresolved high-severity alerts are zero.
-4. Confirm priority remediation items have an owner and due date.
+1. Review 7-day trends for trainer submissions, intro-ready trainers, blocked trainers, intros, conversions, suppressed intros, and at-risk revenue.
+2. Confirm launch phase, public matching exposure, and readiness recommendation remained coherent across the period.
+3. Confirm no loop has been stale repeatedly.
+4. Confirm unresolved high-severity alerts are zero.
+5. Confirm priority remediation items have an owner and due date.
 
 ### Action options (always choose one)
 
 1. `Monitor`: data is stable and within expected range.
 2. `Investigate`: unusual movement appears; collect context and re-check within the same day.
-3. `Escalate`: clear risk to billing, matching continuity, or trust signals; notify technical owner immediately.
+3. `Escalate`: clear risk to billing, matching continuity, or trust signals; switch into `technical-owner mode` immediately.
 
 ### Escalation triggers (plain-language)
 
@@ -87,6 +130,16 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 2. source-ingestion detail for repeated suppression/failure checks, and
 3. local operator-note logging for the daily routine.
 
+During the supply-first launch phase, `/ops` should be treated as the first place to read:
+1. current launch phase
+2. public matching exposure state
+3. supply readiness
+4. trainer submissions
+5. intro-ready trainers
+6. blocked trainers
+7. readiness recommendation
+8. blockers to next phase
+
 ## 2. Healthy state checklist
 
 - All active loops show `last_run` ≤ 2 × their interval (e.g. ranking ≤ 120 s, health ≤ 90 s).
@@ -96,12 +149,28 @@ Sign in with `ADMIN_PASS`. The page polls every 15 s.
 - `billing_recovery.retry_exhausted` does not grow continuously (or remediation path is actively being worked).
 - `source_ingestion.suppressed_sources` remains low and non-sticky after source health recovers.
 - Operator notes are up to date for each daily check.
+- launch phase is coherent with the approved operating posture.
+- public matching exposure matches the approved phase.
+- readiness snapshot is fresh.
+- blocked trainer count is visible.
+- no accidental live matching exposure is present.
+
+## 2A. Phase-readiness checks
+
+Use these checks during supply-first launch and before any later phase transition:
+1. confirm the current launch phase is visible
+2. confirm public matching exposure is visible and separate from launch phase
+3. confirm the latest readiness snapshot is recent enough to support decisions
+4. confirm supply readiness is understandable without direct DB inspection
+5. confirm trainer submissions, intro-ready trainers, and blocked trainers are visible
+6. confirm readiness recommendation and blockers to next phase are visible
+7. escalate to `technical-owner mode` if public exposure, launch mode, or production behaviour must change
 
 ## 3. Common failure scenarios
 
 ### A. A loop has stopped (last_run is far in the past)
 
-Likely cause: backend crash or a long-running coroutine. Action:
+Likely cause: backend crash or a long-running coroutine. Technical-Owner Mode action:
 1. `tail -n 200 /var/log/supervisor/backend.err.log` — look for tracebacks.
 2. `sudo supervisorctl restart backend` — loops re-schedule on startup.
 3. Check `/api/oversight` after 60 s — `last_run` should refresh.
@@ -111,13 +180,13 @@ Likely cause: backend crash or a long-running coroutine. Action:
 If the drop is real (not a side effect of yesterday's burst):
 1. Check `audit_recent` for any high-impact changes (deletions, manual config writes).
 2. Inspect `pricing_state` — confirm `pricing_mode=fixed` and `intro_fee_cents` equals your launch policy.
-3. If a recent change is the cause, write its inverse as a fresh `config_snapshots` row; the next health loop will treat the previous change as outdated.
+3. If a recent change is the cause, only in `technical-owner mode`, write its inverse as a fresh `config_snapshots` row; the next health loop will treat the previous change as outdated.
 
 ### C. `auto_rollback` alert
 
 Means the health loop reverted a `config_snapshots` row because conversions cliffed. Expected next steps:
 1. Read the rolled-back snapshot's `kind` and `payload`.
-2. Either re-apply with adjusted parameters, or leave reverted (the system kept itself stable in the meantime).
+2. Only in `technical-owner mode`, either re-apply with adjusted parameters, or leave reverted (the system kept itself stable in the meantime).
 
 ### D. `fraud_suppressed` alert spikes
 
@@ -129,7 +198,7 @@ mongo $MONGO_URL/$DB_NAME --eval 'db.intros.aggregate([
   {$sort:{n:-1}}, {$limit:5}
 ])'
 ```
-No action is required — these intros never billed and never affected ranking. If you want to permanently block, add the IP to a future `blocklist` collection (already supported by `evaluate_intro` if you extend it).
+No action is required — these intros never billed and never affected ranking. Any permanent blocklist or direct data action is `technical-owner mode` only.
 
 ### E. Discovery queue not draining
 
@@ -175,7 +244,7 @@ Lifecycle outcome guide:
 
 ### H. Pricing mismatch
 
-If intro fee differs from expected launch policy, verify runtime env and restart runtime:
+If intro fee differs from expected launch policy, verify runtime env and restart runtime in `technical-owner mode`:
 - `FIXED_INTRO_FEE_CENTS` should match your intended amount (default `500`).
 - `TRAINER_FREE_INTRO_DAYS` should match your intended trial window (default `30`).
 
@@ -206,9 +275,9 @@ Use this mailbox consistently for:
 ## 4. Manual interventions (when essential)
 
 The system is designed so that none of the routine workflows need a human. Direct DB intervention is reserved for:
-- Legal takedown of a real listing → `db.trainers.updateOne({id:"…"}, {$set:{published:false, verification_status:"hold"}})`.
-- Refunding a billed intro/conversion → flip `billing_status` to `refunded` (any non-`billed` value is excluded from revenue & ranking automatically).
-- Wiping a poisoned discovery batch → `db.discovery_queue.deleteMany({source:"…"})`.
+1. `Technical-Owner Mode only`: Legal takedown of a real listing → `db.trainers.updateOne({id:"…"}, {$set:{published:false, verification_status:"hold"}})`.
+2. `Technical-Owner Mode only`: Refunding a billed intro/conversion → flip `billing_status` to `refunded` (any non-`billed` value is excluded from revenue and ranking automatically).
+3. `Technical-Owner Mode only`: Wiping a poisoned discovery batch → `db.discovery_queue.deleteMany({source:"…"})`.
 
 Every direct write should be paired with an `audit_log` insert noting the human actor and reason; this preserves the integrity of the snapshot timeline.
 
