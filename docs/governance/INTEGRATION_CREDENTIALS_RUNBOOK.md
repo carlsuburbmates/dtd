@@ -79,7 +79,7 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 
 ## Storage rules
 
-1. Keep secrets in your password manager (`BarkBond` vault/folder).
+1. Keep secrets in your password manager (`DTD` / Dog Trainers Directory vault or equivalent current folder naming).
 2. Do not commit secrets to git.
 3. Use `.env` only for local/runtime injection.
 
@@ -214,3 +214,4 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 ## Update rule
 
 If integration behavior changes, update this file in place the same day.
+This file is a credentials/runbook artifact, not the canonical source of launch-phase governance or current product truth.

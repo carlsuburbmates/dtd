@@ -3,12 +3,20 @@
 Date: 2026-05-20
 Scope: UI/UX completeness contract for all website pages and key interactions.
 
-Current launch mode model (2026-05-20):
-1. Public home entry is mode-gated by `PUBLIC_MATCHING_ENABLED`.
-2. `PUBLIC_MATCHING_ENABLED=false`: education-first owner waitlist surface is primary on `/`.
+Authority note:
+1. This is a derivative page-spec document.
+2. It must conform to the Standards Set, the supply-first launch companions, and current governance docs.
+
+Current runtime model (2026-05-20):
+1. Public home entry is exposure-gated by `PUBLIC_MATCHING_ENABLED`.
+2. `PUBLIC_MATCHING_ENABLED=false`: owner waitlist surface is primary on `/`.
 3. `PUBLIC_MATCHING_ENABLED=true`: live owner matching surface is primary on `/`.
-4. Trainer onboarding remains open in both modes.
-5. Matching/contact lifecycle routes and APIs remain implemented in both modes; home entry controls public exposure.
+4. Trainer onboarding remains open in both exposure states.
+5. Matching/contact lifecycle routes and APIs remain implemented in both states; home entry controls public exposure.
+
+Standards note:
+1. `PUBLIC_MATCHING_ENABLED` is the live matching exposure gate only.
+2. Launch phase/public emphasis remains a separate concept from home-entry exposure.
 
 ## 1) Is this different from workflows?
 Yes.
@@ -75,9 +83,9 @@ flowchart TD
 1. `Home /`
 - Header
 - Knowledge hub hero/value statement
-- Mode status (“prelaunch waitlist” or “matching live”)
+- Exposure status plus current launch-phase-aware emphasis
 - Guides/high-value owner content blocks
-- Owner waitlist form (prelaunch mode) or owner match form/results (matching mode)
+- Owner waitlist form or owner match form/results, depending on approved public exposure
 - Trainer onboarding CTA
 - Footer
 
@@ -88,7 +96,7 @@ flowchart TD
 - Contact reveal cards
 - Follow-up expectation notice
 - Footer
-- Note: page is implemented; in mode-lock periods it is not the primary public entry path from home.
+- Note: page is implemented; when public matching exposure is gated, it is not the primary public entry path from home.
 
 3. `Submit /submit`
 - Header
@@ -129,7 +137,7 @@ flowchart TD
 8. `Campaign /lp/:campaign` + `SEO /melbourne/:suburb`
 - Header
 - Intent-specific message
-- Single strong CTA to Home match flow
+- Single strong CTA to the current approved home-entry path
 - Footer
 
 9. `Info pages`
@@ -153,9 +161,9 @@ Component file:
 
 Required sections:
 1. Hero/value proposition.
-2. Mode status badge (`Prelaunch` or `Matching live`).
+2. Exposure/launch-status badge or equivalent current-state indicator.
 3. Practical content/guides blocks.
-4. Owner interaction card (waitlist or match form, mode-dependent).
+4. Owner interaction card (waitlist or match form, depending on approved public exposure).
 5. CTAs to guides, FAQ, trainers, contact.
 
 Required controls:
@@ -166,7 +174,8 @@ Required controls:
 Expected behavior:
 1. If `PUBLIC_MATCHING_ENABLED=false`, waitlist submission is primary and direct matching is not exposed from home.
 2. If `PUBLIC_MATCHING_ENABLED=true`, owner matching flow runs from home and can route to trainer detail.
-3. Trainers can still enter onboarding flow in both modes.
+3. Trainers can still enter onboarding flow in both exposure states.
+4. Supply-first launch posture may keep trainer acquisition and passive owner demand as the dominant public emphasis even while the matching capability exists in code.
 
 Buttons/CTAs expected:
 1. `Explore guides` (or equivalent)
@@ -203,14 +212,14 @@ Buttons/CTAs expected:
 2. Contact action links (website/phone/email cards)
 
 ## `/how-it-works`
-Purpose: explain the phased launch model and current education-first mode.
+Purpose: explain the phased launch model and current supply-first posture.
 
 Component file:
 - `frontend/src/pages/HowItWorks.jsx`
 
 Required sections:
-1. Soft-launch stage explanation.
-2. Current owner value (guides) + next stage (matching).
+1. Supply-first launch stage explanation.
+2. Current owner value (guides/waitlist) + later controlled live-matching stage.
 3. Safety/consent statement.
 
 Required controls:
@@ -345,7 +354,7 @@ Component file:
 
 Required sections:
 1. Campaign-specific value message.
-2. CTA into matching flow.
+2. CTA into the current approved home-entry path.
 
 Required controls:
 1. Primary CTA to `/` with campaign/source propagation.
@@ -362,13 +371,13 @@ Component file:
 
 Required sections:
 1. Localized copy.
-2. CTA to start matching.
+2. CTA into the current approved home-entry path.
 
 Required controls:
 1. Primary CTA to `/`.
 
 Expected behavior:
-1. Visitor can move directly into match flow.
+1. Visitor can move directly into the current approved home-entry path.
 2. SEO attribution survives CTA handoff into home submissions and nurture reporting.
 
 ## `/pricing`, `/trust`, `/faq`, `/about`, `/contact`, `/privacy`, `/terms`
@@ -407,10 +416,11 @@ Component file:
 
 Required sections:
 1. Auth gate.
-2. KPI summary.
-3. Loop health.
-4. Alerts.
-5. Revenue operations detail.
+2. Launch phase/public exposure summary.
+3. Supply-readiness summary.
+4. Loop health.
+5. Alerts.
+6. Revenue operations detail.
 
 Required controls:
 1. Login submit.
@@ -420,6 +430,7 @@ Required controls:
 Expected behavior:
 1. No mutation controls.
 2. Snapshot updates on poll/refresh.
+3. `/ops` remains Normal Ops by default and must not read like an admin dashboard.
 
 ## 5) Completeness checklist
 
