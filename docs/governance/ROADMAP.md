@@ -65,7 +65,7 @@ These defaults are the active completion contract unless explicitly superseded i
 
 5. Guarded policy defaults (no approval required to keep defaults):
 - `CONVERSION_BILLING_MODE=track_only` remains default.
-- `PUBLIC_MATCHING_ENABLED` remains mode-gated by current launch state.
+- `PUBLIC_MATCHING_ENABLED` remains the live exposure gate and stays separate from current launch phase/public emphasis.
 - No auth replacement.
 - No billing model cutover away from intro-first defaults.
 - Any change to the above remains approval-required by existing guardrails.
@@ -84,10 +84,10 @@ These defaults are the active completion contract unless explicitly superseded i
 6. No archive docs. Update or delete in place when truth changes.
 
 ## Current System Truth (2026-05-20)
-Public home-entry mode is enforced by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`):
+Public home-entry exposure is enforced by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`):
 - `false` => owner waitlist on `/`.
 - `true` => live matching on `/`.
-Matching/contact lifecycle routes and APIs remain implemented in both modes.
+Matching/contact lifecycle routes and APIs remain implemented in both exposure states.
 
 Current-state note:
 1. the Standards Set now defines a supply-first launch target
@@ -253,13 +253,13 @@ Do not start this block until the project’s feature/completion work is confirm
 
 ### P4 - Website completion (public + trainer UX only)
 
-Status: completed (IA/routes/UX baseline complete; does not imply workflow completeness or that all routes are publicly promoted in current mode lock).
+Status: completed (IA/routes/UX baseline complete; does not imply workflow completeness or that all routes are publicly promoted under the current exposure gate).
 Evidence references:
 1. Route map: `frontend/src/App.js`.
 2. Build-pass record: `docs/governance/LOCK_STATE.md` ("Verification evidence", compileall + frontend build pass).
 
 1. Public information architecture must be complete and navigable:
-- `/` (education-first hub with gated matching entry)
+- `/` (phase-aware hub with exposure-gated owner entry)
 - `/how-it-works`
 - `/about`
 - `/pricing`

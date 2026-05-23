@@ -37,15 +37,15 @@ Hard boundary:
 
 ## 2. Product Entry and Launch-Phase Responsibilities
 
-### 2.1 Public home mode
+### 2.1 Public home exposure state
 
 **Responsibility label:** Automated System
 
 The system enforces the public entry state through `PUBLIC_MATCHING_ENABLED`.
 
-- `PUBLIC_MATCHING_ENABLED=false`: public home shows education-first owner waitlist.
+- `PUBLIC_MATCHING_ENABLED=false`: public home shows the waitlist-first owner surface.
 - `PUBLIC_MATCHING_ENABLED=true`: public home exposes live matching.
-- Trainer onboarding remains open in both modes.
+- Trainer onboarding remains open in both exposure states.
 
 The owner should not manually swap pages, hide buttons, or edit public copy each time public exposure changes. The home page should consume config and render the correct state automatically.
 

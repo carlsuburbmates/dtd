@@ -47,10 +47,10 @@ This is governance truth. It does not by itself prove that runtime phase records
 
 ## Current Runtime Truth
 
-1. Public home entry is currently mode-gated by `PUBLIC_MATCHING_ENABLED`:
+1. Public home entry is currently exposure-gated by `PUBLIC_MATCHING_ENABLED`:
 - `false`: owner waitlist flow is primary on `/`.
 - `true`: live matching flow is primary on `/`.
-2. Matching/contact lifecycle APIs remain implemented regardless of home-entry mode gate.
+2. Matching/contact lifecycle APIs remain implemented regardless of home-entry exposure gate.
 3. Loop ownership is controlled by `AUTONOMY_LOOP_OWNER` (`api|worker|none`) with DB lease guard (`system_state.autonomy_loop_lease`).
 4. Intro billing path is Stripe-backed when configured; launch conversion mode defaults to `track_only`.
 
@@ -86,7 +86,7 @@ For each status-affecting session entry, append:
 5. The final live-verification and `Final Go/No-Go` steps are intentionally deferred to the `Post-Feature Launch Verification` block in `docs/governance/ROADMAP.md`; do not treat them as current feature work.
 6. Supply-first launch verification still needs explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
 7. Matching-enabled public-path release evidence is intentionally deferred to later controlled live-matching work.
-8. Some non-target docs outside this pass still describe mode lock primarily through `PUBLIC_MATCHING_ENABLED`; treat the Standards Set and `CURRENT_TRUTH_INDEX.md` as higher authority until those docs are aligned.
+8. Some non-target docs outside this pass still describe public exposure primarily through `PUBLIC_MATCHING_ENABLED`; treat the Standards Set and `CURRENT_TRUTH_INDEX.md` as higher authority until those docs are aligned.
 
 ## Append-Only Execution Log (current era)
 
