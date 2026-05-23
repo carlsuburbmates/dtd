@@ -1,5 +1,8 @@
 # Bark&Bond — Pay-on-Outcome Dog-Training Match Engine
 
+Historical/superseded artifact. Not current product authority. Do not use for implementation.
+Current authority is `docs/governance/CURRENT_TRUTH_INDEX.md` and the Standards Set.
+
 ## Original problem statement (iter 2)
 Build an autonomous business operating system. **Pick the optimal model, not preserve the directory.** Maximise revenue → automation → simplicity, in that order.
 

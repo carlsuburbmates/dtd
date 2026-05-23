@@ -1,5 +1,8 @@
 # Workflow Gap Closure Report (2026-05-09)
 
+Historical artifact. Not current authority. Preserved for evidence/history only.
+Current authority is `docs/governance/CURRENT_TRUTH_INDEX.md` and the Standards Set.
+
 ## Purpose
 Record closure of previously open workflow gaps (`W3`, `W8`, `W13`, `W16`, `W18`, `W19`) with implementation rationale and verification evidence.
 

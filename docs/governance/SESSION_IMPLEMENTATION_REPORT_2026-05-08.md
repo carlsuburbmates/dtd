@@ -1,5 +1,8 @@
 # Session Implementation Report
 
+Historical artifact. Not current authority. Preserved for evidence/history only.
+Current authority is `docs/governance/CURRENT_TRUTH_INDEX.md` and the Standards Set.
+
 Date: 2026-05-08
 Scope: architecture + workflow alignment, conflict resolution, and implementation planning for next session.
 

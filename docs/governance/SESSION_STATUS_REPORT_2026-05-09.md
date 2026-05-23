@@ -1,5 +1,8 @@
 # Session Status Report (2026-05-09)
 
+Historical artifact. Not current authority. Preserved for evidence/history only.
+Current authority is `docs/governance/CURRENT_TRUTH_INDEX.md` and the Standards Set.
+
 ## Purpose
 This report consolidates this session history into a single addressed-vs-not-addressed view so the next Codex session can continue without drift.
 

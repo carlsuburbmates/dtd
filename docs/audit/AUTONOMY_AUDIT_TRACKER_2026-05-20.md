@@ -1,4 +1,8 @@
 # Autonomy Audit Tracker (15 Findings)
+
+Historical artifact. Not current authority. Preserved for evidence/history only.
+Current authority is `docs/governance/CURRENT_TRUTH_INDEX.md` and the Standards Set.
+
 Date: 2026-05-20
 Scope: backend, frontend, governance/docs, test alignment
 

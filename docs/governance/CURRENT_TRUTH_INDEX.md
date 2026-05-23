@@ -38,7 +38,11 @@ Last updated: 2026-05-22
 - `docs/governance/PROJECT_LAUNCH_READINESS_OPERATIONAL_PROFILE.md`
 - `docs/governance/SESSION_STATUS_REPORT_2026-05-09.md`
 - `docs/governance/SESSION_IMPLEMENTATION_REPORT_2026-05-08.md`
+- `docs/governance/WORKFLOW_GAP_CLOSURE_REPORT_2026-05-09.md`
 - `docs/governance/EMAIL_DELIVERY_COMPLETION_REPORT_2026-05-09.md`
+- `docs/audit/WORKFLOW_GAP_REVIEW_2026-05-08.md`
+- `docs/audit/AUTONOMY_AUDIT_TRACKER_2026-05-20.md`
+- `memory/PRD.md`
 
 ## Rule
 When conflicts exist, resolve in this order:
