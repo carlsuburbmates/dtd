@@ -28,7 +28,7 @@ Required conditions:
 ## 2. Product Gate
 
 The launch candidate must provide:
-1. a mode-gated and phase-aware home entry surface
+1. an exposure-gated and phase-aware home entry surface
 2. an owner waitlist path
 3. a live matching path
 4. a trainer detail path

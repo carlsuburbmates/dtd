@@ -615,7 +615,7 @@ It is the evidence surface for the launch goal.
 5. Provider tools remain secondary investigation surfaces.
 6. Product database remains the source of truth.
 7. Owner Override actions must be bounded, reversible, reason-captured, and audited.
-8. Technical-Owner Mode is required for launch mode, public matching exposure, billing and pricing and trial policy, provider, deployment, legal, refund, direct-data, or runtime changes.
+8. Technical-Owner Mode is required for launch phase/public emphasis, public matching exposure, billing and pricing and trial policy, provider, deployment, legal, refund, direct-data, or runtime changes.
 
 ## Non-negotiable launch gates before owner-facing live matching
 

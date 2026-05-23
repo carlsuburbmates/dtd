@@ -164,7 +164,7 @@ Use these checks during supply-first launch and before any later phase transitio
 4. confirm supply readiness is understandable without direct DB inspection
 5. confirm trainer submissions, intro-ready trainers, and blocked trainers are visible
 6. confirm readiness recommendation and blockers to next phase are visible
-7. escalate to `technical-owner mode` if public exposure, launch mode, or production behaviour must change
+7. escalate to `technical-owner mode` if public exposure, launch phase/public emphasis, or production behaviour must change
 
 ## 3. Common failure scenarios
 

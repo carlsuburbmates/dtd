@@ -20,7 +20,7 @@ It does not describe whether each item is already complete.
 
 ## B. Public Product Surfaces
 
-1. Build the mode-gated and phase-aware home surface.
+1. Build the exposure-gated and phase-aware home surface.
 2. Build informational public pages:
 - about
 - how it works
