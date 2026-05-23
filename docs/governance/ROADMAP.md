@@ -35,7 +35,7 @@ A launch-ready, robustly autonomous state is reached only when all criteria belo
 | Runtime autonomy | Loop ownership is single-owner and lease-guarded, and active loops remain fresh (no stale loop beyond 2x interval during evidence window). | `/api/oversight` snapshot evidence + `docs/governance/NEXT_SESSION_HANDOFF.md` log |
 | Operational health | No unresolved high-severity health alerts in the launch evidence window. | `/api/oversight` health/alerts evidence |
 | Commercial reliability | Intro billing lifecycle is proven end-to-end (send, paid/failed, retry, webhook reconciliation) with explicit at-risk visibility. | `docs/OPERATIONS.md` KPI semantics + test/runtime evidence |
-| Product path reliability | Home mode behavior is explicit (`PUBLIC_MATCHING_ENABLED`), launch phase is separate from matching exposure, and owner/trainer lifecycle paths are non-dead and consistent. | `frontend/src/pages/*`, `frontend/src/App.js`, route smoke evidence |
+| Product path reliability | Public home exposure behavior is explicit (`PUBLIC_MATCHING_ENABLED`), launch phase is separate from matching exposure, and owner/trainer lifecycle paths are non-dead and consistent. | `frontend/src/pages/*`, `frontend/src/App.js`, route smoke evidence |
 | Security controls | Oversight auth protection, webhook idempotency, intro idempotency, and trainer action-token controls are active and tested. | backend tests + `backend/server.py` |
 | Quality gates | Backend tests pass, frontend tests pass, frontend build passes for the release candidate. | `docs/governance/LOCK_STATE.md` verification evidence |
 | Doc-code sync | README/Architecture/Operations/Workflows/Governance docs reflect current runtime truth without contradictions. | `docs/governance/CURRENT_TRUTH_INDEX.md` + doc consistency pass |
@@ -66,6 +66,7 @@ These defaults are the active completion contract unless explicitly superseded i
 5. Guarded policy defaults (no approval required to keep defaults):
 - `CONVERSION_BILLING_MODE=track_only` remains default.
 - `PUBLIC_MATCHING_ENABLED` remains the live exposure gate and stays separate from current launch phase/public emphasis.
+- For the current `supply_first` phase, `PUBLIC_MATCHING_ENABLED=false` remains the approved default; enabling public live matching is deferred to `P3 - Controlled live matching` and is not part of the current launch scope.
 - No auth replacement.
 - No billing model cutover away from intro-first defaults.
 - Any change to the above remains approval-required by existing guardrails.
@@ -216,8 +217,9 @@ Do not start this block until the project’s feature/completion work is confirm
    - Evidence anchors: `/api/oversight` snapshot evidence, `docs/governance/NEXT_SESSION_HANDOFF.md` execution log.
 2. Complete `P1 - Supply-first launch verification` with explicit evidence.
 3. Defer release-level evidence for the matching-enabled public path (`PUBLIC_MATCHING_ENABLED=true`) to `P3 - Controlled live matching`.
-   - Matching-enabled public-path release evidence is not the immediate supply-first launch gate.
-   - It becomes relevant only for the later controlled live-matching phase.
+    - Matching-enabled public-path release evidence is not the immediate supply-first launch gate.
+    - It becomes relevant only for the later controlled live-matching phase.
+    - Any future decision to enable public live matching requires supply-readiness evidence, a phase-readiness snapshot, owner approval in `technical-owner mode`, and an audit-backed decision record.
 4. Record the explicit `Final Go/No-Go` decision in governance evidence.
    - Evidence anchors: `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/LOCK_STATE.md`.
 

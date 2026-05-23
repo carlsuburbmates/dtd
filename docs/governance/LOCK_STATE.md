@@ -8,24 +8,25 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 1. One-branch workflow on `main`, local-first with auto-sync.
 2. Initial launch strategy is supply-first.
 3. Launch phase/public emphasis must remain separate from `PUBLIC_MATCHING_ENABLED`; changes to public exposure or phase posture require explicit owner approval in `technical-owner mode`.
-4. `/ops` remains Normal Ops by default:
+4. For the current supply-first launch phase, `PUBLIC_MATCHING_ENABLED` must remain `false`; enabling public live matching is deferred to a later controlled live-matching phase and is not part of the current launch scope.
+5. `/ops` remains Normal Ops by default:
 - no unrestricted admin CRUD
 - no manual trainer matching as routine operation
 - no manual routine billing
 - no automatic phase switching
 - no automatic enabling of `PUBLIC_MATCHING_ENABLED`
-5. Core operating-data rule:
+6. Core operating-data rule:
 - `Database = truth`
 - `/ops = readable operating view`
 - `audit_log = decision trail`
 - `CSV/export = proof only`
-6. Operational ownership remains one-man and mode-based:
+7. Operational ownership remains one-man and mode-based:
 - primary operator owner is `carlg`
 - `Monitor`, `Investigate`, and `Escalate` are operating modes within the same ownership model, not separate team roles
 - escalation routes into `technical-owner mode` when the action crosses the hard boundary rule
-7. Codex platform-interaction sync rules are governed by:
+8. Codex platform-interaction sync rules are governed by:
 - `docs/governance/CODEX_PLATFORM_SYNC.md`
-8. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
+9. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
 - actions that can change locked runtime policy are always `technical-owner mode`
 - only reversible, bounded, policy-safe actions may be treated as `operator mode`
 
@@ -33,10 +34,11 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 1. Oversight auth is passcode-based (`ADMIN_PASS`) for launch.
 2. Public home-entry exposure is controlled by `PUBLIC_MATCHING_ENABLED`; latest live runtime evidence records `public_matching_enabled=false`.
-3. Launch billing runtime defaults are intro-first with conversions on `track_only`; Stripe invoice collection is enabled when configured.
-4. Region enforcement is active (`ACTIVE_REGION` / `ACTIVE_REGIONS`).
-5. Consent checkpoints are required on match, intro, and submission flows.
-6. Loop ownership is env-controlled:
+3. Because the approved current launch phase is `supply_first`, public live matching remains intentionally unexposed in the current runtime.
+4. Launch billing runtime defaults are intro-first with conversions on `track_only`; Stripe invoice collection is enabled when configured.
+5. Region enforcement is active (`ACTIVE_REGION` / `ACTIVE_REGIONS`).
+6. Consent checkpoints are required on match, intro, and submission flows.
+7. Loop ownership is env-controlled:
 - `AUTONOMY_LOOP_OWNER=api`: API owns loops
 - `AUTONOMY_LOOP_OWNER=worker`: worker owns loops
 - `AUTONOMY_LOOP_OWNER=none`: no process owns loops
