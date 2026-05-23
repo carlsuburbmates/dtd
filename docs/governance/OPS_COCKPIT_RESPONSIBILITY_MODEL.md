@@ -29,13 +29,13 @@ The system should be organised into four responsibility labels:
 
 Hard boundary:
 
-- If an action changes locked runtime policy, billing policy, launch mode, infrastructure, provider state, direct data, or production behaviour, it is **Technical-Owner Mode**.
+- If an action changes locked runtime policy, billing policy, launch phase/public emphasis, public matching exposure, infrastructure, provider state, direct data, or production behaviour, it is **Technical-Owner Mode**.
 - If an action is reversible, bounded, and policy-safe, it may be **Owner Override**.
 - If the system can handle it safely without affecting the website, public trust, money, or continuity, it should stay **Automated System**.
 
 ---
 
-## 2. Product Entry and Launch Mode Responsibilities
+## 2. Product Entry and Launch-Phase Responsibilities
 
 ### 2.1 Public home mode
 
@@ -47,23 +47,70 @@ The system enforces the public entry state through `PUBLIC_MATCHING_ENABLED`.
 - `PUBLIC_MATCHING_ENABLED=true`: public home exposes live matching.
 - Trainer onboarding remains open in both modes.
 
-The owner should not manually swap pages, hide buttons, or edit public copy each time launch mode changes. The home page should consume config and render the correct state automatically.
+The owner should not manually swap pages, hide buttons, or edit public copy each time public exposure changes. The home page should consume config and render the correct state automatically.
 
-### 2.2 Launch mode visibility
+### 2.2 Launch phase and exposure visibility
 
 **Responsibility label:** Layer 1 — Normal Ops
 
-`/ops` should show the current public launch mode:
+`/ops` should show the current launch phase and public exposure state separately:
 
+- current launch phase
 - matching enabled/disabled
-- owner waitlist mode active/inactive
+- current public emphasis
 - trainer onboarding open
 - lifecycle routes active
+- supply readiness
+- intro-ready trainers
+- blocked trainers
+- readiness recommendation
+- blockers to next phase
 - active region/suburb configuration where relevant
 
 This is read-only monitoring.
 
-### 2.3 Changing public launch mode
+### 2.3 Launch phase readiness snapshots
+
+**Responsibility label:** Automated System for calculation, Layer 1 for review
+
+The system should prepare phase-readiness evidence so `/ops` can show whether the current phase is healthy and whether a later phase is recommended.
+
+`/ops` should be able to surface:
+
+- current readiness status
+- intro-ready trainer count
+- blocked trainer count
+- billing/activation blockers where relevant
+- unresolved high-severity issues
+- recommended next phase
+- blockers to next phase
+
+Normal Ops reviews this evidence but does not approve phase changes.
+
+### 2.4 Phase transition decisions
+
+**Responsibility label:** Layer 3 — Technical-Owner Mode
+
+Any phase transition decision should be explicit and evidence-backed.
+
+This includes:
+
+- transition from `supply_first` to `owner_waitlist`
+- transition from `owner_waitlist` to `live_matching`
+- transition from `live_matching` to `growth`
+- deferral or rejection of a proposed transition
+
+The decision should require:
+
+- current readiness snapshot
+- reason
+- confirmation
+- audit trail
+- rollback note where relevant
+
+Do not treat recommendation as approval.
+
+### 2.5 Changing public matching exposure
 
 **Responsibility label:** Layer 3 — Technical-Owner Mode
 
@@ -1410,6 +1457,13 @@ These are Layer 1:
 - inspect growth attribution
 - inspect reactivation summary
 - inspect pricing state
+- inspect current launch phase
+- inspect public matching exposure
+- inspect supply readiness
+- inspect intro-ready trainers
+- inspect blocked trainers
+- inspect readiness recommendation
+- inspect blockers to next phase
 - inspect top trainers
 - inspect recent system actions
 - inspect audit feed
@@ -1454,6 +1508,7 @@ These actions should not change locked runtime policy and should generally be re
 These are Layer 3:
 
 - change `PUBLIC_MATCHING_ENABLED`
+- change launch phase or public emphasis
 - change billing mode
 - change conversion billing mode
 - change fixed intro fee
@@ -1499,7 +1554,13 @@ Purpose:
 
 Must show:
 
-- launch mode
+- current launch phase
+- public matching exposure
+- supply readiness
+- intro-ready trainers
+- blocked trainers
+- readiness recommendation
+- blockers to next phase
 - loop health
 - revenue booked/collected/at risk
 - trial-free intros
@@ -1645,6 +1706,9 @@ Based on the canonical DTD operating model, every responsibility should fall int
 - case observation
 - decisioning
 - threshold-based investigation
+- review current launch phase
+- review public matching exposure
+- review supply readiness and next-phase blockers
 
 ### Layer 2 — Owner Override
 
@@ -1687,4 +1751,3 @@ It should become a **mode-aware owner cockpit** where:
 The governing rule remains:
 
 > Automate routine work. Surface exceptions. Gate dangerous actions. Audit every mutation.
-
