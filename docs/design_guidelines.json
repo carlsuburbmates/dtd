@@ -1,8 +1,8 @@
 {
   "project_name": "Dog Trainers Directory (Melbourne)",
   "theme": "hybrid_fullstack",
-  "primary_archetype": "Archetype 1: Organic & Earthy (Public: Light, Admin: Dark)",
-  "design_philosophy": "The system features two radically distinct surfaces sharing the same organic brand DNA. The Public Directory is an editorial guide: warm, tactile, trusting, and minimal. The Admin/Ops Dashboard is a dense, high-contrast, dark-mode control room optimized for data triage and operations.",
+  "primary_archetype": "Archetype 1: Organic & Earthy (Public: Light, Ops: Dark)",
+  "design_philosophy": "The system features two distinct surfaces sharing the same organic brand DNA. The public website is an editorial guide: warm, tactile, trusting, and minimal. The /ops cockpit is a dense, high-contrast, dark-mode operating view optimized for readable triage, status review, and exception visibility rather than unrestricted admin control.",
   "colors": {
     "public_directory": {
       "background": "#F5F2EB",
@@ -31,7 +31,7 @@
     }
   },
   "typography": {
-    "font_pairing": "Cormorant Garamond (Public Editorial Headings) + Outfit (Public UI/Body) + JetBrains Mono (Admin Data)",
+    "font_pairing": "Cormorant Garamond (Public Editorial Headings) + Outfit (Public UI/Body) + JetBrains Mono (Ops Data)",
     "public": {
       "h1": "font-serif text-5xl sm:text-6xl tracking-tight text-[#1A3A32] leading-none",
       "h2": "font-serif text-3xl sm:text-4xl tracking-tight text-[#1A3A32]",
@@ -54,7 +54,7 @@
       "card_style": "bg-[#FAFAF7] border border-[#E5DFD3] rounded-xl p-6 md:p-8 shadow-sm transition-transform duration-200 hover:-translate-y-1 hover:shadow-md"
     },
     "admin_dashboard": {
-      "strategy": "Control Room Grid, Dense Data, Grid Borders.",
+      "strategy": "Ops Cockpit Grid, Dense Data, Grid Borders.",
       "container_padding": "p-4 md:p-6",
       "widget_gap": "gap-4",
       "card_style": "bg-[#15201D] border border-[#243631] rounded-lg p-4 shadow-none"
@@ -84,11 +84,11 @@
     "public_hover_states": "Interactive cards lift (-translate-y-1) with a subtle shadow expansion. Text links underline or shift to Terracotta (#D06D4F).",
     "public_focus_states": "High-contrast focus ring (Terracotta) for accessibility.",
     "public_page_transitions": "Subtle fade-in with 10px upward translation on load (Framer Motion).",
-    "admin_interactions": "Instant, snappy feedback. Hover states subtly lighten backgrounds (bg-[#1D2D29]) without changing geometry to preserve data alignment."
+    "admin_interactions": "Instant, snappy feedback. Hover states subtly lighten backgrounds (bg-[#1D2D29]) without changing geometry to preserve data alignment. The dark surface should read as a monitored operations cockpit, not an unrestricted admin dashboard."
   },
   "iconography": {
     "library": "lucide-react",
-    "strategy": "Sparingly use icons on the public site (location pins, verified checkmarks) to maintain editorial feel. Admin uses icons extensively for dense menus, status flags, and table operations."
+    "strategy": "Sparingly use icons on the public site (location pins, verified checkmarks) to maintain editorial feel. /ops may use icons more heavily for status flags, queues, and operating summaries."
   },
   "media_and_images": {
     "hero_background": {
@@ -117,10 +117,11 @@
     "Include Google Fonts imports for 'Cormorant Garamond' (serif), 'Outfit' (sans), and 'JetBrains Mono' (mono) in index.css.",
     "Configure Tailwind config using the dual color palettes provided (Public light themes vs Admin dark themes).",
     "Public Directory: Avoid standard SaaS cards. Use generous padding, warm backgrounds (#F5F2EB), and editorial serif headings.",
-    "Admin Dashboard: Build a passcode-gated route that switches entirely to the dark theme (#0D1412 background) with grid-borders.",
+    "Ops Cockpit: Build a passcode-gated route that switches entirely to the dark theme (#0D1412 background) with grid-borders.",
     "Implement the 'AI matching wizard' with large friendly inputs (Outfit font) and an engaging step-by-step UI.",
     "Trainers detail pages must include lead capture forms with transparent dashboard previews.",
-    "Admin features must include ingestion queue tables with AI confidence scores, MRR analytics, and A/B test toggles.",
+    "Ops features should prioritize current launch phase, public matching exposure, supply readiness, intro-ready trainers, blocked trainers, readiness recommendation, blockers to next phase, and investigation queues.",
+    "Avoid designing unrestricted admin CRUD, growth-experiment toggle surfaces, or dashboard patterns that imply /ops is a general-purpose admin control room.",
     "Apply 'Verified' or 'Unverified' trust badges prominently in directory results.",
     "Strictly use the provided image URLs; do not fallback to placeholder services.",
     "Ensure ALL interactive elements contain 'data-testid' attributes."

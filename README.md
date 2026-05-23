@@ -1,21 +1,24 @@
-# Bark&Bond — pay-on-outcome dog-training match engine
+# DTD / Dog Trainers Directory
 
-> **Product principle:** one input → best matches → real outcomes.
-> **System principle:** the engine runs without humans. Humans observe; they do not operate.
+> **Product principle:** one input -> best matches -> real outcomes.
+> **System principle:** automation-first operations with bounded human oversight.
 
 ## What this is
 
-Bark&Bond is **not a directory**. It is a Melbourne-focused match engine that:
-- uses mode-gated home entry (`PUBLIC_MATCHING_ENABLED`): owner waitlist in prelaunch, or live matching when enabled,
+DTD / Dog Trainers Directory is **not a generic directory**. It is a Greater Melbourne match-and-intro platform that:
+- follows a supply-first launch posture,
+- uses `PUBLIC_MATCHING_ENABLED` as the live matching exposure gate, separate from launch phase/public emphasis,
+- can present owner waitlist or live matching from the home entry depending on approved public exposure,
 - accepts a one-line problem from a dog owner and returns 3 ranked trainer matches (deterministic relevance + outcome score) when matching is enabled,
 - records an intro on **Connect** and issues Stripe invoice collection when trainer billing profile is ready,
 - launch defaults to `track_only` conversion tracking,
 - tracks conversions as quality signals by default, with bill-mode available later,
 - ingests new trainers, re-verifies them, prices them, and detects fraud — all without a human in the loop.
 
-There is **no admin panel** to operate the business. There is `/ops`, a read-only oversight surface.
+There is **no admin dashboard** to operate the business. There is `/ops`, the readable operating view and Normal Ops surface by default.
 
 ## Quick links
+- **Current truth index** → [`docs/governance/CURRENT_TRUTH_INDEX.md`](docs/governance/CURRENT_TRUTH_INDEX.md)
 - **Architecture** → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 - **Operations / troubleshooting** → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
 - **Deployment + portability** → [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
@@ -24,7 +27,7 @@ There is **no admin panel** to operate the business. There is `/ops`, a read-onl
 
 ## Public website routes
 
-- `/` owner waitlist or match flow (mode-gated)
+- `/` owner waitlist or live matching home entry, depending on approved public exposure
 - `/how-it-works`
 - `/about`
 - `/pricing`
@@ -93,7 +96,7 @@ docker compose up --build
 | `ACTIVE_REGIONS` | backend | Comma-separated allowed regions |
 | `AUTONOMY_LOOP_OWNER` | backend | Primary loop-owner selector: `api`, `worker`, or `none` |
 | `RUN_AUTONOMY_IN_API` | backend | Legacy compatibility flag; must not conflict with `AUTONOMY_LOOP_OWNER` |
-| `PUBLIC_MATCHING_ENABLED` | backend | `1` enables public `/match` and `/intros`; `0` keeps prelaunch gating |
+| `PUBLIC_MATCHING_ENABLED` | backend | Live matching exposure gate; `1` exposes live matching, `0` keeps owner waitlist as the primary home entry |
 | `TRAINER_ACTION_TOKEN_SECRET` | backend | HMAC secret for trainer billing/reactivation action tokens |
 | `CONVERSION_BILLING_MODE` | backend | `track_only` (default) or `bill` |
 | `DISCOVERY_SOURCE_URLS` | backend | Comma-separated source pages scanned for candidate trainer links |
@@ -128,4 +131,10 @@ The latest iteration's report lives at `docs/test_reports/iteration_<n>.json`.
 5. Configure `CORS_ORIGINS` to your real domain(s).
 6. Front the API with HTTPS at the platform layer.
 
-The runtime is fail-soft, but launch progression is still governed by explicit human gates in [`docs/governance/LOCK_STATE.md`](docs/governance/LOCK_STATE.md) and [`docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md`](docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md).
+Core operating rule:
+- `Database = truth`
+- `/ops = readable operating view`
+- `audit_log = decision trail`
+- `CSV/export = proof only`
+
+The runtime is fail-soft, but launch progression remains governed by explicit owner-approved decisions in [`docs/governance/LOCK_STATE.md`](docs/governance/LOCK_STATE.md), [`docs/governance/NEXT_SESSION_HANDOFF.md`](docs/governance/NEXT_SESSION_HANDOFF.md), and the canonical standards under `docs/standards/`.

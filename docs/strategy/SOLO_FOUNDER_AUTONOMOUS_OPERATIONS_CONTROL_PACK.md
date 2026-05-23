@@ -15,16 +15,16 @@
 ---
 
 ## 1) Project summary
-- **What this is:** Education-first prelaunch platform for Melbourne dog trainer supply growth, with deterministic state gates and controlled public claims.
-- **What this is not:** Live public matching product yet; enterprise multi-team platform.
-- **Current phase:** Prelaunch readiness + automation hardening.
-- **Main objective:** Build verified trainer supply and trust signals safely until matching-live eligibility is reached.
+- **What this is:** Supply-first launch platform for Melbourne dog trainer acquisition, activation, and controlled owner-demand capture, with deterministic public-claim controls.
+- **What this is not:** Generic marketplace, unrestricted admin dashboard, or enterprise multi-team platform.
+- **Current posture:** Supply-first launch readiness + automation hardening.
+- **Main objective:** Build verified, intro-ready trainer supply and trustworthy launch evidence before broader owner-demand emphasis or live-matching exposure.
 
 ---
 
 ## 2) Locked decisions (`LOCKED`)
-1. Education-first prelaunch.
-2. Public matching deferred until gate eligibility.
+1. Initial launch is supply-first.
+2. Public matching exposure remains separate from launch phase/public emphasis.
 3. Canonical suburb dataset is fixed:
    - `list_id`: `melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1`
    - `count`: `613`
@@ -37,6 +37,8 @@
 9. Automation-first with minimal human exception loop.
 10. No guaranteed leads/bookings claims.
 11. Canonical suburb list changes require versioned migration + rollback.
+12. `/ops` is Normal Ops by default, not an admin dashboard.
+13. `Database = truth`, `/ops = readable operating view`, `audit_log = decision trail`, `CSV/export = proof only`.
 
 ---
 
@@ -46,7 +48,7 @@
 - Data integrity checks (suburb count/hash drift).
 - Deterministic lead validation/qualification.
 - Verification expiry checks and reminders.
-- Gate metric calculations and state evaluation.
+- Phase-readiness calculations and recommendation generation.
 - Claim enforcement (block invalid copy/state combinations).
 - Scheduled monitoring and reports.
 - Alert generation and routing.
@@ -59,6 +61,8 @@
 - Claim policy/copy rule changes.
 - Billing model changes/activation/cutover.
 - Auth model replacement.
+- Launch phase/public emphasis changes.
+- Public matching exposure changes.
 - Overrides of gate/claim controls.
 
 ### Legal/privacy review required (`LEGAL/PRIVACY REVIEW REQUIRED`)
@@ -69,6 +73,7 @@
 
 ### Must never happen automatically (`DO NOT BUILD YET`)
 - Unlocking public matching in production, even if gate calculations are implemented.
+- Advancing launch phase/public emphasis automatically.
 - Publishing “Melbourne-wide” below `STATE_2`.
 - Enabling paid subscription in production without approved migration.
 - Changing consent semantics silently.
@@ -93,7 +98,7 @@
 |---|---|
 | Canonical suburb ingestion + hash checks | `READY` |
 | Waitlist schema + deterministic validation | `READY` |
-| VATC + gate snapshots (read-only first) | `READY` |
+| VATC + phase-readiness snapshots (read-only first) | `READY` |
 | Claim guardrails (blocking invalid claims) | `READY` |
 | Read-only operator insights improvements | `READY` |
 | Event contract + validation | `READY` |
@@ -115,9 +120,9 @@
 | Owner waitlist | Demand capture | lead schema + consent + suburbs | qualified leads by suburb | High | Medium (policy edits) | step1/step2 deterministic | legal wording |
 | Trainer onboarding/verification | Supply quality | verification criteria | verified active trainer counts | High | Medium/High | deterministic status transitions | external verification policy edge cases |
 | Monetization | Sustainable launch/prelaunch revenue | intro billing + conversion tracking mode | billing states + audit | Medium/High | High | intro-first behavior must remain deterministic unless approved cutover | cutover approval |
-| State gates/matching lock | Launch integrity | thresholds + metrics | state + lock status | High | High-risk overrides only | cannot unlock without criteria | override policy finalization |
+| Launch phase/readiness controls | Launch integrity | thresholds + metrics + exposure state | phase/readiness/recommendation/blockers | High | High-risk overrides only | phase and exposure remain separate and cannot advance automatically | override policy finalization |
 | Public claim control | Prevent overclaiming | state->copy rules | allowed claims + blocked attempts | High | Medium | “Melbourne-wide” blocked below STATE_2 | final approved copy set |
-| Admin/operator panel | Non-technical control | KPI + alerts + decisions | readable daily control UI | Medium | Medium/High | operator can act safely | auth migration |
+| `/ops` cockpit | Non-technical control | KPI + alerts + decisions | readable daily operating view | Medium | Medium/High | operator can act safely | auth migration |
 | Analytics/events | Measurement integrity | event contract | KPIs + traceability | High | Medium (versioning) | contract compliance | None |
 | Lifecycle automation | Nurture/recovery | triggers + caps + suppressions | sends + outcomes | High | Medium | unsubscribe/consent always enforced | legal wording |
 | Market monitoring | External signals | sources + cadence | alerts + reports | High | Low/Medium | actionable scans | None |
@@ -134,8 +139,9 @@
 - No guaranteed leads/bookings in any paid plan text, API, or UI.
 - Any pricing-mode migration away from intro-first must be isolated behind migration flags during transition.
 
-### Matching guardrails
-- Matching remains locked until eligibility gate pass.
+### Matching and phase guardrails
+- Public matching exposure remains gated until explicit owner approval.
+- Launch phase/public emphasis remains separate from `PUBLIC_MATCHING_ENABLED`.
 - No manual unlock shortcut except explicit approved emergency protocol.
 
 ### Privacy guardrails
@@ -152,15 +158,16 @@
 - Canonical suburb count/hash must be checked on schedule.
 - Drift must trigger alert + state freeze behavior.
 
-### Auth/admin guardrails
+### Auth/ops guardrails
 - No blind auth replacement.
 - High-risk actions must require explicit owner-approved path + audit log.
+- Do not redesign `/ops` into unrestricted admin CRUD.
 
 ---
 
 ## 8) Repo verification checklist (`VERIFY FIRST`)
 1. Confirm frontend/backend/docs align on canonical monetization mode and migration state.
-2. Confirm matching gate is currently enforced (`PUBLIC_MATCHING_ENABLED` + `403`).
+2. Confirm matching exposure is currently enforced through `PUBLIC_MATCHING_ENABLED` where expected.
 3. Confirm `/ops` remains read-only + passcode-based.
 4. Reconfirm canonical suburb CSV/meta hash and count.
 5. Confirm loop ownership/lease behavior in runtime control.
@@ -171,11 +178,11 @@
 
 ## 9) What a future coding agent may do first (`READY`)
 1. Add machine-readable suburb meta fields (see section 12 constraints).
-2. Implement read-only gate snapshot computation and storage.
+2. Implement read-only phase-readiness snapshot computation and storage.
 3. Implement waitlist step1/step2 deterministic schema + validators.
 4. Implement event validation/versioning layer.
 5. Add claim copy guard that blocks invalid claims only.
-6. Add read-only operator cards for state/coverage/alerts/reports.
+6. Add read-only `/ops` cards for launch phase, exposure, supply readiness, blockers, and alerts.
 7. Add migration feature flags without behavior cutover.
 
 These first tasks must be additive, reversible, and must not change production matching, billing, or auth behavior.
@@ -186,6 +193,7 @@ These first tasks must be additive, reversible, and must not change production m
 - Do not replace auth blindly.
 - Do not activate subscription billing blindly.
 - Do not unlock matching.
+- Do not auto-advance launch phase/public emphasis.
 - Do not publish “Melbourne-wide” claims below `STATE_2`.
 - Do not delete legacy billing paths without approved migration + rollback.
 - Do not add unrelated features or expand scope.
@@ -211,7 +219,7 @@ These first tasks must be additive, reversible, and must not change production m
 ### Gate D — Launch readiness
 - Billing lifecycle tested in non-production.
 - Privacy/consent/audit controls complete.
-- Operator panel supports non-technical daily control.
+- `/ops` supports non-technical daily control.
 
 ### Gate E — Matching-live eligibility
 - `STATE_4` criteria pass for required duration.
@@ -238,7 +246,7 @@ These first tasks must be additive, reversible, and must not change production m
 Implement only safe, approved, additive prelaunch controls for autonomous operations, preserving all locked decisions.
 
 **Allowed actions**  
-- Add deterministic checks, validators, gate snapshots, claim guards, read-only reporting, migration flags, and audit logging.
+- Add deterministic checks, validators, phase-readiness snapshots, claim guards, read-only reporting, migration flags, and audit logging.
 - Align docs/code with locked decisions.
 
 **Forbidden actions**  
@@ -255,7 +263,7 @@ Implement only safe, approved, additive prelaunch controls for autonomous operat
 - High-risk changes require explicit approval artifact.
 
 **Stop conditions**  
-- Missing source truth.
+- Missing source of truth.
 - Conflict with locked decisions.
 - Legal/privacy content needing review but not approved.
 
