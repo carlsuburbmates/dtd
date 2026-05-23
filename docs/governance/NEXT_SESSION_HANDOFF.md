@@ -1,26 +1,33 @@
 # Next Session Handoff
 
-Date: 2026-05-20
+Date: 2026-05-22
 Repo: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Objective
 
-Continue development and launch-readiness work without reopening resolved governance decisions or relying on stale historical notes.
+Continue supply-first launch-readiness and runtime-alignment work without reopening resolved governance decisions or relying on stale historical notes.
 
 ## Authority Order (current)
 
 1. `AGENTS.md`
 2. `.codex/skill-policy.toml`
 3. `docs/governance/CURRENT_TRUTH_INDEX.md`
-4. `docs/governance/LOCK_STATE.md`
-5. `docs/governance/ROADMAP.md`
-6. current repository state on `main`
+4. `docs/standards/SSOT.md`
+5. `docs/standards/BUILD_CHECKLIST.md`
+6. `docs/standards/LAUNCH_GATE.md`
+7. `docs/standards/INTEGRITY_AUDIT.md`
+8. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+9. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
+10. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
+11. `docs/governance/LOCK_STATE.md`
+12. `docs/governance/ROADMAP.md`
+13. current repository state on `main`
 
 If any conflict appears, follow this order.
 
 ## Live Gate Table (current truth)
 
-Last updated: 2026-05-20
+Last updated: 2026-05-22
 
 | Gate | Status | Source of truth |
 |---|---|---|
@@ -32,9 +39,15 @@ Last updated: 2026-05-20
 
 Final Go/No-Go approver: owner (`carlg`).
 
+## Current Governance / Launch Posture
+
+Supply-first is the active governing launch posture under the Standards Set.
+
+This is governance truth. It does not by itself prove that runtime phase records, readiness snapshots, or transition decision records are implemented.
+
 ## Current Runtime Truth
 
-1. Public home entry is mode-gated by `PUBLIC_MATCHING_ENABLED`:
+1. Public home entry is currently mode-gated by `PUBLIC_MATCHING_ENABLED`:
 - `false`: owner waitlist flow is primary on `/`.
 - `true`: live matching flow is primary on `/`.
 2. Matching/contact lifecycle APIs remain implemented regardless of home-entry mode gate.
@@ -50,7 +63,8 @@ Final Go/No-Go approver: owner (`carlg`).
 - `docs/governance/LOCK_STATE.md`
 - `docs/governance/ROADMAP.md`
 - this file
-5. Record evidence for each status change (command result and/or file reference).
+5. If the authority hierarchy or current-truth index changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` in the same session.
+6. Record evidence for each status change (command result and/or file reference).
 
 ## Evidence Logging Standard
 
@@ -68,9 +82,11 @@ For each status-affecting session entry, append:
 - `docs/USER_WORKFLOWS.md`
 3. Keep monetization copy and runtime model aligned to ADR:
 - `docs/governance/ADR-0001-runtime-canonical-mode.md`
-4. Remaining launch and operator-takeover work is tracked in the strict ordered checklist in `docs/governance/ROADMAP.md` (`Remaining Completion Checklist (strict order)`); as of `2026-05-21`, `Must-Finish Before Launch` has no open implementation blockers and remaining launch work begins at `Post-Feature Launch Verification`.
+4. Remaining launch and operator-takeover work is tracked in the strict ordered checklist in `docs/governance/ROADMAP.md` (`Remaining Completion Checklist (strict order)`); `Must-Finish Before Launch` has no open implementation blockers and remaining launch work begins at `Post-Feature Launch Verification`.
 5. The final live-verification and `Final Go/No-Go` steps are intentionally deferred to the `Post-Feature Launch Verification` block in `docs/governance/ROADMAP.md`; do not treat them as current feature work.
-6. Local code/test/doc gaps for operator-takeover, security coverage, and roadmap-authority alignment were closed on `2026-05-21`; remaining launch blockers are now live-evidence / mode-lock / owner-decision items.
+6. Supply-first launch verification still needs explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
+7. Matching-enabled public-path release evidence is intentionally deferred to later controlled live-matching work.
+8. Some non-target docs outside this pass still describe mode lock primarily through `PUBLIC_MATCHING_ENABLED`; treat the Standards Set and `CURRENT_TRUTH_INDEX.md` as higher authority until those docs are aligned.
 
 ## Append-Only Execution Log (current era)
 
@@ -109,3 +125,12 @@ For each status-affecting session entry, append:
   - updated the handoff/open-work view so `Must-Finish Before Launch` is explicitly clear and the remaining launch work starts at `Post-Feature Launch Verification`.
 - Evidence:
   - files: `docs/governance/ROADMAP.md`, `docs/governance/LOCK_STATE.md`, this file.
+7. `2026-05-22T21:34:57Z` — Supply-first current-truth doc alignment completed for architecture/workflow/deployment/governance surfaces.
+- Session-start HEAD: `c0da8b4`.
+- Status changes in this entry:
+  - aligned derivative docs and current-truth governance docs to the committed supply-first standards hierarchy,
+  - clarified that launch phase/public emphasis remains separate from `PUBLIC_MATCHING_ENABLED`,
+  - removed stale `barkbond` deployment examples.
+- No gate status, code path, or runtime behavior changed in this entry.
+- Evidence:
+  - files: `docs/ARCHITECTURE.md`, `docs/USER_WORKFLOWS.md`, `docs/WORKFLOW_TRACE_SHEET.md`, `docs/governance/CURRENT_TRUTH_INDEX.md`, `docs/governance/NEXT_SESSION_HANDOFF.md`, `docs/governance/LOCK_STATE.md`, `docs/DEPLOYMENT.md`.

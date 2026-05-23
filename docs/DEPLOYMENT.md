@@ -2,6 +2,13 @@
 
 The system is intentionally portable and vendor-neutral.
 
+## Authority And Alignment
+
+This document is a derivative deployment guide.
+It must conform to the canonical Standards Set, the supply-first launch companion docs, and `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`.
+
+Current deployment-governance rule: live matching exposure (`PUBLIC_MATCHING_ENABLED`) remains separate from launch phase/public emphasis (`PUBLIC_LAUNCH_PHASE` or equivalent persisted phase state where implemented).
+
 ## 1. Local-first baseline
 
 Use this repo checkout as the source of truth. Keep runtime/env changes versioned with docs whenever behavior changes.
@@ -24,7 +31,7 @@ Open `http://localhost:3000`. The compose file passes through `ADMIN_PASS` from 
 
 ```bash
 # Mongo (any 6.x server works)
-docker run -d -p 27017:27017 --name barkbond-mongo mongo:6
+docker run -d -p 27017:27017 --name dtd-mongo mongo:6
 
 # Backend
 cd backend && cp .env.example .env
@@ -54,6 +61,7 @@ Single-owner loop topology rule:
 2. Allowed values: `api`, `worker`, `none`.
 3. The DB lease is a safety guard, not the primary topology choice.
 4. `/ops` remains read-only regardless of ownership topology.
+5. Changing launch phase/public emphasis or live matching exposure is a `technical-owner mode` deployment decision, not a routine operator action.
 
 ### Frontend (Create React App)
 
@@ -81,7 +89,7 @@ Current matching and verification run through deterministic heuristics in `servi
 
 ## 7. CORS / domains
 
-Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-end origins (e.g. `https://barkbond.app,https://www.barkbond.app`). The default `*` is fine for development.
+Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-end origins (e.g. `https://dogtrainersdirectory.com.au,https://www.dogtrainersdirectory.com.au`). The default `*` is fine for development.
 
 ## 8. Migration checklist (preview → prod)
 
@@ -93,9 +101,10 @@ Set `CORS_ORIGINS` in backend `.env` to a comma-separated list of allowed front-
    - `FIXED_INTRO_FEE_CENTS=500`
 5. Move the seed file aside or empty `MELBOURNE_TRAINERS` once your real ingestion is producing volume.
 6. Set `AUTONOMY_LOOP_OWNER` explicitly (`api` or `worker`) and keep `RUN_AUTONOMY_IN_API` consistent only if legacy compatibility is needed.
-7. Set `PUBLIC_MATCHING_ENABLED` according to current mode lock (`0` for education-first prelaunch).
-8. Bump `ADMIN_PASS` and `TRAINER_ACTION_TOKEN_SECRET` to strong secrets; document only in your password manager.
-9. Verify all configured loops surface in `/ops` after deploy.
+7. Set `PUBLIC_MATCHING_ENABLED` according to the approved public exposure state (`0` keeps owner waitlist as the primary home entry in the current prelaunch runtime).
+8. If a launch-phase mechanism exists, confirm it matches the approved phase. Creating, changing, or promoting launch phase/public emphasis is a Technical-Owner Mode action and must be supported by governance evidence.
+9. Bump `ADMIN_PASS` and `TRAINER_ACTION_TOKEN_SECRET` to strong secrets; document only in your password manager.
+10. Verify all configured loops surface in `/ops` after deploy.
 
 ## 9. Code ownership / portability
 

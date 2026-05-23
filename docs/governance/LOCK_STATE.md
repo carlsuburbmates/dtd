@@ -1,13 +1,39 @@
 # Lock State Snapshot
 
-Date: 2026-05-20
+Date: 2026-05-22
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
-## Locked decisions (active)
+## Governance Locks
 
 1. One-branch workflow on `main`, local-first with auto-sync.
-2. Oversight auth is passcode-based (`ADMIN_PASS`) for launch.
-3. Launch billing model is intro-first; conversions default to `track_only`; Stripe invoice collection is enabled when configured.
+2. Initial launch strategy is supply-first.
+3. Launch phase/public emphasis must remain separate from `PUBLIC_MATCHING_ENABLED`; changes to public exposure or phase posture require explicit owner approval in `technical-owner mode`.
+4. `/ops` remains Normal Ops by default:
+- no unrestricted admin CRUD
+- no manual trainer matching as routine operation
+- no manual routine billing
+- no automatic phase switching
+- no automatic enabling of `PUBLIC_MATCHING_ENABLED`
+5. Core operating-data rule:
+- `Database = truth`
+- `/ops = readable operating view`
+- `audit_log = decision trail`
+- `CSV/export = proof only`
+6. Operational ownership remains one-man and mode-based:
+- primary operator owner is `carlg`
+- `Monitor`, `Investigate`, and `Escalate` are operating modes within the same ownership model, not separate team roles
+- escalation routes into `technical-owner mode` when the action crosses the hard boundary rule
+7. Codex platform-interaction sync rules are governed by:
+- `docs/governance/CODEX_PLATFORM_SYNC.md`
+8. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
+- actions that can change locked runtime policy are always `technical-owner mode`
+- only reversible, bounded, policy-safe actions may be treated as `operator mode`
+
+## Current Runtime / Implementation Locks
+
+1. Oversight auth is passcode-based (`ADMIN_PASS`) for launch.
+2. Public home-entry exposure is controlled by `PUBLIC_MATCHING_ENABLED`; latest live runtime evidence records `public_matching_enabled=false`.
+3. Launch billing runtime defaults are intro-first with conversions on `track_only`; Stripe invoice collection is enabled when configured.
 4. Region enforcement is active (`ACTIVE_REGION` / `ACTIVE_REGIONS`).
 5. Consent checkpoints are required on match, intro, and submission flows.
 6. Loop ownership is env-controlled:
@@ -16,15 +42,6 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 - `AUTONOMY_LOOP_OWNER=none`: no process owns loops
 - Legacy `RUN_AUTONOMY_IN_API=1|0` remains supported but cannot conflict with `AUTONOMY_LOOP_OWNER`
 - DB lease lock `system_state.autonomy_loop_lease` ensures a single active executor across processes
-7. Codex platform-interaction sync rules are governed by:
-- `docs/governance/CODEX_PLATFORM_SYNC.md`
-8. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
-- actions that can change locked runtime policy are always `technical-owner mode`
-- only reversible, bounded, policy-safe actions may be treated as `operator mode`
-9. Operational ownership remains one-man and mode-based:
-- primary operator owner is `carlg`
-- `Monitor`, `Investigate`, and `Escalate` are operating modes within the same ownership model, not separate team roles
-- escalation routes into `technical-owner mode` when the action crosses the hard boundary rule
 
 ## Implemented completion blocks
 
@@ -58,8 +75,10 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 - `vercel curl /trainers --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
 - `vercel curl /ops --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
 6. Local implementation/closeout work is currently clear: roadmap-authority alignment is closed and `docs/governance/ROADMAP.md` no longer carries open `Must-Finish Before Launch` blockers.
-7. Matching-enabled release evidence remains open because the live runtime still reports `public_matching_enabled=false`.
-8. Final Go/No-Go remains pending; this file does not record owner approval yet.
+7. Supply-first authority alignment is now reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`; this docs-only pass did not change runtime behavior.
+8. Supply-first launch verification still requires explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
+9. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
+10. Final Go/No-Go remains pending; this file does not record owner approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 
@@ -92,6 +111,7 @@ Evidence references:
 
 ## Update rule
 
-If any governance, runtime, or route truth changes, update this file and `ROADMAP.md` in the same commit.
+If any governance, runtime, or route truth changes materially, update this file and `ROADMAP.md` in the same commit.
+If the authority hierarchy changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` and `docs/governance/NEXT_SESSION_HANDOFF.md` in the same session.
 If any gate/status value changes, append a matching command/file evidence entry in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log in the same session.
 If Codex interaction protocols are updated from the global feed, update `docs/governance/CODEX_PLATFORM_SYNC.md` in the same commit.

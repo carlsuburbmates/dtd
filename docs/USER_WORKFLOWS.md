@@ -1,10 +1,15 @@
 # User Workflow Catalog
 
+## Authority And Alignment
+- This document is a derivative workflow catalog.
+- It must conform to the Standards Set, the supply-first launch companion docs, and `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`.
+
 ## Understanding Lock
 - Goal: identify all project workflows and organize them by user type.
 - Scope: current implemented product surfaces (`frontend/src/pages/*`) plus active API workflows (`backend/server.py`) and autonomous loops documented in architecture.
 - Exclusions: deprecated legacy `/admin/*` and directory browse/list endpoints (explicitly removed).
-- Mode lock note (2026-05-20): home entry behavior is enforced via `PUBLIC_MATCHING_ENABLED` (`/api/config` + `Home.jsx`) while owner/trainer lifecycle routes and APIs still exist in code.
+- Current runtime note (2026-05-22): home entry behavior is enforced via `PUBLIC_MATCHING_ENABLED` (`/api/config` + `Home.jsx`) while owner/trainer lifecycle routes and APIs still exist in code.
+- Standards note: supply-first launch phase/public emphasis must remain conceptually separate from the live matching exposure gate.
 
 ## Workflow Inventory By User Type
 
@@ -13,9 +18,9 @@ Technical skeleton companion:
 
 ### 1) Dog owner (primary end user)
 
-#### W1. Match request (core demand-capture flow)
-- Scope: discover trainers from one problem statement.
-- Entry: owner opens `/` and submits issue text with consent.
+#### W1. Match request (implemented live-matching capability)
+- Scope: discover trainers from one problem statement when live matching is the active home-entry path.
+- Entry: owner opens `/` and submits issue text with consent when public exposure is in matching mode.
 - Main path:
   1. Load config (`GET /api/config`) for suburbs/active region.
   2. Submit request (`POST /api/match`) with description + optional suburb + consent.
@@ -26,8 +31,8 @@ Technical skeleton companion:
 - Surfaces: `/`, `/how-it-works`, `/faq`, `/trust`.
 
 #### W20. Owner waitlist enrollment (prelaunch demand capture)
-- Scope: capture owner demand while public matching is gated.
-- Entry: owner submits waitlist form on `/` (when `PUBLIC_MATCHING_ENABLED=false`) or campaign-driven entry (`/lp/:campaign`).
+- Scope: capture owner demand during supply-first or owner-waitlist public posture while live matching exposure remains gated.
+- Entry: owner submits waitlist form on `/` when home entry is waitlist-first, or via campaign-driven entry (`/lp/:campaign`).
 - Main path:
   1. Submit waitlist (`POST /api/owner-waitlist`) with email, suburb, consent, campaign/source metadata.
   2. System records normalized lifecycle events (`started`, `submitted`, `duplicate`, `rejected`).
@@ -221,10 +226,10 @@ Technical skeleton companion:
 - Entry: authenticated `/ops` session.
 - Main path:
   1. Poll snapshot every 15s (`GET /api/oversight` with `X-Admin-Pass`).
-  2. Review revenue, throughput, trust signals, loops, pricing state, top trainers, audit feed.
+  2. Review launch phase/public exposure, supply readiness, revenue, throughput, trust signals, loops, pricing state, top trainers, audit feed.
   3. Optional manual refresh; sign out clears session.
 - Exit outcomes:
-  - Operational visibility only (no mutation controls).
+  - Operational visibility only; `/ops` remains Normal Ops by default.
 
 ### 4) External contributor / ecosystem actor
 
@@ -285,9 +290,11 @@ Technical skeleton companion:
 - Chosen actor model includes human and non-human actors because the product is explicitly autonomous.
 - Legacy admin CRUD workflows are excluded by design; endpoints are removed and routes redirect to `/ops`.
 - Trainer lifecycle is split across supply capture (W6/W7), onboarding completion (W17), monetization lifecycle (W8/W18), and reactivation (W19).
+- Workflow completeness is tracked separately from launch phase and public exposure state; a complete workflow can still be traffic-gated during supply-first launch.
 
 ## Execution Readiness
 - Design artifact completeness: complete (Understanding Lock + workflow map + decision log).
 - Technical traceability: complete via `docs/WORKFLOW_TRACE_SHEET.md`.
 - Current implementation status: complete for W1-W21 (no `partial`, `planned`, `missing`, or `broken` rows in the workflow trace sheet).
+- Current launch-state note: W1 remains an implemented capability, but supply-first launch can keep W20 and trainer acquisition as the primary public path until readiness is proven and approved.
 - Next step: maintain completeness with regression checks and governance evidence updates whenever workflow-affecting changes are introduced.

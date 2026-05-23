@@ -1,21 +1,30 @@
 # Architecture
 
-Current mode-lock context (2026-05-20): home entry is mode-gated by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`) while owner/trainer lifecycle routes and APIs remain implemented.
+## Authority And Alignment
 
-## 1. Final product model
+This document is a derivative architecture guide.
+It must conform to the canonical Standards Set, the supply-first launch companions, and `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`.
+
+Current runtime context (2026-05-22): home entry is mode-gated by `PUBLIC_MATCHING_ENABLED` (`/api/config` consumed by `Home.jsx`) while owner/trainer lifecycle routes and APIs remain implemented.
+Standards alignment context: launch phase/public emphasis must remain separate from live matching exposure, so this document distinguishes the current runtime gate from the broader supply-first phase model.
+
+## 1. Product model and launch posture
 
 | Layer | What it is | Where |
 |---|---|---|
-| Product surface | Technical path: mode-gated home entry (owner waitlist or live matching) → trainer detail connect → contact reveal → hire signal. | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
+| Product surface | Technical path: mode-gated home entry (owner waitlist or live matching) within a supply-first, phase-aware launch model → trainer detail connect → contact reveal → hire signal. | `frontend/src/pages/Home.jsx`, `TrainerDetail.jsx` |
 | Lifecycle surfaces | Owner waitlist capture, follow-up confirmation, trainer onboarding status, billing remediation, reactivation, campaign entry | `frontend/src/pages/FollowUp.jsx`, `SubmitStatus.jsx`, `TrainerBilling.jsx`, `TrainerReactivate.jsx`, `CampaignLanding.jsx` |
 | Match decision | Deterministic heuristic relevance × outcome posterior | `backend/services/ai.py` + `engine.recompute_ranking` |
 | Monetisation | Intro-first; `/api/intros` meters lead fee. Submission-registered trainers receive `trial_free` intros for first 30 days, then Stripe invoice collection begins. Launch defaults to `track_only` conversion tracking. | `POST /api/intros`, `POST /api/stripe/webhook`, `POST /api/conversions` |
 | Trust | Bayesian outcome score; multi-signal conversion inference | `engine.py` |
 | Anti-gaming | IP/email duplicate suppression, conversion velocity check | `services/fraud.py` |
 | Ingestion | Public `POST /api/discovery` → autonomous discovery loop | `engine.process_discovery_queue` |
-| Oversight | Read-only snapshot at `/api/oversight` | `frontend/src/pages/Ops.jsx` |
+| Oversight | Read-only operating snapshot at `/api/oversight`; `/ops` is Normal Ops by default | `frontend/src/pages/Ops.jsx` |
 
 ## 2. How the business runs as a continuous system
+
+Current-state note: the diagram below shows the live owner-to-intro capability.
+During the supply-first launch phase, public emphasis can remain trainer acquisition plus owner waitlist while this path stays technically implemented but not broadly exposed from the home entry.
 
 ```
                      ┌──────────────────────────────────────────────┐
@@ -94,14 +103,21 @@ Set `DISABLE_AUTONOMY=1` to suppress all loops (useful in tests).
 | `system_state` | last-run summary per loop (`key` ∈ {ranking, pricing, …}) |
 | `stripe_events` | webhook idempotency + latest Stripe event receipts |
 | `audit_log` | every state-mutating action with before/after |
+| `notification_events` | delivery attempts and submitter notification evidence |
 | `owner_waitlist` | prelaunch owner waitlist enrollment rows (email/suburb/campaign/source) |
 | `owner_waitlist_events` | normalized waitlist lifecycle events (`started/submitted/duplicate/rejected`) |
+| `attribution_entries` | immutable campaign/source/suburb entry events before waitlist or match flow |
 | `evidence` | (reserved) cross-source confidence bonus inputs |
 | `config_snapshots` | (reserved for prod) snapshots used by health auto-rollback |
 | `seo_pages` | auto-generated suburb landing pages |
 | `source_ingestion_state` | per-source failure counters, suppression windows, and last-check telemetry |
 | `growth_attribution` | campaign/source attribution cohorts and nurture/remarketing counters |
 | `reactivation_candidates` | auto-detected trainer reactivation cohort and notification status |
+| `auth_attempts` | oversight login lockout and repeated-failure tracking |
+
+Standards alignment note:
+1. supply-first launch governance requires separate launch-phase/readiness/decision records such as `launch_phase_state`, `phase_readiness_snapshots`, and `phase_transition_decisions`, or an equivalent persisted phase-state mechanism
+2. `PUBLIC_MATCHING_ENABLED` is the live exposure gate, not the complete launch-phase model
 
 ## 5. Signal model
 
@@ -141,8 +157,9 @@ The system *reacts* to signals, it doesn't sit in static rules:
 - Health loop emits structured alerts to the oversight surface.
 - Auto-rollback of the most recent `config_snapshots` row when conversion rate cliff is detected. Snapshots are append-only; the loop only flips a `rolled_back=true` flag, so nothing is destroyed.
 - The frontend is stateless beyond `localStorage` (oversight passcode), so a backend rollback is sufficient.
+- `/ops` remains the readable operating view; direct policy/runtime changes stay outside Normal Ops.
 
-## 9. Componentinteraction
+## 9. Component interaction
 
 - **Frontend → backend**: REST only, all under `/api`.
 - **Backend → MongoDB**: Motor (async).

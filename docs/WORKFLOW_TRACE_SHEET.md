@@ -5,6 +5,11 @@
 - It maps each workflow `W#` to entry surface, API routes, backend functions, DB reads/writes, and emitted signals.
 - Use this file as the source of truth for "implemented vs partial vs planned vs missing" status.
 
+## Authority And Alignment
+- This is a derivative technical trace artifact.
+- Workflow status describes capability completeness, not current launch phase, current public emphasis, or phase-transition approval.
+- It must conform to the Standards Set, the supply-first launch companions, and `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`.
+
 ## Status Legend
 - `complete`: workflow path exists and is end-to-end functional in code.
 - `partial`: path exists, but has operational gaps/caveats that affect reliability, observability, or lifecycle coverage.
@@ -14,7 +19,7 @@
 
 | W# | Actor | Entry Surface | API Route(s) | Backend Function(s) | Primary DB Reads | Primary DB Writes | Emitted Events/Signals | Status | Current Gap (if any) |
 |---|---|---|---|---|---|---|---|---|---|
-| W1 | Dog owner | `/` match form | `GET /api/config`, `POST /api/match` | `config()`, `instant_match()` | `trainers.distinct`, `trainers.find`, `pricing_state.find` | `match_events.insert_one` | `match_events` row (`result_ids`) | complete | None on core path. |
+| W1 | Dog owner | `/` match form | `GET /api/config`, `POST /api/match` | `config()`, `instant_match()` | `trainers.distinct`, `trainers.find`, `pricing_state.find` | `match_events.insert_one` | `match_events` row (`result_ids`) | complete | Core path works; supply-first launch can still keep this capability traffic-gated while waitlist/trainer-acquisition remain the primary public posture. |
 | W2 | Dog owner | `/t/:id` connect form | `GET /api/trainers/{id}`, `POST /api/intros` | `get_trainer()`, `create_intro()` | `trainers.find_one`, `intros.find_one` (idempotency), pricing lookup | `intros.insert_one`, `intros.update_one` (billing/notification), `audit_log.insert_one` | `audit_log:intro`, intro billing metadata, trainer-intro notification metadata | complete | None on core path. |
 | W3 | Dog owner | Contact cards after connect | `POST /api/engagements`, `POST /api/match/connect-click` | `create_engagement()`, `record_match_connect_click()` | `intros.find_one`, `engagements.distinct`, `conversions.find_one`, `match_events.find_one` | `engagements.insert_one`, optional `conversions.insert_one`, `audit_log.insert_one` | aggregate engagement stream, optional `inferred_conversion` audit event, `result_connect_click` | complete | Connect-click and post-connect engagement capture are tested; prelaunch mode keeps the path traffic-gated via the home-entry match gate while oversight counts all engagement signals in aggregate. |
 | W4 | Dog owner | Follow-up outcome or explicit conversion call | `POST /api/follow-up/{token}/outcome`, `POST /api/conversions` | `submit_follow_up_outcome()`, `create_conversion()` | `outreach_events.find_one`, `intros.find_one`, `conversions.find_one` | `conversions.update_many` (supersede pending inferred), `conversions.insert_one`, `outreach_events.update_one`, `audit_log.insert_one` | explicit conversion outcome signal | complete | None on core path. |
@@ -42,6 +47,10 @@
 - `planned`: none
 - `missing`: none
 - `broken`: none found in current code paths
+
+Launch-state note:
+1. workflow closure does not by itself imply live matching is the current public emphasis
+2. phase state, readiness, and transition evidence remain separate launch-governance concerns
 
 ## Closure Evidence For Last Open Workflows
 
