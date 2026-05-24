@@ -11,7 +11,7 @@ Start here for future design-system sessions.
 3. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_COMPONENT_MAP.md`
 4. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_SYNC_PLAYBOOK.md`
 5. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/NO_PAYWALL_WORKFLOW.md`
-6. `/Users/carlg/Documents/AI-Coding/dtd/docs/design_guidelines.json` (creative direction reference, not canonical runtime truth)
+6. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/design_guidelines.json` (creative direction reference, not canonical runtime truth)
 
 ## Documents
 

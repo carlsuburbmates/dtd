@@ -44,8 +44,7 @@ Use these files as canonical inputs for future sync sessions:
 
 Direction references (non-canonical, but relevant):
 
-1. `/Users/carlg/Documents/AI-Coding/dtd/docs/design_guidelines.json`
-2. `/Users/carlg/Documents/AI-Coding/dtd/docs/audit/FRONTEND_AUDIT_ERRATA_2026-05-02.md`
+1. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/design_guidelines.json`
 3. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/DESIGN_ALIGNMENT_REPORT_2026-05-07.md`
 
 ## External constraints

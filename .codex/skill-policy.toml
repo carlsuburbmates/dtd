@@ -3,3 +3,45 @@ mode = "suggest_then_auto_use"
 require_explicit_composio_invocation = true
 
 blocked_skills = []
+
+# Routing guidance:
+# - Keep this file as the only routing policy source.
+# - Use the smallest safe local toolchain first.
+# - Add a plugin or skill only when it clearly matches the task and improves evidence quality.
+# - Prefer native browser/visual checks for UI work and repo tests for code changes.
+# - For integration-heavy work, prefer the matching plugin when available and fall back to local tools.
+# - If a task touches an external system, do not mutate it unless the user explicitly asked for that action.
+# - If a task can be completed by inspecting repo files, build output, browser evidence, or official docs, prefer that path over external provider consoles.
+
+# Precedence
+# 1. Repo-local analysis, edits, and tests.
+# 2. Native browser/visual tools for local or hosted web surfaces.
+# 3. Official docs via `web` when the fact may have changed or needs primary-source verification.
+# 4. Named plugin or connector when the task clearly matches that ecosystem and the tool is available in-session.
+# 5. Skills/subagents when they materially reduce cycle time or risk.
+
+# Required response behavior when optional capabilities are relevant
+# - Before using an optional skill, provide a concise Skill Suggestions list with: Skill, Why matched, Risk, Dependencies, Recommended action.
+# - Keep the active skill set small and task-relevant.
+# - Explain why skipped capabilities are not needed when reporting progress or completion.
+
+# Integration routing notes
+# - Frontend / local web UI work: Browser plugin first for localhost/127.0.0.1 apps; use Browser screenshots and interaction checks before relying on prose.
+# - Remote authenticated web work: Chrome plugin first when session/cookies/profile state matters.
+# - Documentation / API / platform facts: web with primary sources first for changing docs, SDKs, and hosted-provider behavior.
+# - GitHub, Vercel, Render, Stripe, Figma, Cloudflare, Gmail, Google Calendar, Drive, Documents, Spreadsheets, and other named ecosystems: prefer the matching plugin or connector when available in-session; otherwise use local tools plus official docs.
+# - When a user explicitly names a plugin or connector that is available, prefer it over the generic fallback path.
+# - When a user explicitly requests a connector that is not yet available, discover install candidates first, then request install only if there is an exact match.
+
+# Fallback rules
+# - If the preferred plugin is unavailable, use the nearest safe fallback and say why.
+# - If the task is read-only analysis, prefer local inspection and official docs over external provider mutations.
+# - If the task requires a side effect on an external system, ask before proceeding unless the user already explicitly requested that action.
+# - If the task crosses multiple domains, keep the routing stack as small as possible and only add a second capability when it meaningfully reduces risk.
+
+# Default capability bundles
+# - Repo analysis/editing: shell search, file reads, targeted patching, targeted tests.
+# - UI verification: Browser + local build/test + screenshot comparison.
+# - Changing web/platform docs: web + repo edits + consistency re-read.
+# - Provider work: matching plugin + local validation + official docs.
+# - High-risk work: parallel review only when the task is billing/auth/runtime ownership/production-state sensitive.

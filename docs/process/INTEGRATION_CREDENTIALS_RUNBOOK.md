@@ -2,6 +2,8 @@
 
 Purpose: keep credentials and infra verification simple for a one-man workflow.
 
+Agent routing reference: `.codex/skill-policy.toml` is the live routing policy source; use it together with the current task context and native capabilities when picking a plugin, skill, or fallback.
+
 ## Current lock (2026-05-02)
 
 1. Accounts/keys created: Clerk, Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
@@ -42,9 +44,7 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 
 ## H-04 platform readiness snapshot (2026-05-02)
 
-1. Full platform check report:
-- `docs/governance/H04_VERIFICATION_REPORT.json`
-2. Command-level evidence refresh executed at `2026-05-01T19:43:05Z` (`2026-05-02` local):
+1. Command-level evidence refresh executed at `2026-05-01T19:43:05Z` (`2026-05-02` local):
 - `STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh` -> exit `0` (`RESULT=PASS`)
 - `vercel api "/v9/projects/prj_TviWWkrOzNENkY4cazM3XsRHyIR1?teamId=team_5Jzh8VcbTjO5MNniKHpivsCY" --raw` -> exit `0`
 - `curl -H "Authorization: Bearer $RENDER_API_KEY" https://api.render.com/v1/services?limit=100` -> HTTP `200`
@@ -54,12 +54,12 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - `curl -H "Authorization: Bearer $RESEND_API_KEY" https://api.resend.com/domains` -> HTTP `200`
 - `curl -H "Authorization: Bearer $SENTRY_ACCESS_TOKEN" https://sentry.io/api/0/organizations/` -> HTTP `200`
 - `curl -X POST "$NEXT_PUBLIC_POSTHOG_HOST/capture/" ...` -> HTTP `200`
-3. Drift/failure flags from refresh:
+2. Drift/failure flags from refresh:
 - **Failure observed**: Sentry org check returned HTTP `401` when command used `SENTRY_AUTH_TOKEN`/`SENTRY_API_TOKEN` aliases.
 - **Resolution**: switching command to `SENTRY_ACCESS_TOKEN` restored HTTP `200`.
 - Render deploy response shape is nested (`response[0].deploy.status`), so flat parsers can misreport deploy status as null.
 - Vercel production deployment advanced from `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno` to `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`.
-4. Result:
+3. Result:
 - No active platform block detected at refresh time; one credential-variable naming drift and one response-shape drift require command hygiene.
 
 ## Email channel verification snapshot (2026-05-09)
@@ -75,7 +75,7 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 - Invoice body support contact resolves to `info@dogtrainersdirectory.com.au`.
 - This remains Stripe-managed behavior (outside Resend/backend payload config), so it should be rechecked after Stripe account profile edits.
 4. Detailed evidence/report:
-- `docs/governance/EMAIL_DELIVERY_COMPLETION_REPORT_2026-05-09.md`
+- this runbook section is the retained email verification reference after documentation reduction.
 
 ## Storage rules
 

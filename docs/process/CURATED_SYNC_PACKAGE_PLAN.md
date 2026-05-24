@@ -52,11 +52,9 @@ No sync executed in this slice.
 
 ## Group E — Strategy and Evidence Documents
 - Files:
-  - `docs/strategy/SOLO_FOUNDER_AUTONOMOUS_OPERATIONS_CONTROL_PACK.md`
-  - `docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md`
-  - `docs/strategy/melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json`
-  - `docs/strategy/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
-  - `docs/strategy/CURATED_SYNC_PACKAGE_PLAN.md`
+  - `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
+  - `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
+  - `docs/process/CURATED_SYNC_PACKAGE_PLAN.md`
 - Purpose: controlled operational documentation, evidence manifesting, and canonical data metadata continuity.
 - Risk level: low
 - Must-pass checks before staging:

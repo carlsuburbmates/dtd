@@ -1,449 +1,307 @@
 # Complete Website Page Spec
 
-Date: 2026-05-20
-Scope: UI/UX completeness contract for all website pages and key interactions.
+Date: 2026-05-25
+Scope: canonical page-level specification for the intended DTD website.
 
-Authority note:
-1. This is a derivative page-spec document.
-2. It must conform to the Standards Set, the supply-first launch companions, and current governance docs.
+## Authority
 
-Current runtime model (2026-05-20):
-1. Public home entry is exposure-gated by `PUBLIC_MATCHING_ENABLED`.
-2. `PUBLIC_MATCHING_ENABLED=false`: owner waitlist surface is primary on `/`.
-3. `PUBLIC_MATCHING_ENABLED=true`: live owner matching surface is primary on `/`.
-4. Trainer onboarding remains open in both exposure states.
-5. Matching/contact lifecycle routes and APIs remain implemented in both states; home entry controls public exposure.
+This document is part of the canonical implementation pack.
 
-Standards note:
-1. `PUBLIC_MATCHING_ENABLED` is the live matching exposure gate only.
-2. Launch phase/public emphasis remains a separate concept from home-entry exposure.
+Rules:
+1. It defines the intended website and page-level behavior.
+2. It does not claim that current code already satisfies every requirement.
+3. If a lower-authority doc conflicts with this page spec, this page spec governs for page-level implementation.
 
-## 1) Is this different from workflows?
-Yes.
+## Locked website posture
 
-- This document defines what each page must contain and what users should expect when interacting with it.
-- Workflow docs define lifecycle logic across pages, APIs, and system loops.
-- Use both together:
-  - Page spec = UI completeness.
-  - Workflow spec = business/system behavior completeness.
+This page spec is written for the current intended DTD website under the locked project truth:
+1. Product: `DTD` / `Dog Trainers Directory`
+2. Launch posture: `supply_first`
+3. `PUBLIC_MATCHING_ENABLED=false`
+4. Public live owner matching is not exposed from the home entry
+5. Trainer registration, onboarding, activation, and supply readiness come first
+6. Owner waitlist is passive only
+7. `/ops` is Normal Ops, not an admin dashboard
+8. No unrestricted admin CRUD
+9. No routine manual matching
+10. No routine manual billing
+11. `Database = truth`
+12. `/ops = readable operating view`
+13. `audit_log = decision trail`
+14. `CSV/export = proof only`
 
-References:
-- [USER_WORKFLOWS.md](/Users/carlg/Documents/AI-Coding/dtd/docs/USER_WORKFLOWS.md)
-- [WORKFLOW_TRACE_SHEET.md](/Users/carlg/Documents/AI-Coding/dtd/docs/WORKFLOW_TRACE_SHEET.md)
+## Global site contract
 
-## 2) Global UI contract (all public pages)
+Every public-facing page must satisfy these rules:
+1. Shared header and footer
+2. Clear primary action consistent with page intent
+3. Mobile and desktop readable layout
+4. Legal links available where appropriate
+5. No dead buttons or dead links
+6. No public copy that implies broad live matching is currently available
+7. No UI that implies unrestricted admin, manual matching, or manual routine billing
 
-Expected on every public page:
-1. Shared header and footer.
-2. Clear primary action relevant to page intent.
-3. Mobile and desktop readable layout.
-4. Legal links available (`/privacy`, `/terms`).
-5. No dead buttons or dead links.
+## Route map
 
-Component baseline:
-1. Shared chrome from `frontend/src/components/PublicChrome.jsx`.
-2. Routes defined in `frontend/src/App.js`.
-3. Page components from `frontend/src/pages/*`.
+### Public website routes
 
-## 3) Quick-view wireframe
+Required public routes:
+1. `/`
+2. `/how-it-works`
+3. `/about`
+4. `/pricing`
+5. `/trust`
+6. `/faq`
+7. `/contact`
+8. `/privacy`
+9. `/terms`
+10. `/trainers`
+11. `/submit`
+12. `/submit/status/:submissionId`
+13. `/trainer/billing`
+14. `/trainer/reactivate`
+15. `/t/:id`
+16. `/trainers/:id`
+17. `/lp/:campaign`
+18. `/melbourne/:suburb`
+19. `/follow-up/:token`
+20. `/ops`
 
-```mermaid
-flowchart TD
-    A["Home / (Knowledge Hub)"] -->|"Guides"| N1["/how-it-works"]
-    A -->|"Launch FAQ"| N4["/faq"]
-    A -->|"Trainer onboarding"| G["Trainers /trainers"]
-    A -->|"Contact"| N6["/contact"]
+### Route intent rules
 
-    G -->|"Apply"| H["Submit /submit"]
-    H -->|"Status link"| I["Submit Status /submit/status/:submissionId"]
-    I -->|"Fix billing"| J["Trainer Billing /trainer/billing"]
-    I -->|"Reactivate"| K["Trainer Reactivate /trainer/reactivate"]
+1. The home entry must remain waitlist-first while `PUBLIC_MATCHING_ENABLED=false`.
+2. Trainer onboarding must remain visible and usable during the supply-first phase.
+3. Trainer detail and connect flows may exist as lifecycle surfaces without being the primary home-entry path.
+4. Follow-up, billing, reactivation, and submission-status routes are lifecycle routes, not broad public-marketing entry points.
 
-    L["Campaign Landing /lp/:campaign"] -->|"Open hub"| A
-    M["SEO Page /melbourne/:suburb"] -->|"Open hub"| A
+## Page specifications
 
-    X["Deferred from public home entry when gate is off"] --> C["Trainer Detail /t/:id (implemented)"]
-    X --> F["Follow-up /follow-up/:token (implemented)"]
-    X --> E["Outcome Confirmed"]
+### `/`
 
-    N["Info Pages"] --> N1["/how-it-works"]
-    N --> N2["/pricing"]
-    N --> N3["/trust"]
-    N --> N4["/faq"]
-    N --> N5["/about"]
-    N --> N6["/contact"]
-    N --> N7["/privacy"]
-    N --> N8["/terms"]
-
-    O["Ops /ops (read-only)"] --> O1["KPIs + Loop Health + Alerts"]
-```
-
-### Section-level page blocks (quick wireframe)
-
-1. `Home /`
-- Header
-- Knowledge hub hero/value statement
-- Exposure status plus current launch-phase-aware emphasis
-- Guides/high-value owner content blocks
-- Owner waitlist form or owner match form/results, depending on approved public exposure
-- Trainer onboarding CTA
-- Footer
-
-2. `Trainer Detail /t/:id`
-- Header/back
-- Trainer profile summary
-- Connect form (name/email/phone/context + 2 consents)
-- Contact reveal cards
-- Follow-up expectation notice
-- Footer
-- Note: page is implemented; when public matching exposure is gated, it is not the primary public entry path from home.
-
-3. `Submit /submit`
-- Header
-- Trainer onboarding form
-- Consent and billing terms
-- Submit CTA
-- Result/next-step state
-- Footer
-
-4. `Submit Status /submit/status/:submissionId`
-- Header
-- Status summary
-- Blockers/remediation list
-- CTAs to billing/reactivation/profile update
-- Footer
-
-5. `Trainer Billing /trainer/billing`
-- Header
-- Billing profile summary
-- Issue checklist
-- Retry/reconnect/support actions
-- Footer
-
-6. `Trainer Reactivate /trainer/reactivate`
-- Header
-- Inactivity reasons
-- Checklist actions (refresh profile, fix billing, reactivate)
-- Footer
-
-7. `Follow-up /follow-up/:token`
-- Header
-- Intro/trainer context
-- Outcome buttons (hired/still deciding/new match)
-- Confirmation state
-- Footer
-- Note: route is active and used by outreach flow; it is lifecycle-facing, not a primary nav page.
-
-8. `Campaign /lp/:campaign` + `SEO /melbourne/:suburb`
-- Header
-- Intent-specific message
-- Single strong CTA to the current approved home-entry path
-- Footer
-
-9. `Info pages`
-- Header
-- Single focused content section(s)
-- Optional return CTA
-- Footer/legal links
-
-10. `Ops /ops`
-- Auth gate
-- Oversight dashboard cards/tables
-- Refresh/sign out controls
-
-## 4) Page-by-page complete spec (component-level)
-
-## `/` Home (owner entry)
-Purpose: public knowledge hub and launch-status page.
-
-Component file:
-- `frontend/src/pages/Home.jsx`
+Purpose:
+1. Public knowledge hub
+2. Passive owner waitlist entry
+3. Trainer-acquisition signpost
 
 Required sections:
-1. Hero/value proposition.
-2. Exposure/launch-status badge or equivalent current-state indicator.
-3. Practical content/guides blocks.
-4. Owner interaction card (waitlist or match form, depending on approved public exposure).
-5. CTAs to guides, FAQ, trainers, contact.
+1. Hero/value proposition
+2. Clear current public posture summary
+3. Practical owner guidance or education blocks
+4. Passive owner waitlist form
+5. Strong trainer onboarding CTA
+6. Supporting CTAs to `how-it-works`, `faq`, and `contact`
 
-Required controls:
-1. Guides CTA.
-2. Trainer onboarding CTA.
-3. FAQ/contact CTAs.
+Required behavior:
+1. Home must not expose broad public live matching while `PUBLIC_MATCHING_ENABLED=false`.
+2. Waitlist capture must preserve suburb and consent.
+3. Trainer onboarding CTA must remain obvious.
+4. Copy must reinforce supply-first posture and passive owner demand.
 
-Expected behavior:
-1. If `PUBLIC_MATCHING_ENABLED=false`, waitlist submission is primary and direct matching is not exposed from home.
-2. If `PUBLIC_MATCHING_ENABLED=true`, owner matching flow runs from home and can route to trainer detail.
-3. Trainers can still enter onboarding flow in both exposure states.
-4. Supply-first launch posture may keep trainer acquisition and passive owner demand as the dominant public emphasis even while the matching capability exists in code.
+### `/how-it-works`
 
-Buttons/CTAs expected:
-1. `Explore guides` (or equivalent)
-2. `Trainer onboarding` (or equivalent)
-3. `Read launch FAQ`
-4. `Contact the team`
-
-## `/t/:id` and `/trainers/:id` Trainer detail + connect
-Purpose: owner releases contact request and gets trainer contact details.
-
-Component file:
-- `frontend/src/pages/TrainerDetail.jsx`
+Purpose:
+1. Explain what DTD does
+2. Explain the current supply-first posture
+3. Explain how owners and trainers interact with the site now
 
 Required sections:
-1. Trainer profile summary.
-2. Connect form.
-3. Post-connect contact card.
-4. Follow-up expectation section.
+1. DTD explanation
+2. Supply-first explanation
+3. Owner waitlist explanation
+4. Trainer onboarding explanation
+5. Consent/trust explanation
 
-Required controls:
-1. Name/email/phone/context fields.
-2. Two consent checkboxes.
-3. `Connect` button.
-4. Contact action buttons or links (`website`, `phone`, `email`).
+### `/about`
 
-Expected behavior:
-1. Missing required fields or consent blocks connect.
-2. Successful connect reveals contact info immediately.
-3. Contact action clicks are tracked as engagement signals.
-4. Outcome confirmation is deferred to follow-up flow.
-
-Buttons/CTAs expected:
-1. `Connect`
-2. Contact action links (website/phone/email cards)
-
-## `/how-it-works`
-Purpose: explain the phased launch model and current supply-first posture.
-
-Component file:
-- `frontend/src/pages/HowItWorks.jsx`
+Purpose:
+1. Explain the product and its intent
+2. Position DTD as a guided match-and-intro platform, not a generic directory
 
 Required sections:
-1. Supply-first launch stage explanation.
-2. Current owner value (guides/waitlist) + later controlled live-matching stage.
-3. Safety/consent statement.
+1. Product framing
+2. Why supply quality matters
+3. Bounded oversight / automation-first model
 
-Required controls:
-1. CTA back to home hub (`/`).
-2. Secondary CTA for trainers (`/trainers`).
+### `/pricing`
 
-Expected behavior:
-1. User understands process before submitting.
-
-## `/trainers`
-Purpose: trainer acquisition and qualification entry.
-
-Component file:
-- `frontend/src/pages/Trainers.jsx`
+Purpose:
+1. Explain trainer-side commercial model
+2. Avoid misleading owner-facing marketplace language
 
 Required sections:
-1. Commercial model explanation (pay-on-outcome framing).
-2. How trainer listing/submission works.
-3. What happens after submission.
+1. Intro-first billing explanation
+2. Trial-free or billing-readiness explanation where applicable
+3. Clear non-guarantee wording
 
-Required controls:
-1. Primary CTA to `/submit`.
-2. Support contact path.
+### `/trust`
 
-Expected behavior:
-1. Trainer can decide and start onboarding without ambiguity.
-
-## `/submit`
-Purpose: trainer submission and activation start.
-
-Component file:
-- `frontend/src/pages/Submit.jsx`
+Purpose:
+1. Explain trust, consent, and operating boundaries
 
 Required sections:
-1. Trainer details form.
-2. Consent and billing terms section.
-3. Submission result state.
+1. Consent and contact-release explanation
+2. Verification / quality framing
+3. Oversight and accountability framing
 
-Required controls:
-1. Form fields for listing profile.
-2. Consent checkboxes.
-3. Submit button.
-4. Link/route to status page on completion.
+### `/faq`
 
-Expected behavior:
-1. Missing consents block submission.
-2. Successful submission returns status and next-step path.
-
-## `/submit/status/:submissionId`
-Purpose: onboarding completion status and blockers.
-
-Component file:
-- `frontend/src/pages/SubmitStatus.jsx`
+Purpose:
+1. Answer owner and trainer questions without implying broad public live matching
 
 Required sections:
-1. Submission state summary.
-2. Billing/profile readiness.
-3. Blocker list with remediation links.
+1. Owner waitlist answers
+2. Trainer onboarding answers
+3. Billing/remediation answers
+4. Support path
 
-Required controls:
-1. CTA to update profile (`/submit`).
-2. CTA to billing remediation (`/trainer/billing`).
-3. Support escalation path.
+### `/contact`
 
-Expected behavior:
-1. Trainer clearly sees what is complete vs blocked.
-
-## `/trainer/billing`
-Purpose: billing health and revenue remediation.
-
-Component file:
-- `frontend/src/pages/TrainerBilling.jsx`
+Purpose:
+1. Canonical support/contact path
 
 Required sections:
-1. Billing profile summary.
-2. Invoice/recovery state summary.
-3. Issue class checklist.
+1. Contact method
+2. Expected use cases
 
-Required controls:
-1. `Reconnect billing` action.
-2. Update profile action.
-3. Support contact action.
+### `/privacy` and `/terms`
 
-Expected behavior:
-1. Trainer understands billing issue type and next steps.
-2. Retry policy/retry-state visibility is present.
-
-## `/trainer/reactivate`
-Purpose: trainer reactivation and retention.
-
-Component file:
-- `frontend/src/pages/TrainerReactivate.jsx`
+Purpose:
+1. Provide legal and consent baseline
 
 Required sections:
-1. Current activity/health summary.
-2. Reactivation reasons/checklist.
-3. Remediation and reactivation actions.
+1. Current legal copy
+2. Contact/support details where relevant
 
-Required controls:
-1. `Refresh profile` action.
-2. `Fix billing` action.
-3. `Reactivate listing` action.
+### `/trainers`
 
-Expected behavior:
-1. Trainer can resolve blockers and re-run reactivation path.
-
-## `/follow-up/:token`
-Purpose: owner outcome confirmation after outreach.
-
-Component file:
-- `frontend/src/pages/FollowUp.jsx`
+Purpose:
+1. Trainer acquisition and qualification entry
 
 Required sections:
-1. Intro/trainer context.
-2. Outcome choices.
-3. Confirmation feedback state.
+1. Trainer value proposition
+2. How intros work
+3. Submission path
+4. Next-step expectations
 
 Required controls:
-1. `Yes, I hired`.
-2. `Still deciding`.
-3. `Need another match`.
+1. Primary CTA to `/submit`
+2. Support path
 
-Expected behavior:
-1. Valid token shows context and accepts outcome.
-2. Invalid token shows clear error/fallback.
+### `/submit`
 
-## `/lp/:campaign`
-Purpose: campaign landing and demand attribution handoff.
-
-Component file:
-- `frontend/src/pages/CampaignLanding.jsx`
+Purpose:
+1. Trainer submission and activation start
 
 Required sections:
-1. Campaign-specific value message.
-2. CTA into the current approved home-entry path.
+1. Trainer details form
+2. Consent and billing terms
+3. Submission result and next-step state
 
-Required controls:
-1. Primary CTA to `/` with campaign/source propagation.
+### `/submit/status/:submissionId`
 
-Expected behavior:
-1. Attribution survives handoff into match request.
-2. Campaign/source cohort becomes visible in oversight attribution reporting.
-
-## `/melbourne/:suburb` (SEO page)
-Purpose: SEO demand capture for suburb intent.
-
-Component file:
-- `frontend/src/pages/SuburbSEO.jsx`
+Purpose:
+1. Explain trainer submission and activation state
 
 Required sections:
-1. Localized copy.
-2. CTA into the current approved home-entry path.
+1. Current status
+2. Blockers
+3. Next-step guidance
+4. CTAs into billing/remediation/reactivation paths where relevant
 
-Required controls:
-1. Primary CTA to `/`.
+### `/trainer/billing`
 
-Expected behavior:
-1. Visitor can move directly into the current approved home-entry path.
-2. SEO attribution survives CTA handoff into home submissions and nurture reporting.
-
-## `/pricing`, `/trust`, `/faq`, `/about`, `/contact`, `/privacy`, `/terms`
-Purpose: informational/legal confidence pages.
-
-Component files:
-1. `frontend/src/pages/Pricing.jsx`
-2. `frontend/src/pages/Trust.jsx`
-3. `frontend/src/pages/FAQ.jsx`
-4. `frontend/src/pages/About.jsx`
-5. `frontend/src/pages/Contact.jsx`
-6. `frontend/src/pages/Privacy.jsx`
-7. `frontend/src/pages/Terms.jsx`
+Purpose:
+1. Trainer billing remediation
 
 Required sections:
-1. Clear headline and page purpose.
-2. Accurate, current policy/content.
-3. Pricing/legal pages must reflect launch billing baseline:
-   - first 30 days trial-free for submission-registered trainers.
-   - fixed A$5 per valid intro after trial.
-4. Relevant CTA back to primary flows where appropriate.
+1. Billing profile summary
+2. Current issue or blocker summary
+3. Recovery or reconnect actions
+4. Support path
 
-Required controls:
-1. Navigation links.
-2. Contact method on `/contact`.
+### `/trainer/reactivate`
 
-Expected behavior:
-1. No ambiguous legal or policy language.
-2. User can navigate back to action pages without dead-ends.
-
-## `/ops` Oversight (internal)
-Purpose: read-only operational visibility.
-
-Component file:
-- `frontend/src/pages/Ops.jsx`
+Purpose:
+1. Trainer reactivation path
 
 Required sections:
-1. Auth gate.
-2. Launch phase/public exposure summary.
-3. Supply-readiness summary.
-4. Loop health.
-5. Alerts.
-6. Revenue operations detail.
+1. Reactivation context
+2. Recovery checklist
+3. Support path
+
+### `/t/:id` and `/trainers/:id`
+
+Purpose:
+1. Trainer detail and contact-release lifecycle surface
+
+Required sections:
+1. Trainer profile summary
+2. Connect form
+3. Contact-reveal result
+4. Follow-up expectation
+
+Required behavior:
+1. Consent is required before contact release
+2. Successful connect reveals contact information
+3. Contact actions are trackable as engagement signals
+
+### `/lp/:campaign` and `/melbourne/:suburb`
+
+Purpose:
+1. Campaign and SEO landing entry
+2. Route traffic into the approved current home-entry path
+
+Required sections:
+1. Intent-specific message
+2. Single strong CTA back into the approved owner or trainer path
+
+Required behavior:
+1. These pages must not imply broad public live matching is currently active
+2. Attribution context must be preserved into downstream flows
+
+### `/follow-up/:token`
+
+Purpose:
+1. Outcome confirmation and follow-up lifecycle surface
+
+Required sections:
+1. Intro/trainer context
+2. Outcome action choices
+3. Confirmation state
+
+### `/ops`
+
+Purpose:
+1. Readable operating view for Normal Ops
+
+Required sections:
+1. Auth gate
+2. Current launch posture and public exposure summary
+3. Supply-readiness summary
+4. Trainer submissions, intro-ready supply, and blocked supply visibility
+5. Readiness recommendation and blockers to next phase
+6. Loop health and alert visibility
+7. Revenue and billing visibility
+8. Waitlist, growth, source-ingestion, and reactivation visibility
+9. Recent system-action visibility
 
 Required controls:
-1. Login submit.
-2. Refresh.
-3. Sign out.
+1. Login submit
+2. Refresh
+3. Sign out
 
-Expected behavior:
-1. No mutation controls.
-2. Snapshot updates on poll/refresh.
-3. `/ops` remains Normal Ops by default and must not read like an admin dashboard.
+Forbidden controls:
+1. No unrestricted admin CRUD
+2. No public-matching enable toggle in Normal Ops
+3. No launch-phase mutation control in Normal Ops
+4. No routine manual matching controls
+5. No routine manual billing controls
 
-## 5) Completeness checklist
+## Completeness rule
 
-A page set is complete only when:
-1. All routes listed above render.
-2. All listed controls exist and are clickable.
-3. Primary outcomes occur as expected (submit, connect, confirm, remediate).
-4. Error states are explicit (invalid token, missing consent, not found).
-5. Build passes and critical route smoke checks pass.
-
-## 6) Suggested companion docs
-
-Use this with:
-1. [WORKFLOW_TRACE_SHEET.md](/Users/carlg/Documents/AI-Coding/dtd/docs/WORKFLOW_TRACE_SHEET.md) for lifecycle status.
-2. [USER_WORKFLOWS.md](/Users/carlg/Documents/AI-Coding/dtd/docs/USER_WORKFLOWS.md) for actor journeys.
-3. [ROADMAP.md](/Users/carlg/Documents/AI-Coding/dtd/docs/governance/ROADMAP.md) for launch-gate scope.
+The intended website is page-complete only when:
+1. all listed routes exist
+2. each route matches its purpose and required sections
+3. copy and CTA structure match the locked website posture
+4. `/ops` remains a readable operating view, not an admin control room
+5. no page contradicts the supply-first launch posture or the locked operating rules

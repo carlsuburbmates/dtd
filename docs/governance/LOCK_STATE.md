@@ -25,8 +25,8 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 - `Monitor`, `Investigate`, and `Escalate` are operating modes within the same ownership model, not separate team roles
 - escalation routes into `technical-owner mode` when the action crosses the hard boundary rule
 8. Codex platform-interaction sync rules are governed by:
-- `docs/governance/CODEX_PLATFORM_SYNC.md`
-9. Operator-facing actions must satisfy the hard boundary rule in `docs/OPERATIONS.md`:
+- `.codex/skill-policy.toml`
+9. Operator-facing actions must satisfy the hard boundary rule in `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`:
 - actions that can change locked runtime policy are always `technical-owner mode`
 - only reversible, bounded, policy-safe actions may be treated as `operator mode`
 
@@ -91,15 +91,14 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 Evidence references:
 1. `H-01` completed + live-domain state:
-- `docs/governance/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `vercel alias ls` and `curl -I` checks on apex + `www` returning `307`/`200`).
-- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and Stage D/E complete evidence).
+- `docs/process/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `vercel alias ls` and `curl -I` checks on apex + `www` returning `307`/`200`).
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and Stage D/E complete evidence).
 2. `H-02` completed:
-- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
 3. `H-03` completed:
 - this file ("Legal copy sign-off (H-03)" section below).
 4. `H-04` completed:
-- `docs/governance/H04_VERIFICATION_REPORT.json`.
-- `docs/governance/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-04 platform readiness snapshot").
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-04 platform readiness snapshot").
 
 ## Legal copy sign-off (H-03)
 
@@ -114,6 +113,6 @@ Evidence references:
 ## Update rule
 
 If any governance, runtime, or route truth changes materially, update this file and `ROADMAP.md` in the same commit.
-If the authority hierarchy changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` and `docs/governance/NEXT_SESSION_HANDOFF.md` in the same session.
-If any gate/status value changes, append a matching command/file evidence entry in `docs/governance/NEXT_SESSION_HANDOFF.md` execution log in the same session.
-If Codex interaction protocols are updated from the global feed, update `docs/governance/CODEX_PLATFORM_SYNC.md` in the same commit.
+If the authority hierarchy changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` and `docs/process/NEXT_SESSION_HANDOFF.md` in the same session.
+If any gate/status value changes, append a matching command/file evidence entry in `docs/process/NEXT_SESSION_HANDOFF.md` execution log in the same session.
+If Codex interaction protocols are updated, update `.codex/skill-policy.toml` in the same commit.

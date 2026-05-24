@@ -6,9 +6,8 @@ Ensure all design-related docs in the repo are aligned for uninterrupted multi-s
 
 ## Documents reviewed
 
-1. `/Users/carlg/Documents/AI-Coding/dtd/docs/design_guidelines.json`
-2. `/Users/carlg/Documents/AI-Coding/dtd/docs/audit/FRONTEND_AUDIT_ERRATA_2026-05-02.md`
-3. `/Users/carlg/Documents/AI-Coding/dtd/docs/governance/NEXT_SESSION_HANDOFF.md`
+1. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/design_guidelines.json`
+2. `/Users/carlg/Documents/AI-Coding/dtd/docs/process/NEXT_SESSION_HANDOFF.md`
 4. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_SYNC_PLAYBOOK.md`
 5. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_COMPONENT_MAP.md`
 6. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/NO_PAYWALL_WORKFLOW.md`

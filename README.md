@@ -7,9 +7,10 @@
 
 DTD / Dog Trainers Directory is **not a generic directory**. It is a Greater Melbourne match-and-intro platform that:
 - follows a supply-first launch posture,
-- uses `PUBLIC_MATCHING_ENABLED` as the live matching exposure gate, separate from launch phase/public emphasis,
-- can present owner waitlist or live matching from the home entry depending on approved public exposure,
-- accepts a one-line problem from a dog owner and returns 3 ranked trainer matches (deterministic relevance + outcome score) when matching is enabled,
+- keeps `PUBLIC_MATCHING_ENABLED=false` in the current locked posture,
+- treats `PUBLIC_MATCHING_ENABLED` as the public live-matching exposure gate only,
+- keeps the public home entry waitlist-first while live matching remains deferred,
+- accepts a one-line problem from a dog owner and returns ranked trainer matches only in the controlled lifecycle surfaces where matching is still implemented,
 - records an intro on **Connect** and issues Stripe invoice collection when trainer billing profile is ready,
 - launch defaults to `track_only` conversion tracking,
 - tracks conversions as quality signals by default, with bill-mode available later,
@@ -19,15 +20,16 @@ There is **no admin dashboard** to operate the business. There is `/ops`, the re
 
 ## Quick links
 - **Current truth index** → [`docs/governance/CURRENT_TRUTH_INDEX.md`](docs/governance/CURRENT_TRUTH_INDEX.md)
-- **Architecture** → [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- **Operations / troubleshooting** → [`docs/OPERATIONS.md`](docs/OPERATIONS.md)
-- **Deployment + portability** → [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- **Codex platform sync protocol** → [`docs/governance/CODEX_PLATFORM_SYNC.md`](docs/governance/CODEX_PLATFORM_SYNC.md)
+- **Canonical page spec** → [`docs/COMPLETE_WEBSITE_PAGE_SPEC.md`](docs/COMPLETE_WEBSITE_PAGE_SPEC.md)
+- **Roadmap** → [`docs/governance/ROADMAP.md`](docs/governance/ROADMAP.md)
+- **Runtime evidence matrix** → [`docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`](docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md)
+- **Codex execution playbook** → [`docs/process/CODEX_EXECUTION_PLAYBOOK.md`](docs/process/CODEX_EXECUTION_PLAYBOOK.md)
+- **Skill routing policy** → [`.codex/skill-policy.toml`](.codex/skill-policy.toml)
 - **Design continuity (start here for UI/design sessions)** → [`docs/design/README.md`](docs/design/README.md)
 
 ## Public website routes
 
-- `/` owner waitlist or live matching home entry, depending on approved public exposure
+- `/` owner waitlist home entry in the current locked posture
 - `/how-it-works`
 - `/about`
 - `/pricing`
@@ -108,7 +110,7 @@ docker compose up --build
 | `STRIPE_REQUIRE_BILLING_CONSENT` | backend | Set `1` to require explicit trainer billing consent before invoicing |
 | `REACT_APP_BACKEND_URL` | frontend | Public URL of the backend (`/api` is appended client-side) |
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for service-by-service setup.
+See the environment examples and the canonical docs for current runtime expectations.
 
 ## Tests
 
@@ -117,10 +119,10 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for service-by-service setup.
 cd backend && pytest -q
 
 # Frontend smoke tests
-# Use the testing playbook in docs/OPERATIONS.md or your preferred Playwright runner.
+# Use your preferred Playwright runner.
 ```
 
-The latest iteration's report lives at `docs/test_reports/iteration_<n>.json`.
+Use the current test suite and canonical docs as the source of verification.
 
 ## Production checklist
 
@@ -137,4 +139,4 @@ Core operating rule:
 - `audit_log = decision trail`
 - `CSV/export = proof only`
 
-The runtime is fail-soft, but launch progression remains governed by explicit owner-approved decisions in [`docs/governance/LOCK_STATE.md`](docs/governance/LOCK_STATE.md), [`docs/governance/NEXT_SESSION_HANDOFF.md`](docs/governance/NEXT_SESSION_HANDOFF.md), and the canonical standards under `docs/standards/`.
+The runtime is fail-soft, but launch progression remains governed by explicit owner-approved decisions in [`docs/governance/LOCK_STATE.md`](docs/governance/LOCK_STATE.md), [`docs/process/NEXT_SESSION_HANDOFF.md`](docs/process/NEXT_SESSION_HANDOFF.md), and the canonical standards under `docs/standards/`.

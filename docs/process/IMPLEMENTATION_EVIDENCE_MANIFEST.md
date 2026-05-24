@@ -59,10 +59,8 @@ Stage only approved slice-owned files. Keep unrelated dirty-tree changes out of 
 - Frontend Ops visibility group:
   - `frontend/src/pages/Ops.jsx`
 - Strategy/docs group:
-  - `docs/strategy/SOLO_FOUNDER_AUTONOMOUS_OPERATIONS_CONTROL_PACK.md`
-  - `docs/strategy/PRELAUNCH_CHECKS_RUNBOOK.md`
-  - `docs/strategy/melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json`
-  - `docs/strategy/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
+  - `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
+  - `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
 - Tooling guard group:
   - `scripts/check_frontend_copy_guard.js`
   - `scripts/check_prelaunch_release_gate.js`
