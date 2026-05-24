@@ -18,6 +18,7 @@ Last updated: 2026-05-22
 ## Current-state governance docs (active)
 - `docs/governance/LOCK_STATE.md`
 - `docs/governance/ROADMAP.md`
+- `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`
 
 ## Current-state derivative docs (active, subordinate to authorities above)
 - `docs/ARCHITECTURE.md`
