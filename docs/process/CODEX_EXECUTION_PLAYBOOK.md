@@ -14,6 +14,11 @@ Before implementation, publish a concise capability brief:
 
 Use template: `.codex/templates/CAPABILITY_BRIEF_TEMPLATE.md`.
 
+For integrated tech and tool work:
+1. actively prefer the available relevant native capability when it materially improves implementation quality or evidence quality
+2. do not default to manual-only implementation or inspection when a relevant available plugin, browser workflow, subagent, or integration-aware skill is a better fit
+3. if a relevant capability is skipped, state why it was not needed for the active scope
+
 ## 2) Skill Suggestions Standard
 
 Before optional skill use, provide:
@@ -94,6 +99,17 @@ Required sections:
 4. how outputs affected implementation decisions
 5. validation results
 6. residual risks or open gaps
+
+When implementation required a bounded execution-time decision:
+1. record the decision separately from the normal change summary
+2. state the affected area
+3. state the evidence basis used, preferring:
+   - canonical standards and product docs
+   - codebase/runtime evidence
+   - official docs for active integrations/tools
+   - market-appropriate best option within locked scope
+4. state why that decision was the best bounded choice
+5. include supporting evidence in the final report
 
 ## 7) Safety and Guardrails
 

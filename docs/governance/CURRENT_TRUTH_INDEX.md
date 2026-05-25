@@ -58,6 +58,7 @@ When canonical docs disagree, resolve within the pack in this order:
 These docs support repo workflows, Codex operation, deployment/runbook continuity, and session handoff. They must not define implementation scope:
 - `README.md`
 - `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
+- `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
 - `docs/process/NEXT_SESSION_HANDOFF.md`
 - `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md`
 - `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
