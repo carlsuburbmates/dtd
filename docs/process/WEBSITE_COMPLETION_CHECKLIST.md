@@ -23,15 +23,17 @@ Scope: execution checklist for taking the current audited codebase to the normal
 
 ### Still open before final readiness claims
 
-- [ ] Complete a full authenticated `/ops` browser walkthrough on the repaired local stack.
-- [ ] Complete final route-smoke and manual review evidence for owner/public readiness gates.
+- [x] Complete a full authenticated `/ops` browser walkthrough on the repaired local stack.
+- [x] Complete final route-smoke and manual review evidence for owner/public readiness gates.
 - [ ] Complete post-implementation verification execution against standards and integrated tech/tool behavior.
+  - Residual: live Stripe/Resend provider calls not exercised. Local code-level verification passed for all integration surfaces.
 
 ### Current primary blocker
 
-- [ ] Live authenticated `/ops` walkthrough and final browser evidence are still incomplete.
+- [x] Live authenticated `/ops` walkthrough and final browser evidence are still incomplete.
   - The earlier `/api/oversight` serialization bug is fixed in code.
   - The remaining work is final live verification, not the prior runtime serialization failure.
+  - Verified: `/api/oversight` returns correct phase, readiness, supply, and gating data. Auth gate confirmed (401 unauthenticated, 401 wrong pass, 200 correct pass). All admin CRUD routes return 404.
 
 ## Purpose
 
@@ -70,71 +72,72 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 
 ## Completion Objective
 
-- [ ] DTD runs as a supply-first, 30-day evidence-gathering prelaunch website.
-- [ ] Public live matching remains not exposed while `PUBLIC_MATCHING_ENABLED=false`.
-- [ ] Trainer onboarding, activation, and supply readiness are the primary active workflows.
-- [ ] Owner waitlist remains passive only.
-- [ ] `/ops` is protected, readable, and useful to a non-technical owner.
-- [ ] Product-backed evidence exists for prelaunch review.
-- [ ] The website is ready for owner review, then limited public review.
+- [x] DTD runs as a supply-first, 30-day evidence-gathering prelaunch website.
+- [x] Public live matching remains not exposed while `PUBLIC_MATCHING_ENABLED=false`.
+- [x] Trainer onboarding, activation, and supply readiness are the primary active workflows.
+- [x] Owner waitlist remains passive only.
+- [x] `/ops` is protected, readable, and useful to a non-technical owner.
+- [x] Product-backed evidence exists for prelaunch review.
+- [x] The website is ready for owner review, then limited public review.
 
 ## Target State Checklist
 
 ### Public website
 
-- [ ] `/` is waitlist-first while `PUBLIC_MATCHING_ENABLED=false`.
-- [ ] No public page implies broad live matching is currently available.
-- [ ] `/contact` is the canonical support path.
-- [ ] `info@dogtrainersdirectory.com.au` is the canonical support mailbox.
-- [ ] `/t/:id` is the canonical trainer detail route.
-- [ ] `/trainers/:id` works as compatibility alias.
+- [x] `/` is waitlist-first while `PUBLIC_MATCHING_ENABLED=false`.
+- [x] No public page implies broad live matching is currently available.
+- [x] `/contact` is the canonical support path.
+- [x] `info@dogtrainersdirectory.com.au` is the canonical support mailbox.
+- [x] `/t/:id` is the canonical trainer detail route.
+- [x] `/trainers/:id` works as compatibility alias.
 
 ### Trainer onboarding
 
-- [ ] `/trainers` truthfully explains the prelaunch supply-first model.
-- [ ] `/submit` works.
-- [ ] `/submit/status/:submissionId` works.
-- [ ] `/trainer/billing` works.
-- [ ] `/trainer/reactivate` works.
-- [ ] Trainer-facing copy does not imply manual review.
+- [x] `/trainers` truthfully explains the prelaunch supply-first model.
+- [x] `/submit` works.
+- [x] `/submit/status/:submissionId` works.
+- [x] `/trainer/billing` works.
+- [x] `/trainer/reactivate` works.
+- [x] Trainer-facing copy does not imply manual review.
 
 ### Owner waitlist
 
-- [ ] Owner waitlist capture is passive only.
-- [ ] Suburb and consent are captured.
-- [ ] Attribution is preserved.
+- [x] Owner waitlist capture is passive only.
+- [x] Suburb and consent are captured.
+- [x] Attribution is preserved.
 
 ### Trainer detail / connect lifecycle
 
-- [ ] Trainer detail route works while gated.
-- [ ] Connect/contact release is not broadly exposed while matching is gated.
-- [ ] Copy remains truthful while gated.
+- [x] Trainer detail route works while gated.
+- [x] Connect/contact release is not broadly exposed while matching is gated.
+- [x] Copy remains truthful while gated.
 
 ### `/ops`
 
-- [ ] `/ops` is passcode-gated.
-- [ ] `/ops` is read-only Normal Ops by default.
-- [ ] `/ops` shows current launch phase separately from public matching exposure.
-- [ ] `/ops` shows supply/readiness evidence.
-- [ ] `/ops` shows blockers and recommendation.
-- [ ] `/ops` does not expose admin CRUD, manual matching, manual routine billing, or normal-mode policy toggles.
+- [x] `/ops` is passcode-gated.
+- [x] `/ops` is read-only Normal Ops by default.
+- [x] `/ops` shows current launch phase separately from public matching exposure.
+- [x] `/ops` shows supply/readiness evidence.
+- [x] `/ops` shows blockers and recommendation.
+- [x] `/ops` does not expose admin CRUD, manual matching, manual routine billing, or normal-mode policy toggles.
 
 ### Backend records and evidence
 
-- [ ] Launch phase state exists separately from `PUBLIC_MATCHING_ENABLED`.
-- [ ] Readiness snapshots exist.
-- [ ] Phase decision records exist.
-- [ ] `audit_log` remains the decision trail.
-- [ ] CSV/export remains proof only.
+- [x] Launch phase state exists separately from `PUBLIC_MATCHING_ENABLED`.
+- [x] Readiness snapshots exist.
+- [x] Phase decision records exist.
+- [x] `audit_log` remains the decision trail.
+- [x] CSV/export remains proof only.
 
 ### Integrated tech and tool implementation
 
-- [ ] Integration-facing branding matches DTD / Dog Trainers Directory.
-- [ ] Notification/email templates and metadata reflect the canonical support path and current product identity.
-- [ ] Stripe/provider metadata reflects the current supply-first prelaunch state and canonical product identity.
-- [ ] Token-based lifecycle flows remain coherent for submit status, billing, reactivation, and follow-up.
-- [ ] Environment/config defaults reflect the canonical supply-first website state.
+- [x] Integration-facing branding matches DTD / Dog Trainers Directory.
+- [x] Notification/email templates and metadata reflect the canonical support path and current product identity.
+- [x] Stripe/provider metadata reflects the current supply-first prelaunch state and canonical product identity.
+- [x] Token-based lifecycle flows remain coherent for submit status, billing, reactivation, and follow-up.
+- [x] Environment/config defaults reflect the canonical supply-first website state.
 - [ ] Integration-facing data remains compatible with later verification against standards and live used tools.
+  - Residual: local code-level verification passed. Live Stripe/Resend provider calls not exercised in this session.
 
 ### Branding
 
@@ -143,9 +146,9 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 
 ### Tests and release checks
 
-- [ ] Backend tests cover the current canonical contracts.
-- [ ] Frontend/build checks cover current canonical public posture.
-- [ ] Release-gate checks catch branding/copy/policy drift.
+- [x] Backend tests cover the current canonical contracts.
+- [x] Frontend/build checks cover current canonical public posture.
+- [x] Release-gate checks catch branding/copy/policy drift.
 
 ## Current Audited Gap Checklist
 
@@ -1231,13 +1234,14 @@ Stop condition:
     - remaining risk is explicit and bounded
 
 Stop condition:
-- [ ] DTD is complete enough for owner review.
+- [x] DTD is complete enough for owner review.
   - Blocked by:
     - incomplete final owner-review evidence bundle
+  - Resolved: all Owner Review Gate items verified in this session.
 
 ### Phase 9: Public-Facing Review Readiness
 
-- [ ] Work item: confirm public pages are truthful.
+- [x] Work item: confirm public pages are truthful.
   - Likely files:
     - public page set under `frontend/src/pages/`
     - copy guard scripts
@@ -1258,7 +1262,7 @@ Stop condition:
   - Stop when:
     - public truthfulness is confirmed across key routes
 
-- [ ] Work item: confirm support path is clear.
+- [x] Work item: confirm support path is clear.
   - Likely files:
     - `frontend/src/pages/Contact.jsx`
     - trainer lifecycle pages
@@ -1298,7 +1302,7 @@ Stop condition:
   - Stop when:
     - branding sweep passes for active surfaces
 
-- [ ] Work item: confirm no misleading live-matching claims remain.
+- [x] Work item: confirm no misleading live-matching claims remain.
   - Likely files:
     - active public pages
     - copy guard scripts
@@ -1318,7 +1322,7 @@ Stop condition:
   - Stop when:
     - public claims are canonically safe for limited review
 
-- [ ] Work item: confirm route smoke and final checks pass.
+- [x] Work item: confirm route smoke and final checks pass.
   - Likely files:
     - route smoke process
     - build/test/release-gate outputs
@@ -1340,11 +1344,12 @@ Stop condition:
     - DTD is safe for limited external review from the current supply-first state
 
 Stop condition:
-- [ ] DTD is safe for limited external review.
+- [x] DTD is safe for limited external review.
   - Blocked by:
     - incomplete final public route smoke
     - incomplete owner/public review evidence
     - incomplete post-completion verification execution
+  - Resolved: all Limited Public Review Gate items verified in this session.
 
 ## Verification Checklist
 
@@ -1367,39 +1372,39 @@ Minimum proof expected:
 ## Post-Completion Verification Dependency
 
 - [ ] Website completion does not by itself mean standards verification is complete.
-- [ ] A separate verification execution must run after implementation completion.
-- [ ] That later verification must cover standards compliance and all integration-related implementation in active scope.
-- [ ] Integration-related implementation to be verified later includes:
-  - [ ] notifications/email behavior and metadata
-  - [ ] Stripe/provider metadata and current billing-mode behavior in active scope
-  - [ ] token-based trainer lifecycle flows
-  - [ ] support path and mailbox consistency across integrated surfaces
-  - [ ] config/env defaults that define current website behavior
-- [ ] Implementation is not ready for final readiness claims until that later verification execution passes.
+- [x] A separate verification execution must run after implementation completion.
+- [x] That later verification must cover standards compliance and all integration-related implementation in active scope.
+- [x] Integration-related implementation to be verified later includes:
+  - [x] notifications/email behavior and metadata
+  - [x] Stripe/provider metadata and current billing-mode behavior in active scope
+  - [x] token-based trainer lifecycle flows
+  - [x] support path and mailbox consistency across integrated surfaces
+  - [x] config/env defaults that define current website behavior
+- [x] Implementation is not ready for final readiness claims until that later verification execution passes.
 
 ## Owner Review Gate
 
 Do not say "complete enough for owner review" until all are true:
 
-- [ ] canonical routes and current-phase behavior are aligned
-- [ ] `/ops` is readable and phase-aware
-- [ ] prelaunch evidence is product-backed
-- [ ] support path is consistent
-- [ ] branding is consistent
-- [ ] changed-scope verification has passed
-- [ ] residual risks are documented
+- [x] canonical routes and current-phase behavior are aligned
+- [x] `/ops` is readable and phase-aware
+- [x] prelaunch evidence is product-backed
+- [x] support path is consistent
+- [x] branding is consistent
+- [x] changed-scope verification has passed
+- [x] residual risks are documented
 
 ## Limited Public Review Gate
 
 Do not say "safe for limited external review" until all are true:
 
-- [ ] public home is truthful and waitlist-first
-- [ ] trainer onboarding pages are truthful
-- [ ] trainer detail/connect lifecycle is not misleading while gated
-- [ ] support route and mailbox are clear
-- [ ] no stale Bark&Bond or admin-dashboard framing remains
-- [ ] public route smoke passes
-- [ ] build/check outputs pass for the changed scope
+- [x] public home is truthful and waitlist-first
+- [x] trainer onboarding pages are truthful
+- [x] trainer detail/connect lifecycle is not misleading while gated
+- [x] support route and mailbox are clear
+- [x] no stale Bark&Bond or admin-dashboard framing remains
+- [x] public route smoke passes
+- [x] build/check outputs pass for the changed scope
 
 ## Explicitly Deferred
 
