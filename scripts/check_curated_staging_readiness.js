@@ -4,7 +4,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
-const manifestPath = path.join(repoRoot, "docs", "strategy", "IMPLEMENTATION_EVIDENCE_MANIFEST.md");
+const manifestPath = path.join(repoRoot, "docs", "process", "IMPLEMENTATION_EVIDENCE_MANIFEST.md");
 const sectionHeader = "## Guarded files/groups for curated staging";
 
 const reasons = [];
@@ -16,7 +16,7 @@ function fail(reason) {
 
 function readManifest() {
   if (!fs.existsSync(manifestPath)) {
-    fail("manifest missing: docs/strategy/IMPLEMENTATION_EVIDENCE_MANIFEST.md");
+    fail("manifest missing: docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md");
     return "";
   }
   try {

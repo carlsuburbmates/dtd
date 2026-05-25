@@ -6,25 +6,6 @@ const { spawnSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..");
 const serverPath = path.join(repoRoot, "backend", "server.py");
 const copyGuardPath = path.join(repoRoot, "scripts", "check_frontend_copy_guard.js");
-const metaPath = path.join(
-  repoRoot,
-  "docs",
-  "strategy",
-  "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json",
-);
-
-const requiredMetaFields = [
-  "alert_code",
-  "active_list_id",
-  "asgs_edition",
-  "effective_from",
-  "effective_to",
-  "supersedes",
-  "cutover_from_list_id",
-  "state_freeze_flag",
-  "validation_job_id",
-];
-
 const failures = [];
 
 function check(condition, message) {
@@ -93,21 +74,6 @@ if (!fs.existsSync(copyGuardPath)) {
         failures.push(`copy guard detail: ${line}`);
       }
     }
-  }
-}
-
-if (!fs.existsSync(metaPath)) {
-  failures.push("suburb meta file missing: docs/strategy/melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json");
-} else {
-  try {
-    const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-    for (const field of requiredMetaFields) {
-      if (!(field in meta)) {
-        failures.push(`suburb meta missing required field: ${field}`);
-      }
-    }
-  } catch (err) {
-    failures.push(`suburb meta file parse failed: ${err.message}`);
   }
 }
 

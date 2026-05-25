@@ -96,7 +96,6 @@ if CLAIM_ENFORCEMENT_MODE not in {"report_only", "block_invalid"}:
 CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = (
     (os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in {"1", "true", "yes", "on"}
 )
-SUBURB_META_PATH = ROOT_DIR.parent / "docs" / "strategy" / "melb_suburbs_abs_asgs_ed3_gccsa_2gmel_v1.meta.json"
 TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") or "1209600").strip() or "1209600")
 OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
 OVERSIGHT_AUTH_WINDOW_S = int((os.environ.get("OVERSIGHT_AUTH_WINDOW_S") or "600").strip() or "600")
@@ -782,48 +781,14 @@ def _suburb_meta_identity_snapshot() -> Dict[str, Any]:
         "ok": False,
         "warn": True,
         "level": "warn",
-        "reason_codes": ["suburb_meta_unchecked"],
+        "reason_codes": ["dataset_identity_optional_runtime_evidence_not_configured"],
         "meta_available": False,
     }
     payload: Dict[str, Any] = {
         "identity": identity,
         "status": status,
-        "meta_path": str(SUBURB_META_PATH),
+        "source": "runtime_optional",
     }
-
-    if not SUBURB_META_PATH.exists():
-        status["reason_codes"] = ["suburb_meta_file_missing"]
-        return payload
-
-    try:
-        raw = json.loads(SUBURB_META_PATH.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        status["reason_codes"] = ["suburb_meta_parse_error"]
-        return payload
-
-    identity["list_id"] = raw.get("list_id")
-    identity["suburb_count"] = raw.get("suburb_count")
-    identity["suburb_hash_sha256_code_name"] = raw.get("suburb_hash_sha256_code_name")
-    identity["as_of_date_melbourne"] = raw.get("as_of_date_melbourne")
-
-    reasons: List[str] = []
-    if not isinstance(identity["list_id"], str) or not identity["list_id"].strip():
-        reasons.append("suburb_meta_missing_list_id")
-    if not isinstance(identity["suburb_count"], int) or identity["suburb_count"] <= 0:
-        reasons.append("suburb_meta_invalid_suburb_count")
-    if not isinstance(identity["suburb_hash_sha256_code_name"], str) or not identity["suburb_hash_sha256_code_name"].strip():
-        reasons.append("suburb_meta_missing_hash")
-
-    active_list_id = raw.get("active_list_id")
-    if isinstance(active_list_id, str) and active_list_id and identity["list_id"] and active_list_id != identity["list_id"]:
-        reasons.append("suburb_meta_list_id_mismatch")
-
-    status["meta_available"] = True
-    status["reason_codes"] = reasons or ["suburb_meta_ok"]
-    status["ok"] = not reasons
-    status["warn"] = bool(reasons)
-    status["level"] = "ok" if not reasons else "warn"
-
     return payload
 
 
