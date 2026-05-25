@@ -20,6 +20,18 @@ Rules:
 3. If a current code-path env var exists in runtime code or repo verification scripts, it must be represented in either the relevant `*.env.example` file or this runbook.
 4. Legacy local-only keys may exist in untracked `.env` files, but they must not be treated as required unless current code or current verification scripts still use them.
 
+## Env ownership standard
+
+Use this split consistently:
+1. `backend/.env` — authoritative backend runtime config
+2. `frontend/.env` — frontend-only runtime config
+3. root `.env` — repo-level verification and operator tooling config
+
+Ownership rule:
+1. if backend code reads it, put it in `backend/.env`
+2. if frontend code reads it, put it in `frontend/.env`
+3. if repo scripts or operator verification use it, put it in root `.env`
+
 ## Local env contract refresh (2026-05-25)
 
 Presence-only local audit completed across all env files in the repo.
@@ -27,17 +39,18 @@ Presence-only local audit completed across all env files in the repo.
 Result:
 1. root `.env`, `backend/.env`, and `frontend/.env` all exist locally
 2. backend local env was missing several current-runtime keys and has been patched locally with safe defaults/placeholders
-3. current committed examples were incomplete and are now aligned to the current runtime and verification contract
+3. current committed examples were incomplete and are now aligned to the env-ownership standard and current runtime/verification contract
 4. extra local keys still exist in some untracked env files, but several are legacy/non-blocking and are not current codebase requirements
+5. live integration verification confirms the active custom domains point at Vercel project `dtd`; a separate `dogtrainersdirectory` Vercel project still exists in account inventory and should be treated as historical/drift-risk inventory, not the active custom-domain target
 
 Current known legacy/non-required local env noise:
 1. `NEXT_PUBLIC_BACKEND_URL` in `frontend/.env` is not the current frontend runtime key; current code uses `REACT_APP_BACKEND_URL`
-2. `REACT_APP_POSTHOG_*`, `NEXT_PUBLIC_POSTHOG_*`, `NEXT_PUBLIC_SENTRY_*`, and Clerk-related keys may exist locally for historical or deferred integration work, but they are not required by the current frontend code path
+2. `REACT_APP_POSTHOG_*`, `NEXT_PUBLIC_POSTHOG_*`, and `NEXT_PUBLIC_SENTRY_*` may exist locally for historical or deferred integration work, but they are not required by the current frontend code path
 3. `STRIPE_API_KEY_ID`, `STRIPE_PUBLISHABLE_KEY`, lowercase `resend_api_key`, `MONGO_API_KEY`, and `MONGODB_ATLAS_API_KEY` may exist locally, but they are not current codebase requirements
 
 ## Current lock (2026-05-02)
 
-1. Accounts/keys created: Clerk, Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
+1. Accounts/keys created: Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
 2. Evidence captured previously:
 - Stage A runtime baseline: remote verifier pass recorded.
 - Stage B observability baseline: Sentry/PostHog capture checks recorded.
@@ -47,6 +60,7 @@ Current known legacy/non-required local env noise:
 - `REACT_APP_BACKEND_URL` configured to `https://dtd-api.onrender.com` in prod/preview.
 - Core route and backend-config validations recorded during migration.
 - Custom domains reattached to the live `dtd` deployment; public hostnames now return `307` apex redirect to `www` and `200` on `www` and `/trainers`.
+- Live-domain verification confirms `dogtrainersdirectory.com.au` and `www.dogtrainersdirectory.com.au` resolve to a production deployment of project `dtd`.
 4. Stage E evidence captured:
 - Repeatable deploy automation/recovery evidence recorded.
 - Authenticated route smoke confirms required routes render on the production deployment.
@@ -115,12 +129,6 @@ Current known legacy/non-required local env noise:
 3. Use `.env` only for local/runtime injection.
 
 ## Required saved items per platform
-
-### Clerk
-1. Dashboard URL.
-2. Owner email.
-3. API keys (publishable/secret if used).
-4. JWKS/issuer values if you later enforce Clerk on backend.
 
 ### Sentry
 1. Org slug.
@@ -220,7 +228,7 @@ Current known legacy/non-required local env noise:
 
 Current note:
 1. The current frontend code path requires `REACT_APP_BACKEND_URL`.
-2. PostHog, Sentry, and Clerk frontend keys may still exist locally or in provider env history, but they are not current codebase requirements unless frontend code starts consuming them again.
+2. Other frontend-facing provider keys should stay out of `frontend/.env` unless frontend code starts consuming them again.
 
 ## Verification commands
 

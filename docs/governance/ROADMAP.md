@@ -115,7 +115,7 @@ Current-state note:
 
 ### Infrastructure reality
 
-1. Accounts/keys exist for Clerk, Sentry, PostHog, Resend, Render, Atlas, Vercel.
+1. Accounts/keys exist for Sentry, PostHog, Resend, Render, Atlas, Vercel.
 2. Runtime and evidence snapshots for Stage A/B/C were captured in prior runbook entries.
 3. Vercel project migration to `dtd` is complete. Current frontend runtime requires `REACT_APP_BACKEND_URL`; provider env history may still include older PostHog parity keys, but those are not current codebase requirements unless frontend code starts consuming them again.
 4. Custom domains are attached and live; public hostnames return `307` apex redirect to `www` and `200` on `www` and `/trainers`.
@@ -140,7 +140,7 @@ Evidence references:
 3. Launch billing default and conversion handling: `backend/services/engine.py` (`CONVERSION_BILLING_MODE` default) and `backend/server.py` (`/api/conversions`).
 
 Locked decisions now implemented:
-1. Launch auth: passcode-only oversight (`ADMIN_PASS`), no Clerk enforcement on backend.
+1. Launch auth: passcode-only oversight (`ADMIN_PASS`).
 2. Loop ownership: explicit env-controlled ownership to prevent duplicate loop scheduling.
 3. Launch billing: intro-first; conversions tracked by default.
 4. Scope: region-based enforcement with one active region set.
