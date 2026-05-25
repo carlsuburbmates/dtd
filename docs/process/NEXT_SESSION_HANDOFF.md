@@ -1,6 +1,6 @@
 # Next Session Handoff
 
-Date: 2026-05-22
+Date: 2026-05-25
 Repo: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Objective
@@ -27,7 +27,7 @@ If any conflict appears, follow this order.
 
 ## Live Gate Table (current truth)
 
-Last updated: 2026-05-22
+Last updated: 2026-05-25
 
 | Gate | Status | Source of truth |
 |---|---|---|
@@ -35,9 +35,50 @@ Last updated: 2026-05-22
 | H-02 Platform secret readiness | completed | `docs/governance/LOCK_STATE.md` |
 | H-03 Legal copy sign-off | completed | `docs/governance/LOCK_STATE.md` |
 | H-04 Account/billing readiness | completed | `docs/governance/LOCK_STATE.md` |
-| Final Go/No-Go | pending | current release-evidence session |
+| Owner Review Gate | cleared locally | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
+| Limited Public Review Gate | cleared locally | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
+| Final Go/No-Go | pending | owner (`carlg`) sign-off required |
 
 Final Go/No-Go approver: owner (`carlg`).
+
+## Current Verified State (as of 2026-05-25)
+
+```
+Repo:                      clean
+Latest commit:             379b9ce  verify: route smoke, /ops walkthrough, gate verification complete
+Prior commit:              8a2f26c  fix: remove stale BarkBond outreach branding
+Branch:                    main
+Review status:             locally verified and ready for owner review / limited public review
+```
+
+**This is not "fully production verified."** Correct phrasing:
+
+> locally verified and ready for owner review / limited public review
+
+Live Stripe and Resend were not exercised. Local `.env` has one stale conflict.
+12 backend tests were skipped (live DB/integration). These are not review blockers.
+
+## Deferred Scope (do not activate without owner approval)
+
+- `PUBLIC_MATCHING_ENABLED=true`
+- Controlled live matching launch
+- Owner-demand growth push
+- Live Stripe/Resend provider mutation
+- Admin CRUD
+- Manual matching
+- Manual routine billing
+- Phase transition beyond `supply_first`
+- Unrelated redesign or refactor work
+
+## Residual Risks Before Production Confidence
+
+| Risk | Severity | Detail |
+|---|---|---|
+| Live Stripe not exercised | Low | Invoice description and billing-mode strings verified at code level only. Requires real credentials and live provider test. |
+| Live Resend not exercised | Low | From/reply-to and email subjects verified at code level only. |
+| Local `.env` startup conflict | Low | `RUN_AUTONOMY_IN_API=0` conflicts with `AUTONOMY_LOOP_OWNER=api`. Fix: remove or correct `RUN_AUTONOMY_IN_API` in local `.env` to match `.env.example` (`RUN_AUTONOMY_IN_API=1`). Not a deployment blocker. |
+| 12 backend tests skipped | Low | Pre-existing skips for tests requiring live MongoDB. All 124 non-skipped tests pass. |
+| `integrity_status: warn` | Low | 2/12 trainers unverified. Expected during evidence-gathering phase. |
 
 ## Current Governance / Launch Posture
 
@@ -74,15 +115,16 @@ For each status-affecting session entry, append:
 
 ## Active Risks / Open Work
 
-1. Final Go/No-Go remains pending by policy.
-2. Workflow completeness is closed at trace-sheet level; maintain via regression checks and evidence sync:
-- then-current workflow trace and workflow catalog docs
-3. Keep monetization copy and runtime model aligned to ADR:
-- then-current runtime ADR
-4. Remaining launch and operator-takeover work is tracked in the strict ordered checklist in `docs/governance/ROADMAP.md` (`Remaining Completion Checklist (strict order)`); `Must-Finish Before Launch` has no open implementation blockers and remaining launch work begins at `Post-Feature Launch Verification`.
-5. The final live-verification and `Final Go/No-Go` steps are intentionally deferred to the `Post-Feature Launch Verification` block in `docs/governance/ROADMAP.md`; do not treat them as current feature work.
-6. Supply-first launch verification still needs explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
-7. Matching-enabled public-path release evidence is intentionally deferred to later controlled live-matching work.
+1. Final Go/No-Go remains pending by policy. Owner (`carlg`) sign-off required.
+2. Live Stripe and Resend not exercised — see Residual Risks table above.
+3. Local `.env` has stale `RUN_AUTONOMY_IN_API=0` conflict — see Residual Risks table above.
+4. 12 backend integration tests skipped (require live MongoDB) — not a gate blocker.
+5. Next meaningful work for this repo is:
+   - Owner walkthrough of deployed `/ops` on the live/staging stack (not local).
+   - Limited public review of public routes on live/staging stack.
+   - Live Stripe/Resend provider smoke (requires real credentials, mutating, owner-approved).
+   - Final Go/No-Go sign-off.
+6. Do not activate deferred scope (see above) without explicit owner approval.
 
 ## Append-Only Execution Log (current era)
 
@@ -130,3 +172,32 @@ For each status-affecting session entry, append:
 - No gate status, code path, or runtime behavior changed in this entry.
 - Evidence:
   - files: then-current architecture/workflow/deployment docs, `docs/governance/CURRENT_TRUTH_INDEX.md`, `docs/process/NEXT_SESSION_HANDOFF.md`, `docs/governance/LOCK_STATE.md`.
+8. `2026-05-25` — Supply-first prelaunch implementation blocker fixed; full local verification completed; Owner Review Gate and Limited Public Review Gate cleared locally.
+- Session-start HEAD: `2c99c24`.
+- Commits in this session:
+  - `8a2f26c` — fix: remove stale BarkBond outreach branding (`backend/services/automation.py` lines 183–185; `WEBSITE_COMPLETION_CHECKLIST.md` Phase 4 items checked)
+  - `379b9ce` — verify: route smoke, /ops walkthrough, gate verification complete (`WEBSITE_COMPLETION_CHECKLIST.md` all verification items and both gate sections updated)
+- Status changes in this entry:
+  - fixed sole implementation blocker: `_outreach_html()` in `automation.py` still emitted `Bark&Bond` in T+7 outreach email body
+  - Phase 4 (branding) now genuinely complete in code, not just in checklist
+  - completed full local verification pass: backend tests, frontend tests, build, 3 gate scripts, `/ops` API walkthrough, all public routes, copy/posture review, integration-facing code review
+  - Owner Review Gate: all 7 items cleared
+  - Limited Public Review Gate: all 7 items cleared
+  - review status locked as: **locally verified and ready for owner review / limited public review**
+- Evidence:
+  - backend tests: `124 passed, 12 skipped` (`/usr/local/bin/python3.13 -m pytest tests/ -v`)
+  - frontend tests: `8 passed, 2 suites` (`npm test -- --watchAll=false`)
+  - frontend build: `Compiled successfully` (`npm run build`)
+  - `COPY_GUARD_CHECK=PASS`, `PRELAUNCH_RELEASE_GATE=PASS`, `CURATED_STAGING_READINESS=PASS`
+  - `/api/oversight`: `launch_phase=supply_first`, `public_matching_enabled=false`, `public_emphasis=waitlist_first`, `blockers_to_next_phase=[]`, `high_severity_alert_count=0`, auth gate confirmed (401/401/200)
+  - `/api/match`: returns `"Public matching is unavailable during education-first prelaunch."`
+  - `/api/intros`: returns `"Public contact release is unavailable during education-first prelaunch."`
+  - All admin CRUD routes (`/admin/*`, `/api/admin/*`, `/api/oversight/enable-matching`) → `404`
+  - 17 frontend routes: all `200`
+  - Token routes: invalid tokens return correct 404/error responses
+  - Bark&Bond grep: zero hits in `backend/`, `frontend/src/`, `scripts/` (except acceptable trainer seed names)
+  - files: `backend/services/automation.py`, `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`, `docs/process/NEXT_SESSION_HANDOFF.md`
+- Residual risks documented (not blockers for review):
+  - live Stripe/Resend not exercised
+  - local `.env` has stale `RUN_AUTONOMY_IN_API=0` conflict with `AUTONOMY_LOOP_OWNER=api`
+  - 12 backend tests skipped (live DB)
