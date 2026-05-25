@@ -9,6 +9,10 @@ import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 export default function Home() {
     const [search] = useSearchParams();
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
+    const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
+    const [publicEmphasis, setPublicEmphasis] = useState("waitlist_first");
+    const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(true);
+    const [ownerWaitlistMode, setOwnerWaitlistMode] = useState("passive_only");
     const [matchSuburbs, setMatchSuburbs] = useState([]);
     const [waitlistEmail, setWaitlistEmail] = useState("");
     const [waitlistSuburb, setWaitlistSuburb] = useState("");
@@ -39,19 +43,50 @@ export default function Home() {
         api.get("/config")
             .then((r) => {
                 if (!active) return;
-                setPublicMatchingEnabled(Boolean(r?.data?.public_matching_enabled));
-                const suburbs = Array.isArray(r?.data?.suburbs) ? r.data.suburbs : [];
+                const config = r?.data || {};
+                setPublicMatchingEnabled(Boolean(config.public_matching_enabled));
+                setPublicLaunchPhase(String(config.public_launch_phase || "supply_first"));
+                setPublicEmphasis(String(config.public_emphasis || "waitlist_first"));
+                setTrainerOnboardingOpen(Boolean(config.trainer_onboarding_open ?? true));
+                setOwnerWaitlistMode(String(config.owner_waitlist_mode || "passive_only"));
+                const suburbs = Array.isArray(config.suburbs) ? config.suburbs : [];
                 setMatchSuburbs(suburbs);
             })
             .catch(() => {
                 if (!active) return;
                 setPublicMatchingEnabled(false);
+                setPublicLaunchPhase("supply_first");
+                setPublicEmphasis("waitlist_first");
+                setTrainerOnboardingOpen(true);
+                setOwnerWaitlistMode("passive_only");
                 setMatchSuburbs([]);
             });
         return () => {
             active = false;
         };
     }, []);
+
+    const prelaunchCopy = useMemo(() => {
+        if (publicLaunchPhase === "growth") {
+            return {
+                badge: "Growth prep",
+                title: "Melbourne's dog trainer network is still in supply-first build mode.",
+                body: "Owner demand stays passive while trainer coverage, activation, and evidence continue to build.",
+            };
+        }
+        if (publicEmphasis === "owner_waitlist") {
+            return {
+                badge: "Owner waitlist",
+                title: "Melbourne's dog trainer network is opening carefully.",
+                body: "Owners can register interest while trainer supply and suburb coverage continue to build behind the scenes.",
+            };
+        }
+        return {
+            badge: "30-day prelaunch",
+            title: "Melbourne's dog trainer network is in a supply-first prelaunch.",
+            body: "Owners can register interest now while trainer onboarding, activation, and suburb coverage are being recorded cleanly.",
+        };
+    }, [publicEmphasis, publicLaunchPhase]);
 
     const submitWaitlist = async (e) => {
         e?.preventDefault();
@@ -172,25 +207,27 @@ export default function Home() {
                         >
                             <div className="small-caps inline-flex items-center gap-2 rounded-full border border-[#E5DFD3] bg-[#FAFAF7]/70 px-4 py-2">
                                 <Sparkles className="h-3.5 w-3.5" />
-                                {publicMatchingEnabled ? "Matching live" : "Prelaunch"}
+                                {publicMatchingEnabled ? "Matching live" : prelaunchCopy.badge}
                             </div>
                             <h1 className="editorial-h1 text-[2.25rem] leading-[0.92] sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">
-                                Melbourne's verified dog trainer network is being built.
+                                {publicMatchingEnabled ? "Melbourne's verified dog trainer network is live." : prelaunchCopy.title}
                             </h1>
                             <p className="text-[#4A615A] mt-5 text-base sm:text-lg max-w-xl">
                                 {publicMatchingEnabled
                                     ? "Describe your issue and get up to three ranked trainer matches."
-                                    : "Owners can learn and register interest now. Trainers can join early with verified profiles."}
+                                    : prelaunchCopy.body}
                             </p>
 
                             <div className="mt-7 flex flex-wrap items-center gap-3">
                                 <Link to="/how-it-works" className="btn-primary" data-testid="home-owner-entry">
                                     For owners
                                 </Link>
-                                <Link to="/trainers" className="btn-ghost" data-testid="home-trainer-entry">
+                                {trainerOnboardingOpen && (
+                                    <Link to="/trainers" className="btn-ghost" data-testid="home-trainer-entry">
                                     For trainers
                                     <ArrowRight className="h-4 w-4" />
-                                </Link>
+                                    </Link>
+                                )}
                             </div>
                         </motion.div>
 
@@ -200,7 +237,9 @@ export default function Home() {
                                     <div className="small-caps">Owner waitlist</div>
                                     <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Register your interest.</h2>
                                     <p className="text-[#4A615A] mt-3 text-sm">
-                                        Share your suburb now to receive prelaunch updates as verified coverage grows.
+                                        {ownerWaitlistMode === "passive_only"
+                                            ? "Share your suburb now to receive prelaunch updates as verified coverage grows."
+                                            : "Share your suburb now to receive launch updates as local coverage expands."}
                                     </p>
 
                                     <form onSubmit={submitWaitlist} className="mt-5 space-y-3" data-testid="owner-waitlist-form">

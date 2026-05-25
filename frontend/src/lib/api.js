@@ -7,7 +7,6 @@ export const API = `${BACKEND_URL}/api`;
 export const api = axios.create({ baseURL: API, timeout: 60000 });
 
 const STORAGE_KEY = "dtd-admin-pass";
-const OPS_NOTE_STORAGE_KEY = "dtd-ops-notes";
 const ADMIN_PASS_TTL_MS = 30 * 60 * 1000;
 
 export const setAdminPass = (p) => {
@@ -64,26 +63,6 @@ export const buildAttributionSearch = ({
     add("from", from);
     const query = params.toString();
     return query ? `?${query}` : "";
-};
-
-export const getOpsNotes = () => {
-    const raw = localStorage.getItem(OPS_NOTE_STORAGE_KEY);
-    if (!raw) return [];
-    try {
-        const rows = JSON.parse(raw);
-        return Array.isArray(rows) ? rows : [];
-    } catch (_) {
-        localStorage.removeItem(OPS_NOTE_STORAGE_KEY);
-        return [];
-    }
-};
-
-export const appendOpsNote = (note) => {
-    const cleaned = typeof note === "string" ? note.trim() : "";
-    if (!cleaned) return getOpsNotes();
-    const next = [{ id: `${Date.now()}`, text: cleaned, createdAt: new Date().toISOString() }, ...getOpsNotes()].slice(0, 20);
-    localStorage.setItem(OPS_NOTE_STORAGE_KEY, JSON.stringify(next));
-    return next;
 };
 
 export const audCents = (c) => `A$${((c || 0) / 100).toFixed(2)}`;

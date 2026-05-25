@@ -19,6 +19,8 @@ export default function TrainerDetail() {
     const [introId, setIntroId] = useState(null);
     const [busy, setBusy] = useState(false);
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
+    const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
+    const [publicEmphasis, setPublicEmphasis] = useState("waitlist_first");
     const [monetizationCopy, setMonetizationCopy] = useState(() => resolvePublicMonetizationCopy());
     const [form, setForm] = useState({
         user_name: "",
@@ -47,8 +49,11 @@ export default function TrainerDetail() {
         api
             .get("/config")
             .then((r) => {
-                setPublicMatchingEnabled(Boolean(r.data.public_matching_enabled));
-                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(r.data || {})));
+                const config = r.data || {};
+                setPublicMatchingEnabled(Boolean(config.public_matching_enabled));
+                setPublicLaunchPhase(String(config.public_launch_phase || "supply_first"));
+                setPublicEmphasis(String(config.public_emphasis || "waitlist_first"));
+                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(config)));
             })
             .catch(() => setPublicMatchingEnabled(false));
     }, []);
@@ -164,10 +169,12 @@ export default function TrainerDetail() {
                 {!contact ? (
                     !publicMatchingEnabled ? (
                     <section className="card-public p-7 mt-10" data-testid="connect-deferred">
-                        <div className="small-caps">Education-first prelaunch</div>
+                        <div className="small-caps">{publicLaunchPhase === "supply_first" ? "Supply-first prelaunch" : "Prelaunch"}</div>
                         <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Direct connect opens soon.</h2>
                         <p className="text-[#4A615A] mt-3 max-w-xl">
-                            Review trainer details now and get ready to connect when launch opens in your suburb.
+                            {publicEmphasis === "waitlist_first"
+                                ? "Review trainer details now and register interest while live owner matching stays gated."
+                                : "Review trainer details now and get ready to connect when launch opens in your suburb."}
                         </p>
                         <div className="mt-6">
                             <Link to="/how-it-works" className="btn-primary" data-testid="connect-deferred-how">

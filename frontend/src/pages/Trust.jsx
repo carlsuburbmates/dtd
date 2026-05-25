@@ -18,7 +18,7 @@ export default function Trust() {
                     <article className="card-public p-5">
                         <div className="small-caps">Verification</div>
                         <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Profile quality checks</h2>
-                        <p className="text-sm text-[#4A615A] mt-2">Trainer profiles are reviewed before publication to maintain credibility.</p>
+                        <p className="text-sm text-[#4A615A] mt-2">Trainer profiles pass automated publish-or-hold checks, with bounded oversight when something needs attention.</p>
                     </article>
                     <article className="card-public p-5">
                         <div className="small-caps">Consent</div>

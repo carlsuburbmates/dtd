@@ -1,4 +1,4 @@
-import { appendOpsNote, buildAttributionSearch, getAdminPass, getOpsNotes, setAdminPass } from "./api";
+import { buildAttributionSearch, getAdminPass, setAdminPass } from "./api";
 
 describe("ops passcode storage", () => {
     beforeEach(() => {
@@ -36,16 +36,5 @@ describe("buildAttributionSearch", () => {
 
     it("returns empty string when no attribution fields are present", () => {
         expect(buildAttributionSearch()).toBe("");
-    });
-});
-
-describe("ops notes", () => {
-    beforeEach(() => {
-        localStorage.clear();
-    });
-
-    it("stores and reads operator notes", () => {
-        appendOpsNote("Morning check: loops healthy");
-        expect(getOpsNotes()[0].text).toBe("Morning check: loops healthy");
     });
 });

@@ -234,7 +234,7 @@ async def bill_intro(db, trainer: Dict[str, Any], intro: Dict[str, Any]) -> Dict
         "match_id": str(intro.get("match_id") or ""),
     }
 
-    description = f"Bark&Bond intro · {trainer.get('name') or 'Trainer'} · intro {intro_id[:8]}"
+    description = f"Dog Trainers Directory intro · {trainer.get('name') or 'Trainer'} · intro {intro_id[:8]}"
 
     try:
         s = _client()

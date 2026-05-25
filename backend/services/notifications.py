@@ -187,7 +187,7 @@ async def notify_trainer_new_intro(db, trainer: Dict[str, Any], intro: Dict[str,
             "trainer_notification_reason": "missing_email",
         }
 
-    subject = "New Bark&Bond intro"
+    subject = "New Dog Trainers Directory intro"
     html = (
         f"<p>New intro for <strong>{_safe_text(trainer.get('name')) or 'your listing'}</strong>.</p>"
         f"<p>Owner: {_safe_text(intro.get('user_name')) or '(not provided)'}<br/>"
@@ -230,7 +230,7 @@ async def notify_submitter_result(db, submission: Dict[str, Any]) -> Dict[str, A
 
     status = _safe_text(submission.get("status")) or "pending"
     name = _safe_text(submission.get("name")) or "listing"
-    subject = f"Bark&Bond submission update: {status}"
+    subject = f"Dog Trainers Directory submission update: {status}"
     html = (
         f"<p>Your submission for <strong>{name}</strong> is now <strong>{status}</strong>.</p>"
         f"<p>Confidence score: {float(submission.get('confidence_score') or 0):.2f}</p>"
@@ -275,7 +275,7 @@ async def notify_trainer_reactivation_candidate(
 
     base = _public_app_base_url()
     reactivate_link = f"{base}/trainer/reactivate?trainerId={trainer_id}" if base else ""
-    subject = "Bark&Bond listing reactivation recommended"
+    subject = "Dog Trainers Directory listing reactivation recommended"
     reason_lines = "".join(f"<li>{_safe_text(r)}</li>" for r in reasons if _safe_text(r))
     html = (
         f"<p>Hi {_safe_text(trainer.get('name')) or 'there'},</p>"

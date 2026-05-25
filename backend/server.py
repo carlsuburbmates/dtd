@@ -1,4 +1,4 @@
-"""Bark&Bond — pay-on-outcome dog-training match engine.
+"""Dog Trainers Directory — pay-on-outcome dog-training match engine.
 
 Design intent:
   - The product is the match, not the directory. There is no browse view.
@@ -55,7 +55,7 @@ mongo_url = os.environ["MONGO_URL"]
 mongo_client = AsyncIOMotorClient(mongo_url)
 db = mongo_client[os.environ["DB_NAME"]]
 
-app = FastAPI(title="Bark&Bond Match Engine")
+app = FastAPI(title="Dog Trainers Directory Match Engine")
 api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -95,6 +95,12 @@ if CLAIM_ENFORCEMENT_MODE not in {"report_only", "block_invalid"}:
     CLAIM_ENFORCEMENT_MODE = "report_only"
 CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = (
     (os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in {"1", "true", "yes", "on"}
+)
+_public_launch_phase_env = (os.environ.get("PUBLIC_LAUNCH_PHASE") or "supply_first").strip().lower()
+PUBLIC_LAUNCH_PHASE = (
+    _public_launch_phase_env
+    if _public_launch_phase_env in {"supply_first", "owner_waitlist", "live_matching", "growth"}
+    else "supply_first"
 )
 TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") or "1209600").strip() or "1209600")
 OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
@@ -770,6 +776,215 @@ def _claim_policy_snapshot() -> Dict[str, Any]:
     }
 
 
+def _phase_public_emphasis(*, phase: str, public_matching_enabled: bool) -> str:
+    if public_matching_enabled:
+        return "live_matching"
+    if phase == "growth":
+        return "growth_prep"
+    if phase == "owner_waitlist":
+        return "owner_waitlist"
+    return "waitlist_first"
+
+
+def _default_launch_phase_state() -> Dict[str, Any]:
+    current_phase = PUBLIC_LAUNCH_PHASE
+    return {
+        "key": "launch_phase_state",
+        "current_phase": current_phase,
+        "matching_exposure_enabled": bool(PUBLIC_MATCHING_ENABLED),
+        "public_matching_enabled": bool(PUBLIC_MATCHING_ENABLED),
+        "public_emphasis": _phase_public_emphasis(
+            phase=current_phase,
+            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
+        ),
+        "trainer_onboarding_open": True,
+        "owner_waitlist_mode": "passive_only",
+        "evidence_window_mode": "30_day_prelaunch_evidence_window",
+        "requires_owner_review_for_phase_change": True,
+        "active_regions": list(ACTIVE_REGIONS),
+        "updated_at": now_iso(),
+        "updated_by": "system",
+        "reason": "default_supply_first_prelaunch_lock",
+    }
+
+
+async def _get_or_create_launch_phase_state() -> Dict[str, Any]:
+    system_state = getattr(db, "system_state", None)
+    default_state = _default_launch_phase_state()
+    if system_state is None:
+        return default_state
+
+    row = await system_state.find_one({"key": "launch_phase_state"}, {"_id": 0})
+    if row:
+        state = {**default_state, **row}
+        state["matching_exposure_enabled"] = bool(PUBLIC_MATCHING_ENABLED)
+        state["public_matching_enabled"] = bool(PUBLIC_MATCHING_ENABLED)
+        state["public_emphasis"] = _phase_public_emphasis(
+            phase=str(state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
+            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
+        )
+        if state != row:
+            await system_state.update_one({"key": "launch_phase_state"}, {"$set": state}, upsert=True)
+        return state
+
+    await system_state.insert_one(default_state)
+    return default_state
+
+
+async def _phase_blocker_summary() -> Dict[str, Any]:
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is None:
+        return {
+            "intro_ready_trainer_count": 0,
+            "blocked_trainer_count": 0,
+            "blocker_buckets": {},
+            "reason_codes": ["phase_blocker_summary_unavailable"],
+        }
+
+    intro_ready_query = {
+        "published": True,
+        "billing_profile_status": {
+            "$nin": ["missing_email", "profile_incomplete", "consent_required", "stripe_unconfigured", "stripe_error"]
+        },
+    }
+    intro_ready_trainer_count = int(await trainers_coll.count_documents(intro_ready_query))
+    held_or_unpublished_count = int(await trainers_coll.count_documents({"published": False}))
+    needs_profile_count = int(
+        await trainers_coll.count_documents(
+            {"billing_profile_status": {"$in": ["missing_email", "profile_incomplete"]}}
+        )
+    )
+    consent_required_count = int(await trainers_coll.count_documents({"billing_profile_status": "consent_required"}))
+    billing_system_blocked_count = int(
+        await trainers_coll.count_documents(
+            {"billing_profile_status": {"$in": ["stripe_unconfigured", "stripe_error"]}}
+        )
+    )
+
+    blocker_buckets = {
+        "held_or_unpublished": held_or_unpublished_count,
+        "needs_billing_profile": needs_profile_count,
+        "needs_billing_consent": consent_required_count,
+        "billing_system_blocked": billing_system_blocked_count,
+    }
+    blocked_trainer_count = sum(blocker_buckets.values())
+    return {
+        "intro_ready_trainer_count": intro_ready_trainer_count,
+        "blocked_trainer_count": blocked_trainer_count,
+        "blocker_buckets": blocker_buckets,
+        "reason_codes": ["phase_blocker_summary_ok"],
+    }
+
+
+async def _build_phase_readiness_snapshot(phase_state: Dict[str, Any]) -> Dict[str, Any]:
+    kpi_prelaunch = await _kpi_prelaunch_summary()
+    waitlist_summary = await _owner_waitlist_summary()
+    growth_summary = await _growth_attribution_summary()
+    reactivation_summary = await _reactivation_summary()
+    blocker_summary = await _phase_blocker_summary()
+    health = await db.system_state.find_one({"key": "health"}, {"_id": 0}) or {}
+    alerts = health.get("alerts", []) if isinstance(health, dict) else []
+    high_alert_count = len([a for a in alerts if str((a or {}).get("severity") or "").lower() == "high"])
+    blocker_buckets = dict(blocker_summary.get("blocker_buckets") or {})
+    if high_alert_count > 0:
+        blocker_buckets["high_severity_alerts"] = high_alert_count
+
+    blocker_reasons = [key for key, value in blocker_buckets.items() if int(value or 0) > 0]
+    if blocker_reasons:
+        readiness_status = "attention_needed"
+        recommendation = "resolve_blockers_and_continue_supply_first"
+    else:
+        readiness_status = "collecting_evidence"
+        recommendation = "continue_supply_first_collecting_evidence"
+
+    return {
+        "snapshot_kind": "latest",
+        "phase": str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
+        "matching_exposure_enabled": bool(PUBLIC_MATCHING_ENABLED),
+        "public_emphasis": phase_state.get("public_emphasis") or _phase_public_emphasis(
+            phase=str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
+            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
+        ),
+        "readiness_status": readiness_status,
+        "recommendation": recommendation,
+        "blockers_to_next_phase": blocker_reasons,
+        "intro_ready_trainer_count": int(blocker_summary.get("intro_ready_trainer_count") or 0),
+        "blocked_trainer_count": int(blocker_summary.get("blocked_trainer_count") or 0),
+        "blocker_buckets": blocker_buckets,
+        "owner_waitlist_total_active": int(waitlist_summary.get("total_active") or 0),
+        "owner_waitlist_joins_24h": int(waitlist_summary.get("joins_24h") or 0),
+        "published_trainer_count": int(kpi_prelaunch.get("published_trainer_count") or 0),
+        "verified_trainer_count": int(kpi_prelaunch.get("verified_trainer_count") or 0),
+        "trainer_suburb_coverage_count": int(kpi_prelaunch.get("trainer_suburb_coverage_count") or 0),
+        "waitlist_suburb_coverage_count": int(kpi_prelaunch.get("waitlist_suburb_coverage_count") or 0),
+        "growth_cohort_count": int((growth_summary.get("totals") or {}).get("cohort_count") or 0),
+        "reactivation_open_candidates": int(reactivation_summary.get("open_candidates") or 0),
+        "high_severity_alert_count": high_alert_count,
+        "evidence_window_mode": "30_day_prelaunch_evidence_window",
+        "evidence_window_state": "active",
+        "reason_codes": ["phase_readiness_snapshot_ok"],
+        "updated_at": now_iso(),
+    }
+
+
+async def _upsert_latest_phase_readiness_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    coll = getattr(db, "phase_readiness_snapshots", None)
+    if coll is None:
+        return snapshot
+    row = await coll.find_one({"snapshot_kind": "latest"}, {"_id": 0})
+    payload = {**snapshot}
+    if row:
+        await coll.update_one({"snapshot_kind": "latest"}, {"$set": payload}, upsert=True)
+    else:
+        await coll.insert_one(payload)
+    return payload
+
+
+async def _ensure_phase_transition_baseline(
+    phase_state: Dict[str, Any],
+    readiness_snapshot: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    coll = getattr(db, "phase_transition_decisions", None)
+    if coll is None:
+        return []
+
+    existing = await coll.find({}, {"_id": 0}).to_list(20)
+    if existing:
+        existing.sort(key=lambda row: str(row.get("decided_at") or ""), reverse=True)
+        return existing
+
+    baseline = {
+        "id": new_id(),
+        "decision_kind": "current_phase_lock",
+        "decision_outcome": "approved",
+        "from_phase": None,
+        "to_phase": str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
+        "public_matching_enabled": bool(PUBLIC_MATCHING_ENABLED),
+        "recommendation_at_decision_time": readiness_snapshot.get("recommendation"),
+        "readiness_status_at_decision_time": readiness_snapshot.get("readiness_status"),
+        "snapshot_kind": readiness_snapshot.get("snapshot_kind"),
+        "snapshot_updated_at": readiness_snapshot.get("updated_at"),
+        "reason": "default_supply_first_prelaunch_lock",
+        "decision_maker": "system",
+        "requires_owner_review_for_next_transition": True,
+        "decided_at": now_iso(),
+    }
+    await coll.insert_one(baseline)
+    return [baseline]
+
+
+async def _refresh_phase_runtime_records() -> Dict[str, Any]:
+    phase_state = await _get_or_create_launch_phase_state()
+    readiness_snapshot = await _build_phase_readiness_snapshot(phase_state)
+    readiness_snapshot = await _upsert_latest_phase_readiness_snapshot(readiness_snapshot)
+    phase_decisions = await _ensure_phase_transition_baseline(phase_state, readiness_snapshot)
+    return {
+        "phase_state": phase_state,
+        "readiness_snapshot": readiness_snapshot,
+        "phase_decisions": phase_decisions,
+    }
+
+
 def _suburb_meta_identity_snapshot() -> Dict[str, Any]:
     identity: Dict[str, Any] = {
         "list_id": None,
@@ -903,13 +1118,14 @@ async def _resolve_trainer(*, trainer_id: Optional[str], submission_id: Optional
 
 @api.get("/")
 async def root() -> Dict[str, Any]:
-    return {"service": "barkbond-match-engine", "ok": True, "ts": now_iso()}
+    return {"service": "dog-trainers-directory-match-engine", "ok": True, "ts": now_iso()}
 
 
 @api.get("/config")
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
     suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
+    phase_state = await _get_or_create_launch_phase_state()
     return {
         "base_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
         "fixed_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
@@ -921,6 +1137,10 @@ async def config() -> Dict[str, Any]:
         "stripe_intro_billing_enabled": stripe_billing.billing_enabled(),
         "stripe_webhook_enabled": stripe_billing.webhook_enabled(),
         "public_matching_enabled": PUBLIC_MATCHING_ENABLED,
+        "public_launch_phase": phase_state.get("current_phase"),
+        "public_emphasis": phase_state.get("public_emphasis"),
+        "trainer_onboarding_open": bool(phase_state.get("trainer_onboarding_open", True)),
+        "owner_waitlist_mode": phase_state.get("owner_waitlist_mode"),
         "public_monetization_copy_mode": PUBLIC_MONETIZATION_COPY_MODE,
         "public_hide_legacy_intro_fee_copy": PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY,
         "public_show_founding_profile_copy": PUBLIC_SHOW_FOUNDING_PROFILE_COPY,
@@ -1865,6 +2085,10 @@ async def oversight_login(payload: OversightLogin, request: Request) -> Dict[str
 @api.get("/oversight")
 async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     """Single read-only snapshot. No buttons. No actions. Just the truth."""
+    phase_runtime = await _refresh_phase_runtime_records()
+    phase_state = phase_runtime["phase_state"]
+    readiness_snapshot = phase_runtime["readiness_snapshot"]
+    phase_decisions = phase_runtime["phase_decisions"]
     conversion_statuses = autonomy.confirmed_conversion_statuses()
     intros_24 = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
     intros_7d = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
@@ -2151,6 +2375,16 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "state": claim_policy.get("state"),
             "enforcement_mode": claim_policy.get("enforcement_mode"),
         },
+        "launch_phase_state": phase_state,
+        "phase_readiness_snapshot": readiness_snapshot,
+        "phase_transition_decisions": phase_decisions[:10],
+        "launch_phase": phase_state.get("current_phase"),
+        "public_emphasis": phase_state.get("public_emphasis"),
+        "readiness_status": readiness_snapshot.get("readiness_status"),
+        "readiness_recommendation": readiness_snapshot.get("recommendation"),
+        "intro_ready_trainer_count": readiness_snapshot.get("intro_ready_trainer_count"),
+        "blocked_trainer_count": readiness_snapshot.get("blocked_trainer_count"),
+        "blockers_to_next_phase": readiness_snapshot.get("blockers_to_next_phase", []),
         "dataset_identity": {
             "list_id": suburb_identity.get("list_id"),
             "suburb_count": suburb_identity.get("suburb_count"),
@@ -2391,6 +2625,9 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.notification_events.create_index("id", unique=True, sparse=True)
     await db.auth_attempts.create_index("key", unique=True)
     await db.auth_attempts.create_index("updated_at")
+    await db.phase_readiness_snapshots.create_index("snapshot_kind", unique=True)
+    await db.phase_transition_decisions.create_index("id", unique=True, sparse=True)
+    await db.phase_transition_decisions.create_index("decided_at")
     await db.owner_waitlist.create_index([("email_norm", 1), ("suburb_norm", 1), ("status", 1)], unique=True)
     await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
     await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
@@ -2421,6 +2658,7 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
             await autonomy.recompute_ranking(db)
             await autonomy.recompute_pricing(db)
             await autonomy.update_health(db)
+            await _refresh_phase_runtime_records()
         except Exception:  # noqa: BLE001
             logger.exception("initial loop pass failed")
     else:

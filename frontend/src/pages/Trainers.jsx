@@ -20,7 +20,7 @@ export default function Trainers() {
                 <div className="card-public p-7 mt-10" data-testid="economics-card">
                     <ul className="space-y-3 text-[#1A3A32]">
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Build trusted visibility before broader owner onboarding.</li>
-                        <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Profiles are reviewed for quality and credibility.</li>
+                        <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Profiles pass automated publish or hold checks, with bounded oversight when something needs attention.</li>
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />Local owner interest helps guide where coverage expands next.</li>
                         <li className="flex gap-3"><Check className="h-5 w-5 text-[#5C6D59] mt-0.5" />No guaranteed leads or bookings.</li>
                     </ul>
@@ -35,7 +35,7 @@ export default function Trainers() {
                     <article className="card-public p-5">
                         <div className="small-caps">Step 2</div>
                         <h2 className="font-serif text-2xl text-[#1A3A32] mt-1">Verify</h2>
-                        <p className="text-sm text-[#4A615A] mt-2">We review profile quality before publication.</p>
+                        <p className="text-sm text-[#4A615A] mt-2">Automated publish or hold checks decide whether your profile is ready, needs more details, or should wait.</p>
                     </article>
                     <article className="card-public p-5">
                         <div className="small-caps">Step 3</div>

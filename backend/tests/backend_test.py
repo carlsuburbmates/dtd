@@ -1,4 +1,4 @@
-"""Bark&Bond — intro-first match engine regression tests.
+"""Dog Trainers Directory — intro-first match engine regression tests.
 
 Covers (per redesign iteration 2):
   * /api/config + root health

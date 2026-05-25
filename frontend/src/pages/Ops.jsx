@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react";
-import { setAdminPass, getAdminPass, opsApi, audCents, appendOpsNote, getOpsNotes } from "@/lib/api";
+import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
 export default function Ops() {
@@ -162,8 +162,9 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const growthAttributionSummary = snap.growth_attribution_summary || {};
     const reactivationSummary = snap.reactivation_summary || {};
     const opsInvestigation = snap.ops_investigation || {};
-    const [opsNotes, setOpsNotes] = useState(() => getOpsNotes());
-    const [noteDraft, setNoteDraft] = useState("");
+    const launchPhaseState = snap.launch_phase_state || {};
+    const phaseReadinessSnapshot = snap.phase_readiness_snapshot || {};
+    const phaseTransitionDecisions = Array.isArray(snap.phase_transition_decisions) ? snap.phase_transition_decisions : [];
     const datasetIdentity = snap.dataset_identity || integrity.dataset_identity || {};
     const datasetListId = datasetIdentity.list_id || integrity.list_id || "unknown";
     const datasetSuburbCount = typeof datasetIdentity.suburb_count === "number"
@@ -247,6 +248,30 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
     const reactivationCases = Array.isArray(opsInvestigation.reactivation_cases) ? opsInvestigation.reactivation_cases.slice(0, 5) : [];
     const sourceIngestionSources = Array.isArray(opsInvestigation.source_ingestion_sources) ? opsInvestigation.source_ingestion_sources.slice(0, 5) : [];
     const discoveryAlerts = Array.isArray(opsInvestigation.discovery_alerts) ? opsInvestigation.discovery_alerts : [];
+    const currentPhase = String(launchPhaseState.current_phase || snap.launch_phase || "supply_first");
+    const publicEmphasis = String(launchPhaseState.public_emphasis || snap.public_emphasis || "waitlist_first");
+    const readinessStatus = String(phaseReadinessSnapshot.readiness_status || snap.readiness_status || "collecting_evidence");
+    const readinessRecommendation = String(phaseReadinessSnapshot.recommendation || snap.readiness_recommendation || "continue_supply_first_collecting_evidence");
+    const blockersToNextPhase = Array.isArray(phaseReadinessSnapshot.blockers_to_next_phase)
+        ? phaseReadinessSnapshot.blockers_to_next_phase
+        : Array.isArray(snap.blockers_to_next_phase)
+          ? snap.blockers_to_next_phase
+          : [];
+    const activeRegions = Array.isArray(launchPhaseState.active_regions) ? launchPhaseState.active_regions : [];
+    const evidenceWindowMode = String(launchPhaseState.evidence_window_mode || phaseReadinessSnapshot.evidence_window_mode || "30_day_prelaunch_evidence_window");
+    const evidenceWindowState = String(phaseReadinessSnapshot.evidence_window_state || "active");
+    const introReadyTrainerCount = Number(
+        phaseReadinessSnapshot.intro_ready_trainer_count ?? snap.intro_ready_trainer_count ?? 0
+    );
+    const blockedTrainerCount = Number(
+        phaseReadinessSnapshot.blocked_trainer_count ?? snap.blocked_trainer_count ?? 0
+    );
+    const matchingExposureEnabled = Boolean(
+        launchPhaseState.matching_exposure_enabled ?? launchPhaseState.public_matching_enabled ?? false
+    );
+    const latestPhaseDecision = phaseTransitionDecisions[0] || null;
+    const readinessTone = readinessStatus === "attention_needed" ? "amber" : "green";
+    const matchingExposureTone = matchingExposureEnabled ? "amber" : "green";
     const hasDatasetIdentity = datasetListId !== "unknown" && datasetSuburbCount !== "unknown" && datasetHash !== "unknown";
     const statusExplanation = integrityStatus === "ok" && hasDatasetIdentity
         ? "Dataset identity and claim policy are present."
@@ -254,18 +279,12 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
           ? `Attention needed: ${integrityReasonCodes.join(", ")}`
           : "Some integrity fields are missing from the latest snapshot.";
 
-    const addNote = () => {
-        const next = appendOpsNote(noteDraft);
-        setOpsNotes(next);
-        setNoteDraft("");
-    };
-
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
             <header className="border-b border-[#243631] bg-[#0D1412] sticky top-0 z-40">
                 <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Link to="/" className="font-serif text-xl">Bark&amp;Bond</Link>
+                        <Link to="/" className="font-serif text-xl">Dog Trainers Directory</Link>
                         <span className="font-mono text-[10px] uppercase tracking-wider text-[#D06D4F] border border-[#D06D4F]/40 rounded px-2 py-0.5">Oversight · read-only</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -284,6 +303,92 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                         {error}
                     </div>
                 )}
+
+                <Section title="Launch posture and readiness" testid="ops-launch-phase">
+                    <div className="grid md:grid-cols-4 gap-4">
+                        <Tile label="Current phase" value={humanizeValue(currentPhase)} accent="mute" />
+                        <Tile label="Public emphasis" value={humanizeValue(publicEmphasis)} accent="mute" />
+                        <Tile
+                            label="Exposure gate"
+                            value={matchingExposureEnabled ? "live matching enabled" : "public matching off"}
+                            accent={matchingExposureTone}
+                        />
+                        <Tile
+                            label="Readiness"
+                            value={humanizeValue(readinessStatus)}
+                            accent={readinessTone}
+                        />
+                    </div>
+                    <div className="grid md:grid-cols-3 gap-4 mt-4">
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Evidence window</div>
+                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
+                                <div>mode · {humanizeValue(evidenceWindowMode)}</div>
+                                <div>state · {humanizeValue(evidenceWindowState)}</div>
+                                <div>regions · {activeRegions.length > 0 ? activeRegions.join(", ") : "unknown"}</div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Supply snapshot</div>
+                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
+                                <div>intro-ready trainers · {introReadyTrainerCount}</div>
+                                <div>blocked trainers · {blockedTrainerCount}</div>
+                                <div>published trainers · {phaseReadinessSnapshot.published_trainer_count ?? 0}</div>
+                                <div>verified trainers · {phaseReadinessSnapshot.verified_trainer_count ?? 0}</div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Current recommendation</div>
+                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
+                                {humanizeValue(readinessRecommendation)}
+                            </div>
+                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
+                                {latestPhaseDecision
+                                    ? `Last recorded decision · ${humanizeValue(latestPhaseDecision.decision_outcome)} on ${formatDateTime(latestPhaseDecision.decided_at)}`
+                                    : "No recorded phase decisions yet."}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="grid md:grid-cols-2 gap-4 mt-4">
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Blockers to next phase</div>
+                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
+                                {blockersToNextPhase.length === 0 ? (
+                                    <div className="text-[#8B9E98]">No current blockers recorded. Continue collecting evidence.</div>
+                                ) : (
+                                    <ul className="space-y-1">
+                                        {blockersToNextPhase.map((item) => (
+                                            <li key={item}>{humanizeValue(item)}</li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
+                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Recorded phase decisions</div>
+                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
+                                {phaseTransitionDecisions.length === 0 ? (
+                                    <div className="text-[#8B9E98]">No phase decisions recorded yet.</div>
+                                ) : (
+                                    <ul className="space-y-2">
+                                        {phaseTransitionDecisions.slice(0, 3).map((decision) => (
+                                            <li key={decision.id || `${decision.decision_kind}-${decision.decided_at}`} className="rounded border border-[#243631] p-3">
+                                                <div>{humanizeValue(decision.decision_kind)} · {humanizeValue(decision.decision_outcome)}</div>
+                                                <div className="text-[#8B9E98] mt-1">
+                                                    {humanizeValue(decision.to_phase || decision.current_phase || currentPhase)} · {formatDateTime(decision.decided_at)}
+                                                </div>
+                                                {decision.reason && <div className="text-[#8B9E98] mt-1">{humanizeValue(decision.reason)}</div>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
+                        Visibility only. Normal Ops can read the current phase and readiness evidence, but cannot change them here.
+                    </div>
+                </Section>
 
                 <div className="grid md:grid-cols-4 gap-4" data-testid="ops-first-checks">
                     <Metric
@@ -680,26 +785,16 @@ function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
                             </ul>
                         )}
                     </Section>
-
-                    <Section title="Operator notes" testid="ops-notes">
-                        <div className="space-y-3">
-                            <textarea
-                                className="admin-input min-h-[100px]"
-                                value={noteDraft}
-                                onChange={(e) => setNoteDraft(e.target.value)}
-                                placeholder="What changed, what action was taken, and whether follow-up is needed."
-                                data-testid="ops-note-input"
-                            />
-                            <button onClick={addNote} className="admin-btn admin-btn-accent" data-testid="ops-note-save" disabled={!noteDraft.trim()}>
-                                Save note
-                            </button>
-                            <div className="space-y-2 text-sm font-mono">
-                                {opsNotes.length === 0 ? <div className="text-[#8B9E98]">No operator notes saved yet.</div> : opsNotes.map((note) => (
-                                    <div key={note.id} className="rounded border border-[#243631] p-3">
-                                        <div className="text-[#8B9E98] text-xs">{note.createdAt?.slice(0, 19).replace("T", " ")}</div>
-                                        <div className="text-[#F5F2EB] mt-1">{note.text}</div>
-                                    </div>
-                                ))}
+                    <Section title="Evidence discipline" testid="ops-evidence-discipline">
+                        <div className="space-y-3 text-sm font-mono text-[#F5F2EB]">
+                            <div className="rounded border border-[#243631] p-3">
+                                Operator notes are not stored in the browser anymore.
+                            </div>
+                            <div className="rounded border border-[#243631] p-3 text-[#8B9E98]">
+                                Database = truth. Audit log = decision trail. CSV/export = proof only.
+                            </div>
+                            <div className="rounded border border-[#243631] p-3 text-[#8B9E98]">
+                                If a future evidence note is required, it must be product-backed and reflected in the evidence model.
                             </div>
                         </div>
                     </Section>
@@ -846,4 +941,15 @@ function SeverityTag({ s }) {
     if (s === "high") return <span className="admin-tag admin-tag-red"><AlertTriangle className="h-3 w-3" /> High</span>;
     if (s === "medium") return <span className="admin-tag admin-tag-amber"><AlertTriangle className="h-3 w-3" /> Med</span>;
     return <span className="admin-tag admin-tag-mute">Low</span>;
+}
+
+function humanizeValue(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "unknown";
+    return raw.replace(/_/g, " ");
+}
+
+function formatDateTime(value) {
+    const raw = String(value || "").trim();
+    return raw ? raw.slice(0, 19).replace("T", " ") : "unknown";
 }

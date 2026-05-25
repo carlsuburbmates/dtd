@@ -144,6 +144,9 @@ class _Collection:
                     if "$in" in expected and actual not in expected["$in"]:
                         matched = False
                         break
+                    if "$nin" in expected and actual in expected["$nin"]:
+                        matched = False
+                        break
                     if "$gte" in expected and actual is not None and actual < expected["$gte"]:
                         matched = False
                         break
@@ -244,6 +247,10 @@ def test_config_exposes_public_matching_flag(monkeypatch):
     payload = asyncio.run(server.config())
 
     assert payload["public_matching_enabled"] is False
+    assert payload["public_launch_phase"] == "supply_first"
+    assert payload["public_emphasis"] == "waitlist_first"
+    assert payload["trainer_onboarding_open"] is True
+    assert payload["owner_waitlist_mode"] == "passive_only"
     assert "Carlton" in payload["suburbs"]
 
 
@@ -569,6 +576,42 @@ def test_oversight_exposes_kpi_prelaunch_contract_fields_and_types(monkeypatch):
     assert isinstance(kpi.get("status"), str)
     assert kpi["status"] in {"ok", "warn", "unavailable"}
     assert isinstance(kpi.get("reason_codes"), list)
+
+
+def test_oversight_exposes_launch_phase_and_readiness_contract(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+
+    out = asyncio.run(server.oversight(None))
+
+    phase_state = out.get("launch_phase_state")
+    readiness = out.get("phase_readiness_snapshot")
+    decisions = out.get("phase_transition_decisions")
+
+    assert isinstance(phase_state, dict)
+    assert phase_state["current_phase"] == "supply_first"
+    assert phase_state["public_matching_enabled"] is False
+    assert phase_state["public_emphasis"] == "waitlist_first"
+    assert phase_state["trainer_onboarding_open"] is True
+
+    assert isinstance(readiness, dict)
+    assert readiness["phase"] == "supply_first"
+    assert readiness["matching_exposure_enabled"] is False
+    assert readiness["public_emphasis"] == "waitlist_first"
+    assert readiness["readiness_status"] in {"collecting_evidence", "attention_needed"}
+    assert isinstance(readiness.get("recommendation"), str)
+    assert isinstance(readiness.get("intro_ready_trainer_count"), int)
+    assert isinstance(readiness.get("blocked_trainer_count"), int)
+    assert isinstance(readiness.get("blockers_to_next_phase"), list)
+    assert isinstance(readiness.get("blocker_buckets"), dict)
+
+    assert out["launch_phase"] == "supply_first"
+    assert out["public_emphasis"] == "waitlist_first"
+    assert out["readiness_status"] == readiness["readiness_status"]
+    assert out["readiness_recommendation"] == readiness["recommendation"]
+    assert out["intro_ready_trainer_count"] == readiness["intro_ready_trainer_count"]
+    assert out["blocked_trainer_count"] == readiness["blocked_trainer_count"]
+
+    assert isinstance(decisions, list)
 
 
 def test_oversight_exposes_growth_and_reactivation_summary_contract(monkeypatch):
