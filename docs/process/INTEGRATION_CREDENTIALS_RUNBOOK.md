@@ -4,6 +4,37 @@ Purpose: keep credentials and infra verification simple for a one-man workflow.
 
 Agent routing reference: `.codex/skill-policy.toml` is the live routing policy source; use it together with the current task context and native capabilities when picking a plugin, skill, or fallback.
 
+## Local env file inventory (current repo)
+
+These are the env files currently present in the repo layout:
+1. root `.env` — local-only shared verification/operator secrets and repo-level script inputs
+2. root `.env.example` — committed placeholder map for the root `.env`
+3. `backend/.env` — local-only backend runtime secrets and defaults
+4. `backend/.env.example` — committed placeholder map for backend runtime
+5. `frontend/.env` — local-only frontend runtime values
+6. `frontend/.env.example` — committed placeholder map for frontend runtime
+
+Rules:
+1. Real `.env` files stay local only and remain gitignored.
+2. Committed `*.env.example` files must contain placeholders/defaults only.
+3. If a current code-path env var exists in runtime code or repo verification scripts, it must be represented in either the relevant `*.env.example` file or this runbook.
+4. Legacy local-only keys may exist in untracked `.env` files, but they must not be treated as required unless current code or current verification scripts still use them.
+
+## Local env contract refresh (2026-05-25)
+
+Presence-only local audit completed across all env files in the repo.
+
+Result:
+1. root `.env`, `backend/.env`, and `frontend/.env` all exist locally
+2. backend local env was missing several current-runtime keys and has been patched locally with safe defaults/placeholders
+3. current committed examples were incomplete and are now aligned to the current runtime and verification contract
+4. extra local keys still exist in some untracked env files, but several are legacy/non-blocking and are not current codebase requirements
+
+Current known legacy/non-required local env noise:
+1. `NEXT_PUBLIC_BACKEND_URL` in `frontend/.env` is not the current frontend runtime key; current code uses `REACT_APP_BACKEND_URL`
+2. `REACT_APP_POSTHOG_*`, `NEXT_PUBLIC_POSTHOG_*`, `NEXT_PUBLIC_SENTRY_*`, and Clerk-related keys may exist locally for historical or deferred integration work, but they are not required by the current frontend code path
+3. `STRIPE_API_KEY_ID`, `STRIPE_PUBLISHABLE_KEY`, lowercase `resend_api_key`, `MONGO_API_KEY`, and `MONGODB_ATLAS_API_KEY` may exist locally, but they are not current codebase requirements
+
 ## Current lock (2026-05-02)
 
 1. Accounts/keys created: Clerk, Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
@@ -133,33 +164,63 @@ Agent routing reference: `.codex/skill-policy.toml` is the live routing policy s
 5. `ACTIVE_REGIONS`
 6. `AUTONOMY_LOOP_OWNER` (`api` / `worker` / `none`)
 7. `RUN_AUTONOMY_IN_API` (legacy compatibility; must not conflict with `AUTONOMY_LOOP_OWNER`)
-8. `CONVERSION_BILLING_MODE` (`track_only` for launch)
-9. `TRAINER_FREE_INTRO_DAYS` (launch default `30`)
-10. `FIXED_INTRO_FEE_CENTS` (launch default `500`)
+8. `AUTONOMY_LOOP_LEASE_ENABLED`
+9. `AUTONOMY_LOOP_LEASE_TTL_S`
+10. `AUTONOMY_LOOP_LEASE_RENEW_S`
+11. `AUTONOMY_OWNER_ID` (optional explicit owner override)
+12. `DISABLE_AUTONOMY`
+13. `CONVERSION_BILLING_MODE` (`track_only` for launch)
+14. `TRAINER_FREE_INTRO_DAYS` (launch default `30`)
+15. `FIXED_INTRO_FEE_CENTS` (launch default `500`)
+16. `PUBLIC_MATCHING_ENABLED`
+17. `PUBLIC_LAUNCH_PHASE`
+18. `PUBLIC_MONETIZATION_COPY_MODE`
+19. `PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY`
+20. `PUBLIC_SHOW_FOUNDING_PROFILE_COPY`
+21. `TRAINER_ACTION_TOKEN_SECRET`
+22. `TRAINER_ACTION_TOKEN_TTL_S`
+23. `OVERSIGHT_AUTH_MAX_ATTEMPTS`
+24. `OVERSIGHT_AUTH_WINDOW_S`
+25. `OVERSIGHT_AUTH_LOCK_S`
+26. `FRONTEND_BASE_URL`
+27. `DISCOVERY_SOURCE_URLS`
+28. `BILLABILITY_POLICY`
+29. `CONTACT_READY_POLICY`
+30. `NOTIFY_RETRY_ATTEMPTS`
+31. `BILLING_RETRY_MAX_ATTEMPTS`
+32. `BILLING_RETRY_BASE_DELAY_HOURS`
+33. `REACTIVATION_NOTIFY_COOLDOWN_HOURS`
+34. `CLAIM_STATE_MODEL_ENABLED`
+35. `CLAIM_STATE_CURRENT`
+36. `CLAIM_ENFORCEMENT_MODE`
+37. `CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2`
+38. `CORS_ORIGINS`
 
-### Optional monitoring/email vars currently used by supporting workflows
+### Supporting integrations and verification vars currently used
 1. `SENTRY_DSN`
-2. `SENTRY_ACCESS_TOKEN` (used for org-level API verification)
-3. `SENTRY_ENVIRONMENT`
-4. `SENTRY_TRACES_SAMPLE_RATE`
-5. `NEXT_PUBLIC_POSTHOG_KEY`
-6. `NEXT_PUBLIC_POSTHOG_HOST`
-7. `RESEND_API_KEY`
-8. `RENDER_API_KEY`
-9. `MONGODB_ATLAS_PUBLIC_KEY`
-10. `MONGODB_ATLAS_PRIVATE_KEY`
-11. `MONGODB_ATLAS_PROJECT_ID`
-12. `REMOTE_BACKEND_URL`
-13. `DISCOVERY_SOURCE_URLS`
-14. `RESEND_FROM`
-15. `RESEND_REPLY_TO`
+2. `SENTRY_ENVIRONMENT`
+3. `SENTRY_TRACES_SAMPLE_RATE`
+4. `SENTRY_ACCESS_TOKEN` (used for org-level API verification)
+5. `RESEND_API_KEY`
+6. `RESEND_FROM`
+7. `RESEND_REPLY_TO`
+8. `STRIPE_SECRET_KEY`
+9. `STRIPE_WEBHOOK_SECRET`
+10. `STRIPE_DEFAULT_CURRENCY`
+11. `STRIPE_INVOICE_DAYS_UNTIL_DUE`
+12. `STRIPE_REQUIRE_BILLING_CONSENT`
+13. `RENDER_API_KEY`
+14. `MONGODB_ATLAS_PUBLIC_KEY`
+15. `MONGODB_ATLAS_PRIVATE_KEY`
+16. `MONGODB_ATLAS_PROJECT_ID`
+17. `REMOTE_BACKEND_URL`
 
 ### Frontend
 1. `REACT_APP_BACKEND_URL`
-2. `REACT_APP_POSTHOG_KEY`
-3. `REACT_APP_POSTHOG_HOST`
-4. `NEXT_PUBLIC_POSTHOG_KEY` (compat/migration parity)
-5. `NEXT_PUBLIC_POSTHOG_HOST` (compat/migration parity)
+
+Current note:
+1. The current frontend code path requires `REACT_APP_BACKEND_URL`.
+2. PostHog, Sentry, and Clerk frontend keys may still exist locally or in provider env history, but they are not current codebase requirements unless frontend code starts consuming them again.
 
 ## Verification commands
 

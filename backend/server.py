@@ -48,6 +48,11 @@ from services import runtime_control
 from services import stripe_billing
 from services.seed import MELBOURNE_TRAINERS
 
+try:
+    from bson import ObjectId
+except Exception:  # noqa: BLE001
+    ObjectId = None
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -116,9 +121,25 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items() if k != "_id"}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, set):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if ObjectId is not None and isinstance(value, ObjectId):
+        return str(value)
+    return value
+
+
 def _scrub(doc: Dict[str, Any]) -> Dict[str, Any]:
-    doc.pop("_id", None)
-    return doc
+    safe = _json_safe(doc)
+    return safe if isinstance(safe, dict) else {}
 
 
 def _require_public_matching(path_label: str) -> None:
@@ -2318,7 +2339,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         }.items()
     }
 
-    return {
+    return _scrub({
         "revenue": {
             "booked_revenue_cents": booked_revenue_cents,
             "collected_revenue_cents": collected_revenue_cents,
@@ -2407,7 +2428,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "discovery_alerts": discovery_alerts,
         },
         "ts": now_iso(),
-    }
+    })
 
 
 @api.get("/claims/validate")

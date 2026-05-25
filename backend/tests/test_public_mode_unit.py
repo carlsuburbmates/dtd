@@ -7,6 +7,7 @@ import os
 import sys
 import types
 import typing
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -700,6 +701,35 @@ def test_oversight_exposes_ops_investigation_contract(monkeypatch):
     assert ops["reactivation_cases"][0]["trainer_name"] == "Trainer One"
     assert ops["source_ingestion_sources"][0]["source_url"] == "https://source.example.com"
     assert ops["loop_statuses"]["ranking"]["status"] in {"ok", "investigate", "escalate", "warn"}
+
+
+def test_oversight_scrubs_nested_objectids_from_live_like_payload(monkeypatch):
+    bson = pytest.importorskip("bson")
+    object_id = bson.ObjectId()
+    fake_db = _fake_oversight_db()
+    fake_db.system_state = _Collection(
+        rows=[
+            {"key": "health", "alerts": [{"source_id": object_id}]},
+            {"key": "ranking"},
+            {"key": "pricing"},
+            {"key": "verification"},
+            {"key": "discovery"},
+            {"key": "inference"},
+            {"key": "source_ingestion", "alerts": [{"job_id": object_id}]},
+            {"key": "outreach"},
+            {"key": "billing_recovery"},
+            {"key": "nurture"},
+            {"key": "reactivation_route"},
+        ]
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    out = asyncio.run(server.oversight(None))
+
+    assert out["alerts"][0]["source_id"] == str(object_id)
+    assert out["loops"]["health"]["alerts"][0]["source_id"] == str(object_id)
+    assert out["ops_investigation"]["discovery_alerts"][0]["job_id"] == str(object_id)
+    json.dumps(out)
 
 
 def test_oversight_billing_summary_semantics_include_at_risk_and_collected(monkeypatch):

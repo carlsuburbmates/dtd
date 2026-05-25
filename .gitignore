@@ -49,16 +49,16 @@ venv/
 # Real env files are never committed; the .env.example variants ARE.
 .env
 .env.*
-!.env.example
-!**/.env.example
 *.env
-!*.env.example
 credentials.json
 *.pem
 *.key
 *token.json*
 *credentials.json*
 .credentials
+!.env.example
+!*.env.example
+!**/.env.example
 
 # ── Local-only memory / test creds ─────────────────────────────────────────
 memory/test_credentials.md
@@ -78,24 +78,6 @@ chainlit.md
 dump.rdb
 .vercel
 android-sdk/
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
--e 
-# Environment and credential files
-.env
-.env.*
-*.env
-credentials.json
-*.pem
-*.key
-.credentials
 
 .emergent/
 

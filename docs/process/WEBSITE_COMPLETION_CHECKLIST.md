@@ -3,6 +3,36 @@
 Date: 2026-05-25
 Scope: execution checklist for taking the current audited codebase to the normalized canonical supply-first website state.
 
+## Current Status
+
+### Completed so far
+
+- [x] Canonical-pack normalization completed and committed.
+- [x] No-edit code audit completed.
+- [x] Phase 0 execution foundation repair completed.
+- [x] Phase 1 launch-phase / readiness / decision state layer implemented.
+- [x] Phase 2 oversight API contract implemented.
+- [x] Phase 3 `/ops` phase/readiness UI implemented at code level.
+- [x] Phase 4 active runtime branding cleanup completed for the intended DTD surfaces.
+- [x] Phase 5 core public surface launch-phase awareness implemented.
+- [x] Phase 6 default operator-notes decision completed by removing browser-local pseudo-evidence.
+- [x] Targeted backend tests, frontend tests, frontend build, copy guard, prelaunch release gate, and curated staging readiness checks have passed on the changed scope.
+- [x] Local verification environment repaired:
+  - [x] MongoDB installed and running locally
+  - [x] local browser verification path repaired
+
+### Still open before final readiness claims
+
+- [ ] Complete a full authenticated `/ops` browser walkthrough on the repaired local stack.
+- [ ] Complete final route-smoke and manual review evidence for owner/public readiness gates.
+- [ ] Complete post-implementation verification execution against standards and integrated tech/tool behavior.
+
+### Current primary blocker
+
+- [ ] Live authenticated `/ops` walkthrough and final browser evidence are still incomplete.
+  - The earlier `/api/oversight` serialization bug is fixed in code.
+  - The remaining work is final live verification, not the prior runtime serialization failure.
+
 ## Purpose
 
 This document is a followable execution checklist.
@@ -29,6 +59,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 - [ ] Do not introduce unrelated refactors.
 - [ ] Stop if code work conflicts with the canonical pack.
 - [ ] Stop if a destructive migration is required and has not been explicitly approved.
+- [ ] If a blocker is discovered during execution, call it out immediately and fix it in the same execution path unless a locked guardrail, destructive migration, missing approval, or external-runtime impossibility prevents that fix.
 - [ ] If an implementation decision is needed during execution, make the decision from the strongest available basis in this order:
   1. canonical standards and canonical product docs
   2. current codebase and audited runtime evidence
@@ -118,19 +149,20 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 
 ## Current Audited Gap Checklist
 
-- [ ] Missing launch-phase model and persisted phase evidence layer.
-- [ ] `/ops` does not yet meet the canonical phase/readiness contract.
-- [ ] Bark&Bond-era branding remains in runtime/email/provider/operator surfaces.
-- [ ] Public surfaces are match-gate-aware but not launch-phase-aware.
-- [ ] Trainer-facing copy still implies manual review.
-- [ ] Operator notes are browser-local only, not product-backed evidence.
-- [ ] Integration-facing config, metadata, and lifecycle surfaces still need explicit completion coverage before later verification.
+- [x] Missing launch-phase model and persisted phase evidence layer.
+- [x] `/ops` does not yet meet the canonical phase/readiness contract.
+- [x] Bark&Bond-era branding remains in runtime/email/provider/operator surfaces.
+- [x] Public surfaces are match-gate-aware but not launch-phase-aware.
+- [x] Trainer-facing copy still implies manual review.
+- [x] Operator notes are browser-local only, not product-backed evidence.
+- [x] Integration-facing config, metadata, and lifecycle surfaces still need explicit completion coverage before later verification.
+- [x] Live authenticated `/api/oversight` verification exposed a serialization bug that has now been fixed at the backend response boundary.
 
 ## Alignment Phases
 
 ### Phase 0: Baseline and Safety Preparation
 
-- [ ] Work item: freeze scope to canonical-pack alignment only.
+- [x] Work item: freeze scope to canonical-pack alignment only.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - `docs/governance/CURRENT_TRUTH_INDEX.md`
@@ -154,7 +186,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
   - Stop when:
     - the implementation boundary is explicit and stable
 
-- [ ] Work item: convert audit findings into an execution task list.
+- [x] Work item: convert audit findings into an execution task list.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - optional session task ledger under `docs/process/` if later needed
@@ -175,7 +207,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
   - Stop when:
     - the work can be executed phase-by-phase without improvising scope
 
-- [ ] Work item: define phase-by-phase validation bundle.
+- [x] Work item: define phase-by-phase validation bundle.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
@@ -196,7 +228,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
   - Stop when:
     - implementation can be verified phase-by-phase without inventing proof later
 
-- [ ] Work item: map integration-facing implementation surfaces before coding.
+- [x] Work item: map integration-facing implementation surfaces before coding.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - implementation notes for active session only
@@ -224,7 +256,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
   - Stop when:
     - integration-facing implementation is part of the completion path, not an afterthought
 
-- [ ] Work item: lock capability-routing and decision-recording expectations before coding.
+- [x] Work item: lock capability-routing and decision-recording expectations before coding.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
@@ -246,7 +278,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
   - Stop when:
     - future implementation cannot silently skip relevant capabilities or silently bury execution-time decisions
 
-- [ ] Work item: confirm what must not be touched.
+- [x] Work item: confirm what must not be touched.
   - Likely files:
     - `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
     - canonical pack references only
@@ -267,11 +299,11 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
     - future coding can proceed without ambiguity about forbidden work
 
 Stop condition:
-- [ ] Execution scope is clear and stable.
+- [x] Execution scope is clear and stable.
 
 ### Phase 1: Launch-Phase / Readiness / Decision State Layer
 
-- [ ] Work item: add persisted launch-phase state separate from `PUBLIC_MATCHING_ENABLED`.
+- [x] Work item: add persisted launch-phase state separate from `PUBLIC_MATCHING_ENABLED`.
   - Likely files:
     - `backend/server.py`
     - `backend/services/runtime_control.py`
@@ -298,7 +330,7 @@ Stop condition:
   - Stop when:
     - phase state and exposure state are separate and coherent in code
 
-- [ ] Work item: add persisted readiness snapshots.
+- [x] Work item: add persisted readiness snapshots.
   - Likely files:
     - `backend/server.py`
     - backend state/evidence helper under `backend/services/`
@@ -322,7 +354,7 @@ Stop condition:
   - Stop when:
     - readiness can be represented without spreadsheet reconstruction
 
-- [ ] Work item: add persisted phase transition decision records.
+- [x] Work item: add persisted phase transition decision records.
   - Likely files:
     - `backend/server.py`
     - backend state/evidence helper under `backend/services/`
@@ -368,7 +400,7 @@ Stop condition:
   - Stop when:
     - state and decisions are no longer standalone values without evidence linkage
 
-- [ ] Work item: carry launch-phase state into integration-facing data where required.
+- [x] Work item: carry launch-phase state into integration-facing data where required.
   - Likely files:
     - `backend/server.py`
     - `backend/services/notifications.py`
@@ -398,7 +430,7 @@ Stop condition:
 
 ### Phase 2: Oversight API Contract
 
-- [ ] Work item: extend `/api/oversight` with phase state.
+- [x] Work item: extend `/api/oversight` with phase state.
   - Likely files:
     - `backend/server.py`
     - `backend/tests/test_public_mode_unit.py`
@@ -419,7 +451,7 @@ Stop condition:
   - Stop when:
     - current phase is visible in the oversight payload
 
-- [ ] Work item: extend `/api/oversight` with public exposure state.
+- [x] Work item: extend `/api/oversight` with public exposure state.
   - Likely files:
     - `backend/server.py`
     - backend oversight tests
@@ -439,7 +471,7 @@ Stop condition:
   - Stop when:
     - launch phase is no longer inferred from exposure state
 
-- [ ] Work item: extend `/api/oversight` with readiness summary.
+- [x] Work item: extend `/api/oversight` with readiness summary.
   - Likely files:
     - `backend/server.py`
     - backend tests for oversight payload
@@ -459,7 +491,7 @@ Stop condition:
   - Stop when:
     - oversight can answer “what is the current readiness state?”
 
-- [ ] Work item: extend `/api/oversight` with blockers and recommendation.
+- [x] Work item: extend `/api/oversight` with blockers and recommendation.
   - Likely files:
     - `backend/server.py`
     - oversight payload tests
@@ -479,7 +511,7 @@ Stop condition:
   - Stop when:
     - oversight can answer “what is blocking progress and what does the evidence suggest next?”
 
-- [ ] Work item: expose integration-facing implementation state needed for later verification.
+- [x] Work item: expose integration-facing implementation state needed for later verification.
   - Likely files:
     - `backend/server.py`
     - oversight payload tests
@@ -500,7 +532,7 @@ Stop condition:
   - Stop when:
     - integration-facing implementation state is readable without adding mutation controls
 
-- [ ] Work item: keep `/api/oversight` read-only.
+- [x] Work item: keep `/api/oversight` read-only.
   - Likely files:
     - `backend/server.py`
     - oversight auth and route tests
@@ -522,10 +554,12 @@ Stop condition:
 
 Stop condition:
 - [ ] Backend oversight payload matches the canonical phase/readiness contract.
+  - Remaining work:
+    - complete the authenticated browser walkthrough against the live local stack
 
 ### Phase 3: `/ops` UI Completion
 
-- [ ] Work item: add phase visibility to `/ops`.
+- [x] Work item: add phase visibility to `/ops`.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `frontend/src/lib/api.js` if client helpers need changes
@@ -545,7 +579,7 @@ Stop condition:
   - Stop when:
     - phase is visible without reading raw JSON
 
-- [ ] Work item: add exposure-state visibility to `/ops`.
+- [x] Work item: add exposure-state visibility to `/ops`.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
   - Expected change:
@@ -564,7 +598,7 @@ Stop condition:
   - Stop when:
     - exposure is clearly separate from phase in the UI
 
-- [ ] Work item: add supply/readiness summaries.
+- [x] Work item: add supply/readiness summaries.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
   - Expected change:
@@ -583,7 +617,7 @@ Stop condition:
   - Stop when:
     - owner can understand prelaunch progress without decoding metrics manually
 
-- [ ] Work item: add blockers and recommendation view.
+- [x] Work item: add blockers and recommendation view.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
   - Expected change:
@@ -602,7 +636,7 @@ Stop condition:
   - Stop when:
     - blockers and recommendation are visible and readable
 
-- [ ] Work item: keep `/ops` readable for a non-technical owner.
+- [x] Work item: keep `/ops` readable for a non-technical owner.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
   - Expected change:
@@ -620,7 +654,7 @@ Stop condition:
   - Stop when:
     - `/ops` can be reviewed as a business surface, not a developer console
 
-- [ ] Work item: show integration-facing implementation state in `/ops` where needed for later verification.
+- [x] Work item: show integration-facing implementation state in `/ops` where needed for later verification.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `frontend/src/lib/api.js` if needed
@@ -641,7 +675,7 @@ Stop condition:
   - Stop when:
     - `/ops` exposes the needed integration facts as readable status, not controls
 
-- [ ] Work item: keep `/ops` read-only Normal Ops.
+- [x] Work item: keep `/ops` read-only Normal Ops.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `backend/server.py` only if contract confirmation is needed
@@ -663,10 +697,12 @@ Stop condition:
 
 Stop condition:
 - [ ] `/ops` is operationally readable and canonically aligned.
+  - Remaining reason:
+    - full authenticated live walkthrough still needs to be completed after the oversight serialization fix.
 
 ### Phase 4: Branding and Copy Cleanup
 
-- [ ] Work item: remove Bark&Bond runtime strings.
+- [x] Work item: remove Bark&Bond runtime strings.
   - Likely files:
     - `backend/server.py`
     - `backend/tests/backend_test.py`
@@ -687,7 +723,7 @@ Stop condition:
   - Stop when:
     - stale runtime identity no longer appears in active DTD surfaces
 
-- [ ] Work item: remove Bark&Bond email/provider strings.
+- [x] Work item: remove Bark&Bond email/provider strings.
   - Likely files:
     - `backend/services/notifications.py`
     - `backend/services/automation.py`
@@ -708,7 +744,7 @@ Stop condition:
   - Stop when:
     - no stale Bark&Bond identity remains in active outbound paths
 
-- [ ] Work item: align integration-facing support and provider metadata to canonical state.
+- [x] Work item: align integration-facing support and provider metadata to canonical state.
   - Likely files:
     - `backend/services/notifications.py`
     - `backend/services/stripe_billing.py`
@@ -731,7 +767,7 @@ Stop condition:
   - Stop when:
     - integration-facing support and provider metadata are aligned to the canonical website state
 
-- [ ] Work item: remove Bark&Bond operator-surface strings.
+- [x] Work item: remove Bark&Bond operator-surface strings.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
   - Expected change:
@@ -750,7 +786,7 @@ Stop condition:
   - Stop when:
     - operator surface no longer shows historical product identity
 
-- [ ] Work item: replace stale product identity with DTD / Dog Trainers Directory where required.
+- [x] Work item: replace stale product identity with DTD / Dog Trainers Directory where required.
   - Likely files:
     - runtime files above
     - env examples where current defaults still use historical names
@@ -772,11 +808,11 @@ Stop condition:
     - the active codebase no longer mixes historical and canonical product identity
 
 Stop condition:
-- [ ] Stale branding no longer appears in intended runtime surfaces.
+- [x] Stale branding no longer appears in intended runtime surfaces.
 
 ### Phase 5: Public Surface Launch-Phase Awareness
 
-- [ ] Work item: make home reflect supply-first prelaunch truth through the new state layer.
+- [x] Work item: make home reflect supply-first prelaunch truth through the new state layer.
   - Likely files:
     - `frontend/src/pages/Home.jsx`
     - `backend/server.py` `/api/config` payload
@@ -798,7 +834,7 @@ Stop condition:
   - Stop when:
     - home truth comes from canonical phase logic instead of a single gate flag
 
-- [ ] Work item: keep home waitlist-first while matching is gated.
+- [x] Work item: keep home waitlist-first while matching is gated.
   - Likely files:
     - `frontend/src/pages/Home.jsx`
     - `backend/server.py`
@@ -843,7 +879,7 @@ Stop condition:
   - Stop when:
     - major public pages tell the same truthful current-state story
 
-- [ ] Work item: keep trainer detail truthful while direct connect is gated.
+- [x] Work item: keep trainer detail truthful while direct connect is gated.
   - Likely files:
     - `frontend/src/pages/TrainerDetail.jsx`
     - `backend/server.py`
@@ -889,10 +925,14 @@ Stop condition:
 
 Stop condition:
 - [ ] Public site behavior matches the canonical supply-first website state.
+  - Remaining work:
+    - finish the adjacent public-page sweep
+    - finish the token-lifecycle surface sweep
+    - complete final manual route smoke
 
 ### Phase 6: Operator Notes / Evidence Decision
 
-- [ ] Work item: set the default operator-notes decision.
+- [x] Work item: set the default operator-notes decision.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `frontend/src/lib/api.js`
@@ -939,7 +979,7 @@ Stop condition:
   - Stop when:
     - notes are no longer local-only and misleading
 
-- [ ] Work item: if not kept, remove misleading browser-local pseudo-evidence.
+- [x] Work item: if not kept, remove misleading browser-local pseudo-evidence.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `frontend/src/lib/api.js`
@@ -960,11 +1000,11 @@ Stop condition:
     - no browser-local pseudo-evidence remains
 
 Stop condition:
-- [ ] Operator notes behavior is explicit and canonically acceptable.
+- [x] Operator notes behavior is explicit and canonically acceptable.
 
 ### Phase 7: Tests and Release-Gate Automation
 
-- [ ] Work item: add/update backend tests for phase state and oversight payload.
+- [x] Work item: add/update backend tests for phase state and oversight payload.
   - Likely files:
     - `backend/tests/test_public_mode_unit.py`
     - `backend/tests/test_runtime_control_unit.py`
@@ -1008,7 +1048,7 @@ Stop condition:
   - Stop when:
     - used integration surfaces have explicit contract coverage
 
-- [ ] Work item: add/update frontend checks for public posture and route truth.
+- [x] Work item: add/update frontend checks for public posture and route truth.
   - Likely files:
     - `frontend/src/lib/*.test.js`
     - route-specific test helpers if added
@@ -1028,7 +1068,7 @@ Stop condition:
   - Stop when:
     - current public posture is enforceable by checks
 
-- [ ] Work item: add/update copy/branding/policy guards.
+- [x] Work item: add/update copy/branding/policy guards.
   - Likely files:
     - `scripts/check_frontend_copy_guard.js`
     - possibly new guard scripts under `scripts/`
@@ -1047,7 +1087,7 @@ Stop condition:
   - Stop when:
     - canonical public truth has automated drift protection
 
-- [ ] Work item: add/update release-gate scripts for current canonical state.
+- [x] Work item: add/update release-gate scripts for current canonical state.
   - Likely files:
     - `scripts/check_prelaunch_release_gate.js`
     - any supporting scripts referenced by it
@@ -1088,6 +1128,9 @@ Stop condition:
 
 Stop condition:
 - [ ] Automated checks enforce the canonical supply-first website state.
+  - Remaining work:
+    - complete remaining integration-facing contract coverage
+    - complete the explicit post-completion verification handoff section as an executed output, not just a plan item
 
 ### Phase 8: Owner Review Readiness
 
@@ -1189,6 +1232,8 @@ Stop condition:
 
 Stop condition:
 - [ ] DTD is complete enough for owner review.
+  - Blocked by:
+    - incomplete final owner-review evidence bundle
 
 ### Phase 9: Public-Facing Review Readiness
 
@@ -1296,6 +1341,10 @@ Stop condition:
 
 Stop condition:
 - [ ] DTD is safe for limited external review.
+  - Blocked by:
+    - incomplete final public route smoke
+    - incomplete owner/public review evidence
+    - incomplete post-completion verification execution
 
 ## Verification Checklist
 

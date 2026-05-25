@@ -117,7 +117,7 @@ Current-state note:
 
 1. Accounts/keys exist for Clerk, Sentry, PostHog, Resend, Render, Atlas, Vercel.
 2. Runtime and evidence snapshots for Stage A/B/C were captured in prior runbook entries.
-3. Vercel project migration to `dtd` is complete and frontend runtime vars are set for prod/preview (`REACT_APP_BACKEND_URL`, `REACT_APP_POSTHOG_KEY`, `REACT_APP_POSTHOG_HOST`, plus `NEXT_PUBLIC_POSTHOG_*` parity keys).
+3. Vercel project migration to `dtd` is complete. Current frontend runtime requires `REACT_APP_BACKEND_URL`; provider env history may still include older PostHog parity keys, but those are not current codebase requirements unless frontend code starts consuming them again.
 4. Custom domains are attached and live; public hostnames return `307` apex redirect to `www` and `200` on `www` and `/trainers`.
 5. Stage D evidence is complete (migration + routing + domain reattach/TLS/edge validation).
 6. Stage E (deploy automation evidence) is complete; repeatable deploy/redeploy evidence and authenticated route smoke both pass.

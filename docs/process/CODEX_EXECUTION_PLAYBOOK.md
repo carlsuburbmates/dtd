@@ -18,6 +18,7 @@ For integrated tech and tool work:
 1. actively prefer the available relevant native capability when it materially improves implementation quality or evidence quality
 2. do not default to manual-only implementation or inspection when a relevant available plugin, browser workflow, subagent, or integration-aware skill is a better fit
 3. if a relevant capability is skipped, state why it was not needed for the active scope
+4. if a blocker is discovered during execution, call it out immediately and fix it in the same execution path unless a locked guardrail, destructive migration, missing approval, or external-runtime impossibility prevents that fix
 
 ## 2) Skill Suggestions Standard
 
@@ -121,3 +122,4 @@ Capability use never overrides locked guardrails:
 5. no production deploy without approval
 6. no unauthorized market-coverage or guaranteed-outcome claims
 7. no scope expansion without explicit instruction
+8. execution blockers should be fixed immediately when they can be fixed safely inside these guardrails
