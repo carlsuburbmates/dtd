@@ -23,8 +23,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 - [ ] Read `docs/governance/CURRENT_TRUTH_INDEX.md` first.
 - [ ] Use this checklist only as an execution path, not as a replacement for canonical product docs.
 - [ ] Do one phase at a time.
-- [ ] Use available relevant native capabilities for integrated tech and tool work where they materially improve implementation or evidence quality.
-- [ ] Do not default to manual-only implementation or inspection when a relevant available skill, plugin, browser check, subagent review, or integration-aware workflow is a better fit.
+- [ ] Use only relevant available capabilities when they directly reduce implementation or verification risk for the active phase. Do not invoke unrelated tools, plugins, or integrations for completeness theater.
 - [ ] Do not enable `PUBLIC_MATCHING_ENABLED=true`.
 - [ ] Do not expand scope into live matching launch, admin CRUD, manual matching, or manual routine billing.
 - [ ] Do not introduce unrelated refactors.
@@ -893,25 +892,27 @@ Stop condition:
 
 ### Phase 6: Operator Notes / Evidence Decision
 
-- [ ] Work item: decide whether operator notes are removed.
+- [ ] Work item: set the default operator-notes decision.
   - Likely files:
     - `frontend/src/pages/Ops.jsx`
     - `frontend/src/lib/api.js`
     - canonical evidence docs for reference only
   - Expected change:
-    - choose one path: remove notes entirely or convert them into product-backed evidence
+    - default decision: remove browser-local operator notes unless product-backed notes are explicitly required by the evidence model
+    - keep product-backed notes as the exception path, not the default
   - Dependency:
     - `/ops` contract is stable enough to judge whether notes belong
   - Acceptance:
-    - there is one explicit notes/evidence direction before implementation proceeds
+    - the default path is removal of misleading browser-local notes
+    - product-backed notes are only kept if the evidence model explicitly requires them
   - Verification:
     - design/behavior review against canonical evidence rules
   - Risk:
-    - medium
+    - low
   - Owner mode:
     - planning/implementation decision
   - Stop when:
-    - the repo is no longer carrying ambiguous note behavior
+    - the repo no longer carries ambiguous note behavior and the default path is explicit
 
 - [ ] Work item: if kept, make notes product-backed evidence.
   - Likely files:
@@ -1369,7 +1370,7 @@ Do not say "safe for limited external review" until all are true:
 - [ ] Work one phase at a time.
 - [ ] Verify each phase before starting the next.
 - [ ] Do not widen scope mid-flight.
-- [ ] Use the available relevant skills, plugins, browser checks, subagents, and integration-aware workflows whenever they materially improve implementation or evidence quality for active integrated tech and tool work.
+- [ ] Use only relevant available capabilities when they directly reduce implementation or verification risk for the active phase. Do not invoke unrelated tools, plugins, or integrations for completeness theater.
 - [ ] If a bounded implementation decision must be made during execution, make it from the strongest available evidence basis instead of deferring by default.
 - [ ] Record each such decision separately in the final report/evidence output with:
   - [ ] the decision made
