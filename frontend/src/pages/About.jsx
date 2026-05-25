@@ -27,6 +27,23 @@ export default function About() {
                         <Link to="/submit" data-testid="about-trainer-cta" className="btn-accent mt-5 inline-flex">Apply as trainer</Link>
                     </article>
                 </div>
+
+                <div className="grid md:grid-cols-2 gap-5 mt-5">
+                    <article className="card-public p-6">
+                        <div className="small-caps">Why supply quality matters</div>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Verified profiles only</h2>
+                        <p className="mt-2 text-[#4A615A]">
+                            Every trainer profile passes automated publish-or-hold checks before going live. The directory grows by expanding verified coverage, not by accepting unreviewed listings.
+                        </p>
+                    </article>
+                    <article className="card-public p-6">
+                        <div className="small-caps">How it operates</div>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Automation-first, bounded oversight</h2>
+                        <p className="mt-2 text-[#4A615A]">
+                            Routine operations run autonomously. When something needs attention, bounded operator oversight applies — not manual handling at scale. No admin CRUD, no manual matching.
+                        </p>
+                    </article>
+                </div>
             </main>
             <PublicFooter />
         </div>

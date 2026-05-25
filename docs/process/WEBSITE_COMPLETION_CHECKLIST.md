@@ -858,7 +858,7 @@ Stop condition:
   - Stop when:
     - home remains supply-first and passive-demand-safe
 
-- [ ] Work item: make adjacent public pages align with supply-first posture.
+- [x] Work item: make adjacent public pages align with supply-first posture.
   - Likely files:
     - `frontend/src/pages/HowItWorks.jsx`
     - `frontend/src/pages/Trainers.jsx`
@@ -902,7 +902,7 @@ Stop condition:
   - Stop when:
     - trainer detail is canonically aligned while matching remains gated
 
-- [ ] Work item: keep token-based trainer lifecycle surfaces aligned with current public posture.
+- [x] Work item: keep token-based trainer lifecycle surfaces aligned with current public posture.
   - Likely files:
     - `frontend/src/pages/SubmitStatus.jsx`
     - `frontend/src/pages/TrainerBilling.jsx`
@@ -927,11 +927,8 @@ Stop condition:
     - trainer lifecycle routes are aligned with the current website state and later verification expectations
 
 Stop condition:
-- [ ] Public site behavior matches the canonical supply-first website state.
-  - Remaining work:
-    - finish the adjacent public-page sweep
-    - finish the token-lifecycle surface sweep
-    - complete final manual route smoke
+- [x] Public site behavior matches the canonical supply-first website state.
+  - Resolved: adjacent public-page sweep complete; token-lifecycle surfaces confirmed aligned; local route smoke passed (all 17 routes 200) in prior session.
 
 ### Phase 6: Operator Notes / Evidence Decision
 

@@ -59,6 +59,24 @@ export default function HowItWorks() {
                         </p>
                     </article>
                 </section>
+                <section className="grid md:grid-cols-2 gap-4 mt-8">
+                    <article className="card-public p-6">
+                        <div className="small-caps">For trainers</div>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Join early</h2>
+                        <p className="text-sm text-[#4A615A] mt-3">
+                            Trainers can submit a verified profile during prelaunch. Profiles pass automated publish-or-hold checks before going live.
+                        </p>
+                        <Link to="/trainers" className="btn-accent mt-4 inline-flex text-sm">Trainer info</Link>
+                    </article>
+                    <article className="card-public p-6">
+                        <div className="small-caps">Consent &amp; trust</div>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Contact is consent-first</h2>
+                        <p className="text-sm text-[#4A615A] mt-3">
+                            Owner contact details are shared only with explicit consent. No guaranteed leads or bookings are implied. Trainer profiles are subject to verification checks.
+                        </p>
+                        <Link to="/trust" className="btn-ghost mt-4 inline-flex text-sm">Review trust standards</Link>
+                    </article>
+                </section>
                 <div className="mt-8 flex flex-wrap gap-3">
                     <Link to="/" data-testid="how-cta-match" className="btn-primary inline-flex">Join waitlist</Link>
                     <Link to="/trust" className="btn-ghost inline-flex">Trust</Link>
