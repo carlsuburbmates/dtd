@@ -52,6 +52,24 @@ if (serverText) {
     serverText.includes('@api.post("/owner-waitlist")'),
     "owner waitlist endpoint missing",
   );
+
+  // Phase/readiness layer — required since 2026-05-25
+  check(
+    serverText.includes("PUBLIC_LAUNCH_PHASE"),
+    "phase symbol missing: PUBLIC_LAUNCH_PHASE",
+  );
+  check(
+    serverText.includes("_get_or_create_launch_phase_state("),
+    "phase symbol missing: _get_or_create_launch_phase_state",
+  );
+  check(
+    serverText.includes("phase_readiness_snapshots"),
+    "phase symbol missing: phase_readiness_snapshots collection",
+  );
+  check(
+    serverText.includes("phase_transition_decisions"),
+    "phase symbol missing: phase_transition_decisions collection",
+  );
 }
 
 if (!fs.existsSync(copyGuardPath)) {
