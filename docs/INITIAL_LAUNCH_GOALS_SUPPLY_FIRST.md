@@ -24,6 +24,18 @@ It must conform to:
 
 If this document conflicts with the Standards Set or the Ops Cockpit Responsibility Model, those documents govern.
 
+## Locked prelaunch interpretation
+
+For the current DTD plan, `prelaunch` means:
+1. a 30-day evidence-gathering window
+2. starting from the date the owner explicitly declares launch start
+3. with `supply_first` posture locked throughout the window
+4. with `PUBLIC_MATCHING_ENABLED=false` throughout the window
+5. with trainer onboarding open and owner waitlist passive only
+6. with no hard trainer-count or intro-ready-count cap required before the window starts
+7. with an owner review and recorded next-step decision at the end of the window
+8. with Greater Melbourne as the prelaunch geography scope
+
 This document must not be interpreted as approval to build:
 1. a generic directory
 2. a traditional marketplace
@@ -148,7 +160,7 @@ Required surfaces:
 3. `/submit/status/:submissionId`
 4. `/trainer/billing`
 5. `/trainer/reactivate`
-6. support/contact path
+6. `/contact`
 
 ### Required message
 
@@ -239,7 +251,7 @@ When public matching is not enabled:
 
 ### Non-negotiable requirements
 
-1. No active dog-owner marketing push before supply threshold.
+1. No active dog-owner marketing push during the locked 30-day evidence window.
 2. No public copy implying full matching availability before readiness.
 3. No uncontrolled live matching exposure.
 4. Owner waitlist records must still be captured cleanly if owners arrive.
@@ -623,13 +635,13 @@ Before live owner matching is exposed, DTD must pass these gates.
 
 ### Supply gate
 
-1. Minimum trainer supply threshold defined.
-2. Minimum intro-ready trainer threshold defined.
-3. Target geography covered.
-4. Trainer profiles complete enough.
-5. Publish and hold logic working.
-6. Held and blocked trainers visible.
-7. Reactivation and remediation path working.
+1. The 30-day prelaunch evidence window is completed.
+2. Trainer supply, activation, blockers, and geography evidence are readable in `/ops`.
+3. Target geography scope is inspectable.
+4. Trainer profiles are complete enough to judge real usability.
+5. Publish and hold logic is working.
+6. Held and blocked trainers are visible.
+7. Reactivation and remediation path is working.
 
 ### Data gate
 
@@ -694,6 +706,6 @@ Do not build or prioritise:
 
 DTD initial launch is approved only when:
 
-> The platform has enough qualified, activated, intro-ready trainer supply; records that supply clearly; exposes readiness and blockers in `/ops`; keeps dog-owner demand passive until supply is ready; and requires owner-approved Technical-Owner Mode for any public phase transition.
+> The platform completes a 30-day supply-first evidence window; records trainer supply, activation, blockers, geography, passive demand, and operational health clearly; exposes that evidence readably in `/ops`; keeps dog-owner demand passive during the window; and requires owner-reviewed Technical-Owner Mode for any public phase transition afterward.
 
 That is the supply-first initial launch standard.

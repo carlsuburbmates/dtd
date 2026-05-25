@@ -85,12 +85,12 @@ The launch candidate must provide:
 The launch candidate must provide evidence-backed supply readiness controls.
 
 Required conditions:
-1. a minimum trainer supply threshold is defined
-2. a minimum intro-ready trainer threshold is defined
-3. target geography coverage is defined and inspectable
+1. the supply-first prelaunch evidence window is defined as 30 elapsed days from owner-declared launch start
+2. no hard trainer-count or intro-ready-count cap is required before that evidence window begins
+3. target geography scope is defined and inspectable
 4. trainer publish, hold, blocked, and intro-ready states are visible in product-backed evidence
 5. trainer remediation and reactivation paths exist
-6. supply readiness can be judged without spreadsheet reconstruction or direct database queries
+6. supply readiness can be judged without spreadsheet reconstruction or direct database queries at the end of the evidence window
 
 ## 7. Revenue Gate
 
@@ -136,10 +136,11 @@ The launch candidate must provide a non-technical operator path for:
 ## 10. Support Gate
 
 The launch candidate must provide:
-1. a canonical support mailbox or support path
-2. trainer billing remediation routing
-3. trainer reactivation routing
-4. a documented escalation path for broken user workflows
+1. canonical support path `/contact`
+2. canonical support mailbox `info@dogtrainersdirectory.com.au`
+3. trainer billing remediation routing
+4. trainer reactivation routing
+5. a documented escalation path for broken user workflows
 
 ## 11. Observability Gate
 
@@ -185,14 +186,12 @@ The launch candidate must pass:
 ## 14. Documentation Gate
 
 The launch candidate must have a coherent documentation set covering:
-1. system architecture
-2. workflows
-3. operations
-4. deployment
-5. launch gate
-6. post-build integrity audit
-7. supply-first launch goals and evidence alignment
-8. ops responsibility boundaries
+1. the current truth index
+2. the standards set
+3. the canonical page/route contract
+4. supply-first launch goals and evidence alignment
+5. ops responsibility boundaries
+6. runtime/code audit support
 
 ## 15. Launch Evidence Requirement
 

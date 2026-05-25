@@ -135,7 +135,7 @@ Verify:
 ## 10. Documentation Integrity Checks
 
 Verify:
-1. architecture, workflows, operations, deployment, and standards docs do not contradict each other
+1. the canonical implementation pack does not contradict itself
 2. product copy does not contradict actual runtime policy
 3. environment examples do not contradict canonical auth or monetization decisions
 4. historical status documents do not override normative standards

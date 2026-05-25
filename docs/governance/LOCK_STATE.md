@@ -3,6 +3,10 @@
 Date: 2026-05-22
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
+This file is runtime/governance snapshot evidence.
+It does not override `docs/standards/SSOT.md` or `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`.
+It must not be treated as the canonical route or page contract.
+
 ## Governance Locks
 
 1. One-branch workflow on `main`, local-first with auto-sync.
@@ -29,6 +33,12 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 9. Operator-facing actions must satisfy the hard boundary rule in `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`:
 - actions that can change locked runtime policy are always `technical-owner mode`
 - only reversible, bounded, policy-safe actions may be treated as `operator mode`
+10. The current prelaunch interpretation is locked as:
+- a 30-day evidence-gathering window
+- starting from the date the owner explicitly declares launch start
+- `supply_first` throughout
+- `PUBLIC_MATCHING_ENABLED=false` throughout
+- no hard trainer-count or intro-ready-count cap required before the window starts
 
 ## Current Runtime / Implementation Locks
 
@@ -45,11 +55,15 @@ Project: `/Users/carlg/Documents/AI-Coding/dtd`
 - Legacy `RUN_AUTONOMY_IN_API=1|0` remains supported but cannot conflict with `AUTONOMY_LOOP_OWNER`
 - DB lease lock `system_state.autonomy_loop_lease` ensures a single active executor across processes
 
-## Implemented completion blocks
+## Current runtime evidence subset
 
-1. Public/trainer website IA routes:
-- `/`, `/how-it-works`, `/about`, `/pricing`, `/trust`, `/faq`, `/contact`, `/privacy`, `/terms`
-- `/trainers`, `/submit`, `/t/:id`, `/ops`
+This section records selected currently evidenced routes and loops only.
+It is not a completeness claim and it is not the canonical route contract.
+
+1. Selected currently evidenced surfaces:
+- `/`
+- `/trainers`
+- `/ops`
 2. Discovery source ingestion loop (`ingest_sources`) implemented.
 3. T+7 outreach loop (`send_outreach`) implemented.
 

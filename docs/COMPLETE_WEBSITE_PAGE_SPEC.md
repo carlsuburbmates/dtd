@@ -60,12 +60,16 @@ Required public routes:
 12. `/submit/status/:submissionId`
 13. `/trainer/billing`
 14. `/trainer/reactivate`
-15. `/t/:id`
-16. `/trainers/:id`
+15. `/t/:id` as the canonical trainer-detail route
+16. `/trainers/:id` as a compatibility alias to the trainer-detail route
 17. `/lp/:campaign`
 18. `/melbourne/:suburb`
 19. `/follow-up/:token`
-20. `/ops`
+
+### Protected oversight route
+
+Required protected oversight route:
+1. `/ops`
 
 ### Route intent rules
 
@@ -73,6 +77,7 @@ Required public routes:
 2. Trainer onboarding must remain visible and usable during the supply-first phase.
 3. Trainer detail and connect flows may exist as lifecycle surfaces without being the primary home-entry path.
 4. Follow-up, billing, reactivation, and submission-status routes are lifecycle routes, not broad public-marketing entry points.
+5. `/ops` is a passcode-gated oversight route, not a public user-marketing route.
 
 ## Page specifications
 
@@ -96,6 +101,7 @@ Required behavior:
 2. Waitlist capture must preserve suburb and consent.
 3. Trainer onboarding CTA must remain obvious.
 4. Copy must reinforce supply-first posture and passive owner demand.
+5. Future matching-mode home behavior is outside the current 30-day supply-first prelaunch scope and must not be implied while `PUBLIC_MATCHING_ENABLED=false`.
 
 ### `/how-it-works`
 
@@ -162,6 +168,7 @@ Purpose:
 Required sections:
 1. Contact method
 2. Expected use cases
+3. Canonical mailbox `info@dogtrainersdirectory.com.au`
 
 ### `/privacy` and `/terms`
 
@@ -234,6 +241,10 @@ Required sections:
 Purpose:
 1. Trainer detail and contact-release lifecycle surface
 
+Route rule:
+1. `/t/:id` is the canonical public trainer-detail route
+2. `/trainers/:id` is an alias to the same lifecycle surface
+
 Required sections:
 1. Trainer profile summary
 2. Connect form
@@ -273,6 +284,10 @@ Required sections:
 
 Purpose:
 1. Readable operating view for Normal Ops
+
+Scope rule:
+1. This page spec defines the intended `/ops` surface and boundaries.
+2. It does not claim that every intended section is already implemented in the current runtime.
 
 Required sections:
 1. Auth gate

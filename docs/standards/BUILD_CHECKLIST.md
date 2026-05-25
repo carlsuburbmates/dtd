@@ -167,12 +167,12 @@ It does not describe whether each item is already complete.
 
 ## N. Documentation
 
-1. Maintain architecture document.
-2. Maintain operations runbook.
-3. Maintain deployment document.
-4. Maintain workflow catalog.
-5. Maintain workflow trace sheet.
-6. Maintain canonical standards set.
+1. Maintain `docs/governance/CURRENT_TRUTH_INDEX.md` as the only implementation entry point.
+2. Maintain the canonical standards set.
+3. Maintain the canonical page/route contract.
+4. Maintain the current supply-first launch goals and evidence model.
+5. Maintain the ops responsibility boundary model.
+6. Maintain runtime/code audit support docs needed for no-edit audit sequencing.
 
 ## O. Human/Operator Enablement
 

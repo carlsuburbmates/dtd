@@ -3,7 +3,7 @@
 **File:** `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`  
 **Project:** Dog Trainers Directory / DTD  
 **Purpose:** Governance model for the owner-facing `/ops` cockpit, autonomous system responsibilities, owner override boundaries, and technical-owner escalation paths.  
-**Status:** Canonical governance draft  
+**Status:** Canonical governance standard  
 
 ---
 
@@ -244,7 +244,7 @@ Technical-Owner Mode is required if resolution needs:
 
 **Responsibility label:** Automated System
 
-Trainer detail pages `/t/:id` and `/trainers/:id` should:
+Trainer detail pages should use `/t/:id` as the canonical public route, with `/trainers/:id` allowed as a compatibility alias to the same lifecycle surface:
 
 - load trainer data
 - show connect form
@@ -887,9 +887,9 @@ Legal takedown of a real listing requires technical-owner mode and an audit reas
 
 ### 11.5 Temporary hide pending review
 
-**Responsibility label:** Layer 2 — Owner Override, if implemented safely
+**Responsibility label:** Layer 2 — Owner Override for target-state implementation only
 
-This may be safe if:
+If implemented, it must be:
 
 - reversible
 - reason required
@@ -898,7 +898,7 @@ This may be safe if:
 - does not delete trainer data
 - clearly distinct from legal takedown
 
-Until implementation is verified, treat this as proposed, not confirmed.
+This is a target-state Owner Override boundary, not a current-runtime completeness claim.
 
 ---
 
@@ -1545,6 +1545,9 @@ These can be accessible from the owner cockpit as guided escalation paths, but n
 ---
 
 ## 26. Materialised `/ops` Design
+
+This section describes the intended target-state materialisation of the `/ops` cockpit.
+It is not a claim that every surface below already exists in the current runtime.
 
 ### 26.1 Normal Ops zone
 

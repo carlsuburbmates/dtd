@@ -4,7 +4,7 @@
 
 This document defines the proof model for DTD's supply-first initial launch.
 
-It explains what evidence the founder should be able to see in `/ops`, supporting investigation views, and proof exports so the launch can be judged by supply readiness first.
+It explains what evidence the founder should be able to see in `/ops`, supporting investigation views, and proof exports during the 30-day supply-first prelaunch evidence window.
 
 This is not a technical audit.
 It is the evidence standard for a supply-first launch.
@@ -33,10 +33,13 @@ This document must not be interpreted as approval to build:
 
 ## Core rule
 
-Evidence must prove supply-first readiness first.
+Evidence must make the 30-day supply-first prelaunch readable first.
 
-The founder should not need to guess whether the platform is ready for controlled owner exposure.
+The founder should not need to guess what happened during prelaunch, where supply formed, what blocked activation, or what should happen next.
 The evidence model should make that answer visible.
+
+This evidence window does not require a hard trainer-count cap or intro-ready-count cap before prelaunch begins.
+Those later decisions can be made from the recorded evidence.
 
 ## Core evidence model
 

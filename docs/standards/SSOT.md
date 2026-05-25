@@ -51,6 +51,10 @@ Rules:
 3. public live matching exposure must remain gated until supply readiness is proven and explicitly approved
 4. trainer onboarding must remain available during supply-first launch even when public live matching is gated
 5. the mature product promise remains valid, but launch sequencing must not be treated as demand-first by default
+6. the supply-first prelaunch is a 30-day evidence-gathering window starting from the date the owner explicitly declares launch start
+7. no hard trainer-count or intro-ready-count cap is required before that 30-day window begins
+8. the output of the prelaunch window is an owner review of product-backed evidence and a recorded next-step decision
+9. the prelaunch geography scope is Greater Melbourne
 
 ## Target User Types
 
@@ -139,7 +143,7 @@ Rules:
 
 ## Core Product Surfaces
 
-### Public surfaces
+### Public website surfaces
 
 The public website must contain:
 1. `/`
@@ -153,14 +157,29 @@ The public website must contain:
 9. `/terms`
 10. `/trainers`
 11. `/submit`
-12. `/t/:id`
-13. `/lp/:campaign`
-14. `/melbourne/:suburb`
-15. `/follow-up/:token`
-16. `/submit/status/:submissionId`
-17. `/trainer/billing`
-18. `/trainer/reactivate`
-19. `/ops`
+12. `/t/:id` as the canonical trainer-detail route
+13. `/trainers/:id` as a compatibility alias to the trainer-detail route
+14. `/lp/:campaign`
+15. `/melbourne/:suburb`
+16. `/follow-up/:token`
+17. `/submit/status/:submissionId`
+18. `/trainer/billing`
+19. `/trainer/reactivate`
+
+### Protected oversight surface
+
+The protected oversight website must contain:
+1. `/ops`
+
+`/ops` is a passcode-gated oversight route, not a public user-marketing route.
+
+### Canonical support path
+
+The canonical support/contact path must be:
+1. route: `/contact`
+2. mailbox: `info@dogtrainersdirectory.com.au`
+
+The project may change that mailbox later, but docs and code must be updated together.
 
 ### Legacy/admin rule
 
@@ -384,7 +403,7 @@ The platform standard requires:
 2. backend tests for critical billing, auth, loop, and public-mode behavior
 3. frontend tests for critical helpers and user flows
 4. frontend production build pass
-5. consistency between product docs, workflow docs, architecture docs, and runtime behavior
+5. consistency between the canonical implementation pack, runtime/code audit support docs, and runtime behavior
 
 ## Non-Goals
 
