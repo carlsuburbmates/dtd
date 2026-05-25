@@ -138,8 +138,8 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 
 ### Branding
 
-- [ ] Bark&Bond-era branding is removed from runtime, emails, provider metadata, and operator surfaces.
-- [ ] DTD / Dog Trainers Directory branding is consistent.
+- [x] Bark&Bond-era branding is removed from runtime, emails, provider metadata, and operator surfaces.
+- [x] DTD / Dog Trainers Directory branding is consistent.
 
 ### Tests and release checks
 
@@ -1279,7 +1279,7 @@ Stop condition:
   - Stop when:
     - support routing is consistent and obvious
 
-- [ ] Work item: confirm no stale branding remains.
+- [x] Work item: confirm no stale branding remains.
   - Likely files:
     - active frontend and backend runtime surfaces
   - Expected change:

@@ -180,9 +180,9 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
 def _outreach_html(trainer_name: str) -> str:
     safe = trainer_name or "your trainer"
     return (
-        "<p>Quick follow-up from Bark&amp;Bond.</p>"
+        "<p>Quick follow-up from Dog Trainers Directory.</p>"
         f"<p>Did you hire <strong>{safe}</strong>?</p>"
-        "<p>If yes, please confirm in your Bark&amp;Bond session. This helps improve match quality.</p>"
+        "<p>If yes, please confirm your outcome. This helps improve match quality.</p>"
     )
 
 
