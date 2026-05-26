@@ -4,6 +4,13 @@ import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
+function normalizeOversightSnapshot(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("Malformed oversight snapshot");
+    }
+    return data;
+}
+
 export default function Ops() {
     const [authed, setAuthed] = useState(Boolean(getAdminPass()));
     const [snap, setSnap] = useState(null);
@@ -13,12 +20,12 @@ export default function Ops() {
     const failureCountRef = useRef(0);
 
     useEffect(() => {
+        mountedRef.current = true;
         document.documentElement.setAttribute("data-theme", "admin");
-        return () => document.documentElement.removeAttribute("data-theme");
-    }, []);
-
-    useEffect(() => () => {
-        mountedRef.current = false;
+        return () => {
+            mountedRef.current = false;
+            document.documentElement.removeAttribute("data-theme");
+        };
     }, []);
 
     const fetchSnap = useCallback(async () => {
@@ -26,8 +33,9 @@ export default function Ops() {
         setError("");
         try {
             const r = await opsApi.get("/oversight");
+            const snapshot = normalizeOversightSnapshot(r.data);
             if (!mountedRef.current) return;
-            setSnap(r.data);
+            setSnap(snapshot);
             failureCountRef.current = 0;
             return true;
         } catch (err) {
@@ -41,6 +49,7 @@ export default function Ops() {
                 return false;
             }
             failureCountRef.current += 1;
+            setSnap(null);
             setError("Unable to load oversight snapshot. Auto-retry continues.");
             return false;
         } finally {
