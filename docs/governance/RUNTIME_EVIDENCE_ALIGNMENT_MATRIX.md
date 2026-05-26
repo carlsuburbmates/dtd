@@ -71,7 +71,6 @@ If a requirement is documented but no current runtime/code evidence was found in
 
 3. Main remaining gaps (non-blocking for supply-first):
 - waitlist duplicate/rejected rollup not yet in `_owner_waitlist_summary()` (events persisted, no aggregate exposed)
-- ops note logging is browser-local only — not backend-persisted or audit-safe
 - trainer acquisition trend series is current-count only — no historical series
 - release-gate script does not yet assert phase/readiness symbols (addressed in `scripts/check_prelaunch_release_gate.js` re-verification 2026-05-25)
 
@@ -147,7 +146,7 @@ If a requirement is documented but no current runtime/code evidence was found in
 | `/ops` is read-only and passcode-gated | `SSOT.md`, `LAUNCH_GATE.md`, `OPS_COCKPIT_RESPONSIBILITY_MODEL.md` | `/ops` should be a Normal Ops surface by default, protected by oversight auth, without mutation controls | `POST /api/oversight/login`, `GET /api/oversight` with `require_oversight`; `Ops.jsx` shows read-only snapshot and no runtime mutation buttons | `docs/governance/LOCK_STATE.md`, `docs/governance/LOCK_STATE.md` | Implemented | Low | Keep as-is | Normal Ops | No |
 | `/ops` stays outside unrestricted admin CRUD | `SSOT.md`, `INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`, `OPS_COCKPIT_RESPONSIBILITY_MODEL.md` | No unrestricted admin surface should be active | `frontend/src/App.js` redirects legacy admin routes; `Ops.jsx` is read-only; no admin CRUD endpoint was found in inspected runtime surfaces | `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`, `docs/governance/LOCK_STATE.md` | Implemented | Low | Keep as-is | Normal Ops | No |
 | `/ops` shows phase, exposure, supply readiness, intro-ready, blocked, recommendation, and blockers | `BUILD_CHECKLIST.md`, `LAUNCH_GATE.md`, `INTEGRITY_AUDIT.md`, `OPS_COCKPIT_RESPONSIBILITY_MODEL.md` | Required launch-governance visibility should be directly readable in `/ops` | `Ops.jsx` launch-posture section surfaces `launch_phase`, `public_matching_enabled`, `recommendation`, `intro_ready_trainer_count`, `blocked_trainer_count`, `blockers_to_next_phase` (lines 255–270); backed by oversight payload at `server.py:920-946` | Docs require these as first-check fields | Implemented | Low | Keep as-is | Normal Ops for reading; Technical-Owner Mode for changing state | No |
-| `/ops` note logging is product-backed and audit-safe | `LOCK_STATE.md`, `OPS_COCKPIT_RESPONSIBILITY_MODEL.md` | Daily ops notes should support operating evidence | `frontend/src/lib/api.js` stores notes in browser `localStorage`; no backend persistence or audit linkage was found | `docs/governance/LOCK_STATE.md` says log one short note in `/ops` | Partial | Medium: notes are local/browser-scoped, not shared evidence | Decide whether ops notes should remain local convenience only or become product-backed evidence | Technical-Owner Mode for changing evidence policy | No |
+| `/ops` note logging is product-backed and audit-safe | `LOCK_STATE.md`, `OPS_COCKPIT_RESPONSIBILITY_MODEL.md` | Daily ops notes should support operating evidence | Browser-local note UI and `localStorage` writes were removed; `Ops.jsx:788-800` now renders a static "Evidence discipline" section stating "Operator notes are not stored in the browser anymore" and "Database = truth. Audit log = decision trail. CSV/export = proof only." No `localStorage` references exist in any frontend file. | `docs/governance/LOCK_STATE.md` evidence discipline model | Implemented | Low | Keep as-is — decision was to enforce evidence discipline via data hierarchy, not browser notes | Normal Ops | No |
 
 ## 9. Audit Logging And Decision Trail
 
@@ -227,7 +226,6 @@ Original planning order (all now implemented):
 Remaining non-blocking gaps (owner decision on priority):
 
 - Waitlist duplicate/rejected aggregate not yet in `_owner_waitlist_summary()` (events ARE persisted; no rollup)
-- Ops note logging remains browser-local — not backend-persisted or audit-safe
 - Trainer acquisition trend series is current-count only (no historical series)
 
 Next required action: owner walkthrough of deployed `/ops` on live/staging stack and Final Go/No-Go sign-off (`carlg`).
