@@ -1,6 +1,6 @@
 # DTD Website Completion Checklist
 
-Date: 2026-05-25
+Date: 2026-05-31
 Scope: execution checklist for taking the current audited codebase to the normalized canonical supply-first website state.
 
 ## Current Status
@@ -20,20 +20,29 @@ Scope: execution checklist for taking the current audited codebase to the normal
 - [x] Local verification environment repaired:
   - [x] MongoDB installed and running locally
   - [x] local browser verification path repaired
+- [x] Live public/frontend deployment mismatch was fixed by promoting the correct Vercel deployment.
+- [x] Live public routes now serve the current DTD frontend.
+- [x] Live `/ops` auth and read-only cockpit flow are verified.
+- [x] Live Dog Owner waitlist flow is verified.
+- [x] Live trainer read-only/token routes are verified.
 
 ### Still open before final readiness claims
 
 - [x] Complete a full authenticated `/ops` browser walkthrough on the repaired local stack.
 - [x] Complete final route-smoke and manual review evidence for owner/public readiness gates.
 - [ ] Complete post-implementation verification execution against standards and integrated tech/tool behavior.
-  - Residual: live Stripe/Resend provider calls not exercised. Local code-level verification passed for all integration surfaces.
+  - Residual: live trainer submission E2E and live Stripe/Resend provider behavior are not yet exercised.
+- [ ] Complete the remaining live/staging E2E proof that is outside the safe read-only/public review surface.
+  - Residual: campaign-attribution row persistence is not directly proven on live.
+  - Residual: exact discovery pickup of the submitted live row is not tied off in-session.
+  - Residual: long-running proof across all autonomous loops is still partial.
 
 ### Current primary blocker
 
-- [x] Live authenticated `/ops` walkthrough and final browser evidence are still incomplete.
-  - The earlier `/api/oversight` serialization bug is fixed in code.
-  - The remaining work is final live verification, not the prior runtime serialization failure.
-  - Verified: `/api/oversight` returns correct phase, readiness, supply, and gating data. Auth gate confirmed (401 unauthenticated, 401 wrong pass, 200 correct pass). All admin CRUD routes return 404.
+- [ ] No active implementation blocker remains.
+  - Verified: the earlier `/api/oversight` serialization bug is fixed in code.
+  - Verified: the earlier hosted stale-frontend/Vercel alias issue is fixed.
+  - Remaining work is evidence completion and owner decisioning, not a current code blocker.
 
 ## Purpose
 
@@ -79,6 +88,8 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 - [x] `/ops` is protected, readable, and useful to a non-technical owner.
 - [x] Product-backed evidence exists for prelaunch review.
 - [x] The website is ready for owner review, then limited public review.
+- [ ] The website is not yet full staging/live E2E complete.
+- [ ] The website is not yet fully production-ready.
 
 ## Target State Checklist
 
@@ -137,7 +148,7 @@ Canonical product truth still starts at `docs/governance/CURRENT_TRUTH_INDEX.md`
 - [x] Token-based lifecycle flows remain coherent for submit status, billing, reactivation, and follow-up.
 - [x] Environment/config defaults reflect the canonical supply-first website state.
 - [ ] Integration-facing data remains compatible with later verification against standards and live used tools.
-  - Residual: local code-level verification passed. Live Stripe/Resend provider calls not exercised in this session.
+  - Residual: local code-level verification passed. Live Stripe/Resend provider calls are still not exercised.
 
 ### Branding
 
@@ -1390,6 +1401,8 @@ Do not say "complete enough for owner review" until all are true:
 - [x] branding is consistent
 - [x] changed-scope verification has passed
 - [x] residual risks are documented
+- [x] live public surface serves the current DTD frontend
+- [x] live `/ops` surface is verified as read-only Normal Ops
 
 ## Limited Public Review Gate
 
@@ -1402,6 +1415,26 @@ Do not say "safe for limited external review" until all are true:
 - [x] no stale Bark&Bond or admin-dashboard framing remains
 - [x] public route smoke passes
 - [x] build/check outputs pass for the changed scope
+
+## Current Review Status
+
+- [x] Correct current classification: live public/ops review-ready
+- [ ] Not yet correct to claim: full staging/live E2E complete
+- [ ] Not yet correct to claim: fully production-ready
+
+## Remaining Evidence Gaps
+
+- [ ] Live trainer submission E2E
+- [ ] Live Resend behavior
+- [ ] Live Stripe behavior
+- [ ] Full long-running proof across all autonomous loops
+- [ ] Row-level campaign-attribution persistence on live
+- [ ] Exact pickup proof for the submitted live discovery row
+
+## Non-Blocking Evidence Improvements
+
+- [ ] Add duplicate/rejected waitlist aggregate to `_owner_waitlist_summary()`
+- [ ] Add historical trainer acquisition trend series instead of current-count only
 
 ## Explicitly Deferred
 

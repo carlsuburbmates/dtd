@@ -1,6 +1,6 @@
 # Next Session Handoff
 
-Date: 2026-05-25
+Date: 2026-05-31
 Repo: `/Users/carlg/Documents/AI-Coding/dtd`
 
 ## Objective
@@ -27,7 +27,7 @@ If any conflict appears, follow this order.
 
 ## Live Gate Table (current truth)
 
-Last updated: 2026-05-25
+Last updated: 2026-05-31
 
 | Gate | Status | Source of truth |
 |---|---|---|
@@ -35,28 +35,29 @@ Last updated: 2026-05-25
 | H-02 Platform secret readiness | completed | `docs/governance/LOCK_STATE.md` |
 | H-03 Legal copy sign-off | completed | `docs/governance/LOCK_STATE.md` |
 | H-04 Account/billing readiness | completed | `docs/governance/LOCK_STATE.md` |
-| Owner Review Gate | cleared locally | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
-| Limited Public Review Gate | cleared locally | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
+| Owner Review Gate | cleared on live public and `/ops` surfaces | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
+| Limited Public Review Gate | cleared on live public and `/ops` surfaces | `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` |
 | Final Go/No-Go | pending | owner (`carlg`) sign-off required |
 
 Final Go/No-Go approver: owner (`carlg`).
 
-## Current Verified State (as of 2026-05-25)
+## Current Verified State (as of 2026-05-31)
 
 ```
 Repo:                      clean
-Latest commit:             379b9ce  verify: route smoke, /ops walkthrough, gate verification complete
-Prior commit:              8a2f26c  fix: remove stale BarkBond outreach branding
+Latest commit:             9851460  fix: render authenticated ops cockpit
+Prior commit:              44276fd  docs: correct stale ops-note gap in RUNTIME_EVIDENCE_ALIGNMENT_MATRIX
 Branch:                    main
-Review status:             locally verified and ready for owner review / limited public review
+Review status:             live public/ops review-ready
 ```
 
-**This is not "fully production verified."** Correct phrasing:
+**This is not full staging/live E2E complete and not fully production-ready.** Correct phrasing:
 
-> locally verified and ready for owner review / limited public review
+> live public/ops review-ready for the current supply-first posture
 
-Live Stripe and Resend were not exercised. Local `.env` has one stale conflict.
-12 backend tests were skipped (live DB/integration). These are not review blockers.
+Live trainer submission E2E was not exercised because it can trigger provider-coupled Resend/Stripe behavior.
+Live Stripe and Resend provider behavior remain unverified.
+Autonomous loop proof is still partial over a longer runtime window.
 
 ## Deferred Scope (do not activate without owner approval)
 
@@ -74,11 +75,12 @@ Live Stripe and Resend were not exercised. Local `.env` has one stale conflict.
 
 | Risk | Severity | Detail |
 |---|---|---|
-| Live Stripe not exercised | Low | Invoice description and billing-mode strings verified at code level only. Requires real credentials and live provider test. |
-| Live Resend not exercised | Low | From/reply-to and email subjects verified at code level only. |
-| Local `.env` startup conflict | Low | `RUN_AUTONOMY_IN_API=0` conflicts with `AUTONOMY_LOOP_OWNER=api`. Fix: remove or correct `RUN_AUTONOMY_IN_API` in local `.env` to match `.env.example` (`RUN_AUTONOMY_IN_API=1`). Not a deployment blocker. |
-| 12 backend tests skipped | Low | Pre-existing skips for tests requiring live MongoDB. All 124 non-skipped tests pass. |
-| `integrity_status: warn` | Low | 2/12 trainers unverified. Expected during evidence-gathering phase. |
+| Provider-coupled trainer submission not exercised on live | Medium | Live trainer submission can trigger Resend and Stripe-side behavior, so full live trainer E2E remains unverified. |
+| Live Stripe behavior not exercised | Medium | Billing and provider metadata are aligned in code and passive routes, but no live Stripe-side action was exercised. |
+| Live Resend behavior not exercised | Medium | Mailbox/sender policy is aligned, but no live Resend send was exercised in the current evidence pass. |
+| Autonomous-loop proof remains partial over time | Medium | `/ops` shows all 11 loops and safe output samples, but not every loop was freshly exercised in one long-running window. |
+| Duplicate Vercel project/domain inventory remains | Medium | Live domains now serve the correct `dtd` deployment, but the separate `dogtrainersdirectory` project still creates account-hygiene ambiguity. |
+| Non-blocking runtime evidence gaps remain | Low | Waitlist duplicate/rejected aggregate is not yet in `_owner_waitlist_summary()`, and trainer acquisition trend is current-count only. |
 
 ## Current Governance / Launch Posture
 
@@ -116,13 +118,14 @@ For each status-affecting session entry, append:
 ## Active Risks / Open Work
 
 1. Final Go/No-Go remains pending by policy. Owner (`carlg`) sign-off required.
-2. Live Stripe and Resend not exercised — see Residual Risks table above.
-3. Local `.env` has stale `RUN_AUTONOMY_IN_API=0` conflict — see Residual Risks table above.
-4. 12 backend integration tests skipped (require live MongoDB) — not a gate blocker.
+2. Live trainer submission E2E remains unverified because it is provider-coupled.
+3. Live Stripe and Resend behavior remain unverified — see Residual Risks table above.
+4. Autonomous-loop proof remains partial over a longer runtime window.
 5. Next meaningful work for this repo is:
-   - Owner walkthrough of deployed `/ops` on the live/staging stack (not local).
-   - Limited public review of public routes on live/staging stack.
-   - Live Stripe/Resend provider smoke (requires real credentials, mutating, owner-approved).
+   - Narrowly approved live trainer submission verification.
+   - Live Resend/Stripe provider-coupled verification (mutating, owner-approved).
+   - Longer-running autonomous-loop evidence pass.
+   - Optional follow-up proof for campaign-attribution row persistence and exact discovery pickup.
    - Final Go/No-Go sign-off.
 6. Do not activate deferred scope (see above) without explicit owner approval.
 
@@ -201,3 +204,23 @@ For each status-affecting session entry, append:
   - live Stripe/Resend not exercised
   - local `.env` has stale `RUN_AUTONOMY_IN_API=0` conflict with `AUTONOMY_LOOP_OWNER=api`
   - 12 backend tests skipped (live DB)
+9. `2026-05-31` — Live public surface and live `/ops` surface re-verified after hosted Vercel alias fix.
+- Session-start HEAD: `9851460`.
+- Status changes in this entry:
+  - corrected project-state wording from local-only review readiness to live public/ops review readiness
+  - confirmed live public domains now serve the current DTD frontend after promoting the correct `dtd` deployment
+  - confirmed live `/ops` auth and read-only dashboard behavior
+  - confirmed live Dog Owner waitlist flow, duplicate handling, and rejection handling
+  - confirmed live trainer read-only/token routes while leaving provider-coupled trainer submission unexercised
+- Evidence:
+  - live public routes: `/`, `/trainers`, `/how-it-works`, `/ops` return current DTD content with no active Bark&Bond branding
+  - live config: `public_matching_enabled=false`, `public_launch_phase=supply_first`, `conversion_billing_mode=track_only`
+  - live gate checks: `/api/match` and `/api/intros` both remain gated on production
+  - live `/ops`: wrong pass rejected, correct pass succeeds, dashboard renders launch phase, exposure, readiness, blockers, loop health, and evidence discipline
+  - live waitlist flow: accepted, duplicate, and rejected responses verified
+  - live trainer routes: `/t/:id`, `/trainers/:id`, `/trainer/billing`, `/trainer/reactivate` verified on current hosted frontend
+  - Vercel: current live domains serve project `dtd`; duplicate `dogtrainersdirectory` project remains account-inventory drift risk only
+- Residual risks documented (not blockers for review):
+  - live trainer submission E2E still unverified because it may trigger provider-side behavior
+  - live Stripe/Resend behavior not exercised
+  - autonomous-loop proof remains partial over time

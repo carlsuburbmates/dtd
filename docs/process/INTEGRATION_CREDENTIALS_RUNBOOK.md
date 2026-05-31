@@ -48,7 +48,7 @@ Current known legacy/non-required local env noise:
 2. `REACT_APP_POSTHOG_*`, `NEXT_PUBLIC_POSTHOG_*`, and `NEXT_PUBLIC_SENTRY_*` may exist locally for historical or deferred integration work, but they are not required by the current frontend code path
 3. `STRIPE_API_KEY_ID`, `STRIPE_PUBLISHABLE_KEY`, lowercase `resend_api_key`, `MONGO_API_KEY`, and `MONGODB_ATLAS_API_KEY` may exist locally, but they are not current codebase requirements
 
-## Current lock (2026-05-02)
+## Current lock (2026-05-31)
 
 1. Accounts/keys created: Sentry, PostHog, Resend, Render, MongoDB Atlas, Vercel.
 2. Evidence captured previously:
@@ -64,6 +64,10 @@ Current known legacy/non-required local env noise:
 4. Stage E evidence captured:
 - Repeatable deploy automation/recovery evidence recorded.
 - Authenticated route smoke confirms required routes render on the production deployment.
+5. Current live-state correction:
+- The stale hosted frontend incident was traced to production aliases serving an older Vercel deployment.
+- The active `dtd` deployment was promoted and live domains now serve the current DTD frontend.
+- A separate `dogtrainersdirectory` Vercel project still exists in account inventory and should be treated as drift-risk inventory, not the active custom-domain target.
 
 ## H-02 readiness snapshot (2026-05-02)
 
@@ -86,6 +90,9 @@ Current known legacy/non-required local env noise:
 4. Post-patch deploy evidence:
 - Render latest deploys live for API + worker.
 - Vercel production redeploy completed: `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno`.
+5. Current live deployment note:
+- the active production deployment later advanced to `dpl_AL1UMMUptY9LBvcKCS4sY9cAKEAa` (`fix: render authenticated ops cockpit`)
+- production aliases now serve the current `dtd` deployment after the stale-alias correction
 
 ## H-04 platform readiness snapshot (2026-05-02)
 
@@ -104,8 +111,10 @@ Current known legacy/non-required local env noise:
 - **Resolution**: switching command to `SENTRY_ACCESS_TOKEN` restored HTTP `200`.
 - Render deploy response shape is nested (`response[0].deploy.status`), so flat parsers can misreport deploy status as null.
 - Vercel production deployment advanced from `dpl_H8gcahxzuwLfEmf66VL3v9MnoWno` to `dpl_AD5Kghob4aQNHcAFVQyWwNoq373K`.
+- later live routing drift was observed when production aliases pointed at an older deployment; that issue was corrected by promoting `dpl_AL1UMMUptY9LBvcKCS4sY9cAKEAa`.
 3. Result:
 - No active platform block detected at refresh time; one credential-variable naming drift and one response-shape drift require command hygiene.
+- current active live domains serve DTD correctly, but duplicate Vercel project/domain inventory remains an account-hygiene risk.
 
 ## Email channel verification snapshot (2026-05-09)
 
@@ -161,6 +170,8 @@ Current known legacy/non-required local env noise:
 2. Project ID.
 3. Domain mapping and TLS state.
 4. API token if used.
+5. Active project is `dtd` (`prj_TviWWkrOzNENkY4cazM3XsRHyIR1`).
+6. Separate `dogtrainersdirectory` project remains in account inventory and should not be treated as the active production target.
 
 ## Environment mapping (current codebase)
 
