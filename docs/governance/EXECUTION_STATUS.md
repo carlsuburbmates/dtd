@@ -30,10 +30,11 @@ The current objective is now Phase 2: launch-readiness proof inside the locked
 supply-first posture.
 
 The current project execution priority is:
-1. close provider-coupled launch evidence gaps
-2. verify live trainer submission and contact-release paths
-3. verify live Stripe and Resend lifecycle paths in the guarded current mode
+1. close non-provider launch evidence gaps
+2. complete campaign-attribution and discovery-pickup proof
+3. complete long-window autonomous-loop proof
 4. confirm launch readiness before any deferred Ops power is reconsidered
+5. reserve provider-coupled live proof for the final actual-domain activation decision
 
 Current Ops objective:
 1. preserve the current Operations Console direction and trust boundary
@@ -45,15 +46,13 @@ Current Ops objective:
 No active Phase 1 blocker remains.
 
 Current blockers are launch-evidence blockers:
-1. provider-coupled and long-window evidence remains incomplete
-2. live trainer submission E2E is still not captured
-3. live Stripe and Resend exercise is still not captured
-4. campaign-attribution and discovery-pickup proof is still incomplete
+1. campaign-attribution and discovery-pickup proof is still incomplete
+2. long-window autonomous-loop proof is still incomplete
 
 ## Current Priority Order
 
 1. complete launch-readiness proof against `LAUNCH_GATE.md`
-2. capture provider-coupled evidence on the safe hosted path
+2. capture non-provider evidence on the current trusted hosted path
 3. confirm the Operations Console remains stable, readable, and accurate enough for launch-review work
 4. only after 1 to 3 are complete may bounded owner controls be reconsidered
 5. only after 4 is proven safe may technical-owner controls be reconsidered
@@ -62,7 +61,7 @@ Current blockers are launch-evidence blockers:
 
 In scope now:
 1. launch-readiness proof within the locked current posture
-2. provider-coupled runtime verification on the safe hosted path
+2. non-provider runtime verification on the current trusted hosted path
 3. `/ops` review of launch-critical workflow evidence
 
 Out of scope now:
@@ -72,6 +71,7 @@ Out of scope now:
 4. broad admin CRUD
 5. unrelated code refactors
 6. public custom-domain activation
+7. provider-coupled live trainer submission, notification, and billing exercise before the final actual-domain decision
 
 Guarded defaults that remain in force:
 1. `CONVERSION_BILLING_MODE=track_only`
@@ -86,6 +86,7 @@ Do not implement yet:
 2. technical-owner controls
 3. public matching launch enablement
 4. broad Ops mutation controls
+5. provider-coupled live proof before the actual-domain activation decision
 
 ## Current Verification Status
 
@@ -103,8 +104,9 @@ Established from current repo and hosted-runtime evidence:
 8. local, remote, and live are re-synced to the same trusted execution path for the current locked posture
 
 Not yet proven at the project level:
-1. final live provider exercise for all external lifecycle paths
+1. campaign-attribution row persistence and discovery pickup proof on live
 2. long-window autonomous-loop proof
+3. final live provider exercise for external lifecycle paths, deferred to the actual-domain activation decision
 
 Current readiness state:
 1. website is owner/public review ready at the current baseline
@@ -113,11 +115,11 @@ Current readiness state:
 4. status remains `not launch-ready` until `LAUNCH_GATE.md` is fully satisfied with evidence
 
 Known remaining evidence gaps:
-1. live trainer submission E2E
-2. live Stripe/Resend provider exercise
-3. campaign-attribution row persistence on live
-4. discovery pickup proof tied cleanly to a submitted live row
-5. long-running proof across all autonomous loops
+1. campaign-attribution row persistence on live
+2. discovery pickup proof tied cleanly to a submitted live row
+3. long-running proof across all autonomous loops
+4. final live trainer submission E2E, deferred to the actual-domain activation decision
+5. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
 
 ## Current Runtime And Infrastructure Truth
 
@@ -142,7 +144,7 @@ Current infrastructure truths worth preserving:
 
 ## Current Risks
 
-1. provider-coupled evidence is still the main path to launch blocking or launch approval
+1. attribution/discovery proof and long-window loop proof remain the current evidence risk
 2. stale local env values can mislead remote verification if they point to a retired backend URL
 3. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
@@ -217,3 +219,15 @@ Launch authority:
   - campaign-attribution and discovery-pickup proof
   - long-window autonomous-loop proof
 - stale closed-blocker rows in `RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` were corrected so the matrix matches the current `/ops` contract and hosted runtime evidence
+
+6. `2026-06-08`
+- Phase 2 launch-readiness audit tightened the next human gate
+- code audit confirmed the first live trainer-submission proof is provider-coupled, not inert:
+  - `create_submission()` can trigger `notify_submitter_result()`
+  - `create_intro()` can trigger `bill_intro()` and `notify_trainer_new_intro()`
+- next live proof therefore requires deliberate owner approval before exercising real provider paths
+
+7. `2026-06-08`
+- owner decision recorded: defer provider-coupled live proof
+- live trainer submission, notification, and billing-coupled exercise are no longer current Phase 2 blockers
+- those proofs are reserved for the final actual-domain activation decision instead of the current safe hosted path

@@ -69,15 +69,16 @@ If a requirement is documented but no current runtime/code evidence was found in
 - `/ops` surfaces phase, exposure gate, supply readiness, intro-ready count, blocked-trainer count, recommendation, and blockers-to-next-phase: `frontend/src/pages/Ops.jsx:255-270`, `backend/server.py:920-946`
 - Phase-state/readiness/decision tests: `backend/tests/test_public_mode_unit.py:582`
 
-3. Main remaining gaps (non-blocking for supply-first):
-- waitlist duplicate/rejected rollup not yet in `_owner_waitlist_summary()` (events persisted, no aggregate exposed)
-- trainer acquisition trend series is current-count only — no historical series
-- release-gate script does not yet assert phase/readiness symbols (addressed in `scripts/check_prelaunch_release_gate.js` re-verification 2026-05-25)
+3. Main remaining launch-readiness gaps:
+- trainer acquisition trend series is still current-count oriented, not a richer historical readiness view
+- campaign-attribution and discovery-pickup proof on live is still incomplete
+- long-window autonomous-loop proof is still incomplete
+- provider-coupled live proof for trainer submission, notification, and billing-side lifecycle behaviour is intentionally deferred to the final actual-domain activation decision
 
-4. Conclusion (re-verified 2026-05-25):
+4. Conclusion (re-verified 2026-06-08):
 - docs/governance alignment and runtime/evidence alignment are now consistent for supply-first posture
 - all previously-Missing High-risk blocking items have been implemented
-- remaining gaps are Medium or Low risk and are not supply-first blockers
+- remaining blockers are no longer local contract blockers; they are launch-readiness evidence blockers
 
 ## 1. Public Exposure And Launch Posture
 
@@ -186,7 +187,7 @@ If a requirement is documented but no current runtime/code evidence was found in
 |---|---|---|---|---|---|---|---|---|---|
 | Core runtime and workflow paths are tested | `LAUNCH_GATE.md`, `INTEGRITY_AUDIT.md` | Matching gate, waitlist, oversight, lifecycle, billing, and security paths should be test-backed | `backend/tests/test_public_mode_unit.py`, `test_lifecycle_endpoints_unit.py`, and billing tests cover matching gate, waitlist, oversight auth, lifecycle status, and billing semantics | `docs/governance/LOCK_STATE.md` records passing test evidence | Implemented | Low | Keep as-is | Normal Ops | No |
 | Phase-state/readiness/decision layer is tested | `BUILD_CHECKLIST.md`, `LAUNCH_GATE.md`, `INTEGRITY_AUDIT.md` | New governance runtime surfaces should be test-backed | `test_public_mode_unit.py:582` — `test_oversight_exposes_launch_phase_and_readiness_contract` asserts `launch_phase_state`, `phase_readiness_snapshot`, `phase_transition_decisions` shape and `supply_first` values | Docs define these as required launch evidence | Implemented | Low | Keep as-is | Normal Ops | No |
-| Final supply-first evidence window is complete | `EXECUTION_STATUS.md`, `LOCK_STATE.md`, `LAUNCH_GATE.md` | Final supply-readiness and Go/No-Go evidence should be explicit | Phase/readiness/decision layer is product-backed and test-covered; live public surface and live `/ops` are verified; Dog Owner waitlist flow is verified live; provider-coupled trainer submission and live Stripe/Resend behavior remain unverified | `docs/governance/LOCK_STATE.md`, `docs/governance/EXECUTION_STATUS.md` | Partial | Medium: owner Go/No-Go and provider-coupled verification remain open | Complete approved provider-coupled live checks or explicitly defer them by owner decision, then record Final Go/No-Go | Owner decision | Yes |
+| Final supply-first evidence window is complete | `EXECUTION_STATUS.md`, `LOCK_STATE.md`, `LAUNCH_GATE.md` | Final supply-readiness and Go/No-Go evidence should be explicit | Phase/readiness/decision layer is product-backed and test-covered; live public surface and live `/ops` are verified; Dog Owner waitlist flow is verified live; provider-coupled trainer submission and live Stripe/Resend behavior are intentionally deferred until the final actual-domain activation decision | `docs/governance/LOCK_STATE.md`, `docs/governance/EXECUTION_STATUS.md` | Partial | Medium: owner Go/No-Go remains open and the deferred provider-coupled proof still must be completed at final activation time | Complete the remaining non-provider evidence now; perform provider-coupled live checks only at the final actual-domain activation decision, then record Final Go/No-Go | Owner decision | Yes |
 
 ## 14. Implementation Backlog Candidates
 
@@ -223,9 +224,18 @@ Original planning order (all now implemented):
 5. ~~add aggregate intro-ready and blocked-trainer metrics~~ — Implemented (`server.py:871-933`, `Ops.jsx:264-268`)
 6. ~~add tests and release-gate checks for the new phase/readiness layer~~ — Implemented (`test_public_mode_unit.py:582`, `check_prelaunch_release_gate.js` extended 2026-05-25)
 
-Remaining non-blocking gaps (owner decision on priority):
+Remaining non-blocking product gaps (owner decision on priority):
 
-- Waitlist duplicate/rejected aggregate not yet in `_owner_waitlist_summary()` (events ARE persisted; no rollup)
 - Trainer acquisition trend series is current-count only (no historical series)
 
-Next required action: complete the remaining approved live/provider-coupled verification scope, then record Final Go/No-Go sign-off (`carlg`).
+Launch-readiness blockers still open:
+
+- campaign-attribution and discovery-pickup proof on live
+- long-window autonomous-loop proof
+
+Deferred until final actual-domain activation decision:
+
+- live trainer submission proof
+- live provider exercise for notification and billing-coupled paths
+
+Next required action: complete the remaining non-provider verification scope now, then reserve provider-coupled live proof for the final actual-domain activation decision before Final Go/No-Go sign-off (`carlg`).
