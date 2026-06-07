@@ -31,8 +31,8 @@ supply-first posture.
 
 The current project execution priority is:
 1. close non-provider launch evidence gaps
-2. complete campaign-attribution and discovery-pickup proof
-3. complete long-window autonomous-loop proof
+2. complete campaign-attribution and discovery-pickup proof on the current trusted hosted path
+3. complete elapsed-window autonomous-loop proof on the current trusted hosted path
 4. confirm launch readiness before any deferred Ops power is reconsidered
 5. reserve provider-coupled live proof for the final actual-domain activation decision
 
@@ -46,8 +46,8 @@ Current Ops objective:
 No active Phase 1 blocker remains.
 
 Current blockers are launch-evidence blockers:
-1. campaign-attribution and discovery-pickup proof is still incomplete
-2. long-window autonomous-loop proof is still incomplete
+1. campaign-attribution and discovery-pickup proof on the current trusted hosted path is still incomplete
+2. elapsed-window autonomous-loop proof on the current trusted hosted path is still incomplete
 
 ## Current Priority Order
 
@@ -104,8 +104,8 @@ Established from current repo and hosted-runtime evidence:
 8. local, remote, and live are re-synced to the same trusted execution path for the current locked posture
 
 Not yet proven at the project level:
-1. campaign-attribution row persistence and discovery pickup proof on live
-2. long-window autonomous-loop proof
+1. campaign-attribution row persistence and discovery pickup proof on the current trusted hosted path
+2. elapsed-window autonomous-loop proof on the current trusted hosted path
 3. final live provider exercise for external lifecycle paths, deferred to the actual-domain activation decision
 
 Current readiness state:
@@ -115,9 +115,9 @@ Current readiness state:
 4. status remains `not launch-ready` until `LAUNCH_GATE.md` is fully satisfied with evidence
 
 Known remaining evidence gaps:
-1. campaign-attribution row persistence on live
-2. discovery pickup proof tied cleanly to a submitted live row
-3. long-running proof across all autonomous loops
+1. campaign-attribution row persistence on the current trusted hosted path
+2. discovery pickup proof tied cleanly to a submitted hosted row
+3. elapsed-window proof across the autonomous loops on the current trusted hosted path
 4. final live trainer submission E2E, deferred to the actual-domain activation decision
 5. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
 
@@ -144,7 +144,7 @@ Current infrastructure truths worth preserving:
 
 ## Current Risks
 
-1. attribution/discovery proof and long-window loop proof remain the current evidence risk
+1. attribution/discovery proof and elapsed-window loop proof on the current trusted hosted path remain the current evidence risk
 2. stale local env values can mislead remote verification if they point to a retired backend URL
 3. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
@@ -231,3 +231,8 @@ Launch authority:
 - owner decision recorded: defer provider-coupled live proof
 - live trainer submission, notification, and billing-coupled exercise are no longer current Phase 2 blockers
 - those proofs are reserved for the final actual-domain activation decision instead of the current safe hosted path
+
+8. `2026-06-08`
+- Phase 2 wording tightened to reflect the actual proof target
+- nearest-to-live hosted verification already exists for the synced frontend alias, live backend contract, and `/ops` surface
+- remaining current blockers are now described as hosted-path attribution/discovery proof and elapsed-window loop proof, not generic final-live proof
