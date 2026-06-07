@@ -26,15 +26,16 @@ It does not define:
 
 Phase 1 trust restoration is complete.
 Phase 2 launch-readiness proof is complete under the current governance scope.
+Phase 3 owner review and bounded Go/No-Go is complete.
 
-The current objective is now Phase 3: owner review and launch decision
-preparation inside the locked supply-first posture.
+The current objective is now the deferred actual-domain activation slice
+inside the locked supply-first posture.
 
 The current project execution priority is:
 1. preserve the completed hosted-path evidence set
-2. prepare owner review against `LAUNCH_GATE.md`
-3. reserve provider-coupled live proof for the final actual-domain activation decision
-4. reach explicit owner Go/No-Go before any deferred Ops power is reconsidered
+2. execute the deferred provider-coupled actual-domain activation proof slice
+3. reach final explicit owner Go/No-Go immediately after that slice
+4. confirm launch readiness before any deferred Ops power is reconsidered
 5. only after 1 to 4 are complete may deferred Ops power be reconsidered
 
 Current Ops objective:
@@ -46,27 +47,28 @@ Current Ops objective:
 
 No active Phase 1 blocker remains.
 No active Phase 2 blocker remains.
+No active Phase 3 blocker remains.
 
-Current remaining gates are deferred final-activation gates:
+Current remaining gates are final-activation gates:
 1. live trainer submission E2E remains reserved for the final actual-domain activation decision
 2. live provider exercise for notification and billing-coupled paths remains reserved for the final actual-domain activation decision
-3. explicit owner Go/No-Go remains outstanding
+3. final owner launch approval remains intentionally withheld until the actual-domain activation slice is complete
 
 ## Current Priority Order
 
 1. preserve the completed hosted-path launch evidence against `LAUNCH_GATE.md`
-2. complete owner review and launch decision preparation
-3. hold provider-coupled proof for the final actual-domain activation decision
+2. complete the deferred provider-coupled actual-domain activation slice
+3. complete final owner Go/No-Go
 4. only after 1 to 3 are complete may bounded owner controls be reconsidered
 5. only after 4 is proven safe may technical-owner controls be reconsidered
 
 ## Current Accepted Scope
 
 In scope now:
-1. owner review against the completed Phase 2 evidence set
-2. preservation of the trusted hosted-path evidence set
-3. `/ops` review of launch-critical workflow evidence
-4. preparation for the deferred actual-domain activation slice
+1. preservation of the trusted hosted-path evidence set
+2. deferred provider-coupled proof for the actual-domain activation decision
+3. final owner Go/No-Go
+4. `/ops` review of launch-critical workflow evidence during final activation work
 
 Out of scope now:
 1. Owner Override controls
@@ -125,13 +127,15 @@ Still deferred at the project level:
 Current readiness state:
 1. website is owner/public review ready at the current baseline
 2. Phase 2 is complete under the current governance scope
-3. website is not yet final-activation-ready because provider-coupled actual-domain proof remains deferred
+3. Phase 3 owner review is complete with a bounded outcome:
+   - Go to the deferred actual-domain activation slice
+   - No-Go on final public launch approval until that slice passes
 4. final status remains `not launch-approved` until owner review and the deferred actual-domain activation checks are complete
 
 Known remaining evidence gaps:
 1. final live trainer submission E2E, deferred to the actual-domain activation decision
 2. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
-3. explicit owner approval decision, still pending
+3. final explicit owner approval after the actual-domain activation slice
 
 ## Current Runtime And Infrastructure Truth
 
@@ -276,3 +280,15 @@ Launch authority:
 - Phase 2 is complete under the current governance scope
 - next active phase is owner review and launch decision preparation
 - only deferred actual-domain activation proofs remain
+
+11. `2026-06-08`
+- Phase 3 owner review and bounded Go/No-Go completed
+- Browser review verified the key trusted hosted surfaces used for owner review:
+  - `/`
+  - `/trainers`
+  - `/ops`
+- launch-gate assessment confirmed the hosted-path non-provider evidence set is sufficient to move forward
+- bounded decision recorded:
+  - Go to the deferred actual-domain activation slice
+  - No-Go on final public launch approval until the provider-coupled actual-domain checks pass
+- next active step is therefore the actual-domain activation slice, not deferred Ops power

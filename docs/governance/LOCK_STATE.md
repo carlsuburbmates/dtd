@@ -119,11 +119,18 @@ It is not a completeness claim and it is not the canonical route contract.
 6. Phase 2 is complete under the current governance scope:
 - the trusted hosted-path non-provider launch-readiness evidence set is complete
 - the remaining launch gates are:
-  - explicit owner Go/No-Go
   - deferred actual-domain activation proof
-7. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
-8. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
-9. Final Go/No-Go remains pending; this file does not record owner approval yet.
+7. Phase 3 owner review is complete under the current governance scope:
+- Browser review confirmed the owner-facing and operator-facing hosted surfaces required for the current decision:
+  - `/`
+  - `/trainers`
+  - `/ops`
+- bounded decision:
+  - Go to the deferred actual-domain activation slice
+  - No-Go on final public launch approval until the provider-coupled actual-domain checks pass
+8. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
+9. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
+10. Final public launch approval remains pending; this file does not record that approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 
