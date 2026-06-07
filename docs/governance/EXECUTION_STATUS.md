@@ -26,15 +26,15 @@ It does not define:
 
 Phase 1 trust restoration is complete.
 
-The current objective is now Phase 2: launch-readiness proof inside the locked
+The current objective is now post-Phase-2 review inside the locked
 supply-first posture.
 
 The current project execution priority is:
-1. close non-provider launch evidence gaps
-2. complete campaign-attribution persistence and clean discovery-lineage proof on the current trusted hosted path
-3. complete elapsed-window autonomous-loop proof on the current trusted hosted path
+1. preserve the completed non-provider launch evidence set on the current trusted hosted path
+2. prepare owner review against `LAUNCH_GATE.md`
+3. reserve provider-coupled live proof for the final actual-domain activation decision
 4. confirm launch readiness before any deferred Ops power is reconsidered
-5. reserve provider-coupled live proof for the final actual-domain activation decision
+5. only after 1 to 4 are complete may deferred Ops power be reconsidered
 
 Current Ops objective:
 1. preserve the current Operations Console direction and trust boundary
@@ -45,15 +45,17 @@ Current Ops objective:
 
 No active Phase 1 blocker remains.
 
-Current blockers are launch-evidence blockers:
-1. campaign-attribution persistence and clean discovery-lineage proof on the current trusted hosted path is still incomplete
-2. elapsed-window autonomous-loop proof on the current trusted hosted path is still incomplete
+No active non-provider Phase 2 blocker remains.
+
+Current remaining gates are deferred final-activation gates:
+1. live trainer submission E2E remains reserved for the final actual-domain activation decision
+2. live provider exercise for notification and billing-coupled paths remains reserved for the final actual-domain activation decision
 
 ## Current Priority Order
 
-1. complete launch-readiness proof against `LAUNCH_GATE.md`
-2. capture non-provider evidence on the current trusted hosted path
-3. confirm the Operations Console remains stable, readable, and accurate enough for launch-review work
+1. preserve the completed hosted-path launch evidence against `LAUNCH_GATE.md`
+2. confirm the Operations Console remains stable, readable, and accurate enough for launch-review work
+3. hold provider-coupled proof for the final actual-domain activation decision
 4. only after 1 to 3 are complete may bounded owner controls be reconsidered
 5. only after 4 is proven safe may technical-owner controls be reconsidered
 
@@ -102,24 +104,31 @@ Established from current repo and hosted-runtime evidence:
    - `message_log`
    - `ops_cases`
 8. local, remote, and live are re-synced to the same trusted execution path for the current locked posture
+9. hosted campaign landing proof now persists a retained attribution cohort on the trusted hosted path:
+   - `campaign=phase2-proof`
+   - `source=lp`
+   - `entry_events_30d=3`
+   - `waitlist_joins_30d=1`
+10. hosted discovery intake now has a current duplicate-path proof on the trusted hosted path:
+   - a public `/api/discovery` candidate for an existing trainer was accepted as `pending`
+   - hosted oversight later moved from `pending=1, duplicate=0` to `pending=0, duplicate=1`
+   - the discovery heartbeat then recorded `duplicates=1`, `handled=1`, `last_run=2026-06-07T18:44:10.935161+00:00`
+11. elapsed-window hosted loop proof now exists:
+   - repeated hosted samples over time showed `ranking`, `pricing`, and `health` refreshing within expected cadence
+   - the hosted discovery loop also advanced from the pre-proof run at `2026-06-07T18:34:09.921276+00:00` to the processed duplicate-path run at `2026-06-07T18:44:10.935161+00:00`
 
-Not yet proven at the project level:
-1. campaign-attribution row persistence and clean discovery-lineage proof on the current trusted hosted path
-2. elapsed-window autonomous-loop proof on the current trusted hosted path
-3. final live provider exercise for external lifecycle paths, deferred to the actual-domain activation decision
+Still deferred at the project level:
+1. final live provider exercise for external lifecycle paths, reserved for the actual-domain activation decision
 
 Current readiness state:
 1. website is owner/public review ready at the current baseline
-2. website is not yet full launch-ready E2E complete
-3. website is not yet fully production-ready
-4. status remains `not launch-ready` until `LAUNCH_GATE.md` is fully satisfied with evidence
+2. non-provider Phase 2 hosted-path launch evidence is complete
+3. website is not yet final-activation-ready because provider-coupled actual-domain proof remains deferred
+4. final status remains `not launch-approved` until owner review and the deferred actual-domain activation checks are complete
 
 Known remaining evidence gaps:
-1. campaign-attribution row persistence on the current trusted hosted path
-2. discovery pickup lineage tied cleanly to a submitted hosted row
-3. elapsed-window proof across the autonomous loops on the current trusted hosted path
-4. final live trainer submission E2E, deferred to the actual-domain activation decision
-5. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
+1. final live trainer submission E2E, deferred to the actual-domain activation decision
+2. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
 
 ## Current Runtime And Infrastructure Truth
 
@@ -144,7 +153,7 @@ Current infrastructure truths worth preserving:
 
 ## Current Risks
 
-1. attribution persistence, discovery-lineage proof, and elapsed-window loop proof on the current trusted hosted path remain the current evidence risk
+1. the remaining launch gate is now the deferred actual-domain activation slice, not the trusted hosted path
 2. stale local env values can mislead remote verification if they point to a retired backend URL
 3. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
@@ -245,3 +254,20 @@ Launch authority:
 - remaining non-provider blocker language narrowed to:
   - campaign-attribution persistence and clean discovery-lineage proof
   - elapsed-window autonomous-loop proof
+
+10. `2026-06-08`
+- hosted Phase 2 non-provider proof completed on the trusted hosted path
+- browser-driven landing and waitlist proof established a retained attribution cohort:
+  - `campaign=phase2-proof`
+  - `source=lp`
+  - `entry_events_30d=3`
+  - `waitlist_joins_30d=1`
+- hosted duplicate-path discovery proof established current discovery intake and processing without creating a new public trainer row:
+  - `POST /api/discovery` accepted a pending candidate for `https://www.dogforce1.com.au`
+  - hosted oversight moved from `pending=1, duplicate=0` to `pending=0, duplicate=1`
+  - hosted discovery heartbeat then recorded `duplicates=1`, `handled=1`, `last_run=2026-06-07T18:44:10.935161+00:00`
+- elapsed-window hosted loop proof established that short-cadence loops continued refreshing over time:
+  - `ranking`, `pricing`, and `health` stayed within expected cadence across repeated samples
+  - `discovery` advanced from `last_run=2026-06-07T18:34:09.921276+00:00` to `last_run=2026-06-07T18:44:10.935161+00:00`
+- current active Phase 2 blockers are therefore closed
+- only deferred actual-domain activation proofs remain

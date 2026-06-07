@@ -98,9 +98,27 @@ It is not a completeness claim and it is not the canonical route contract.
 - `https://dtd-ten.vercel.app/` -> `200`
 - `https://dtd-ten.vercel.app/trainers` -> `200`
 - `https://dtd-ten.vercel.app/ops` -> `200`
-5. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
-6. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
-7. Final Go/No-Go remains pending; this file does not record owner approval yet.
+5. Hosted Phase 2 non-provider proof completed on `2026-06-08`:
+- browser-driven landing and waitlist proof on `https://dtd-ten.vercel.app/lp/phase2-proof` persisted a hosted attribution cohort with:
+  - `campaign=phase2-proof`
+  - `source=lp`
+  - `entry_events_30d=3`
+  - `waitlist_joins_30d=1`
+- hosted duplicate-path discovery proof accepted a pending candidate for `https://www.dogforce1.com.au`, then later moved hosted oversight from:
+  - `pending=1, duplicate=0`
+  - to `pending=0, duplicate=1`
+- hosted discovery heartbeat then recorded:
+  - `duplicates=1`
+  - `handled=1`
+  - `last_run=2026-06-07T18:44:10.935161+00:00`
+- repeated hosted samples also showed elapsed-window loop continuity for:
+  - `ranking`
+  - `pricing`
+  - `health`
+  - `discovery`
+6. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
+7. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
+8. Final Go/No-Go remains pending; this file does not record owner approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 

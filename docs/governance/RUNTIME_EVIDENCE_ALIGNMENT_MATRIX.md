@@ -71,14 +71,13 @@ If a requirement is documented but no current runtime/code evidence was found in
 
 3. Main remaining launch-readiness gaps:
 - trainer acquisition trend series is still current-count oriented, not a richer historical readiness view
-- campaign-attribution persistence and clean discovery-lineage proof on the current trusted hosted path is still incomplete
-- elapsed-window autonomous-loop proof on the current trusted hosted path is still incomplete
 - provider-coupled live proof for trainer submission, notification, and billing-side lifecycle behaviour is intentionally deferred to the final actual-domain activation decision
 
 4. Conclusion (re-verified 2026-06-08):
 - docs/governance alignment and runtime/evidence alignment are now consistent for supply-first posture
 - all previously-Missing High-risk blocking items have been implemented
-- remaining blockers are no longer local contract blockers; they are launch-readiness evidence blockers
+- trusted hosted-path non-provider launch evidence is now complete
+- remaining gates are deferred actual-domain activation proofs plus explicit owner Go/No-Go
 
 ## 1. Public Exposure And Launch Posture
 
@@ -187,7 +186,7 @@ If a requirement is documented but no current runtime/code evidence was found in
 |---|---|---|---|---|---|---|---|---|---|
 | Core runtime and workflow paths are tested | `LAUNCH_GATE.md`, `INTEGRITY_AUDIT.md` | Matching gate, waitlist, oversight, lifecycle, billing, and security paths should be test-backed | `backend/tests/test_public_mode_unit.py`, `test_lifecycle_endpoints_unit.py`, and billing tests cover matching gate, waitlist, oversight auth, lifecycle status, and billing semantics | `docs/governance/LOCK_STATE.md` records passing test evidence | Implemented | Low | Keep as-is | Normal Ops | No |
 | Phase-state/readiness/decision layer is tested | `BUILD_CHECKLIST.md`, `LAUNCH_GATE.md`, `INTEGRITY_AUDIT.md` | New governance runtime surfaces should be test-backed | `test_public_mode_unit.py:582` — `test_oversight_exposes_launch_phase_and_readiness_contract` asserts `launch_phase_state`, `phase_readiness_snapshot`, `phase_transition_decisions` shape and `supply_first` values | Docs define these as required launch evidence | Implemented | Low | Keep as-is | Normal Ops | No |
-| Final supply-first evidence window is complete | `EXECUTION_STATUS.md`, `LOCK_STATE.md`, `LAUNCH_GATE.md` | Final supply-readiness and Go/No-Go evidence should be explicit | Phase/readiness/decision layer is product-backed and test-covered; the current trusted hosted frontend surface and live `/ops` contract are verified; Dog Owner waitlist flow is verified on the hosted runtime; hosted oversight also shows discovery promotion counts and loop interval/age signals; provider-coupled trainer submission and live Stripe/Resend behavior are intentionally deferred until the final actual-domain activation decision | `docs/governance/LOCK_STATE.md`, `docs/governance/EXECUTION_STATUS.md` | Partial | Medium: owner Go/No-Go remains open and the deferred provider-coupled proof still must be completed at final activation time | Complete the remaining non-provider evidence now on the current trusted hosted path; perform provider-coupled live checks only at the final actual-domain activation decision, then record Final Go/No-Go | Owner decision | Yes |
+| Final supply-first evidence window is complete | `EXECUTION_STATUS.md`, `LOCK_STATE.md`, `LAUNCH_GATE.md` | Final supply-readiness and Go/No-Go evidence should be explicit | Phase/readiness/decision layer is product-backed and test-covered; the current trusted hosted frontend surface and live `/ops` contract are verified; a browser-driven hosted campaign landing and waitlist proof now persists `campaign=phase2-proof` / `source=lp` with `entry_events_30d=3` and `waitlist_joins_30d=1`; a hosted duplicate-path discovery proof moved oversight from `pending=1, duplicate=0` to `pending=0, duplicate=1` and then updated the discovery heartbeat to `duplicates=1`, `handled=1`, `last_run=2026-06-07T18:44:10.935161+00:00`; repeated hosted samples also showed `ranking`, `pricing`, `health`, and `discovery` loop continuity over time; provider-coupled trainer submission and live Stripe/Resend behavior remain intentionally deferred until the final actual-domain activation decision | `docs/governance/LOCK_STATE.md`, `docs/governance/EXECUTION_STATUS.md` | Partial | Medium: owner Go/No-Go remains open and the deferred provider-coupled proof still must be completed at final activation time | Preserve the completed hosted-path evidence set, then perform provider-coupled live checks only at the final actual-domain activation decision before Final Go/No-Go | Owner decision | Yes |
 
 ## 14. Implementation Backlog Candidates
 
@@ -230,12 +229,11 @@ Remaining non-blocking product gaps (owner decision on priority):
 
 Launch-readiness blockers still open:
 
-- campaign-attribution persistence and clean discovery-lineage proof on the current trusted hosted path
-- elapsed-window autonomous-loop proof on the current trusted hosted path
+- none on the current trusted hosted path
 
 Deferred until final actual-domain activation decision:
 
 - live trainer submission proof
 - live provider exercise for notification and billing-coupled paths
 
-Next required action: complete the remaining non-provider verification scope now, then reserve provider-coupled live proof for the final actual-domain activation decision before Final Go/No-Go sign-off (`carlg`).
+Next required action: preserve the completed hosted-path evidence set, then perform the deferred provider-coupled live proof only at the final actual-domain activation decision before Final Go/No-Go sign-off (`carlg`).
