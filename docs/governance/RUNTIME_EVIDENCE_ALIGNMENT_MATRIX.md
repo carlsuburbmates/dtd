@@ -77,6 +77,7 @@ If a requirement is documented but no current runtime/code evidence was found in
 - docs/governance alignment and runtime/evidence alignment are now consistent for supply-first posture
 - all previously-Missing High-risk blocking items have been implemented
 - trusted hosted-path non-provider launch evidence is now complete
+- Phase 2 launch-readiness proof is complete under the current governance scope
 - remaining gates are deferred actual-domain activation proofs plus explicit owner Go/No-Go
 
 ## 1. Public Exposure And Launch Posture
@@ -236,4 +237,4 @@ Deferred until final actual-domain activation decision:
 - live trainer submission proof
 - live provider exercise for notification and billing-coupled paths
 
-Next required action: preserve the completed hosted-path evidence set, then perform the deferred provider-coupled live proof only at the final actual-domain activation decision before Final Go/No-Go sign-off (`carlg`).
+Next required action: preserve the completed hosted-path evidence set, complete owner review, then perform the deferred provider-coupled live proof only at the final actual-domain activation decision before Final Go/No-Go sign-off (`carlg`).

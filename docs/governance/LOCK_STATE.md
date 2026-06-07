@@ -116,9 +116,14 @@ It is not a completeness claim and it is not the canonical route contract.
   - `pricing`
   - `health`
   - `discovery`
-6. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
-7. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
-8. Final Go/No-Go remains pending; this file does not record owner approval yet.
+6. Phase 2 is complete under the current governance scope:
+- the trusted hosted-path non-provider launch-readiness evidence set is complete
+- the remaining launch gates are:
+  - explicit owner Go/No-Go
+  - deferred actual-domain activation proof
+7. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
+8. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
+9. Final Go/No-Go remains pending; this file does not record owner approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 

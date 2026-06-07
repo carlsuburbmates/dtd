@@ -25,15 +25,16 @@ It does not define:
 ## Current Objective
 
 Phase 1 trust restoration is complete.
+Phase 2 launch-readiness proof is complete under the current governance scope.
 
-The current objective is now post-Phase-2 review inside the locked
-supply-first posture.
+The current objective is now Phase 3: owner review and launch decision
+preparation inside the locked supply-first posture.
 
 The current project execution priority is:
-1. preserve the completed non-provider launch evidence set on the current trusted hosted path
+1. preserve the completed hosted-path evidence set
 2. prepare owner review against `LAUNCH_GATE.md`
 3. reserve provider-coupled live proof for the final actual-domain activation decision
-4. confirm launch readiness before any deferred Ops power is reconsidered
+4. reach explicit owner Go/No-Go before any deferred Ops power is reconsidered
 5. only after 1 to 4 are complete may deferred Ops power be reconsidered
 
 Current Ops objective:
@@ -44,17 +45,17 @@ Current Ops objective:
 ## Current Blocker
 
 No active Phase 1 blocker remains.
-
-No active non-provider Phase 2 blocker remains.
+No active Phase 2 blocker remains.
 
 Current remaining gates are deferred final-activation gates:
 1. live trainer submission E2E remains reserved for the final actual-domain activation decision
 2. live provider exercise for notification and billing-coupled paths remains reserved for the final actual-domain activation decision
+3. explicit owner Go/No-Go remains outstanding
 
 ## Current Priority Order
 
 1. preserve the completed hosted-path launch evidence against `LAUNCH_GATE.md`
-2. confirm the Operations Console remains stable, readable, and accurate enough for launch-review work
+2. complete owner review and launch decision preparation
 3. hold provider-coupled proof for the final actual-domain activation decision
 4. only after 1 to 3 are complete may bounded owner controls be reconsidered
 5. only after 4 is proven safe may technical-owner controls be reconsidered
@@ -62,9 +63,10 @@ Current remaining gates are deferred final-activation gates:
 ## Current Accepted Scope
 
 In scope now:
-1. launch-readiness proof within the locked current posture
-2. non-provider runtime verification on the current trusted hosted path
+1. owner review against the completed Phase 2 evidence set
+2. preservation of the trusted hosted-path evidence set
 3. `/ops` review of launch-critical workflow evidence
+4. preparation for the deferred actual-domain activation slice
 
 Out of scope now:
 1. Owner Override controls
@@ -122,13 +124,14 @@ Still deferred at the project level:
 
 Current readiness state:
 1. website is owner/public review ready at the current baseline
-2. non-provider Phase 2 hosted-path launch evidence is complete
+2. Phase 2 is complete under the current governance scope
 3. website is not yet final-activation-ready because provider-coupled actual-domain proof remains deferred
 4. final status remains `not launch-approved` until owner review and the deferred actual-domain activation checks are complete
 
 Known remaining evidence gaps:
 1. final live trainer submission E2E, deferred to the actual-domain activation decision
 2. final live Stripe/Resend provider exercise, deferred to the actual-domain activation decision
+3. explicit owner approval decision, still pending
 
 ## Current Runtime And Infrastructure Truth
 
@@ -270,4 +273,6 @@ Launch authority:
   - `ranking`, `pricing`, and `health` stayed within expected cadence across repeated samples
   - `discovery` advanced from `last_run=2026-06-07T18:34:09.921276+00:00` to `last_run=2026-06-07T18:44:10.935161+00:00`
 - current active Phase 2 blockers are therefore closed
+- Phase 2 is complete under the current governance scope
+- next active phase is owner review and launch decision preparation
 - only deferred actual-domain activation proofs remain
