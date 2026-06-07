@@ -1,6 +1,6 @@
 # Lock State Snapshot
 
-Date: 2026-05-22
+Date: 2026-06-08
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 This file is runtime/governance snapshot evidence.
@@ -80,21 +80,27 @@ It is not a completeness claim and it is not the canonical route contract.
 
 ## Launch evidence status (non-code configuration/evidence)
 
-1. Public custom domains are attached and live. Reattach evidence is recorded in the execution log and runbook.
-2. Stage D evidence pack is complete (domain/TLS/edge).
-3. Stage E evidence pack is complete (repeatable deploy/redeploy and route smoke are evidenced).
-4. Runtime loop-output reasons are cleared in live checks; `source_ingestion.failed_sources=1` remains only as historical count until the next successful cycle.
-5. Live runtime snapshot refreshed on `2026-05-21T07:08:57Z`:
-- `curl -sS https://dtd-api.onrender.com/api/config` -> `public_matching_enabled=false`, `conversion_billing_mode=track_only`.
-- `curl -sS -H "X-Admin-Pass: change-me" https://dtd-api.onrender.com/api/oversight` -> loops present and current; no unresolved `severity:high` alerts in the sampled snapshot; one medium `fraud_suppressed` alert remains.
-- `vercel curl / --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
-- `vercel curl /trainers --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
-- `vercel curl /ops --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
-6. Local implementation/closeout work is currently clear and the execution/status control plane now lives in `docs/governance/EXECUTION_STATUS.md`.
-7. Supply-first authority alignment is now reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`; this docs-only pass did not change runtime behavior.
-8. Supply-first launch verification still requires explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
-9. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
-10. Final Go/No-Go remains pending; this file does not record owner approval yet.
+1. Public custom domains are intentionally withheld from final live use until launch trust is restored; they are not the current proof target.
+2. The current safe hosted proof surface is `https://dtd-ten.vercel.app`.
+3. Trust-restoration Phase 1 is complete:
+- startup seeds are explicit opt-in and API-only
+- `main` auto-sync is active again
+- the hosted backend and safe frontend alias now reflect commit `12b049b8fb6ef06728a4dd6bd3f966f5e475ea4b`
+4. Live runtime snapshot refreshed on `2026-06-08`:
+- `STAGE_A_MODE=remote ./scripts/verify_stage_a_runtime.sh` -> `PASS`
+- `https://dtd-api.onrender.com/api/config` -> `public_matching_enabled=false`, `public_launch_phase=supply_first`, `public_emphasis=waitlist_first`, `owner_waitlist_mode=passive_only`
+- `https://dtd-api.onrender.com/api/oversight` -> current `/ops` read-model contract present, including:
+  - `trainer_inventory`
+  - `message_log`
+  - `ops_cases`
+  - `launch_phase_state`
+  - `phase_readiness_snapshot`
+- `https://dtd-ten.vercel.app/` -> `200`
+- `https://dtd-ten.vercel.app/trainers` -> `200`
+- `https://dtd-ten.vercel.app/ops` -> `200`
+5. Supply-first authority alignment is reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`.
+6. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
+7. Final Go/No-Go remains pending; this file does not record owner approval yet.
 
 ## Human gate snapshot (synced 2026-05-07)
 

@@ -67,6 +67,7 @@ Retain these as durable integration caveats:
 1. Sentry org-level verification should use `SENTRY_ACCESS_TOKEN`
 2. Render deploy responses may be nested, so flat parsers can misread deploy status
 3. a stale production-alias incident previously caused live domains to serve an older Vercel deployment; alias state must be checked when hosted/frontend drift is suspected
+4. `REMOTE_BACKEND_URL` can drift to a stale or retired endpoint; when remote verification looks wrong, fall back to the current Render API URL before diagnosing application behavior
 
 ## Storage Rules
 

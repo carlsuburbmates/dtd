@@ -24,48 +24,46 @@ It does not define:
 
 ## Current Objective
 
-Restore trust in the DTD environment and data path before any further Ops power
-is added.
+Phase 1 trust restoration is complete.
+
+The current objective is now Phase 2: launch-readiness proof inside the locked
+supply-first posture.
 
 The current project execution priority is:
-1. contaminated/reset-era cleanup
-2. seed control and local/live sync
-3. verification of `/ops` against a clean synced state
-4. readiness confirmation before any deferred Ops controls are reconsidered
+1. close provider-coupled launch evidence gaps
+2. verify live trainer submission and contact-release paths
+3. verify live Stripe and Resend lifecycle paths in the guarded current mode
+4. confirm launch readiness before any deferred Ops power is reconsidered
 
 Current Ops objective:
-1. continue the Operations Console and environment-stabilisation work
-2. do not reopen already-approved Ops direction
+1. preserve the current Operations Console direction and trust boundary
+2. use `/ops` as the human review surface for launch-readiness proof
 3. do not start deferred high-power Ops controls
 
 ## Current Blocker
 
-No active implementation blocker remains for the current website baseline.
+No active Phase 1 blocker remains.
 
-Current blockers are trust and verification blockers:
-1. environment/data trust is not yet clean enough
-2. seed-control correctness is not yet proven
-3. local/live sync is not yet proven
-4. provider-coupled and long-window evidence remains incomplete
-5. the worktree contains unrelated and pre-existing local changes that must not be reverted casually
+Current blockers are launch-evidence blockers:
+1. provider-coupled and long-window evidence remains incomplete
+2. live trainer submission E2E is still not captured
+3. live Stripe and Resend exercise is still not captured
+4. campaign-attribution and discovery-pickup proof is still incomplete
 
 ## Current Priority Order
 
-1. clean up contaminated/reset-era drift
-2. lock seed control and sync local with the real deployment path
-3. verify the current Operations Console against the clean synced state
-4. confirm the console is stable, readable, and accurate enough before any further Ops power is considered
-5. only after 1 to 4 are complete may bounded owner controls be reconsidered
-6. only after 5 is proven safe may technical-owner controls be reconsidered
+1. complete launch-readiness proof against `LAUNCH_GATE.md`
+2. capture provider-coupled evidence on the safe hosted path
+3. confirm the Operations Console remains stable, readable, and accurate enough for launch-review work
+4. only after 1 to 3 are complete may bounded owner controls be reconsidered
+5. only after 4 is proven safe may technical-owner controls be reconsidered
 
 ## Current Accepted Scope
 
 In scope now:
-1. contaminated/reset-era cleanup
-2. seed control
-3. local/live sync
-4. `/ops` verification against the clean synced state
-5. launch-readiness proof within the locked current posture
+1. launch-readiness proof within the locked current posture
+2. provider-coupled runtime verification on the safe hosted path
+3. `/ops` review of launch-critical workflow evidence
 
 Out of scope now:
 1. Owner Override controls
@@ -73,7 +71,7 @@ Out of scope now:
 3. public live matching enablement
 4. broad admin CRUD
 5. unrelated code refactors
-6. production/runtime mutations
+6. public custom-domain activation
 
 Guarded defaults that remain in force:
 1. `CONVERSION_BILLING_MODE=track_only`
@@ -91,21 +89,26 @@ Do not implement yet:
 
 ## Current Verification Status
 
-Established from current repo evidence:
+Established from current repo and hosted-runtime evidence:
 1. `/ops` is materially implemented and not merely aspirational
 2. bounded Layer 1 review-state persistence exists in code and tests
 3. the public route set materially matches the canonical page spec
 4. the supply-first, passive owner waitlist posture is materially reflected in current code paths
+5. startup seeds are explicit opt-in and API-only through `ENABLE_STARTUP_SEEDS`
+6. the safe hosted frontend alias is serving the latest synced `main` deployment
+7. the live backend oversight contract now exposes the current Operations Console read models:
+   - `trainer_inventory`
+   - `message_log`
+   - `ops_cases`
+8. local, remote, and live are re-synced to the same trusted execution path for the current locked posture
 
 Not yet proven at the project level:
-1. clean runtime data trustworthiness
-2. seed-control correctness
-3. local/live sync correctness
-4. final live provider exercise for all external lifecycle paths
+1. final live provider exercise for all external lifecycle paths
+2. long-window autonomous-loop proof
 
 Current readiness state:
 1. website is owner/public review ready at the current baseline
-2. website is not yet full staging/live E2E complete
+2. website is not yet full launch-ready E2E complete
 3. website is not yet fully production-ready
 4. status remains `not launch-ready` until `LAUNCH_GATE.md` is fully satisfied with evidence
 
@@ -133,17 +136,16 @@ Current code/runtime truths worth preserving:
 
 Current infrastructure truths worth preserving:
 1. the active Vercel project is `dtd`
-2. custom domains are attached to the active production target
-3. a duplicate `dogtrainersdirectory` Vercel project remains account inventory only and should be treated as drift-risk
+2. the current safe hosted proof surface is `https://dtd-ten.vercel.app`
+3. the public custom domains are intentionally withheld from final live use until launch trust is ready
+4. a duplicate `dogtrainersdirectory` Vercel project remains account inventory only and should be treated as drift-risk
 
 ## Current Risks
 
-1. the worktree is not clean, so active changes must avoid reverting unrelated local edits
-2. environment trust is still not clean enough to start deferred control layers
-3. remote and live runtime proof for the new startup-seed gate is not yet captured
-4. local, remote, and live are still not yet fully re-synced as one trusted execution path
-5. stale wording outside the canonical pack could still flatten the bounded Layer 1 `/ops` model if not corrected carefully during future edits
-6. latent matching-capable code could be misread as the current product posture if authority order is ignored
+1. the worktree still contains untracked local-only noise that must not be committed casually
+2. provider-coupled evidence is still the main path to launch blocking or launch approval
+3. stale local env values can mislead remote verification if they point to a retired backend URL
+4. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
 ## Restart Protocol
 
@@ -190,3 +192,19 @@ Launch authority:
   - seeds require explicit `ENABLE_STARTUP_SEEDS`
   - worker startup no longer participates in seeding
 - optional local compose stack aligned toward DTD naming and worker topology
+
+4. `2026-06-08`
+- Phase 1 trust restoration completed
+- local validation passed:
+  - `python3 -m compileall backend`
+  - `cd backend && ../.venv/bin/pytest -q tests/test_public_mode_unit.py tests/test_runtime_control_unit.py tests/test_lifecycle_endpoints_unit.py`
+  - `cd frontend && CI=true npm test -- --watch=false --runInBand src/pages/Ops.test.jsx`
+  - `cd frontend && npm run build`
+- trusted state synced to `origin/main` at commit `12b049b8fb6ef06728a4dd6bd3f966f5e475ea4b`
+- Vercel production deployment for commit `12b049b8fb6ef06728a4dd6bd3f966f5e475ea4b` reached `READY`
+- live backend `/api/config` and `/api/oversight` now match the locked supply-first posture and current `/ops` contract
+- current safe hosted verification routes returned `200`:
+  - `/`
+  - `/trainers`
+  - `/ops`
+- next active phase is launch-readiness proof, not further trust restoration
