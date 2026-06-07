@@ -142,10 +142,9 @@ Current infrastructure truths worth preserving:
 
 ## Current Risks
 
-1. the worktree still contains untracked local-only noise that must not be committed casually
-2. provider-coupled evidence is still the main path to launch blocking or launch approval
-3. stale local env values can mislead remote verification if they point to a retired backend URL
-4. latent matching-capable code could be misread as the current product posture if authority order is ignored
+1. provider-coupled evidence is still the main path to launch blocking or launch approval
+2. stale local env values can mislead remote verification if they point to a retired backend URL
+3. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
 ## Restart Protocol
 
@@ -208,3 +207,13 @@ Launch authority:
   - `/trainers`
   - `/ops`
 - next active phase is launch-readiness proof, not further trust restoration
+
+5. `2026-06-08`
+- Phase 2 started
+- `node scripts/check_prelaunch_release_gate.js` returned `PRELAUNCH_RELEASE_GATE=PASS`
+- runtime-evidence review narrowed the active launch blockers to:
+  - live trainer submission E2E proof
+  - live Stripe/Resend provider exercise
+  - campaign-attribution and discovery-pickup proof
+  - long-window autonomous-loop proof
+- stale closed-blocker rows in `RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` were corrected so the matrix matches the current `/ops` contract and hosted runtime evidence
