@@ -8,8 +8,10 @@ Design intent:
     (≥0.85 is marked verified) and auto-hold when < 0.60.
   - Launch monetisation is intro-first: per-intro fee only.
     Conversions are tracked signals by default (bill mode is feature-flagged).
-  - The "admin panel" is a single read-only oversight surface; no endpoint in
-    here mutates data on a human's behalf.
+  - The oversight surface is visibility-first and Normal Ops by default.
+    It allows only bounded Layer 1 review-state persistence; it does not
+    mutate live policy, provider state, runtime, or direct data on a human's
+    behalf.
 
 Conventions:
   - All routes live under /api.
@@ -66,6 +68,9 @@ api = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("dtd")
 
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+STARTUP_SEEDS_ENV = "ENABLE_STARTUP_SEEDS"
+
 PUBLISH_THRESHOLD = 0.85
 HOLD_THRESHOLD = 0.60
 ACTIVE_REGION = (os.environ.get("ACTIVE_REGION") or "Greater Melbourne").strip()
@@ -73,34 +78,22 @@ ACTIVE_REGIONS = [r.strip() for r in os.environ.get("ACTIVE_REGIONS", ACTIVE_REG
 ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
 BILLABILITY_POLICY = (os.environ.get("BILLABILITY_POLICY") or "allow").strip().lower()
 CONTACT_READY_POLICY = (os.environ.get("CONTACT_READY_POLICY") or "allow").strip().lower()
-PUBLIC_MATCHING_ENABLED = (os.environ.get("PUBLIC_MATCHING_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
+PUBLIC_MATCHING_ENABLED = (os.environ.get("PUBLIC_MATCHING_ENABLED") or "false").strip().lower() in TRUTHY_ENV_VALUES
 
 PUBLIC_MONETIZATION_COPY_MODE = (os.environ.get("PUBLIC_MONETIZATION_COPY_MODE") or "legacy_intro_fee").strip()
 if PUBLIC_MONETIZATION_COPY_MODE not in {"legacy_intro_fee", "founding_profile_prelaunch"}:
     PUBLIC_MONETIZATION_COPY_MODE = "legacy_intro_fee"
 
-PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "0").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-PUBLIC_SHOW_FOUNDING_PROFILE_COPY = (os.environ.get("PUBLIC_SHOW_FOUNDING_PROFILE_COPY") or "0").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "0").strip().lower() in TRUTHY_ENV_VALUES
+PUBLIC_SHOW_FOUNDING_PROFILE_COPY = (os.environ.get("PUBLIC_SHOW_FOUNDING_PROFILE_COPY") or "0").strip().lower() in TRUTHY_ENV_VALUES
 
-CLAIM_STATE_MODEL_ENABLED = (os.environ.get("CLAIM_STATE_MODEL_ENABLED") or "0").strip().lower() in {"1", "true", "yes", "on"}
+CLAIM_STATE_MODEL_ENABLED = (os.environ.get("CLAIM_STATE_MODEL_ENABLED") or "0").strip().lower() in TRUTHY_ENV_VALUES
 _claim_state_current_env = (os.environ.get("CLAIM_STATE_CURRENT") or "STATE_0").strip().upper()
 CLAIM_STATE_CURRENT = _claim_state_current_env if _claim_state_current_env in {"STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"} else "STATE_0"
 CLAIM_ENFORCEMENT_MODE = (os.environ.get("CLAIM_ENFORCEMENT_MODE") or "report_only").strip().lower()
 if CLAIM_ENFORCEMENT_MODE not in {"report_only", "block_invalid"}:
     CLAIM_ENFORCEMENT_MODE = "report_only"
-CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = (
-    (os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in {"1", "true", "yes", "on"}
-)
+CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = ((os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in TRUTHY_ENV_VALUES)
 _public_launch_phase_env = (os.environ.get("PUBLIC_LAUNCH_PHASE") or "supply_first").strip().lower()
 PUBLIC_LAUNCH_PHASE = (
     _public_launch_phase_env
@@ -111,6 +104,31 @@ TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") o
 OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
 OVERSIGHT_AUTH_WINDOW_S = int((os.environ.get("OVERSIGHT_AUTH_WINDOW_S") or "600").strip() or "600")
 OVERSIGHT_AUTH_LOCK_S = int((os.environ.get("OVERSIGHT_AUTH_LOCK_S") or "900").strip() or "900")
+
+OPS_CASE_ALLOWED_STATES = {
+    "detected",
+    "acknowledged",
+    "investigating",
+    "actioned",
+    "monitoring",
+    "resolved",
+    "deferred",
+    "dismissed",
+    "escalated_to_owner_override",
+    "escalated_to_technical_owner",
+}
+OPS_CASE_HISTORY_LIMIT = 20
+
+
+def _env_flag(name: str, *, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in TRUTHY_ENV_VALUES
+
+
+def _startup_seeds_enabled(process_role: runtime_control.ProcessRole) -> bool:
+    return process_role == "api" and _env_flag(STARTUP_SEEDS_ENV, default=False)
 
 
 def now_iso() -> str:
@@ -340,6 +358,13 @@ class OversightLogin(BaseModel):
     passcode: str
 
 
+class OpsCaseReviewIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    state: str
+    owner: Optional[str] = ""
+    note: Optional[str] = ""
+
+
 class FollowUpOutcomeIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     action: str = "hired"  # hired | still_deciding | need_another_match
@@ -535,11 +560,16 @@ async def _record_owner_waitlist_event(
 
 async def _owner_waitlist_summary() -> Dict[str, Any]:
     waitlist_coll = getattr(db, "owner_waitlist", None)
+    waitlist_events_coll = getattr(db, "owner_waitlist_events", None)
     if waitlist_coll is None:
         return {
             "total_active": 0,
             "joins_24h": 0,
             "top_suburbs": [],
+            "duplicate_24h": 0,
+            "rejected_24h": 0,
+            "duplicate_total": 0,
+            "rejected_total": 0,
             "status": "unavailable",
             "reason_codes": ["owner_waitlist_collection_unavailable"],
         }
@@ -556,10 +586,27 @@ async def _owner_waitlist_summary() -> Dict[str, Any]:
         ]
     ).to_list(5)
     top_suburbs = [{"suburb": str(row.get("_id") or ""), "count": int(row.get("count") or 0)} for row in top_rows if row.get("_id")]
+    duplicate_24h = 0
+    rejected_24h = 0
+    duplicate_total = 0
+    rejected_total = 0
+    if waitlist_events_coll is not None:
+        duplicate_24h = int(
+            await waitlist_events_coll.count_documents({"event_type": "owner_waitlist_duplicate", "created_at": {"$gte": since_24h}})
+        )
+        rejected_24h = int(
+            await waitlist_events_coll.count_documents({"event_type": "owner_waitlist_rejected", "created_at": {"$gte": since_24h}})
+        )
+        duplicate_total = int(await waitlist_events_coll.count_documents({"event_type": "owner_waitlist_duplicate"}))
+        rejected_total = int(await waitlist_events_coll.count_documents({"event_type": "owner_waitlist_rejected"}))
     return {
         "total_active": int(total_active or 0),
         "joins_24h": int(joins_24h or 0),
         "top_suburbs": top_suburbs,
+        "duplicate_24h": duplicate_24h,
+        "rejected_24h": rejected_24h,
+        "duplicate_total": duplicate_total,
+        "rejected_total": rejected_total,
         "status": "ok",
         "reason_codes": ["owner_waitlist_summary_ok"],
     }
@@ -744,6 +791,473 @@ async def _reactivation_summary() -> Dict[str, Any]:
     }
 
 
+async def _trainer_inventory_rows(limit: int = 200) -> List[Dict[str, Any]]:
+    rows = await db.trainers.find(
+        {},
+        {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "suburb": 1,
+            "published": 1,
+            "verification_status": 1,
+            "confidence_score": 1,
+            "billing_profile_status": 1,
+            "website": 1,
+            "phone": 1,
+            "email": 1,
+            "via_submission_id": 1,
+            "via_discovery": 1,
+            "source_evidence_url": 1,
+            "updated_at": 1,
+            "created_at": 1,
+            "outcome_score": 1,
+            "intros_30d": 1,
+            "conversions_30d": 1,
+        },
+    ).sort("name", 1).to_list(limit)
+    inventory: List[Dict[str, Any]] = []
+    for trainer in rows:
+        blocker_codes = _trainer_blocker_codes(trainer)
+        trainer_id = str(trainer.get("id") or "")
+        inventory.append(
+            {
+                "id": trainer_id,
+                "name": trainer.get("name") or trainer_id or "unknown",
+                "suburb": trainer.get("suburb") or "",
+                "published": bool(trainer.get("published")),
+                "verification_status": trainer.get("verification_status") or "unknown",
+                "intro_ready": _trainer_intro_ready(trainer),
+                "confidence_score": float(trainer.get("confidence_score") or 0),
+                "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
+                "blocker_codes": blocker_codes,
+                "source_kind": _trainer_source_kind(trainer),
+                "contact_channel_ready": _has_contact_channel(trainer),
+                "outcome_score": float(trainer.get("outcome_score") or 0),
+                "intros_30d": int(trainer.get("intros_30d") or 0),
+                "conversions_30d": int(trainer.get("conversions_30d") or 0),
+                "public_detail_path": f"/t/{trainer_id}" if trainer_id else "",
+                "updated_at": trainer.get("updated_at") or trainer.get("created_at"),
+            }
+        )
+    return inventory
+
+
+async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
+    notifications_coll = getattr(db, "notification_events", None)
+    if notifications_coll is None:
+        return []
+
+    events = await notifications_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    trainer_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "trainer" and e.get("target_id")}
+    submission_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "submission" and e.get("target_id")}
+    intro_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "intro" and e.get("target_id")}
+
+    trainers = await db.trainers.find({"id": {"$in": sorted(trainer_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(max(1, len(trainer_ids))) if trainer_ids else []
+    submissions = await db.submissions.find({"id": {"$in": sorted(submission_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(max(1, len(submission_ids))) if submission_ids else []
+    intros = await db.intros.find({"id": {"$in": sorted(intro_ids)}}, {"_id": 0, "id": 1, "trainer_id": 1}).to_list(max(1, len(intro_ids))) if intro_ids else []
+
+    trainers_by_id = {str(row.get("id") or ""): row for row in trainers}
+    submissions_by_id = {str(row.get("id") or ""): row for row in submissions}
+    intros_by_id = {str(row.get("id") or ""): row for row in intros}
+
+    rows: List[Dict[str, Any]] = []
+    for event in events:
+        target_kind = str(event.get("target_kind") or "")
+        target_id = str(event.get("target_id") or "")
+        entity_label = target_id or "unknown"
+        workflow = "communications"
+        canonical_user_type = "Oversight operator"
+        if target_kind == "trainer":
+            trainer = trainers_by_id.get(target_id, {})
+            entity_label = str(trainer.get("name") or target_id or "trainer")
+            workflow = "trainer lifecycle"
+            canonical_user_type = "Trainer / business submitter"
+        elif target_kind == "submission":
+            submission = submissions_by_id.get(target_id, {})
+            entity_label = str(submission.get("name") or target_id or "submission")
+            workflow = "trainer submission"
+            canonical_user_type = "Trainer / business submitter"
+        elif target_kind == "intro":
+            intro = intros_by_id.get(target_id, {})
+            trainer = trainers_by_id.get(str(intro.get("trainer_id") or ""), {})
+            entity_label = str(trainer.get("name") or target_id or "intro")
+            workflow = "trainer intro"
+            canonical_user_type = "Trainer / business submitter"
+
+        rows.append(
+            {
+                "id": str(event.get("id") or new_id()),
+                "created_at": event.get("created_at"),
+                "target_kind": target_kind or "unknown",
+                "target_id": target_id,
+                "kind": event.get("kind") or "unknown",
+                "status": event.get("status") or "unknown",
+                "attempt": int(event.get("attempt") or 0),
+                "http_status": int(event.get("http_status") or 0),
+                "to_email": event.get("to_email") or "",
+                "entity_label": entity_label,
+                "workflow": workflow,
+                "canonical_user_type": canonical_user_type,
+                "provider": event.get("provider") or "",
+            }
+        )
+    return rows
+
+
+def _build_message_case(row: Dict[str, Any]) -> Dict[str, Any]:
+    status = str(row.get("status") or "unknown")
+    severity = "high" if status == "failed" else "low"
+    state = "detected" if status == "failed" else "notified"
+    return {
+        "case_id": f"message:{row.get('id')}",
+        "case_type": "trainer_communications_case",
+        "canonical_user_type": row.get("canonical_user_type") or "Trainer / business submitter",
+        "workflow": row.get("workflow") or "communications",
+        "entity_type": row.get("target_kind") or "message",
+        "entity_id": row.get("target_id") or row.get("id"),
+        "title": f"{humanize_case_token(row.get('kind') or 'message')} · {row.get('entity_label') or 'unknown'}",
+        "summary": f"Delivery status is {status}. Review message history before more contact is sent.",
+        "severity": severity,
+        "state": state,
+        "owner": "",
+        "detected_at": row.get("created_at"),
+        "last_updated_at": row.get("created_at"),
+        "source_refs": [{"kind": "notification_event", "id": row.get("id")}],
+        "risk_reason_codes": [f"notification_{status}"],
+        "recommended_next_step": "Review message history and linked workflow.",
+        "responsibility_layer": "Layer 1 — Normal Ops",
+        "detail_rows": [
+            {"label": "Workflow", "value": row.get("workflow") or "communications"},
+            {"label": "Target type", "value": row.get("target_kind") or "unknown"},
+            {"label": "Delivery status", "value": status},
+            {"label": "Provider", "value": row.get("provider") or "unknown"},
+            {"label": "Attempt", "value": int(row.get("attempt") or 0)},
+            {"label": "HTTP status", "value": int(row.get("http_status") or 0)},
+        ],
+        "linked_paths": [],
+        "audit_refs": [],
+    }
+
+
+def _normalize_ops_case_state(raw_state: str) -> str:
+    token = str(raw_state or "").strip().lower()
+    return token if token in OPS_CASE_ALLOWED_STATES else ""
+
+
+def _normalize_ops_case_owner(raw_owner: Optional[str]) -> str:
+    owner = " ".join(str(raw_owner or "").strip().split())
+    return owner[:80]
+
+
+def _normalize_ops_case_note(raw_note: Optional[str]) -> str:
+    note = " ".join(str(raw_note or "").strip().split())
+    return note[:500]
+
+
+async def _load_ops_case_state_map(case_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    states_coll = getattr(db, "ops_case_states", None)
+    if states_coll is None or not case_ids:
+        return {}
+    rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
+    return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+
+
+def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not override:
+        return {
+            **case,
+            "review": {
+                "state": str(case.get("state") or "detected"),
+                "owner": str(case.get("owner") or ""),
+                "note": "",
+                "updated_at": case.get("last_updated_at") or case.get("detected_at"),
+                "history": [],
+            },
+        }
+
+    merged = dict(case)
+    override_state = str(override.get("state") or "")
+    merged["state"] = override_state or merged.get("state")
+    merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
+    merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
+    merged["review"] = {
+        "state": merged.get("state"),
+        "owner": str(override.get("owner") or ""),
+        "note": str(override.get("note") or ""),
+        "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
+        "history": list(override.get("history") or []),
+    }
+    return merged
+
+
+async def _ops_case_rows(
+    *,
+    discovery_summary: Dict[str, Any],
+    waitlist_summary: Dict[str, Any],
+    loop_statuses: Dict[str, Any],
+    billing_recovery_case_rows: List[Dict[str, Any]],
+    reactivation_case_rows: List[Dict[str, Any]],
+    source_ingestion_state_rows: List[Dict[str, Any]],
+    message_log: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    cases: List[Dict[str, Any]] = []
+
+    held_submissions = await db.submissions.find(
+        {"status": {"$in": ["pending", "held"]}},
+        {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(50).to_list(50)
+    for row in held_submissions:
+        status = str(row.get("status") or "pending")
+        severity = "high" if status == "held" else "medium"
+        cases.append(
+            {
+                "case_id": f"submission:{row.get('id')}",
+                "case_type": "trainer_submission_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "trainer submission",
+                "entity_type": "submission",
+                "entity_id": row.get("id"),
+                "title": f"{row.get('name') or 'Unnamed trainer'} · {humanize_case_token(status)}",
+                "summary": "Submission needs review in the trainer workflow.",
+                "severity": severity,
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("created_at"),
+                "source_refs": [{"kind": "submission", "id": row.get("id")}],
+                "risk_reason_codes": [f"submission_{status}"],
+                "recommended_next_step": "Review submission status and linked trainer readiness.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Submission status", "value": status},
+                    {"label": "Created", "value": row.get("created_at")},
+                    {"label": "Entity", "value": row.get("id")},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    if int(waitlist_summary.get("duplicate_24h") or 0) > 0 or int(waitlist_summary.get("rejected_24h") or 0) > 0:
+        cases.append(
+            {
+                "case_id": "waitlist:abnormality",
+                "case_type": "owner_waitlist_case",
+                "canonical_user_type": "Dog owner",
+                "workflow": "owner waitlist",
+                "entity_type": "waitlist",
+                "entity_id": "owner_waitlist",
+                "title": "Waitlist abnormalities detected",
+                "summary": f"Duplicates {int(waitlist_summary.get('duplicate_24h') or 0)} · rejected {int(waitlist_summary.get('rejected_24h') or 0)} in the last 24h.",
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "owner_waitlist_summary", "id": "owner_waitlist"}],
+                "risk_reason_codes": ["waitlist_abnormalities_present"],
+                "recommended_next_step": "Review demand quality and attribution health before resuming public exposure.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Duplicate joins (24h)", "value": int(waitlist_summary.get("duplicate_24h") or 0)},
+                    {"label": "Rejected joins (24h)", "value": int(waitlist_summary.get("rejected_24h") or 0)},
+                    {"label": "Active waitlist", "value": int(waitlist_summary.get("total_active") or 0)},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    if int(discovery_summary.get("pending") or 0) > 0:
+        cases.append(
+            {
+                "case_id": "discovery:pending",
+                "case_type": "discovery_case",
+                "canonical_user_type": "External contributor / ecosystem actor",
+                "workflow": "discovery intake",
+                "entity_type": "discovery_queue",
+                "entity_id": "pending",
+                "title": "Discovery queue awaiting review",
+                "summary": f"{int(discovery_summary.get('pending') or 0)} discovery candidates remain pending.",
+                "severity": "low",
+                "state": "detected",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "discovery_summary", "id": "pending"}],
+                "risk_reason_codes": ["discovery_pending"],
+                "recommended_next_step": "Review discovery backlog and confirm sources are still appropriate.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Pending discovery items", "value": int(discovery_summary.get("pending") or 0)},
+                    {"label": "Promoted", "value": int(discovery_summary.get("promoted") or 0)},
+                    {"label": "Discarded", "value": int(discovery_summary.get("discarded") or 0)},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for key, status_meta in loop_statuses.items():
+        loop_status = str(status_meta.get("status") or "ok")
+        if loop_status == "ok":
+            continue
+        severity = "high" if loop_status == "escalate" else "medium"
+        cases.append(
+            {
+                "case_id": f"loop:{key}",
+                "case_type": "loop_health_case",
+                "canonical_user_type": "Autonomous system actor",
+                "workflow": "system activity",
+                "entity_type": "loop",
+                "entity_id": key,
+                "title": f"{humanize_case_token(key)} needs review",
+                "summary": f"Loop status is {humanize_case_token(loop_status)}.",
+                "severity": severity,
+                "state": "detected",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "loop_status", "id": key}],
+                "risk_reason_codes": [f"loop_{loop_status}"],
+                "recommended_next_step": "Inspect system activity and escalate if the loop stays stale.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Loop", "value": key},
+                    {"label": "Status", "value": loop_status},
+                    {"label": "Age (seconds)", "value": status_meta.get("age_s")},
+                    {"label": "Escalates after (seconds)", "value": status_meta.get("stale_after_s")},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in billing_recovery_case_rows:
+        retry_state = str(row.get("billing_retry_state") or "needs_remediation")
+        state = "monitoring" if retry_state == "retry_sent" else "detected"
+        severity = "high" if retry_state in {"retry_exhausted", "retry_failed"} else "medium"
+        trainer_id = str(row.get("trainer_id") or "")
+        trainer_token = str(row.get("trainer_action_token") or "")
+        cases.append(
+            {
+                "case_id": f"billing:{row.get('intro_id')}",
+                "case_type": "trainer_billing_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "billing remediation",
+                "entity_type": "intro",
+                "entity_id": row.get("intro_id"),
+                "title": f"{row.get('trainer_name') or 'Trainer'} · {humanize_case_token(retry_state)}",
+                "summary": f"Billing state is {humanize_case_token(row.get('billing_collection_status') or 'unknown')} with {int(row.get('billing_retry_attempts') or 0)} attempts.",
+                "severity": severity,
+                "state": state,
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("billing_last_retry_at") or row.get("created_at"),
+                "source_refs": [{"kind": "intro", "id": row.get("intro_id")}],
+                "risk_reason_codes": [f"billing_{retry_state}"],
+                "recommended_next_step": "Review billing health and use the lifecycle route if follow-up is needed.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Billing collection status", "value": row.get("billing_collection_status") or "unknown"},
+                    {"label": "Billing profile status", "value": row.get("billing_profile_status") or "unknown"},
+                    {"label": "Retry attempts", "value": int(row.get("billing_retry_attempts") or 0)},
+                    {"label": "Intro fee", "value": int(row.get("intro_fee_cents") or 0)},
+                ],
+                "linked_paths": [
+                    {
+                        "label": "Open billing view",
+                        "path": f"/trainer/billing?trainer_id={trainer_id}&trainer_action_token={trainer_token}",
+                    }
+                ] if trainer_id and trainer_token else [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in reactivation_case_rows:
+        last_status = str(row.get("last_notification_status") or "")
+        state = "monitoring" if last_status == "sent" else "detected"
+        trainer_id = str(row.get("trainer_id") or "")
+        trainer_token = str(row.get("trainer_action_token") or "")
+        cases.append(
+            {
+                "case_id": f"reactivation:{row.get('trainer_id')}",
+                "case_type": "trainer_reactivation_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "reactivation",
+                "entity_type": "trainer",
+                "entity_id": row.get("trainer_id"),
+                "title": f"{row.get('trainer_name') or 'Trainer'} · reactivation",
+                "summary": "Listing signals suggest reactivation review is needed.",
+                "severity": "medium",
+                "state": state,
+                "owner": "",
+                "detected_at": row.get("updated_at"),
+                "last_updated_at": row.get("last_notified_at") or row.get("updated_at"),
+                "source_refs": [{"kind": "reactivation_candidate", "id": row.get("trainer_id")}],
+                "risk_reason_codes": ["reactivation_open"],
+                "recommended_next_step": "Review the trainer reactivation reasons and linked lifecycle route.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Last notification status", "value": last_status or "not_sent"},
+                    {"label": "Reasons", "value": ", ".join(row.get("reasons") or []) or "No reasons listed"},
+                    {"label": "Updated", "value": row.get("updated_at")},
+                ],
+                "linked_paths": [
+                    {
+                        "label": "Open reactivation view",
+                        "path": f"/trainer/reactivate?trainer_id={trainer_id}&trainer_action_token={trainer_token}",
+                    }
+                ] if trainer_id and trainer_token else [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in source_ingestion_state_rows:
+        failures = int(row.get("consecutive_failures") or 0)
+        if failures <= 0 and not row.get("suppressed_until"):
+            continue
+        cases.append(
+            {
+                "case_id": f"source:{hashlib.sha1(str(row.get('source_url') or '').encode('utf-8')).hexdigest()[:12]}",
+                "case_type": "source_ingestion_case",
+                "canonical_user_type": "External contributor / ecosystem actor",
+                "workflow": "source ingestion",
+                "entity_type": "source_url",
+                "entity_id": row.get("source_url"),
+                "title": "Source ingestion needs review",
+                "summary": f"{row.get('source_url') or 'Source'} has {failures} consecutive failures.",
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("last_ok_at") or now_iso(),
+                "last_updated_at": row.get("suppressed_until") or row.get("last_ok_at") or now_iso(),
+                "source_refs": [{"kind": "source_ingestion_state", "id": row.get("source_url")}],
+                "risk_reason_codes": ["source_ingestion_failures"],
+                "recommended_next_step": "Inspect source health and confirm it should remain in the pipeline.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Source URL", "value": row.get("source_url") or "unknown"},
+                    {"label": "Consecutive failures", "value": failures},
+                    {"label": "Suppressed until", "value": row.get("suppressed_until") or "not_suppressed"},
+                    {"label": "Last success", "value": row.get("last_ok_at") or "unknown"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in message_log:
+        if str(row.get("status") or "") in {"failed", "sent"}:
+            cases.append(_build_message_case(row))
+
+    overrides = await _load_ops_case_state_map([str(case.get("case_id") or "") for case in cases if case.get("case_id")])
+    cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
+    cases.sort(key=_sort_case_priority)
+    return cases[:150]
+
+
 def _loop_interval_seconds() -> Dict[str, int]:
     return {
         "ranking": autonomy.RANKING_INTERVAL_S,
@@ -783,6 +1297,69 @@ def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Di
         "age_s": age_s,
         "stale_after_s": interval_s * 2 if interval_s > 0 else None,
     }
+
+
+def humanize_case_token(value: str) -> str:
+    raw = str(value or "").strip()
+    return raw.replace("_", " ") if raw else "unknown"
+
+
+def _trainer_source_kind(trainer: Dict[str, Any]) -> str:
+    if trainer.get("via_submission_id"):
+        return "submission"
+    if trainer.get("via_discovery"):
+        return "discovery"
+    if trainer.get("source_evidence_url"):
+        return "seed"
+    return "unknown"
+
+
+def _trainer_blocker_codes(trainer: Dict[str, Any]) -> List[str]:
+    codes: List[str] = []
+    if not bool(trainer.get("published")):
+        codes.append("held_or_unpublished")
+    if float(trainer.get("confidence_score") or 0) < HOLD_THRESHOLD:
+        codes.append("low_confidence")
+    billing_status = str(trainer.get("billing_profile_status") or "").strip().lower()
+    if billing_status in {"missing_email", "profile_incomplete"}:
+        codes.append("needs_billing_profile")
+    elif billing_status == "consent_required":
+        codes.append("needs_billing_consent")
+    elif billing_status in {"stripe_unconfigured", "stripe_error"}:
+        codes.append("billing_system_blocked")
+    if not _has_contact_channel(trainer):
+        codes.append("missing_contact_channel")
+    deduped: List[str] = []
+    for code in codes:
+        if code not in deduped:
+            deduped.append(code)
+    return deduped
+
+
+def _trainer_intro_ready(trainer: Dict[str, Any]) -> bool:
+    return bool(trainer.get("published")) and _is_billable_ready(trainer) and float(trainer.get("confidence_score") or 0) >= HOLD_THRESHOLD
+
+
+def _sort_case_priority(case: Dict[str, Any]) -> tuple[int, int, str]:
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    state_rank = {
+        "detected": 0,
+        "notified": 1,
+        "acknowledged": 2,
+        "investigating": 3,
+        "actioned": 4,
+        "monitoring": 5,
+        "resolved": 6,
+        "deferred": 7,
+        "dismissed": 8,
+        "escalated_to_owner_override": 9,
+        "escalated_to_technical_owner": 10,
+    }
+    return (
+        severity_rank.get(str(case.get("severity") or "low"), 99),
+        state_rank.get(str(case.get("state") or "detected"), 99),
+        str(case.get("detected_at") or ""),
+    )
 
 
 def _claim_policy_snapshot() -> Dict[str, Any]:
@@ -2086,8 +2663,123 @@ async def get_seo(slug: str) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Oversight — read-only surface; no mutations.
+# Oversight — visibility-first surface with bounded Layer 1 review-state writes
+# only; no policy, provider, runtime, or direct-data mutations.
 # ---------------------------------------------------------------------------
+
+
+async def _current_ops_cases() -> List[Dict[str, Any]]:
+    discovery_summary = {
+        "pending": await db.discovery_queue.count_documents({"status": "pending"}),
+        "promoted": await db.discovery_queue.count_documents({"status": "promoted"}),
+        "duplicate": await db.discovery_queue.count_documents({"status": "duplicate"}),
+        "discarded": await db.discovery_queue.count_documents({"status": "discarded"}),
+    }
+    waitlist_summary = await _owner_waitlist_summary()
+    now_dt = datetime.now(timezone.utc)
+    health = await db.system_state.find_one({"key": "health"}, {"_id": 0}) or {}
+    ranking = await db.system_state.find_one({"key": "ranking"}, {"_id": 0}) or {}
+    pricing = await db.system_state.find_one({"key": "pricing"}, {"_id": 0}) or {}
+    verification = await db.system_state.find_one({"key": "verification"}, {"_id": 0}) or {}
+    discovery = await db.system_state.find_one({"key": "discovery"}, {"_id": 0}) or {}
+    inference = await db.system_state.find_one({"key": "inference"}, {"_id": 0}) or {}
+    source_ingestion = await db.system_state.find_one({"key": "source_ingestion"}, {"_id": 0}) or {}
+    outreach = await db.system_state.find_one({"key": "outreach"}, {"_id": 0}) or {}
+    billing_recovery = await db.system_state.find_one({"key": "billing_recovery"}, {"_id": 0}) or {}
+    nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
+    reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
+    source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
+    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).to_list(20) if source_ingestion_state_coll is not None else []
+    source_ingestion_state_rows.sort(
+        key=lambda row: (
+            int(row.get("consecutive_failures") or 0),
+            str(row.get("suppressed_until") or ""),
+            str(row.get("source_url") or ""),
+        ),
+        reverse=True,
+    )
+    billing_recovery_cases = await db.intros.find(
+        {
+            "billing_status": "billed",
+            "billing_retry_state": {"$in": ["retry_exhausted", "retry_failed", "needs_remediation", "retry_sent"]},
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "trainer_id": 1,
+            "billing_collection_status": 1,
+            "billing_retry_state": 1,
+            "billing_retry_attempts": 1,
+            "billing_last_retry_at": 1,
+            "intro_fee_cents": 1,
+            "created_at": 1,
+        },
+    ).to_list(20)
+    trainer_ids_for_cases = sorted({str(row.get("trainer_id") or "") for row in billing_recovery_cases if row.get("trainer_id")})
+    trainer_rows = await db.trainers.find(
+        {"id": {"$in": trainer_ids_for_cases}},
+        {"_id": 0, "id": 1, "name": 1, "billing_profile_status": 1, "published": 1, "confidence_score": 1},
+    ).to_list(max(1, len(trainer_ids_for_cases))) if trainer_ids_for_cases else []
+    trainers_by_id = {str(row.get("id") or ""): row for row in trainer_rows}
+    billing_recovery_case_rows: List[Dict[str, Any]] = []
+    for row in billing_recovery_cases:
+        trainer = trainers_by_id.get(str(row.get("trainer_id") or ""), {})
+        trainer_id = str(row.get("trainer_id") or "")
+        billing_recovery_case_rows.append(
+            {
+                "intro_id": row.get("id"),
+                "trainer_id": trainer_id,
+                "trainer_name": trainer.get("name") or trainer_id or "unknown",
+                "billing_collection_status": row.get("billing_collection_status") or "unknown",
+                "billing_retry_state": row.get("billing_retry_state") or "unknown",
+                "billing_retry_attempts": int(row.get("billing_retry_attempts") or 0),
+                "billing_last_retry_at": row.get("billing_last_retry_at"),
+                "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
+                "intro_fee_cents": int(row.get("intro_fee_cents") or 0),
+                "created_at": row.get("created_at"),
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+            }
+        )
+    reactivation_candidates_coll = getattr(db, "reactivation_candidates", None)
+    reactivation_case_rows_raw = await reactivation_candidates_coll.find(
+        {"status": "open"},
+        {"_id": 0, "trainer_id": 1, "trainer_name": 1, "email": 1, "reasons": 1, "last_notified_at": 1, "last_notification_status": 1, "updated_at": 1},
+    ).to_list(20) if reactivation_candidates_coll is not None else []
+    reactivation_case_rows: List[Dict[str, Any]] = []
+    for row in reactivation_case_rows_raw:
+        trainer_id = str(row.get("trainer_id") or "")
+        reactivation_case_rows.append(
+            {
+                **row,
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+            }
+        )
+    loop_statuses = {
+        key: _loop_status(key, loop, now_dt=now_dt)
+        for key, loop in {
+            "ranking": ranking,
+            "pricing": pricing,
+            "verification": verification,
+            "discovery": discovery,
+            "inference": inference,
+            "source_ingestion": source_ingestion,
+            "outreach": outreach,
+            "health": health,
+            "billing_recovery": billing_recovery,
+            "nurture": nurture,
+            "reactivation_route": reactivation_route,
+        }.items()
+    }
+    message_log = await _message_log_rows()
+    return await _ops_case_rows(
+        discovery_summary=discovery_summary,
+        waitlist_summary=waitlist_summary,
+        loop_statuses=loop_statuses,
+        billing_recovery_case_rows=billing_recovery_case_rows,
+        reactivation_case_rows=reactivation_case_rows,
+        source_ingestion_state_rows=source_ingestion_state_rows,
+        message_log=message_log,
+    )
 
 
 @api.post("/oversight/login")
@@ -2103,9 +2795,64 @@ async def oversight_login(payload: OversightLogin, request: Request) -> Dict[str
     return {"ok": True}
 
 
+@api.post("/oversight/cases/{case_id}")
+async def update_oversight_case_review(
+    case_id: str,
+    payload: OpsCaseReviewIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    normalized_state = _normalize_ops_case_state(payload.state)
+    if not normalized_state:
+        raise HTTPException(status_code=400, detail="Invalid case state.")
+    owner = _normalize_ops_case_owner(payload.owner)
+    note = _normalize_ops_case_note(payload.note)
+    current_cases = await _current_ops_cases()
+    current_case = next((row for row in current_cases if str(row.get("case_id") or "") == case_id), None)
+    if not current_case:
+        raise HTTPException(status_code=404, detail="Ops case not found.")
+
+    states_coll = getattr(db, "ops_case_states", None)
+    if states_coll is None:
+        raise HTTPException(status_code=503, detail="Ops case state store unavailable.")
+
+    before = await states_coll.find_one({"case_id": case_id}, {"_id": 0}) or {}
+    updated_at = now_iso()
+    history = list(before.get("history") or [])
+    history.append(
+        {
+            "state": normalized_state,
+            "owner": owner,
+            "note": note,
+            "updated_at": updated_at,
+            "actor": f"ops:{owner}" if owner else "ops",
+        }
+    )
+    history = history[-OPS_CASE_HISTORY_LIMIT:]
+    after = {
+        "case_id": case_id,
+        "case_type": current_case.get("case_type"),
+        "workflow": current_case.get("workflow"),
+        "entity_type": current_case.get("entity_type"),
+        "entity_id": current_case.get("entity_id"),
+        "state": normalized_state,
+        "owner": owner,
+        "note": note,
+        "updated_at": updated_at,
+        "history": history,
+    }
+    await states_coll.update_one({"case_id": case_id}, {"$set": after}, upsert=True)
+    await _audit("ops_case_review_updated", case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
+    merged_case = _merge_ops_case_state(current_case, after)
+    return _scrub({"ok": True, "case": merged_case})
+
+
 @api.get("/oversight")
 async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
-    """Single read-only snapshot. No buttons. No actions. Just the truth."""
+    """Primary oversight snapshot for the Operations Console.
+
+    This route is read-only. The wider Ops surface may still persist bounded
+    Layer 1 review-state history through dedicated review endpoints.
+    """
     phase_runtime = await _refresh_phase_runtime_records()
     phase_state = phase_runtime["phase_state"]
     readiness_snapshot = phase_runtime["readiness_snapshot"]
@@ -2338,6 +3085,17 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "reactivation_route": reactivation_route,
         }.items()
     }
+    trainer_inventory = await _trainer_inventory_rows()
+    message_log = await _message_log_rows()
+    ops_cases = await _ops_case_rows(
+        discovery_summary=discovery_summary,
+        waitlist_summary=waitlist_summary,
+        loop_statuses=loop_statuses,
+        billing_recovery_case_rows=billing_recovery_case_rows,
+        reactivation_case_rows=reactivation_case_rows,
+        source_ingestion_state_rows=source_ingestion_state_rows,
+        message_log=message_log,
+    )
 
     return _scrub({
         "revenue": {
@@ -2420,6 +3178,9 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "kpi_prelaunch": kpi_prelaunch,
         "growth_attribution_summary": growth_attribution_summary,
         "reactivation_summary": reactivation_summary,
+        "trainer_inventory": trainer_inventory,
+        "message_log": message_log,
+        "ops_cases": ops_cases,
         "ops_investigation": {
             "loop_statuses": loop_statuses,
             "billing_recovery_cases": billing_recovery_case_rows,
@@ -2644,6 +3405,8 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.config_snapshots.create_index("applied_at")
     await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
     await db.notification_events.create_index("id", unique=True, sparse=True)
+    await db.ops_case_states.create_index("case_id", unique=True, sparse=True)
+    await db.ops_case_states.create_index("updated_at")
     await db.auth_attempts.create_index("key", unique=True)
     await db.auth_attempts.create_index("updated_at")
     await db.phase_readiness_snapshots.create_index("snapshot_kind", unique=True)
@@ -2655,8 +3418,16 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
 
     runtime = runtime_control.resolve_loop_runtime(process_role)
-    await _seed_if_empty()
-    await _seed_discovery_if_empty()
+    if _startup_seeds_enabled(process_role):
+        await _seed_if_empty()
+        await _seed_discovery_if_empty()
+    else:
+        logger.info(
+            "startup seeds skipped: process=%s %s=%s",
+            process_role,
+            STARTUP_SEEDS_ENV,
+            os.environ.get(STARTUP_SEEDS_ENV, "0"),
+        )
 
     # Only the active owner process should execute initial autonomy writes.
     startup_holder = runtime.should_schedule_loops

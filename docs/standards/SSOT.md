@@ -278,10 +278,11 @@ The oversight model must be Normal Ops by default.
 
 Requirements:
 1. `/ops` is an observation and triage surface by default
-2. `/ops` must not directly mutate locked runtime policy during Normal Ops
-3. any future Owner Override actions surfaced from `/ops` must stay within reversible, bounded, reason-captured, audit-logged, policy-safe workflows
-4. any policy-altering, launch-phase-altering, public-exposure-altering, direct-data, provider, deployment, or infrastructure action is reserved to the same owner acting in `technical-owner mode`
-5. `/ops` must not drift into unrestricted admin CRUD, manual trainer matching, or manual routine billing
+2. `/ops` may persist bounded Layer 1 review state, owner note, and audit history during Normal Ops
+3. `/ops` must not directly mutate locked runtime policy during Normal Ops
+4. any future Owner Override actions surfaced from `/ops` must stay within reversible, bounded, reason-captured, audit-logged, policy-safe workflows
+5. any policy-altering, launch-phase-altering, public-exposure-altering, direct-data, provider, deployment, or infrastructure action is reserved to the same owner acting in `technical-owner mode`
+6. `/ops` must not drift into unrestricted admin CRUD, manual trainer matching, or manual routine billing
 
 ## Operating Model
 

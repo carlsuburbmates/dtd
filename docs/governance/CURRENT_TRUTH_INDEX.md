@@ -1,88 +1,108 @@
 # Current Truth Index
-Last updated: 2026-05-25
+
+Last updated: 2026-06-07
 
 ## Purpose
 
-This file is the only entry point for future implementation work in this repo.
+This file is the only entry point for implementation and documentation-truth
+routing in this repo.
 
 Rules:
-1. Only the docs listed under `Canonical implementation pack` govern implementation.
-2. Docs listed under `Runtime/code audit support` may be used during a no-edit code audit, but they do not define product truth by themselves.
-3. Docs listed under `Runtime snapshot evidence` are evidence-only and must not override normative implementation truth.
-4. Process and design docs are non-authoritative support material.
-5. If a doc is not explicitly listed below, it must not drive implementation decisions.
+1. only the docs listed under `Canonical implementation pack` govern implementation truth
+2. docs listed under `Execution control` govern current work sequencing and current state only
+3. docs listed under `Verification and evidence` support proof and runtime review only
+4. process and design docs are non-authoritative support material
+5. if a doc is not explicitly listed below, it must not drive implementation or truth decisions
 
-## Core execution authorities
+## Core Execution Authorities
 
-These govern Codex session behavior, not product definition:
-- `AGENTS.md`
-- `.codex/skill-policy.toml`
-- `docs/governance/CURRENT_TRUTH_INDEX.md`
+These govern Codex session behavior and execution method, not product truth:
+1. `AGENTS.md`
+2. `.codex/skill-policy.toml`
+3. `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
+4. `docs/governance/CURRENT_TRUTH_INDEX.md`
 
-## Canonical implementation pack
+## Canonical Implementation Pack
 
-These docs define the intended DTD website and operating model for implementation:
-- `docs/standards/SSOT.md`
-- `docs/standards/BUILD_CHECKLIST.md`
-- `docs/standards/LAUNCH_GATE.md`
-- `docs/standards/INTEGRITY_AUDIT.md`
-- `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
-- `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
-- `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
-- `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
+These docs define the intended DTD website and operating model:
+1. `docs/standards/SSOT.md`
+2. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
+3. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
+4. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
+5. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+6. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
+7. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
+8. `docs/standards/BUILD_CHECKLIST.md`
+9. `docs/standards/LAUNCH_GATE.md`
+10. `docs/standards/INTEGRITY_AUDIT.md`
 
-## Runtime/code audit support
+## Execution Control
 
-These docs support no-edit audit and sequencing work. They are not standalone product-definition sources:
-- `docs/governance/ROADMAP.md`
-- `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`
+These docs govern active work and current-state control. They must not redefine
+product or workflow truth:
+1. `docs/governance/EXECUTION_STATUS.md`
+2. `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
 
-## Runtime snapshot evidence
+## Verification And Evidence
 
-These docs are runtime/evidence snapshots only. They do not override normative implementation truth, and they do not define product, page, or route truth:
-- `docs/governance/LOCK_STATE.md`
+These docs support verification, runtime review, and proof continuity. They do
+not override normative truth:
+1. `docs/governance/LOCK_STATE.md`
+2. `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`
+3. `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
+4. `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md`
+5. `docs/process/CURATED_SYNC_PACKAGE_PLAN.md`
+6. `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
 
-## Canonical pack precedence
+## Canonical Pack Precedence
 
-When canonical docs disagree, resolve within the pack in this order:
-1. `docs/governance/CURRENT_TRUTH_INDEX.md` routes authority; it does not define product behavior by itself.
-2. `docs/standards/SSOT.md` governs product model, launch model, route classes, and operating rules.
-3. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` governs route-level and page-level behavior.
-4. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first prelaunch goals and evidence model.
-5. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and operator-mode separation.
-6. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch-approval, and verification requirements.
-7. `docs/governance/LOCK_STATE.md` is runtime/governance snapshot evidence only. It must not override `SSOT.md` or `COMPLETE_WEBSITE_PAGE_SPEC.md`, and it does not define product, page, or route truth.
+When canonical docs disagree, resolve in this order:
+1. `docs/governance/CURRENT_TRUTH_INDEX.md` routes authority only
+2. `docs/standards/SSOT.md` governs product model, actor types, launch model, and operating rules
+3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` governs end-to-end workflow completion and E2E completion criteria
+4. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` governs page-level and route-level behavior
+5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the current `/ops` product surface and operator-facing semantics
+6. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and escalation layers
+7. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first phase goals and evidence model
+8. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch approval, and verification requirements
 
-## Process-only docs
+## Execution Control Rules
 
-These docs support repo workflows, Codex operation, deployment/runbook continuity, and session handoff. They must not define implementation scope:
-- `README.md`
-- `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
-- `docs/process/WEBSITE_COMPLETION_CHECKLIST.md`
-- `docs/process/NEXT_SESSION_HANDOFF.md`
-- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md`
-- `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
-- `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
-- `docs/process/CURATED_SYNC_PACKAGE_PLAN.md`
-- `.codex/templates/CAPABILITY_BRIEF_TEMPLATE.md`
-- `.codex/templates/FINAL_EVIDENCE_TEMPLATE.md`
+1. `docs/governance/EXECUTION_STATUS.md` is the only current-state controller
+2. `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` is the execution checklist only
+3. execution docs may not redefine product truth, workflow truth, page truth, or `/ops` behavior
 
-## Design docs
+## Verification And Evidence Rules
 
-These docs support design continuity only. They must not define implementation scope:
-- `docs/design/README.md`
-- `docs/design/FIGMA_SYNC_PLAYBOOK.md`
-- `docs/design/FIGMA_COMPONENT_MAP.md`
-- `docs/design/NO_PAYWALL_WORKFLOW.md`
-- `docs/design/DESIGN_ALIGNMENT_REPORT_2026-05-07.md`
-- `docs/design/design_guidelines.json`
+1. evidence docs may support or challenge a claim
+2. evidence docs may not redefine product, workflow, page, or `/ops` truth
+3. runtime snapshots must not be mistaken for normative implementation requirements
 
-## Resolution order
+## Process-Only Docs
+
+These docs support repo workflow and orientation only. They must not define
+implementation truth:
+1. `README.md`
+2. `.codex/templates/CAPABILITY_BRIEF_TEMPLATE.md`
+3. `.codex/templates/FINAL_EVIDENCE_TEMPLATE.md`
+
+## Design Docs
+
+These docs support design continuity only. They must not define implementation
+scope:
+1. `docs/design/README.md`
+2. `docs/design/FIGMA_SYNC_PLAYBOOK.md`
+3. `docs/design/FIGMA_COMPONENT_MAP.md`
+4. `docs/design/NO_PAYWALL_WORKFLOW.md`
+5. `docs/design/DESIGN_ALIGNMENT_REPORT_2026-05-07.md`
+6. `docs/design/design_guidelines.json`
+
+## Resolution Order
 
 When conflicts exist, resolve in this order:
 1. core execution authorities
 2. canonical implementation pack
-3. runtime/code audit support
-4. runtime snapshot evidence
+3. execution control
+4. verification and evidence
 5. process-only docs
 6. design docs

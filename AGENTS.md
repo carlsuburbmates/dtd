@@ -77,6 +77,11 @@ Default approval behavior is policy-driven:
 4. Fix stale workspace/path references in authoritative docs when discovered.
 5. Use subagents when work benefits from parallel specialist review (for example: frontend UX/copy review, repo audit + validation, accessibility + responsive checks, billing/auth/migration risk review).
 6. Use skills/plugins when the task matches a repeatable workflow (for example: frontend audit, copy refinement, accessibility review, test/build verification, release readiness, docs cleanup, evidence audit).
+7. Apply passive prompt optimization by default before execution:
+   - internally rewrite ambiguous or verbose user prompts into concise, constraint-aware execution intent
+   - preserve user objective exactly; do not expand scope
+   - add explicit output shape and acceptance criteria when missing
+   - only skip this rewrite when the user explicitly requests verbatim handling
 
 ## 6) Safety Boundary (locked)
 

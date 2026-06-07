@@ -90,7 +90,7 @@ It is not a completeness claim and it is not the canonical route contract.
 - `vercel curl / --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
 - `vercel curl /trainers --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
 - `vercel curl /ops --deployment dtd-oomq80e9u-carlitos-projects-a62ff78f.vercel.app` -> HTML returned.
-6. Local implementation/closeout work is currently clear: roadmap-authority alignment is closed and `docs/governance/ROADMAP.md` no longer carries open `Must-Finish Before Launch` blockers.
+6. Local implementation/closeout work is currently clear and the execution/status control plane now lives in `docs/governance/EXECUTION_STATUS.md`.
 7. Supply-first authority alignment is now reflected across the current-truth docs listed in `docs/governance/CURRENT_TRUTH_INDEX.md`; this docs-only pass did not change runtime behavior.
 8. Supply-first launch verification still requires explicit phase/readiness/decision evidence, or clearly documented equivalent persisted phase-state evidence, where that is not yet shown in runtime evidence.
 9. Matching-enabled release evidence remains intentionally open for later controlled live-matching work because the live runtime still reports `public_matching_enabled=false`.
@@ -105,14 +105,14 @@ It is not a completeness claim and it is not the canonical route contract.
 
 Evidence references:
 1. `H-01` completed + live-domain state:
-- `docs/process/NEXT_SESSION_HANDOFF.md` ("Execution log", current session `vercel alias ls` and `curl -I` checks on apex + `www` returning `307`/`200`).
-- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("Current lock", item 3 and Stage D/E complete evidence).
+- `docs/governance/EXECUTION_STATUS.md` (append-only execution log and current runtime/infrastructure truth).
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` (active Vercel project identity and durable integration caveats).
 2. `H-02` completed:
-- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-02 readiness snapshot", items 1-4).
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` (platform inventory, environment mapping, verification command set).
 3. `H-03` completed:
 - this file ("Legal copy sign-off (H-03)" section below).
 4. `H-04` completed:
-- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` ("H-04 platform readiness snapshot").
+- `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md` (durable platform inventory and verification command set).
 
 ## Legal copy sign-off (H-03)
 
@@ -126,7 +126,7 @@ Evidence references:
 
 ## Update rule
 
-If any governance, runtime, or route truth changes materially, update this file and `ROADMAP.md` in the same commit.
-If the authority hierarchy changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` and `docs/process/NEXT_SESSION_HANDOFF.md` in the same session.
-If any gate/status value changes, append a matching command/file evidence entry in `docs/process/NEXT_SESSION_HANDOFF.md` execution log in the same session.
+If any governance, runtime, or route truth changes materially, update this file and `docs/governance/EXECUTION_STATUS.md` in the same commit.
+If the authority hierarchy changes, update `docs/governance/CURRENT_TRUTH_INDEX.md` and `docs/governance/EXECUTION_STATUS.md` in the same session.
+If any gate/status value changes, append a matching command/file evidence entry in `docs/governance/EXECUTION_STATUS.md` execution log in the same session.
 If Codex interaction protocols are updated, update `.codex/skill-policy.toml` in the same commit.

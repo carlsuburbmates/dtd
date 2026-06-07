@@ -188,10 +188,11 @@ The launch candidate must pass:
 The launch candidate must have a coherent documentation set covering:
 1. the current truth index
 2. the standards set
-3. the canonical page/route contract
-4. supply-first launch goals and evidence alignment
-5. ops responsibility boundaries
-6. runtime/code audit support
+3. workflow completion authority
+4. the canonical page/route contract
+5. supply-first launch goals and evidence alignment
+6. ops responsibility boundaries
+7. the Operations Console product spec
 
 ## 15. Launch Evidence Requirement
 

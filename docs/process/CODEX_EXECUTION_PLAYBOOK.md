@@ -14,6 +14,12 @@ Before implementation, publish a concise capability brief:
 
 Use template: `.codex/templates/CAPABILITY_BRIEF_TEMPLATE.md`.
 
+Passive prompt optimization is default behavior in this repo:
+1. rewrite ambiguous or verbose requests into concise execution intent before acting
+2. preserve objective and scope exactly
+3. add constraints/output shape/acceptance criteria when missing
+4. skip only when the user explicitly requests verbatim handling
+
 For integrated tech and tool work:
 1. actively prefer the available relevant native capability when it materially improves implementation quality or evidence quality
 2. do not default to manual-only implementation or inspection when a relevant available plugin, browser workflow, subagent, or integration-aware skill is a better fit

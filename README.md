@@ -67,7 +67,7 @@ cd frontend && yarn build
 Read in this order:
 1. `docs/governance/CURRENT_TRUTH_INDEX.md`
 2. canonical implementation docs listed there
-3. `docs/governance/ROADMAP.md` and `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` for no-edit code audit support
+3. `docs/governance/EXECUTION_STATUS.md` and `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` for current-state and audit-support context
 
 Process and design docs are non-authoritative.
 
@@ -75,5 +75,5 @@ Process and design docs are non-authoritative.
 
 - `docs/governance/CURRENT_TRUTH_INDEX.md`
 - `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
-- `docs/governance/ROADMAP.md`
+- `docs/governance/EXECUTION_STATUS.md`
 - `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`

@@ -535,7 +535,7 @@ But the owner must approve any transition affecting:
 
 1. Readiness calculation: Automated System
 2. Readiness display: Normal Ops
-3. Bounded note and review: Owner Override
+3. Bounded note and review-state capture: Normal Ops
 4. Phase transition approval: Technical-Owner Mode
 
 ### Non-negotiable requirements

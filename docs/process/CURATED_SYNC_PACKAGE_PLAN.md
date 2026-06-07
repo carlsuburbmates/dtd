@@ -8,7 +8,7 @@ No sync executed in this slice.
 - Files:
   - `backend/server.py`
   - `backend/services/claim_state.py`
-- Purpose: core prelaunch runtime controls, claim-state enforcement surfaces, waitlist/oversight read-only contracts.
+- Purpose: core prelaunch runtime controls, claim-state enforcement surfaces, waitlist contracts, and bounded Normal Ops oversight contracts.
 - Risk level: high
 - Must-pass checks before staging:
   - `cd backend && ../.venv/bin/python -m pytest -q tests/test_claim_state_unit.py tests/test_public_mode_unit.py`
@@ -41,10 +41,10 @@ No sync executed in this slice.
   - `node scripts/check_frontend_copy_guard.js`
   - `cd frontend && npm run build`
 
-## Group D — Ops Read-Only Visibility
+## Group D — Ops Visibility And Bounded Review State
 - Files:
   - `frontend/src/pages/Ops.jsx`
-- Purpose: non-technical read-only visibility for claim policy, data integrity, waitlist, and KPI surfaces.
+- Purpose: non-technical visibility for claim policy, data integrity, waitlist, KPI surfaces, and bounded Layer 1 review-state persistence.
 - Risk level: low
 - Must-pass checks before staging:
   - `cd frontend && npm run build`

@@ -2,12 +2,19 @@
 
 **File:** `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`  
 **Project:** Dog Trainers Directory / DTD  
-**Purpose:** Governance model for the owner-facing `/ops` cockpit, autonomous system responsibilities, owner override boundaries, and technical-owner escalation paths.  
+**Purpose:** Governance model for the owner-facing `/ops` console, autonomous system responsibilities, owner override boundaries, and technical-owner escalation paths.  
 **Status:** Canonical governance standard  
 
 ---
 
 ## 1. Control Principle
+
+Implementation note:
+
+- this file governs **responsibility boundaries**
+- `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the **current Operations Console product/UI shape**
+
+Both documents must stay aligned.
 
 DTD is operated by the same human owner, but responsibilities must be separated by operational risk.
 
@@ -19,7 +26,10 @@ The system should be organised into four responsibility labels:
    - Handles routine product behaviour, recurring loops, scoring, matching, billing lifecycle, signal processing, normal remediation, and self-healing where safe.
 
 2. **Layer 1 — Normal Ops**
-   - Read-only monitoring, daily checks, triage, notes, and decisioning: `Monitor`, `Investigate`, `Escalate`.
+   - Read-only monitoring, daily checks, triage, and decisioning inside the Operations Console.
+   - May record bounded review state, owner note, and queue history without changing live policy or provider state.
+   - Current implemented console behavior is visibility-first and queue-first.
+   - Follow the current page structure and reading order in `OPERATIONS_CONSOLE_SPEC.md`.
 
 3. **Layer 2 — Owner Override**
    - Bounded, reversible, policy-safe owner intervention from `/ops`.
@@ -1075,17 +1085,24 @@ The owner should review trends, stale loops, high-severity alerts, and unresolve
 
 **Responsibility label:** Layer 1 — Normal Ops
 
-The owner must choose one:
+The owner must be able to classify and progress review work without leaving
+Normal Ops.
 
-- `Monitor`
-- `Investigate`
-- `Escalate`
+At the workflow level this means:
+- monitor / investigate / escalate still remain the governing mental model
+- the current queue implementation may also persist bounded Layer 1 review
+  states such as `acknowledged`, `actioned`, `resolved`, `deferred`,
+  `dismissed`, and explicit escalation states
+- those persisted review states do not create Owner Override or
+  Technical-Owner powers by themselves
 
 ### 15.6 Current `/ops` read-only boundary
 
 **Responsibility label:** Layer 1 — Normal Ops
 
-Current `/ops` is operational visibility only.
+Current `/ops` is visibility-first and read-only by default, with one bounded
+exception: it may persist Layer 1 review state, owner note, and review history
+for queue cases.
 
 Future materialisation should not silently convert it into unrestricted admin.
 
@@ -1097,6 +1114,7 @@ Layer 1:
 
 - inspect case
 - read evidence
+- record bounded review-state progress where supported
 - monitor/investigate/escalate
 - record note
 

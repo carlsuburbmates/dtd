@@ -131,6 +131,13 @@ class _Collection:
         row = await self.find_one(filt)
         if row:
             row.update(update.get("$set", {}))
+        elif upsert:
+            doc = dict(filt)
+            doc.update(update.get("$set", {}))
+            self.rows.append(doc)
+
+    async def create_index(self, *_args, **_kwargs):
+        return None
 
     async def count_documents(self, filt=None):
         filt = filt or {}
@@ -185,6 +192,14 @@ def _fake_oversight_db():
                 "outcome_score": 0.8,
                 "verification_status": "verified",
                 "published": True,
+                "confidence_score": 0.92,
+                "billing_profile_status": "ready",
+                "website": "https://trainer.example.com",
+                "email": "trainer@example.com",
+                "updated_at": "2026-05-20T00:00:00+00:00",
+                "intros_30d": 2,
+                "conversions_30d": 1,
+                "via_submission_id": "sub_1",
             }
         ]
     )
@@ -208,6 +223,56 @@ def _fake_oversight_db():
             }
         ]
     )
+    submissions = _Collection(
+        rows=[
+            {
+                "id": "sub_1",
+                "name": "Trainer One",
+                "status": "held",
+                "created_at": "2026-05-19T00:00:00+00:00",
+                "submitter_notification_status": "sent",
+            }
+        ]
+    )
+    notification_events = _Collection(
+        rows=[
+            {
+                "id": "note_1",
+                "target_kind": "submission",
+                "target_id": "sub_1",
+                "kind": "submission_update",
+                "status": "sent",
+                "attempt": 1,
+                "http_status": 202,
+                "provider": "resend",
+                "created_at": "2026-05-20T00:00:00+00:00",
+            }
+        ]
+    )
+    owner_waitlist_events = _Collection(
+        rows=[
+            {
+                "id": "wle_1",
+                "event_type": "owner_waitlist_duplicate",
+                "status": "duplicate",
+                "email_norm": "owner@example.com",
+                "suburb_norm": "carlton",
+                "created_at": "2026-05-20T00:00:00+00:00",
+            }
+        ]
+    )
+    owner_waitlist = _Collection(
+        rows=[
+            {
+                "id": "wl_1",
+                "email_norm": "owner@example.com",
+                "suburb_norm": "carlton",
+                "suburb": "Carlton",
+                "status": "active",
+                "created_at": "2026-05-19T00:00:00+00:00",
+            }
+        ]
+    )
     empty = _Collection(rows=[])
     system_state = _Collection(
         rows=[
@@ -228,7 +293,7 @@ def _fake_oversight_db():
         intros=intros,
         conversions=conversions,
         engagements=empty,
-        submissions=empty,
+        submissions=submissions,
         discovery_queue=empty,
         pricing_state=empty,
         trainers=trainers,
@@ -237,6 +302,35 @@ def _fake_oversight_db():
         system_state=system_state,
         source_ingestion_state=empty,
         reactivation_candidates=empty,
+        notification_events=notification_events,
+        owner_waitlist=owner_waitlist,
+        owner_waitlist_events=owner_waitlist_events,
+        ops_case_states=_Collection(rows=[]),
+    )
+
+
+def _fake_startup_db():
+    coll = _Collection(rows=[])
+    return SimpleNamespace(
+        trainers=_Collection(rows=[]),
+        intros=_Collection(rows=[]),
+        conversions=_Collection(rows=[]),
+        engagements=_Collection(rows=[]),
+        submissions=coll,
+        audit_log=coll,
+        pricing_state=coll,
+        system_state=coll,
+        discovery_queue=_Collection(rows=[]),
+        stripe_events=coll,
+        config_snapshots=coll,
+        outreach_events=coll,
+        notification_events=coll,
+        ops_case_states=coll,
+        auth_attempts=coll,
+        phase_readiness_snapshots=coll,
+        phase_transition_decisions=coll,
+        owner_waitlist=coll,
+        owner_waitlist_events=coll,
     )
 
 
@@ -279,6 +373,78 @@ def test_config_exposes_claim_and_monetization_safe_defaults(monkeypatch):
     assert payload["claim_state_current"] == "STATE_0"
     assert payload["claim_enforcement_mode"] == "report_only"
     assert payload["claim_block_melbourne_wide_below_state_2"] is True
+
+
+def test_startup_skips_seeds_by_default(monkeypatch):
+    fake_db = _fake_startup_db()
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.delenv("ENABLE_STARTUP_SEEDS", raising=False)
+
+    calls = {"trainers": 0, "discovery": 0}
+
+    async def _seed_trainers():
+        calls["trainers"] += 1
+
+    async def _seed_discovery():
+        calls["discovery"] += 1
+
+    monkeypatch.setattr(server, "_seed_if_empty", _seed_trainers)
+    monkeypatch.setattr(server, "_seed_discovery_if_empty", _seed_discovery)
+    monkeypatch.setattr(
+        server.runtime_control,
+        "resolve_loop_runtime",
+        lambda process_role: server.runtime_control.LoopRuntimeConfig(
+            process_role=process_role,
+            loop_owner="none",
+            source="test",
+            should_schedule_loops=False,
+            lease_enabled=False,
+            lease_ttl_s=120,
+            lease_renew_s=30,
+            owner_id="test-owner",
+        ),
+    )
+
+    asyncio.run(server.on_startup(process_role="api", allow_loop_schedule=False))
+
+    assert calls == {"trainers": 0, "discovery": 0}
+
+
+def test_startup_seeds_only_from_api_when_enabled(monkeypatch):
+    fake_db = _fake_startup_db()
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setenv("ENABLE_STARTUP_SEEDS", "1")
+
+    calls = {"trainers": 0, "discovery": 0}
+
+    async def _seed_trainers():
+        calls["trainers"] += 1
+
+    async def _seed_discovery():
+        calls["discovery"] += 1
+
+    monkeypatch.setattr(server, "_seed_if_empty", _seed_trainers)
+    monkeypatch.setattr(server, "_seed_discovery_if_empty", _seed_discovery)
+    monkeypatch.setattr(
+        server.runtime_control,
+        "resolve_loop_runtime",
+        lambda process_role: server.runtime_control.LoopRuntimeConfig(
+            process_role=process_role,
+            loop_owner="none",
+            source="test",
+            should_schedule_loops=False,
+            lease_enabled=False,
+            lease_ttl_s=120,
+            lease_renew_s=30,
+            owner_id="test-owner",
+        ),
+    )
+
+    asyncio.run(server.on_startup(process_role="worker", allow_loop_schedule=False))
+    assert calls == {"trainers": 0, "discovery": 0}
+
+    asyncio.run(server.on_startup(process_role="api", allow_loop_schedule=False))
+    assert calls == {"trainers": 1, "discovery": 1}
 
 
 def test_match_gate_off_denies(monkeypatch):
@@ -628,6 +794,101 @@ def test_oversight_exposes_growth_and_reactivation_summary_contract(monkeypatch)
     assert "reason_codes" in growth
     assert "status" in react
     assert "reason_codes" in react
+
+
+def test_oversight_exposes_operations_console_read_models(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+
+    out = asyncio.run(server.oversight(None))
+
+    trainer_inventory = out.get("trainer_inventory")
+    message_log = out.get("message_log")
+    ops_cases = out.get("ops_cases")
+
+    assert isinstance(trainer_inventory, list)
+    assert trainer_inventory
+    assert trainer_inventory[0]["name"] == "Trainer One"
+    assert trainer_inventory[0]["source_kind"] == "submission"
+    assert isinstance(trainer_inventory[0]["blocker_codes"], list)
+
+    assert isinstance(message_log, list)
+    assert message_log
+    assert message_log[0]["workflow"] == "trainer submission"
+    assert message_log[0]["status"] == "sent"
+
+    assert isinstance(ops_cases, list)
+    assert ops_cases
+    assert any(case["case_type"] == "trainer_submission_case" for case in ops_cases)
+    assert any(case["case_type"] == "trainer_communications_case" for case in ops_cases)
+
+
+def test_oversight_merges_persisted_case_review_state(monkeypatch):
+    fake_db = _fake_oversight_db()
+    fake_db.ops_case_states = _Collection(
+        rows=[
+            {
+                "case_id": "submission:sub_1",
+                "state": "investigating",
+                "owner": "Carl",
+                "note": "Checked trainer evidence.",
+                "updated_at": "2026-05-21T00:00:00+00:00",
+                "history": [
+                    {
+                        "state": "acknowledged",
+                        "owner": "Carl",
+                        "note": "Opened the case.",
+                        "updated_at": "2026-05-20T12:00:00+00:00",
+                        "actor": "ops:Carl",
+                    }
+                ],
+            }
+        ]
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    out = asyncio.run(server.oversight(None))
+    case = next(row for row in out["ops_cases"] if row["case_id"] == "submission:sub_1")
+
+    assert case["state"] == "investigating"
+    assert case["owner"] == "Carl"
+    assert case["review"]["state"] == "investigating"
+    assert case["review"]["note"] == "Checked trainer evidence."
+    assert case["review"]["history"][0]["state"] == "acknowledged"
+
+
+def test_update_oversight_case_review_persists_state_and_history(monkeypatch):
+    fake_db = _fake_oversight_db()
+    monkeypatch.setattr(server, "db", fake_db)
+    audit_calls = []
+
+    async def _noop_audit(action, entity_id, before=None, after=None, actor="system"):
+        audit_calls.append(
+            {
+                "action": action,
+                "entity_id": entity_id,
+                "before": before,
+                "after": after,
+                "actor": actor,
+            }
+        )
+
+    monkeypatch.setattr(server, "_audit", _noop_audit)
+
+    payload = server.OpsCaseReviewIn(
+        state="investigating",
+        owner="Carl",
+        note="Reviewed the submission and kept it open.",
+    )
+
+    out = asyncio.run(server.update_oversight_case_review("submission:sub_1", payload, None))
+
+    assert out["ok"] is True
+    assert out["case"]["state"] == "investigating"
+    assert out["case"]["review"]["owner"] == "Carl"
+    assert out["case"]["review"]["state"] == "investigating"
+    assert fake_db.ops_case_states.rows[0]["case_id"] == "submission:sub_1"
+    assert fake_db.ops_case_states.rows[0]["history"][0]["note"] == "Reviewed the submission and kept it open."
+    assert audit_calls[0]["action"] == "ops_case_review_updated"
 
 
 def test_oversight_exposes_ops_investigation_contract(monkeypatch):
@@ -1006,3 +1267,5 @@ def test_oversight_waitlist_summary_fields_present(monkeypatch):
     assert any(k in keys for k in {"total", "total_count", "waitlist_total", "total_active"})
     assert any(k in keys for k in {"recent_7d", "recent_joins_7d", "recent_joins", "joins_24h"})
     assert any(k in keys for k in {"top_suburbs", "top_suburbs_7d"})
+    assert "duplicate_24h" in keys
+    assert "rejected_24h" in keys

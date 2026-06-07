@@ -7,9 +7,11 @@ jest.mock("react-router-dom", () => ({
 }), { virtual: true });
 
 const mockToastError = jest.fn();
+const mockToastSuccess = jest.fn();
 jest.mock("sonner", () => ({
     toast: {
         error: (...args) => mockToastError(...args),
+        success: (...args) => mockToastSuccess(...args),
     },
 }));
 
@@ -34,6 +36,19 @@ function renderOps() {
     };
 }
 
+function setFieldValue(element, value) {
+    const prototype =
+        element.tagName === "TEXTAREA"
+            ? window.HTMLTextAreaElement.prototype
+            : element.tagName === "SELECT"
+                ? window.HTMLSelectElement.prototype
+                : window.HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    descriptor.set.call(element, value);
+    const eventName = element.tagName === "SELECT" ? "change" : "input";
+    element.dispatchEvent(new Event(eventName, { bubbles: true }));
+}
+
 const validSnapshot = {
     ts: "2026-05-26T11:35:27.120695+00:00",
     revenue: {},
@@ -53,6 +68,9 @@ const validSnapshot = {
     kpi_prelaunch: {},
     growth_attribution_summary: {},
     reactivation_summary: {},
+    trainer_inventory: [],
+    message_log: [],
+    ops_cases: [],
     ops_investigation: {},
     launch_phase_state: {
         current_phase: "supply_first",
@@ -79,6 +97,40 @@ const validSnapshot = {
             decided_at: "2026-05-26T11:35:27.120695+00:00",
             to_phase: "supply_first",
             reason: "default_supply_first_prelaunch_lock",
+        },
+    ],
+    ops_cases: [
+        {
+            case_id: "submission:sub_1",
+            case_type: "trainer_submission_case",
+            canonical_user_type: "Trainer / business submitter",
+            workflow: "trainer submission",
+            entity_type: "submission",
+            entity_id: "sub_1",
+            title: "Trainer One · Held",
+            summary: "Submission needs review in the trainer workflow.",
+            severity: "high",
+            state: "detected",
+            owner: "",
+            detected_at: "2026-05-19T00:00:00+00:00",
+            last_updated_at: "2026-05-19T00:00:00+00:00",
+            source_refs: [{ kind: "submission", id: "sub_1" }],
+            risk_reason_codes: ["submission_held"],
+            recommended_next_step: "Review submission status and linked trainer readiness.",
+            responsibility_layer: "Layer 1 — Normal Ops",
+            detail_rows: [
+                { label: "Submission status", value: "held" },
+                { label: "Entity", value: "sub_1" },
+            ],
+            linked_paths: [],
+            audit_refs: [],
+            review: {
+                state: "detected",
+                owner: "",
+                note: "",
+                updated_at: "2026-05-19T00:00:00+00:00",
+                history: [],
+            },
         },
     ],
 };
@@ -109,9 +161,10 @@ describe("Ops auth transition", () => {
             await Promise.resolve();
             await Promise.resolve();
         });
-        expect(view.container.textContent).toContain("Launch posture and readiness");
-        expect(view.container.textContent).toContain("Current phase");
-        expect(view.container.textContent).toContain("Public emphasis");
+        expect(view.container.textContent).toContain("Operations Console");
+        expect(view.container.textContent).toContain("Website status");
+        expect(view.container.textContent).toContain("Work Queue");
+        expect(view.container.textContent).toContain("Readable website control in one place");
         view.cleanup();
     });
 
@@ -126,6 +179,49 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).not.toContain("Loading…");
         expect(view.container.textContent).toContain("Unable to load oversight snapshot");
         expect(view.container.querySelector("[data-testid='ops-refresh-empty']")).not.toBeNull();
+        view.cleanup();
+    });
+
+    it("saves review state from the work queue case detail panel", async () => {
+        const postSpy = jest.spyOn(opsApi, "post");
+        getSpy.mockResolvedValue({ data: validSnapshot });
+        postSpy.mockResolvedValueOnce({ data: { ok: true, case: { case_id: "submission:sub_1", state: "investigating" } } });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const workQueueButton = view.container.querySelector("[data-testid='ops-nav-work_queue']");
+        await act(async () => {
+            workQueueButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        const stateSelect = view.container.querySelector("[data-testid='ops-case-state']");
+        const ownerInput = view.container.querySelector("[data-testid='ops-case-owner']");
+        const noteInput = view.container.querySelector("[data-testid='ops-case-note']");
+        const saveButton = view.container.querySelector("[data-testid='ops-case-save']");
+
+        await act(async () => {
+            setFieldValue(stateSelect, "investigating");
+            setFieldValue(ownerInput, "Carl");
+            setFieldValue(noteInput, "Reviewed message history.");
+        });
+
+        await act(async () => {
+            saveButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(postSpy).toHaveBeenCalledWith("/oversight/cases/submission%3Asub_1", {
+            state: "investigating",
+            owner: "Carl",
+            note: "Reviewed message history.",
+        });
+        expect(mockToastSuccess).toHaveBeenCalled();
+        postSpy.mockRestore();
         view.cleanup();
     });
 });

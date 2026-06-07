@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   mongo:
     image: mongo:6
@@ -15,10 +13,28 @@ services:
     depends_on: [mongo]
     environment:
       MONGO_URL: mongodb://mongo:27017
-      DB_NAME: barkbond
+      DB_NAME: dtd
       CORS_ORIGINS: "*"
       ADMIN_PASS: ${ADMIN_PASS:-melbourne-bark-2026}
+      AUTONOMY_LOOP_OWNER: worker
+      RUN_AUTONOMY_IN_API: 0
+      ENABLE_STARTUP_SEEDS: 0
     ports: ["8001:8001"]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on: [mongo]
+    command: ["python", "worker.py"]
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      DB_NAME: dtd
+      ADMIN_PASS: ${ADMIN_PASS:-melbourne-bark-2026}
+      AUTONOMY_LOOP_OWNER: worker
+      RUN_AUTONOMY_IN_API: 0
+      ENABLE_STARTUP_SEEDS: 0
 
   frontend:
     build:

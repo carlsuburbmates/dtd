@@ -4,11 +4,122 @@ import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
+const VIEW_ORDER = [
+    "overview",
+    "work_queue",
+    "trainer_supply",
+    "messages",
+    "billing_reactivation",
+    "system_activity",
+    "recent_changes",
+];
+
+const VIEW_LABELS = {
+    overview: "Overview",
+    work_queue: "Work Queue",
+    trainer_supply: "Trainer Supply",
+    messages: "Messages",
+    billing_reactivation: "Billing & Reactivation",
+    system_activity: "System Activity",
+    recent_changes: "Recent Changes",
+};
+
+const PAGE_INTROS = {
+    overview: "Start here to understand website status, what needs attention now, and whether anything risky happened recently.",
+    work_queue: "Review one item at a time, record what you did, and keep the queue moving with clear state changes.",
+    trainer_supply: "See the live trainer inventory, where each record came from, and what is blocking it.",
+    messages: "Check exactly what the system sent, to which workflow, and whether delivery succeeded or failed.",
+    billing_reactivation: "Review trainer billing problems and reactivation cases without leaving the Operations Console.",
+    system_activity: "See whether the automated parts of the website are healthy, stale, or escalating.",
+    recent_changes: "Use the audit trail to confirm what changed and when.",
+};
+
+const QUEUE_GROUPS = [
+    { key: "needs_review", label: "Needs review", states: ["detected", "notified"] },
+    { key: "acknowledged", label: "Acknowledged", states: ["acknowledged"] },
+    { key: "in_progress", label: "In progress", states: ["investigating", "actioned"] },
+    { key: "monitoring", label: "Monitoring", states: ["monitoring"] },
+    { key: "escalated", label: "Escalated", states: ["escalated_to_owner_override", "escalated_to_technical_owner"] },
+    { key: "resolved_recently", label: "Resolved recently", states: ["resolved", "deferred", "dismissed"] },
+];
+
+const REVIEW_STATE_OPTIONS = [
+    "acknowledged",
+    "investigating",
+    "actioned",
+    "monitoring",
+    "resolved",
+    "deferred",
+    "dismissed",
+    "escalated_to_owner_override",
+    "escalated_to_technical_owner",
+    "detected",
+];
+
 function normalizeOversightSnapshot(data) {
     if (!data || typeof data !== "object" || Array.isArray(data)) {
         throw new Error("Malformed oversight snapshot");
     }
     return data;
+}
+
+function asArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
+function humanizeToken(value) {
+    return String(value || "unknown")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatDateTime(value) {
+    if (!value) return "Unknown";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleString("en-AU", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+}
+
+function formatShortNumber(value) {
+    return new Intl.NumberFormat("en-AU", { maximumFractionDigits: 1 }).format(Number(value || 0));
+}
+
+function formatPercent(value) {
+    if (!Number.isFinite(Number(value))) return "0%";
+    return `${Math.round(Number(value) * 100)}%`;
+}
+
+function stateLabel(value) {
+    return humanizeToken(value || "detected");
+}
+
+function toneClass(kind, value) {
+    const normalized = String(value || "").toLowerCase();
+    if (kind === "severity") {
+        if (normalized === "high") return "bg-[#4A201C] text-[#F8D9D3]";
+        if (normalized === "medium") return "bg-[#403423] text-[#F4E2B5]";
+        return "bg-[#1F3A34] text-[#BEE0D7]";
+    }
+    if (normalized.includes("escalated") || normalized === "warn" || normalized === "attention_needed" || normalized === "failed") {
+        return "bg-[#4A201C] text-[#F8D9D3]";
+    }
+    if (normalized === "monitoring" || normalized === "investigating" || normalized === "actioned" || normalized === "notified") {
+        return "bg-[#403423] text-[#F4E2B5]";
+    }
+    return "bg-[#1F3A34] text-[#BEE0D7]";
+}
+
+function queueGroups(cases) {
+    return QUEUE_GROUPS.map((group) => ({
+        ...group,
+        rows: cases.filter((row) => group.states.includes(String(row?.state || ""))),
+    }));
 }
 
 export default function Ops() {
@@ -100,7 +211,20 @@ export default function Ops() {
         );
     }
 
-    return <OversightSurface snap={snap} loading={loading} error={error} onRefresh={fetchSnap} onSignOut={() => { setAdminPass(""); setSnap(null); setError(""); setAuthed(false); }} />;
+    return (
+        <OperationsConsole
+            snap={snap}
+            loading={loading}
+            error={error}
+            onRefresh={fetchSnap}
+            onSignOut={() => {
+                setAdminPass("");
+                setSnap(null);
+                setError("");
+                setAuthed(false);
+            }}
+        />
+    );
 }
 
 function Login({ onPass }) {
@@ -123,13 +247,14 @@ function Login({ onPass }) {
             setBusy(false);
         }
     };
+
     return (
         <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB] px-6">
             <main className="min-h-screen w-full max-w-md mx-auto flex items-center">
                 <div className="w-full">
-                    <div className="flex items-center gap-2 small-caps !text-[#8B9E98] mb-6"><Terminal className="h-4 w-4" /> Oversight</div>
-                    <h1 className="font-serif text-4xl tracking-tight">Read-only console</h1>
-                    <p className="text-sm text-[#8B9E98] mt-2 font-mono">No buttons mutate the system. The system runs itself.</p>
+                    <div className="flex items-center gap-2 small-caps !text-[#8B9E98] mb-6"><Terminal className="h-4 w-4" /> Operations Console</div>
+                    <h1 className="font-serif text-4xl tracking-tight">Operations control view</h1>
+                    <p className="text-sm text-[#8B9E98] mt-2 font-mono">The website runs itself. This screen exists so you can see what is happening in plain language.</p>
                     <form onSubmit={submit} className="admin-card p-5 mt-8" data-testid="ops-login-form">
                         <label htmlFor="ops-pass-input" className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] flex items-center gap-2"><Lock className="h-3 w-3" /> Passcode</label>
                         <input id="ops-pass-input" type="password" data-testid="ops-pass-input" className="admin-input mt-2" value={pass} onChange={(e) => setPass(e.target.value)} autoFocus />
@@ -152,813 +277,885 @@ function Frame({ children, loading }) {
     );
 }
 
-function OversightSurface({ snap, loading, error, onRefresh, onSignOut }) {
-    const rev = snap.revenue || {};
-    const tp = snap.throughput || {};
+function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
+    const [activeView, setActiveView] = useState("overview");
+    const [activeQueue, setActiveQueue] = useState("needs_review");
+    const [selectedCaseId, setSelectedCaseId] = useState("");
+
+    const opsCases = asArray(snap.ops_cases);
+    const queueBuckets = queueGroups(opsCases);
+    const currentBucket = queueBuckets.find((bucket) => bucket.key === activeQueue) || queueBuckets[0];
+    const visibleCases = currentBucket?.rows || [];
+    const selectedCase = visibleCases.find((row) => row.case_id === selectedCaseId) || visibleCases[0] || opsCases[0] || null;
+
+    useEffect(() => {
+        if (!currentBucket?.rows?.length) {
+            const firstNonEmpty = queueBuckets.find((bucket) => bucket.rows.length > 0);
+            if (firstNonEmpty && firstNonEmpty.key !== activeQueue) {
+                setActiveQueue(firstNonEmpty.key);
+            }
+            return;
+        }
+        const hasSelected = currentBucket.rows.some((row) => row.case_id === selectedCaseId);
+        if (!hasSelected) {
+            setSelectedCaseId(currentBucket.rows[0].case_id);
+        }
+    }, [activeQueue, currentBucket, queueBuckets, selectedCaseId]);
+
+    const phaseState = snap.launch_phase_state || {};
+    const readiness = snap.phase_readiness_snapshot || {};
+    const ownerWaitlist = snap.owner_waitlist_summary || {};
+    const growth = snap.growth_attribution_summary || {};
+    const reactivation = snap.reactivation_summary || {};
     const integrity = snap.integrity || {};
-    const loops = snap.loops || {};
-    const submissions = snap.submissions_summary || {};
-    const alerts = Array.isArray(snap.alerts) ? snap.alerts : [];
-    const pricingState = Array.isArray(snap.pricing_state) ? snap.pricing_state : [];
-    const topTrainers = Array.isArray(snap.top_trainers) ? snap.top_trainers : [];
-    const auditRecent = Array.isArray(snap.audit_recent) ? snap.audit_recent : [];
     const billingSummary = snap.billing_summary || {};
-    const nonBillable = snap.non_billable_causes || {};
-    const notificationSummary = snap.notification_summary || {};
-    const claimPolicy = snap.claim_policy || {};
-    const ownerWaitlistSummary = snap.owner_waitlist_summary || {};
-    const prelaunchKpi = snap.kpi_prelaunch || {};
-    const growthAttributionSummary = snap.growth_attribution_summary || {};
-    const reactivationSummary = snap.reactivation_summary || {};
-    const opsInvestigation = snap.ops_investigation || {};
-    const launchPhaseState = snap.launch_phase_state || {};
-    const phaseReadinessSnapshot = snap.phase_readiness_snapshot || {};
-    const phaseTransitionDecisions = Array.isArray(snap.phase_transition_decisions) ? snap.phase_transition_decisions : [];
-    const datasetIdentity = snap.dataset_identity || integrity.dataset_identity || {};
-    const datasetListId = datasetIdentity.list_id || integrity.list_id || "unknown";
-    const datasetSuburbCount = typeof datasetIdentity.suburb_count === "number"
-        ? datasetIdentity.suburb_count
-        : typeof integrity.suburb_count === "number"
-          ? integrity.suburb_count
-          : "unknown";
-    const datasetHash = datasetIdentity.hash || datasetIdentity.suburb_hash_sha256_code_name || integrity.suburb_hash_sha256_code_name || "unknown";
-    const datasetAsOf = datasetIdentity.as_of_date || integrity.as_of_date || "unknown";
-    const claimPolicyEnabled =
-        typeof claimPolicy.enabled === "boolean"
-            ? claimPolicy.enabled
-            : typeof claimPolicy.model_enabled === "boolean"
-              ? claimPolicy.model_enabled
-              : null;
-    const claimPolicyState =
-        typeof claimPolicy.state === "string"
-            ? claimPolicy.state
-            : typeof claimPolicy.state_current === "string"
-              ? claimPolicy.state_current
-              : "STATE_0";
-    const claimEnforcementMode = typeof claimPolicy.enforcement_mode === "string" ? claimPolicy.enforcement_mode : "report_only";
-    const melbourneWideBlockRule = typeof claimPolicy.block_melbourne_wide_below_state_2 === "boolean"
-        ? claimPolicy.block_melbourne_wide_below_state_2
-        : null;
-    const integrityReasonCodes = Array.isArray(snap.integrity_reason_codes)
-        ? snap.integrity_reason_codes
-        : Array.isArray(integrity.reason_codes)
-          ? integrity.reason_codes
-          : [];
-    const integrityStatusRaw = typeof snap.integrity_status === "string"
-        ? snap.integrity_status
-        : typeof integrity.status === "string"
-          ? integrity.status
-          : "ok";
-    const integrityStatus = integrityStatusRaw === "ok" ? "ok" : "warn";
-    const waitlistTotalActive = typeof ownerWaitlistSummary.total_active === "number" ? ownerWaitlistSummary.total_active : 0;
-    const waitlistJoins24h = typeof ownerWaitlistSummary.joins_24h === "number" ? ownerWaitlistSummary.joins_24h : 0;
-    const waitlistTopSuburbsRaw = Array.isArray(ownerWaitlistSummary.top_suburbs) ? ownerWaitlistSummary.top_suburbs : [];
-    const waitlistTopSuburbs = waitlistTopSuburbsRaw.slice(0, 5);
-    const waitlistStatusRaw = typeof ownerWaitlistSummary.status === "string" ? ownerWaitlistSummary.status : "unavailable";
-    const waitlistStatus = waitlistStatusRaw === "ok" ? "ok" : "warn";
-    const waitlistReasonCodes = Array.isArray(ownerWaitlistSummary.reason_codes) ? ownerWaitlistSummary.reason_codes : [];
-    const waitlistStatusExplanation = waitlistStatus === "ok"
-        ? "Waitlist tracking is available and up to date."
-        : waitlistReasonCodes.length > 0
-          ? `Waitlist data is limited: ${waitlistReasonCodes.join(", ")}`
-          : "Waitlist data is temporarily unavailable.";
-    const prelaunchKpiStatusRaw = typeof prelaunchKpi.status === "string" ? prelaunchKpi.status : "unavailable";
-    const prelaunchKpiStatus = prelaunchKpiStatusRaw === "ok" ? "ok" : "warn";
-    const prelaunchKpiReasonCodes = Array.isArray(prelaunchKpi.reason_codes) ? prelaunchKpi.reason_codes : [];
-    const prelaunchKpiEntries = Object.entries(prelaunchKpi).filter(([key]) => !["status", "reason_codes", "ts"].includes(key));
-    const prelaunchKpiStatusExplanation = prelaunchKpiStatus === "ok"
-        ? "Prelaunch progress tracking is available."
-        : prelaunchKpiReasonCodes.length > 0
-          ? `Some KPI signals are limited: ${prelaunchKpiReasonCodes.join(", ")}`
-          : "Prelaunch KPI tracking is temporarily unavailable.";
-    const growthStatusRaw = typeof growthAttributionSummary.status === "string" ? growthAttributionSummary.status : "unavailable";
-    const growthStatus = growthStatusRaw === "ok" ? "ok" : "warn";
-    const growthReasonCodes = Array.isArray(growthAttributionSummary.reason_codes) ? growthAttributionSummary.reason_codes : [];
-    const growthTotals = growthAttributionSummary.totals || {};
-    const growthCohorts = Array.isArray(growthAttributionSummary.cohorts) ? growthAttributionSummary.cohorts.slice(0, 5) : [];
-    const growthStatusExplanation = growthStatus === "ok"
-        ? "Campaign and source attribution cohorts are available."
-        : growthReasonCodes.length > 0
-          ? `Growth attribution is limited: ${growthReasonCodes.join(", ")}`
-          : "Growth attribution is temporarily unavailable.";
-    const reactivationStatusRaw = typeof reactivationSummary.status === "string" ? reactivationSummary.status : "unavailable";
-    const reactivationStatus = reactivationStatusRaw === "ok" ? "ok" : "warn";
-    const reactivationReasonCodes = Array.isArray(reactivationSummary.reason_codes) ? reactivationSummary.reason_codes : [];
-    const resolved7d = typeof reactivationSummary.resolved_7d === "number" ? reactivationSummary.resolved_7d : 0;
-    const activeAfterResolution7d = typeof reactivationSummary.active_after_resolution_7d === "number" ? reactivationSummary.active_after_resolution_7d : 0;
-    const reactivationReturnRate = resolved7d > 0 ? `${Math.round((activeAfterResolution7d / resolved7d) * 100)}%` : "n/a";
-    const reactivationStatusExplanation = reactivationStatus === "ok"
-        ? "Reactivation routing and return-to-active tracking are available."
-        : reactivationReasonCodes.length > 0
-          ? `Reactivation tracking is limited: ${reactivationReasonCodes.join(", ")}`
-          : "Reactivation tracking is temporarily unavailable.";
-    const loopStatuses = opsInvestigation.loop_statuses || {};
-    const billingCases = Array.isArray(opsInvestigation.billing_recovery_cases) ? opsInvestigation.billing_recovery_cases.slice(0, 5) : [];
-    const reactivationCases = Array.isArray(opsInvestigation.reactivation_cases) ? opsInvestigation.reactivation_cases.slice(0, 5) : [];
-    const sourceIngestionSources = Array.isArray(opsInvestigation.source_ingestion_sources) ? opsInvestigation.source_ingestion_sources.slice(0, 5) : [];
-    const discoveryAlerts = Array.isArray(opsInvestigation.discovery_alerts) ? opsInvestigation.discovery_alerts : [];
-    const currentPhase = String(launchPhaseState.current_phase || snap.launch_phase || "supply_first");
-    const publicEmphasis = String(launchPhaseState.public_emphasis || snap.public_emphasis || "waitlist_first");
-    const readinessStatus = String(phaseReadinessSnapshot.readiness_status || snap.readiness_status || "collecting_evidence");
-    const readinessRecommendation = String(phaseReadinessSnapshot.recommendation || snap.readiness_recommendation || "continue_supply_first_collecting_evidence");
-    const blockersToNextPhase = Array.isArray(phaseReadinessSnapshot.blockers_to_next_phase)
-        ? phaseReadinessSnapshot.blockers_to_next_phase
-        : Array.isArray(snap.blockers_to_next_phase)
-          ? snap.blockers_to_next_phase
-          : [];
-    const activeRegions = Array.isArray(launchPhaseState.active_regions) ? launchPhaseState.active_regions : [];
-    const evidenceWindowMode = String(launchPhaseState.evidence_window_mode || phaseReadinessSnapshot.evidence_window_mode || "30_day_prelaunch_evidence_window");
-    const evidenceWindowState = String(phaseReadinessSnapshot.evidence_window_state || "active");
-    const introReadyTrainerCount = Number(
-        phaseReadinessSnapshot.intro_ready_trainer_count ?? snap.intro_ready_trainer_count ?? 0
-    );
-    const blockedTrainerCount = Number(
-        phaseReadinessSnapshot.blocked_trainer_count ?? snap.blocked_trainer_count ?? 0
-    );
-    const matchingExposureEnabled = Boolean(
-        launchPhaseState.matching_exposure_enabled ?? launchPhaseState.public_matching_enabled ?? false
-    );
-    const latestPhaseDecision = phaseTransitionDecisions[0] || null;
-    const readinessTone = readinessStatus === "attention_needed" ? "amber" : "green";
-    const matchingExposureTone = matchingExposureEnabled ? "amber" : "green";
-    const hasDatasetIdentity = datasetListId !== "unknown" && datasetSuburbCount !== "unknown" && datasetHash !== "unknown";
-    const statusExplanation = integrityStatus === "ok" && hasDatasetIdentity
-        ? "Dataset identity and claim policy are present."
-        : integrityReasonCodes.length > 0
-          ? `Attention needed: ${integrityReasonCodes.join(", ")}`
-          : "Some integrity fields are missing from the latest snapshot.";
+    const loops = snap.ops_investigation?.loop_statuses || {};
+    const messages = asArray(snap.message_log);
+    const trainerInventory = asArray(snap.trainer_inventory);
+    const recentChanges = asArray(snap.audit_recent);
+    const billingCases = asArray(snap.ops_investigation?.billing_recovery_cases);
+    const reactivationCases = asArray(snap.ops_investigation?.reactivation_cases);
+    const sourceIngestionSources = asArray(snap.ops_investigation?.source_ingestion_sources);
+    const alerts = asArray(snap.alerts);
 
     return (
-        <div data-theme="admin" className="min-h-screen bg-[#0D1412] text-[#F5F2EB]">
-            <header className="border-b border-[#243631] bg-[#0D1412] sticky top-0 z-40">
-                <div className="max-w-[1400px] mx-auto px-6 h-14 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Link to="/" className="font-serif text-xl">Dog Trainers Directory</Link>
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-[#D06D4F] border border-[#D06D4F]/40 rounded px-2 py-0.5">Oversight · read-only</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono text-[#8B9E98]">last sync · {snap.ts?.slice(11, 19)}</span>
-                        <button data-testid="ops-refresh" onClick={onRefresh} className="admin-btn">
-                            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Sync
-                        </button>
-                        <button data-testid="ops-signout" onClick={onSignOut} className="admin-btn">Sign out</button>
-                    </div>
-                </div>
-            </header>
-
-            <main className="max-w-[1400px] mx-auto px-6 py-6 space-y-6">
-                {error && (
-                    <div className="admin-card p-3 text-xs font-mono text-[#D06D4F]" data-testid="ops-refresh-error">
-                        {error}
-                    </div>
-                )}
-
-                <Section title="Launch posture and readiness" testid="ops-launch-phase">
-                    <div className="grid md:grid-cols-4 gap-4">
-                        <Tile label="Current phase" value={humanizeValue(currentPhase)} accent="mute" />
-                        <Tile label="Public emphasis" value={humanizeValue(publicEmphasis)} accent="mute" />
-                        <Tile
-                            label="Exposure gate"
-                            value={matchingExposureEnabled ? "live matching enabled" : "public matching off"}
-                            accent={matchingExposureTone}
-                        />
-                        <Tile
-                            label="Readiness"
-                            value={humanizeValue(readinessStatus)}
-                            accent={readinessTone}
-                        />
-                    </div>
-                    <div className="grid md:grid-cols-3 gap-4 mt-4">
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Evidence window</div>
-                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
-                                <div>mode · {humanizeValue(evidenceWindowMode)}</div>
-                                <div>state · {humanizeValue(evidenceWindowState)}</div>
-                                <div>regions · {activeRegions.length > 0 ? activeRegions.join(", ") : "unknown"}</div>
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Supply snapshot</div>
-                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
-                                <div>intro-ready trainers · {introReadyTrainerCount}</div>
-                                <div>blocked trainers · {blockedTrainerCount}</div>
-                                <div>published trainers · {phaseReadinessSnapshot.published_trainer_count ?? 0}</div>
-                                <div>verified trainers · {phaseReadinessSnapshot.verified_trainer_count ?? 0}</div>
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Current recommendation</div>
-                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
-                                {humanizeValue(readinessRecommendation)}
-                            </div>
-                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
-                                {latestPhaseDecision
-                                    ? `Last recorded decision · ${humanizeValue(latestPhaseDecision.decision_outcome)} on ${formatDateTime(latestPhaseDecision.decided_at)}`
-                                    : "No recorded phase decisions yet."}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="grid md:grid-cols-2 gap-4 mt-4">
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Blockers to next phase</div>
-                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
-                                {blockersToNextPhase.length === 0 ? (
-                                    <div className="text-[#8B9E98]">No current blockers recorded. Continue collecting evidence.</div>
-                                ) : (
-                                    <ul className="space-y-1">
-                                        {blockersToNextPhase.map((item) => (
-                                            <li key={item}>{humanizeValue(item)}</li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Recorded phase decisions</div>
-                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
-                                {phaseTransitionDecisions.length === 0 ? (
-                                    <div className="text-[#8B9E98]">No phase decisions recorded yet.</div>
-                                ) : (
-                                    <ul className="space-y-2">
-                                        {phaseTransitionDecisions.slice(0, 3).map((decision) => (
-                                            <li key={decision.id || `${decision.decision_kind}-${decision.decided_at}`} className="rounded border border-[#243631] p-3">
-                                                <div>{humanizeValue(decision.decision_kind)} · {humanizeValue(decision.decision_outcome)}</div>
-                                                <div className="text-[#8B9E98] mt-1">
-                                                    {humanizeValue(decision.to_phase || decision.current_phase || currentPhase)} · {formatDateTime(decision.decided_at)}
-                                                </div>
-                                                {decision.reason && <div className="text-[#8B9E98] mt-1">{humanizeValue(decision.reason)}</div>}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
-                        Visibility only. Normal Ops can read the current phase and readiness evidence, but cannot change them here.
-                    </div>
-                </Section>
-
-                <div className="grid md:grid-cols-4 gap-4" data-testid="ops-first-checks">
-                    <Metric
-                        label="Revenue · at risk"
-                        value={audCents(rev.at_risk_revenue_cents)}
-                        sub="Investigate if rising. Escalate if it rises across consecutive checks."
-                        testid="metric-revenue"
-                    />
-                    <Metric label="Loop cards" value={Object.keys(loopStatuses).length} sub="Escalate if any core loop is stale beyond 2x interval." testid="metric-loops-priority" />
-                    <Metric label="Alerts" value={alerts.length} sub="Escalate if a high-severity alert persists after refresh." testid="metric-alerts-priority" />
-                    <Metric label="Discovery pending" value={(snap.discovery_summary || {}).pending ?? 0} sub="Investigate if backlog keeps rising without recovery." testid="metric-discovery-priority" />
-                </div>
-
-                {/* North star */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-northstar">
-                    <Metric label="Revenue · booked" value={audCents(rev.booked_revenue_cents ?? rev.total_cents)} sub={`collected ${audCents(rev.collected_revenue_cents)} · trial free ${billingSummary.trial_free ?? 0}`} testid="metric-revenue-booked" />
-                    <Metric label="Intros · 24h" value={tp.intros_24h ?? 0} sub={`7d ${tp.intros_7d ?? 0}`} testid="metric-intros" />
-                    <Metric label="Conversions · 24h" value={tp.conversions_24h ?? 0} sub={`rate ${((tp.intro_to_conversion_rate || 0) * 100).toFixed(0)}%`} testid="metric-conversions" />
-                    <Metric label="Live listings" value={integrity.live_total ?? 0} sub={`${integrity.verified ?? 0} verified · ${integrity.hidden ?? 0} held`} testid="metric-listings" />
-                </div>
-
-                {/* Trust + signals row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="ops-trust-row">
-                    <Metric label="Engagement events" value={tp.engagements_total ?? 0} sub="signals feeding ranking" testid="metric-engagements" />
-                    <Metric label="Suppressed intros" value={(snap.trust || {}).intros_suppressed ?? 0} sub="anti-gaming filter" testid="metric-suppressed" />
-                    <Metric label="Suspicious conversions" value={(snap.trust || {}).conversions_suspicious ?? 0} sub="too-fast / dup" testid="metric-suspicious" />
-                    <Metric label="Inferred pending" value={(snap.trust || {}).inferred_pending ?? 0} sub="awaiting 48h promote" testid="metric-inferred" />
-                </div>
-
-
-                {/* Alerts */}
-                <Section title="Alerts" testid="ops-alerts">
-                    {alerts.length === 0 ? (
-                        <div className="text-sm font-mono text-[#8B9E98]">No anomalies. System nominal.</div>
-                    ) : (
-                        <ul className="space-y-2">
-                            {alerts.map((a, i) => (
-                                <li key={i} className="flex items-center gap-3 text-sm">
-                                    <SeverityTag s={a.severity} />
-                                    <span className="font-mono text-xs text-[#8B9E98]">{a.type}</span>
-                                    <span>{a.message}</span>
-                                    {a.severity === "high" && <span className="text-xs font-mono text-[#F87171]">Escalate if still present after refresh.</span>}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </Section>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                    <Section title="Loop cards" testid="ops-loop-priority">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" statusMeta={loopStatuses.ranking} />
-                            <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" statusMeta={loopStatuses.pricing} />
-                            <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" statusMeta={loopStatuses.verification} />
-                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" statusMeta={loopStatuses.discovery} />
-                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" statusMeta={loopStatuses.inference} />
-                            <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" statusMeta={loopStatuses.health} />
-                        </div>
-                    </Section>
-
-                    <Section title="Investigation queue" testid="ops-investigation-queue">
-                        <div className="space-y-4 text-sm font-mono text-[#F5F2EB]">
-                            <div>
-                                <div className="text-xs uppercase tracking-wider text-[#8B9E98] mb-2">Billing recovery</div>
-                                {billingCases.length === 0 ? <div className="text-[#8B9E98]">No trainer billing cases need investigation.</div> : (
-                                    <ul className="space-y-2">
-                                        {billingCases.map((row) => (
-                                            <li key={row.intro_id} className="rounded border border-[#243631] p-3">
-                                                <div>{row.trainer_name} · {row.billing_retry_state}</div>
-                                                <div className="text-[#8B9E98]">{row.billing_collection_status} · attempts {row.billing_retry_attempts} · {audCents(row.intro_fee_cents)}</div>
-                                                {row.trainer_id && row.trainer_action_token && (
-                                                    <Link
-                                                        to={`/trainer/billing?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
-                                                        className="inline-flex text-xs text-[#F5F2EB] underline underline-offset-2 mt-2"
-                                                    >
-                                                        Open billing remediation
-                                                    </Link>
-                                                )}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                            <div>
-                                <div className="text-xs uppercase tracking-wider text-[#8B9E98] mb-2">Reactivation</div>
-                                {reactivationCases.length === 0 ? <div className="text-[#8B9E98]">No open reactivation candidates.</div> : (
-                                    <ul className="space-y-2">
-                                        {reactivationCases.map((row) => (
-                                            <li key={row.trainer_id} className="rounded border border-[#243631] p-3">
-                                                <div>{row.trainer_name}</div>
-                                                <div className="text-[#8B9E98]">{(row.reasons || []).join(" | ") || "No reasons recorded."}</div>
-                                                {row.trainer_id && row.trainer_action_token && (
-                                                    <Link
-                                                        to={`/trainer/reactivate?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
-                                                        className="inline-flex text-xs text-[#F5F2EB] underline underline-offset-2 mt-2"
-                                                    >
-                                                        Open reactivation flow
-                                                    </Link>
-                                                )}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                    </Section>
-                </div>
-
-                {/* Claim policy */}
-                <Section title="Claim policy · read-only" testid="ops-claim-policy">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Tile label="State" value={claimPolicyState} accent="mute" />
-                        <Tile
-                            label="Model enabled"
-                            value={claimPolicyEnabled === null ? "unknown" : claimPolicyEnabled ? "yes" : "no"}
-                            accent={claimPolicyEnabled ? "green" : "mute"}
-                        />
-                        <Tile label="Enforcement mode" value={claimEnforcementMode} accent={claimEnforcementMode === "block_invalid" ? "amber" : "mute"} />
-                        <Tile
-                            label="Melbourne-wide block (< STATE_2)"
-                            value={melbourneWideBlockRule === null ? "unknown" : melbourneWideBlockRule ? "on" : "off"}
-                            accent={melbourneWideBlockRule ? "amber" : "mute"}
-                        />
-                    </div>
-                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
-                        Visibility only. Claim policy is controlled by runtime configuration.
-                    </div>
-                </Section>
-
-                <Section title="Data integrity" testid="ops-data-integrity">
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Dataset identity</div>
-                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
-                                <div>list · {datasetListId}</div>
-                                <div>suburbs · {datasetSuburbCount}</div>
-                                <div>hash · {datasetHash}</div>
-                                <div>as of · {datasetAsOf}</div>
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Claim policy</div>
-                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
-                                <div>state · {claimPolicyState}</div>
-                                <div>mode · {claimEnforcementMode}</div>
-                                <div>model · {claimPolicyEnabled === null ? "unknown" : claimPolicyEnabled ? "enabled" : "disabled"}</div>
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
-                            <div className="mt-2">
-                                <span className={`admin-tag ${integrityStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
-                                    {integrityStatus === "ok" ? "OK" : "WARN"}
-                                </span>
-                            </div>
-                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
-                                {statusExplanation}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
-                        Read-only visibility. No controls here can change runtime behavior.
-                    </div>
-                </Section>
-
-                <Section title="Owner waitlist" testid="ops-owner-waitlist">
-                    <div className="grid md:grid-cols-3 gap-4">
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Waitlist size</div>
-                            <div className="font-mono text-sm mt-2 space-y-1 text-[#F5F2EB]">
-                                <div>active owners · {waitlistTotalActive}</div>
-                                <div>new in 24h · {waitlistJoins24h}</div>
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Top suburbs</div>
-                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
-                                {waitlistTopSuburbs.length === 0 ? (
-                                    <div className="text-[#8B9E98]">No suburb trends yet.</div>
-                                ) : (
-                                    <ul className="space-y-1">
-                                        {waitlistTopSuburbs.map((row) => (
-                                            <li key={row.suburb} className="flex items-center justify-between gap-2">
-                                                <span className="truncate">{row.suburb}</span>
-                                                <span className="text-[#8B9E98]">{row.count}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
-                            <div className="mt-2">
-                                <span className={`admin-tag ${waitlistStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
-                                    {waitlistStatus === "ok" ? "OK" : "WARN"}
-                                </span>
-                            </div>
-                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
-                                {waitlistStatusExplanation}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
-                        Visibility only. This dashboard does not change waitlist entries.
-                    </div>
-                </Section>
-
-                <Section title="Prelaunch KPIs" testid="ops-prelaunch-kpis">
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Current values</div>
-                            <div className="font-mono text-sm mt-2 text-[#F5F2EB]">
-                                {prelaunchKpiEntries.length === 0 ? (
-                                    <div className="text-[#8B9E98]">No KPI values available yet.</div>
-                                ) : (
-                                    <ul className="space-y-1">
-                                        {prelaunchKpiEntries.map(([key, value]) => (
-                                            <li key={key} className="flex items-center justify-between gap-2">
-                                                <span className="text-[#8B9E98]">
-                                                    {key.replace(/_/g, " ")}
-                                                </span>
-                                                <span className="truncate">
-                                                    {typeof value === "boolean" ? (value ? "yes" : "no") : String(value)}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-                        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-                            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">Status</div>
-                            <div className="mt-2">
-                                <span className={`admin-tag ${prelaunchKpiStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
-                                    {prelaunchKpiStatus === "ok" ? "OK" : "WARN"}
-                                </span>
-                            </div>
-                            <div className="font-mono text-xs text-[#8B9E98] mt-2">
-                                {prelaunchKpiStatusExplanation}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="text-xs font-mono text-[#8B9E98] mt-3">
-                        Read-only visibility for prelaunch progress. No actions can be taken from this panel.
-                    </div>
-                </Section>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                    <Section title="Growth attribution" testid="ops-growth-attribution">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <Tile label="Entry events 30d" value={growthTotals.entry_events_30d ?? 0} accent="mute" />
-                            <Tile label="Matched 30d" value={growthTotals.matched_30d ?? 0} accent="mute" />
-                            <Tile label="Connected 30d" value={growthTotals.connected_30d ?? 0} accent="mute" />
-                            <Tile label="Converted 30d" value={growthTotals.converted_30d ?? 0} accent="green" />
-                            <Tile label="Waitlist joins 30d" value={growthTotals.waitlist_joins_30d ?? 0} accent="amber" />
-                            <Tile label="Cohorts" value={growthTotals.cohort_count ?? 0} accent="mute" />
-                        </div>
-                        <div className="mt-4 text-xs font-mono uppercase tracking-wider text-[#8B9E98]">Top cohorts</div>
-                        <div className="mt-2 font-mono text-sm text-[#F5F2EB]">
-                            {growthCohorts.length === 0 ? (
-                                <div className="text-[#8B9E98]">No attributed cohorts yet.</div>
-                            ) : (
-                                <ul className="space-y-2">
-                                    {growthCohorts.map((cohort) => (
-                                        <li key={`${cohort.campaign}:${cohort.source}`} className="flex items-center justify-between gap-3">
-                                            <span className="truncate text-[#8B9E98]">{cohort.campaign} · {cohort.source}</span>
-                                            <span className="shrink-0">
-                                                matched {cohort.matched ?? 0} · connected {cohort.connected ?? 0} · converted {cohort.converted ?? 0}
-                                            </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                        <div className="mt-4">
-                            <span className={`admin-tag ${growthStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
-                                {growthStatus === "ok" ? "OK" : "WARN"}
-                            </span>
-                        </div>
-                        <div className="font-mono text-xs text-[#8B9E98] mt-2">{growthStatusExplanation}</div>
-                    </Section>
-
-                    <Section title="Trainer reactivation" testid="ops-reactivation-summary">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <Tile label="Open candidates" value={reactivationSummary.open_candidates ?? 0} accent="amber" />
-                            <Tile label="Notified 7d" value={reactivationSummary.notified_7d ?? 0} accent="mute" />
-                            <Tile label="Resolved 7d" value={resolved7d} accent="mute" />
-                            <Tile label="Active after resolve" value={activeAfterResolution7d} accent="green" />
-                            <Tile label="Return to active" value={reactivationReturnRate} accent="green" />
-                        </div>
-                        <div className="mt-4">
-                            <span className={`admin-tag ${reactivationStatus === "ok" ? "admin-tag-green" : "admin-tag-amber"}`}>
-                                {reactivationStatus === "ok" ? "OK" : "WARN"}
-                            </span>
-                        </div>
-                        <div className="font-mono text-xs text-[#8B9E98] mt-2">{reactivationStatusExplanation}</div>
-                        <div className="font-mono text-xs text-[#8B9E98] mt-3">
-                            Monitor below 5 resolved cases in 7d or when return-to-active is at least 50%. Investigate when resolved volume is meaningful and the rate drops below 50%. Escalate if the rate stays below 25% across two daily checks.
-                        </div>
-                    </Section>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                    {/* Loops */}
-                    <Section title="Autonomous loops" testid="ops-loops">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                            <LoopCard name="Ranking" loop={loops.ranking} unit="trainers scored" countKey="trainers_scored" statusMeta={loopStatuses.ranking} />
-                            <LoopCard name="Pricing" loop={loops.pricing} unit="suburbs priced" countKey="suburbs_priced" statusMeta={loopStatuses.pricing} />
-                            <LoopCard name="Verification" loop={loops.verification} unit="rescored" countKey="rescored" statusMeta={loopStatuses.verification} />
-                            <LoopCard name="Discovery" loop={loops.discovery} unit="processed" countKey="handled" statusMeta={loopStatuses.discovery} />
-                            <LoopCard name="Inference" loop={loops.inference} unit="promoted" countKey="promoted_inferred" statusMeta={loopStatuses.inference} />
-                            <LoopCard name="SourceIngest" loop={loops.source_ingestion} unit="queued urls" countKey="queued" statusMeta={loopStatuses.source_ingestion} />
-                            <LoopCard name="Outreach" loop={loops.outreach} unit="emails sent" countKey="sent" statusMeta={loopStatuses.outreach} />
-                            <LoopCard name="BillingRecovery" loop={loops.billing_recovery} unit="retries" countKey="retried" statusMeta={loopStatuses.billing_recovery} />
-                            <LoopCard name="Nurture" loop={loops.nurture} unit="cohorts" countKey="cohorts" statusMeta={loopStatuses.nurture} />
-                            <LoopCard name="Reactivation" loop={loops.reactivation_route} unit="candidates" countKey="open_candidates" statusMeta={loopStatuses.reactivation_route} />
-                            <LoopCard name="Health" loop={loops.health} unit="snapshot" countKey="" statusMeta={loopStatuses.health} />
-                        </div>
-                    </Section>
-
-                    {/* Discovery + Submissions */}
-                    <Section title="Pipeline · auto-handled" testid="ops-pipeline">
-                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Submissions</div>
-                        <div className="grid grid-cols-3 gap-3">
-                            <Tile label="Auto-published" value={submissions.auto_published ?? 0} accent="green" />
-                            <Tile label="Auto-held" value={submissions.auto_held ?? 0} accent="amber" />
-                            <Tile label="Pending" value={submissions.pending ?? 0} accent="mute" />
-                        </div>
-                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mt-4 mb-2">Discovery queue</div>
-                        <div className="grid grid-cols-4 gap-3">
-                            <Tile label="Pending" value={(snap.discovery_summary || {}).pending ?? 0} accent="mute" />
-                            <Tile label="Promoted" value={(snap.discovery_summary || {}).promoted ?? 0} accent="green" />
-                            <Tile label="Duplicate" value={(snap.discovery_summary || {}).duplicate ?? 0} accent="mute" />
-                            <Tile label="Discarded" value={(snap.discovery_summary || {}).discarded ?? 0} accent="amber" />
-                        </div>
-                        <div className="text-xs font-mono text-[#8B9E98] mt-3">Investigate if pending rises across checks. Escalate if the queue keeps growing without recovery.</div>
-                    </Section>
-                </div>
-
-                <Section title="Revenue operations" testid="ops-revenue-ops">
-                    <div className="grid md:grid-cols-3 gap-4">
+        <Frame loading={loading}>
+            <div className="px-4 py-4 md:px-6 md:py-6">
+                <header className="admin-card p-4 md:p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Invoice lifecycle</div>
-                            <div className="space-y-1 text-sm font-mono">
-                                <div>sent · {billingSummary.invoice_sent ?? 0}</div>
-                                <div>paid · {billingSummary.paid ?? 0}</div>
-                                <div>trial free · {billingSummary.trial_free ?? 0}</div>
-                                <div>failed · {billingSummary.payment_failed ?? 0}</div>
-                                <div>uncollectible · {billingSummary.uncollectible ?? 0}</div>
-                                <div>waived · {billingSummary.waived ?? 0}</div>
-                                <div>refunded · {billingSummary.refunded ?? 0}</div>
-                                <div>disputed · {billingSummary.disputed ?? 0}</div>
-                                <div>dispute resolved · {billingSummary.dispute_resolved ?? 0}</div>
+                            <div className="small-caps !text-[#8B9E98] flex items-center gap-2">
+                                <Activity className="h-4 w-4" />
+                                Operations Console
                             </div>
+                            <h1 className="font-serif text-3xl md:text-4xl tracking-tight mt-2">Readable website control in one place</h1>
+                            <p className="font-mono text-sm text-[#8B9E98] mt-3 max-w-3xl">
+                                Website status, trainer supply, messages, billing problems, system activity, and recent changes stay visible here without opening multiple tools.
+                            </p>
                         </div>
-                        <div>
-                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Non-billable causes</div>
-                            <div className="space-y-1 text-sm font-mono">
-                                <div>trial free · {nonBillable.trial_free ?? 0}</div>
-                                <div>profile incomplete · {nonBillable.profile_incomplete ?? 0}</div>
-                                <div>consent required · {nonBillable.consent_required ?? 0}</div>
-                                <div>stripe unconfigured · {nonBillable.stripe_unconfigured ?? 0}</div>
-                                <div>invoice error · {nonBillable.invoice_error ?? 0}</div>
-                            </div>
-                        </div>
-                        <div>
-                            <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98] mb-2">Notification delivery</div>
-                            <div className="space-y-1 text-sm font-mono">
-                                <div>trainer intro sent · {notificationSummary.trainer_intro_sent ?? 0}</div>
-                                <div>trainer intro failed · {notificationSummary.trainer_intro_failed ?? 0}</div>
-                                <div>trainer intro skipped · {notificationSummary.trainer_intro_skipped ?? 0}</div>
-                                <div>submission sent · {notificationSummary.submission_sent ?? 0}</div>
-                                <div>submission failed · {notificationSummary.submission_failed ?? 0}</div>
-                                <div>submission skipped · {notificationSummary.submission_skipped ?? 0}</div>
-                            </div>
+                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                            <button className="admin-btn" onClick={onRefresh} data-testid="ops-refresh">
+                                <RefreshCw className="h-4 w-4" />
+                                Refresh
+                            </button>
+                            <button className="admin-btn" onClick={onSignOut} data-testid="ops-sign-out">Sign out</button>
                         </div>
                     </div>
-                </Section>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                    <Section title="Source ingestion detail" testid="ops-source-detail">
-                        {sourceIngestionSources.length === 0 ? (
-                            <div className="text-sm font-mono text-[#8B9E98]">No source-ingestion detail available.</div>
-                        ) : (
-                            <ul className="space-y-2 text-sm font-mono">
-                                {sourceIngestionSources.map((row) => (
-                                    <li key={row.source_url} className="rounded border border-[#243631] p-3">
-                                        <div className="text-[#F5F2EB] truncate">{row.source_url}</div>
-                                        <div className="text-[#8B9E98] mt-1">failures {row.consecutive_failures || 0} · error {row.last_error_code || "none"}</div>
-                                        <div className="text-[#8B9E98]">suppressed until {row.suppressed_until || "not suppressed"}</div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </Section>
-                    <Section title="Evidence discipline" testid="ops-evidence-discipline">
-                        <div className="space-y-3 text-sm font-mono text-[#F5F2EB]">
-                            <div className="rounded border border-[#243631] p-3">
-                                Operator notes are not stored in the browser anymore.
-                            </div>
-                            <div className="rounded border border-[#243631] p-3 text-[#8B9E98]">
-                                Database = truth. Audit log = decision trail. CSV/export = proof only.
-                            </div>
-                            <div className="rounded border border-[#243631] p-3 text-[#8B9E98]">
-                                If a future evidence note is required, it must be product-backed and reflected in the evidence model.
-                            </div>
-                        </div>
-                    </Section>
-                </div>
-
-                {/* Pricing state */}
-                <Section title="Intro fee state · per suburb" testid="ops-pricing">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="text-left text-[10px] uppercase tracking-wider font-mono text-[#8B9E98] border-b border-[#243631]">
-                                    <th className="px-3 py-2">Suburb</th>
-                                    <th className="px-3 py-2">Mode</th>
-                                    <th className="px-3 py-2">Intro fee</th>
-                                    <th className="px-3 py-2">Intros · 7d</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {pricingState.map((p) => (
-                                    <tr key={p.suburb} className="border-b border-[#243631]">
-                                        <td className="px-3 py-2 font-mono">{p.suburb}</td>
-                                        <td className="px-3 py-2 font-mono">{p.pricing_mode || "fixed"}</td>
-                                        <td className="px-3 py-2 font-mono">{audCents(p.intro_fee_cents)}</td>
-                                        <td className="px-3 py-2 font-mono">{p.intros_7d || 0}</td>
-                                    </tr>
-                                ))}
-                                {pricingState.length === 0 && (
-                                    <tr><td colSpan={4} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No pricing state yet — loop runs every 90s.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="mt-4 grid gap-3 md:grid-cols-3">
+                        <StatusLine label="Current phase" value={humanizeToken(phaseState.current_phase || "unknown")} />
+                        <StatusLine label="Public visibility" value={phaseState.public_matching_enabled ? "Matching exposed" : "Hidden or gated"} />
+                        <StatusLine label="Readiness" value={humanizeToken(readiness.readiness_status || "unknown")} />
                     </div>
-                </Section>
-
-                {/* Top trainers by outcome */}
-                <Section title="Top trainers by outcome score" testid="ops-top">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="text-left text-[10px] uppercase tracking-wider font-mono text-[#8B9E98] border-b border-[#243631]">
-                                    <th className="px-3 py-2">Trainer</th>
-                                    <th className="px-3 py-2">Suburb</th>
-                                    <th className="px-3 py-2">Outcome</th>
-                                    <th className="px-3 py-2">Intros 30d</th>
-                                    <th className="px-3 py-2">Conv 30d</th>
-                                    <th className="px-3 py-2">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {topTrainers.map((t) => (
-                                    <tr key={t.id} className="border-b border-[#243631] hover:bg-[#1D2D29]">
-                                        <td className="px-3 py-2 font-mono">{t.name}</td>
-                                        <td className="px-3 py-2 font-mono">{t.suburb}</td>
-                                        <td className="px-3 py-2 font-mono text-[#F5F2EB]">{((t.outcome_score || 0) * 100).toFixed(1)}%</td>
-                                        <td className="px-3 py-2 font-mono">{t.intros_30d ?? 0}</td>
-                                        <td className="px-3 py-2 font-mono">{t.conversions_30d ?? 0}</td>
-                                        <td className="px-3 py-2">
-                                            <span className={`admin-tag ${t.verification_status === "verified" ? "admin-tag-green" : t.verification_status === "unverified" ? "admin-tag-amber" : "admin-tag-mute"}`}>
-                                                {t.verification_status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))}
-                                {topTrainers.length === 0 && (
-                                    <tr><td colSpan={6} className="px-3 py-6 text-center font-mono text-[#8B9E98]">No trainers yet.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </Section>
-
-                {/* Audit */}
-                <Section title="Recent system actions" testid="ops-audit">
-                    <div className="font-mono text-xs space-y-1.5 max-h-80 overflow-auto">
-                        {auditRecent.map((a) => (
-                            <div key={a.id} className="flex gap-3 text-[#cfd6d3]">
-                                <span className="text-[#8B9E98] w-44 shrink-0">{a.ts?.slice(0, 19).replace("T", " ")}</span>
-                                <span className="text-[#D06D4F] w-44 shrink-0">{a.action}</span>
-                                <span className="text-[#8B9E98] w-32 shrink-0">{a.actor}</span>
-                                <span className="text-[#8B9E98] truncate">{a.target}</span>
-                            </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                        {VIEW_ORDER.map((key) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setActiveView(key)}
+                                data-testid={`ops-nav-${key}`}
+                                className={`rounded-full border px-3 py-1.5 text-sm font-mono transition ${
+                                    activeView === key
+                                        ? "border-[#D9B36C] bg-[#D9B36C] text-[#0D1412]"
+                                        : "border-[#2A3935] bg-[#111A17] text-[#C9C2B1]"
+                                }`}
+                            >
+                                {VIEW_LABELS[key]}
+                            </button>
                         ))}
-                        {auditRecent.length === 0 && <div className="text-[#8B9E98]">No events.</div>}
                     </div>
-                </Section>
-            </main>
+                    {error ? (
+                        <div className="mt-4 flex items-center gap-2 rounded-2xl border border-[#5B2B27] bg-[#2B1715] px-3 py-2 text-sm text-[#F8D9D3]">
+                            <AlertTriangle className="h-4 w-4" />
+                            {error}
+                        </div>
+                    ) : null}
+                </header>
+
+                {activeView === "overview" ? (
+                    <OverviewView
+                        snap={snap}
+                        phaseState={phaseState}
+                        readiness={readiness}
+                        integrity={integrity}
+                        ownerWaitlist={ownerWaitlist}
+                        growth={growth}
+                        reactivation={reactivation}
+                        alerts={alerts}
+                        queueBuckets={queueBuckets}
+                        loops={loops}
+                    />
+                ) : null}
+
+                {activeView === "work_queue" ? (
+                    <WorkQueueView
+                        queueBuckets={queueBuckets}
+                        activeQueue={activeQueue}
+                        onQueueChange={setActiveQueue}
+                        selectedCase={selectedCase}
+                        selectedCaseId={selectedCaseId}
+                        onSelectCase={setSelectedCaseId}
+                        onRefresh={onRefresh}
+                    />
+                ) : null}
+
+                {activeView === "trainer_supply" ? (
+                    <TrainerSupplyView trainerInventory={trainerInventory} />
+                ) : null}
+
+                {activeView === "messages" ? (
+                    <MessagesView messages={messages} />
+                ) : null}
+
+                {activeView === "billing_reactivation" ? (
+                    <BillingReactivationView billingCases={billingCases} reactivationCases={reactivationCases} />
+                ) : null}
+
+                {activeView === "system_activity" ? (
+                    <SystemActivityView loops={loops} alerts={alerts} sourceIngestionSources={sourceIngestionSources} />
+                ) : null}
+
+                {activeView === "recent_changes" ? (
+                    <RecentChangesView recentChanges={recentChanges} />
+                ) : null}
+            </div>
+        </Frame>
+    );
+}
+
+function OverviewView({ snap, phaseState, readiness, integrity, ownerWaitlist, growth, reactivation, alerts, queueBuckets, loops }) {
+    const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
+    const topQueueRows = queueBuckets.flatMap((bucket) => bucket.rows).slice(0, 3);
+    const billingProblems = (snap.billing_summary?.payment_failed || 0)
+        + (snap.billing_summary?.uncollectible || 0)
+        + (snap.billing_summary?.profile_incomplete || 0)
+        + (snap.billing_summary?.consent_required || 0)
+        + (snap.billing_summary?.stripe_unconfigured || 0);
+    const loopRows = Object.entries(loops || {});
+    const unhealthyLoops = loopRows.filter(([, meta]) => String(meta?.status || "ok") !== "ok").length;
+
+    return (
+        <div className="mt-4 grid gap-4">
+            <PageHeader title="Overview" description={PAGE_INTROS.overview} />
+            <section className="grid gap-4 xl:grid-cols-[1.4fr,1fr]">
+                <div className="admin-card p-5" data-testid="ops-overview">
+                    <div className="small-caps !text-[#8B9E98]">Website status</div>
+                    <div className="grid gap-3 mt-4 md:grid-cols-2">
+                        <StatusLine label="Current phase" value={humanizeToken(phaseState.current_phase || "unknown")} />
+                        <StatusLine label="Public visibility" value={phaseState.public_matching_enabled ? "Matching exposed" : "Hidden or gated"} />
+                        <StatusLine label="Readiness" value={humanizeToken(readiness.readiness_status || "unknown")} />
+                        <StatusLine label="Recommendation" value={humanizeToken(readiness.recommendation || "review needed")} />
+                    </div>
+                    <div className="mt-4">
+                        <div className="text-xs font-mono uppercase tracking-[0.22em] text-[#8B9E98]">Blockers</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            {asArray(readiness.blockers_to_next_phase).length ? asArray(readiness.blockers_to_next_phase).map((row) => (
+                                <Badge key={row} label={humanizeToken(row)} kind="state" />
+                            )) : <span className="font-mono text-sm text-[#8B9E98]">No active blockers reported.</span>}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="admin-card p-5">
+                    <div className="small-caps !text-[#8B9E98]">What needs attention now</div>
+                    <div className="mt-4 grid gap-3">
+                        <SummaryCard title="Needs review" value={needsReview} note="Open work items waiting for review" />
+                        <SummaryCard title="Messages sent" value={asArray(snap.message_log).filter((row) => row.status === "sent").length} note="Recent successful messages in the log" />
+                        <SummaryCard title="Billing problems" value={billingProblems} note="Trainer billing blockers or failures" />
+                        <SummaryCard title="System alerts" value={alerts.length + unhealthyLoops} note="Warnings and stale system activity signals" />
+                    </div>
+                </div>
+            </section>
+
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard title="Trainer supply" value={integrity.live_total || 0} note={`${integrity.verified || 0} verified · ${readiness.intro_ready_trainer_count || 0} intro-ready`} />
+                <MetricCard title="Blocked trainers" value={readiness.blocked_trainer_count || 0} note="Need review before moving ahead" />
+                <MetricCard title="Owner waitlist" value={ownerWaitlist.total_active || 0} note={`${ownerWaitlist.joins_24h || 0} joined in the last day`} />
+                <MetricCard title="Reactivation open" value={reactivation.open_candidates || 0} note={`${reactivation.notified_7d || 0} notified in the last 7 days`} />
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-2">
+                <div className="admin-card p-5">
+                    <div className="small-caps !text-[#8B9E98]">Demand and supply signals</div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <KeyValueBlock
+                            title="Owner demand"
+                            rows={[
+                                ["Duplicate joins (24h)", ownerWaitlist.duplicate_24h || 0],
+                                ["Rejected joins (24h)", ownerWaitlist.rejected_24h || 0],
+                                ["Top suburb count", asArray(ownerWaitlist.top_suburbs).length],
+                            ]}
+                        />
+                        <KeyValueBlock
+                            title="Growth signals"
+                            rows={[
+                                ["Entry events (30d)", growth.totals?.entry_events_30d || 0],
+                                ["Waitlist joins (30d)", growth.totals?.waitlist_joins_30d || 0],
+                                ["Connected (30d)", growth.totals?.connected_30d || 0],
+                            ]}
+                        />
+                    </div>
+                </div>
+                <div className="admin-card p-5">
+                    <div className="small-caps !text-[#8B9E98]">Revenue visibility</div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <KeyValueBlock
+                            title="Booked"
+                            rows={[
+                                ["Booked revenue", audCents(snap.revenue?.booked_revenue_cents || 0)],
+                                ["Collected revenue", audCents(snap.revenue?.collected_revenue_cents || 0)],
+                            ]}
+                        />
+                        <KeyValueBlock
+                            title="Trust and quality"
+                            rows={[
+                                ["Suppressed intros", snap.trust?.intros_suppressed || 0],
+                                ["Suspicious conversions", snap.trust?.conversions_suspicious || 0],
+                                ["Intro to conversion", formatPercent(snap.throughput?.intro_to_conversion_rate || 0)],
+                            ]}
+                        />
+                    </div>
+                </div>
+            </section>
+
+            <section className="admin-card p-5">
+                <div className="small-caps !text-[#8B9E98]">Review next</div>
+                <div className="mt-4 grid gap-3">
+                    {topQueueRows.length ? topQueueRows.map((row) => (
+                        <div key={row.case_id} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge label={humanizeToken(row.severity)} kind="severity" />
+                                <Badge label={stateLabel(row.state)} kind="state" />
+                                <span className="text-xs font-mono text-[#8B9E98]">{row.workflow}</span>
+                            </div>
+                            <div className="mt-2 font-medium text-[#F5F2EB]">{row.title}</div>
+                            <div className="mt-1 text-sm text-[#8B9E98]">{row.summary}</div>
+                        </div>
+                    )) : <EmptyCard message="No queue items currently need attention." />}
+                </div>
+            </section>
         </div>
     );
 }
 
-function Section({ title, testid, children }) {
+function WorkQueueView({ queueBuckets, activeQueue, onQueueChange, selectedCase, selectedCaseId, onSelectCase, onRefresh }) {
+    const currentBucket = queueBuckets.find((bucket) => bucket.key === activeQueue) || queueBuckets[0];
+    const rows = currentBucket?.rows || [];
+
     return (
-        <section className="admin-card p-5" data-testid={testid}>
-            <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xs font-mono uppercase tracking-wider text-[#8B9E98]">{title}</h2>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr,0.9fr]">
+            <section className="admin-card p-5">
+                <PageHeader title="Work Queue" description={PAGE_INTROS.work_queue} />
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="small-caps !text-[#8B9E98] mr-auto">Choose a queue, then open one case at a time.</div>
+                    {queueBuckets.map((bucket) => (
+                        <button
+                            key={bucket.key}
+                            type="button"
+                            onClick={() => onQueueChange(bucket.key)}
+                            data-testid={`ops-queue-${bucket.key}`}
+                            className={`rounded-full border px-3 py-1.5 text-sm font-mono ${
+                                activeQueue === bucket.key
+                                    ? "border-[#D9B36C] bg-[#D9B36C] text-[#0D1412]"
+                                    : "border-[#2A3935] bg-[#111A17] text-[#C9C2B1]"
+                            }`}
+                        >
+                            {bucket.label} · {bucket.rows.length}
+                        </button>
+                    ))}
+                </div>
+                <div className="mt-3 rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3 text-sm text-[#8B9E98]">
+                    This queue shows owner-readable review work only. It does not expose dangerous website, payment, or deployment controls.
+                </div>
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Priority</th>
+                                <th className="pb-3 pr-3">Workflow</th>
+                                <th className="pb-3 pr-3">Item</th>
+                                <th className="pb-3 pr-3">State</th>
+                                <th className="pb-3 pr-3">Layer</th>
+                                <th className="pb-3">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.length ? rows.map((row) => (
+                                <tr
+                                    key={row.case_id}
+                                    className={`border-t border-[#1E2A27] ${selectedCaseId === row.case_id ? "bg-[#121C19]" : ""}`}
+                                >
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.severity)} kind="severity" /></td>
+                                    <td className="py-3 pr-3 font-mono text-[#C9C2B1]">{row.workflow}</td>
+                                    <td className="py-3 pr-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => onSelectCase(row.case_id)}
+                                            data-testid={`ops-case-${row.case_id}`}
+                                            className="w-full text-left"
+                                        >
+                                            <div className="font-medium">{row.title}</div>
+                                            <div className="text-xs text-[#8B9E98] mt-1">{row.summary}</div>
+                                        </button>
+                                    </td>
+                                    <td className="py-3 pr-3"><Badge label={stateLabel(row.state)} kind="state" /></td>
+                                    <td className="py-3 pr-3 text-[#8B9E98]">{row.responsibility_layer}</td>
+                                    <td className="py-3 text-[#8B9E98]">{formatDateTime(row.last_updated_at || row.detected_at)}</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">No items in this queue.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <CaseDetailPanel selectedCase={selectedCase} onRefresh={onRefresh} />
+        </div>
+    );
+}
+
+function CaseDetailPanel({ selectedCase, onRefresh }) {
+    const [draftState, setDraftState] = useState("detected");
+    const [owner, setOwner] = useState("");
+    const [note, setNote] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
+
+    useEffect(() => {
+        if (!selectedCase) {
+            setDraftState("detected");
+            setOwner("");
+            setNote("");
+            setSaveError("");
+            return;
+        }
+        setDraftState(selectedCase.review?.state || selectedCase.state || "detected");
+        setOwner(selectedCase.review?.owner || selectedCase.owner || "");
+        setNote(selectedCase.review?.note || "");
+        setSaveError("");
+    }, [selectedCase]);
+
+    const saveReview = useCallback(async () => {
+        if (!selectedCase) return;
+        setSaving(true);
+        setSaveError("");
+        try {
+            await opsApi.post(`/oversight/cases/${encodeURIComponent(selectedCase.case_id)}`, {
+                state: draftState,
+                owner,
+                note,
+            });
+            toast.success("Case review saved");
+            await onRefresh?.();
+        } catch (err) {
+            setSaveError("Review could not be saved. Try again after refreshing the page.");
+            toast.error("Review could not be saved");
+        } finally {
+            setSaving(false);
+        }
+    }, [draftState, note, onRefresh, owner, selectedCase]);
+
+    return (
+        <aside className="admin-card p-5">
+            <PageHeader title="Case detail" description="Use this panel to understand the item, review the evidence, and record what happened next." />
+            {!selectedCase ? (
+                <div className="mt-6 text-sm text-[#8B9E98] font-mono">Pick a work item to see why it exists, what evidence supports it, and what the next safe review step is.</div>
+            ) : (
+                <div className="mt-4 grid gap-4">
+                    <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge label={humanizeToken(selectedCase.severity)} kind="severity" />
+                            <Badge label={stateLabel(selectedCase.state)} kind="state" />
+                        </div>
+                        <h2 className="font-serif text-2xl tracking-tight mt-3">{selectedCase.title}</h2>
+                        <p className="text-sm text-[#C9C2B1] mt-2">{selectedCase.summary}</p>
+                    </div>
+                    <KeyValueBlock
+                        title="Why this exists"
+                        rows={[
+                            ["Workflow", selectedCase.workflow],
+                            ["User type", selectedCase.canonical_user_type],
+                            ["Layer", selectedCase.responsibility_layer],
+                            ["Detected", formatDateTime(selectedCase.detected_at)],
+                            ["Recommended next step", selectedCase.recommended_next_step || "Review evidence"],
+                        ]}
+                    />
+                    <DetailRowsCard title="Case details" rows={selectedCase.detail_rows} />
+                    <KeyValueBlock
+                        title="Evidence"
+                        rows={[
+                            ["Risk reasons", asArray(selectedCase.risk_reason_codes).map(humanizeToken).join(", ") || "None listed"],
+                            ["Source references", asArray(selectedCase.source_refs).map((ref) => `${ref.kind}:${ref.id}`).join(" · ") || "No linked evidence"],
+                            ["Audit references", asArray(selectedCase.audit_refs).join(", ") || "No audit refs linked yet"],
+                        ]}
+                    />
+                    <LinkRowsCard rows={selectedCase.linked_paths} />
+                    <section className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                        <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">Record review</div>
+                        <div className="mt-3 grid gap-3">
+                            <label className="grid gap-2">
+                                <span className="text-sm text-[#8B9E98]">Current review state</span>
+                                <select
+                                    value={draftState}
+                                    onChange={(event) => setDraftState(event.target.value)}
+                                    className="admin-input"
+                                    data-testid="ops-case-state"
+                                >
+                                    {REVIEW_STATE_OPTIONS.map((option) => (
+                                        <option key={option} value={option}>
+                                            {humanizeToken(option)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="grid gap-2">
+                                <span className="text-sm text-[#8B9E98]">Owner note label</span>
+                                <input
+                                    value={owner}
+                                    onChange={(event) => setOwner(event.target.value)}
+                                    className="admin-input"
+                                    placeholder="Example: Carl"
+                                    data-testid="ops-case-owner"
+                                />
+                            </label>
+                            <label className="grid gap-2">
+                                <span className="text-sm text-[#8B9E98]">What happened</span>
+                                <textarea
+                                    value={note}
+                                    onChange={(event) => setNote(event.target.value)}
+                                    className="admin-input min-h-[120px]"
+                                    placeholder="Example: Reviewed message history. No new contact needed."
+                                    data-testid="ops-case-note"
+                                />
+                            </label>
+                            {saveError ? <div className="text-sm text-[#F8D9D3]">{saveError}</div> : null}
+                            <div className="flex flex-wrap items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={saveReview}
+                                    disabled={saving}
+                                    className="admin-btn admin-btn-accent"
+                                    data-testid="ops-case-save"
+                                >
+                                    {saving ? "Saving…" : "Save review"}
+                                </button>
+                                <span className="text-xs text-[#8B9E98]">
+                                    This records review state only. It does not change the website, billing, or public visibility.
+                                </span>
+                            </div>
+                        </div>
+                    </section>
+                    <HistoryCard rows={selectedCase.review?.history} />
+                </div>
+            )}
+        </aside>
+    );
+}
+
+function TrainerSupplyView({ trainerInventory }) {
+    return (
+        <section className="admin-card p-5 mt-4">
+            <PageHeader title="Trainer Supply" description={PAGE_INTROS.trainer_supply} />
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <div className="small-caps !text-[#8B9E98]">Review the live trainer set without leaving the console.</div>
+                    <p className="text-sm text-[#8B9E98] font-mono mt-2">Each row shows visibility, trust-readiness, billing state, blockers, and a safe public link.</p>
+                </div>
+                <div className="text-sm font-mono text-[#8B9E98]">{trainerInventory.length} rows</div>
             </div>
-            {children}
+            <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[980px] text-sm">
+                    <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                        <tr>
+                            <th className="pb-3 pr-3">Trainer</th>
+                            <th className="pb-3 pr-3">Suburb</th>
+                            <th className="pb-3 pr-3">Public</th>
+                            <th className="pb-3 pr-3">Verified</th>
+                            <th className="pb-3 pr-3">Intro-ready</th>
+                            <th className="pb-3 pr-3">Billing</th>
+                            <th className="pb-3 pr-3">Source</th>
+                            <th className="pb-3 pr-3">Blockers</th>
+                            <th className="pb-3 pr-3">Last updated</th>
+                            <th className="pb-3">Public page</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {trainerInventory.length ? trainerInventory.map((row) => (
+                            <tr key={row.id} className="border-t border-[#1E2A27]">
+                                <td className="py-3 pr-3">
+                                    <div className="font-medium">{row.name}</div>
+                                    <div className="text-xs text-[#8B9E98] mt-1">
+                                        Confidence {formatPercent(row.confidence_score)} · Outcomes {formatShortNumber(row.outcome_score)}
+                                    </div>
+                                </td>
+                                <td className="py-3 pr-3">{row.suburb || "—"}</td>
+                                <td className="py-3 pr-3"><Badge label={row.published ? "Yes" : "No"} kind="state" /></td>
+                                <td className="py-3 pr-3">{humanizeToken(row.verification_status)}</td>
+                                <td className="py-3 pr-3">{row.intro_ready ? "Yes" : "No"}</td>
+                                <td className="py-3 pr-3">{humanizeToken(row.billing_profile_status)}</td>
+                                <td className="py-3 pr-3">{humanizeToken(row.source_kind)}</td>
+                                <td className="py-3 pr-3 text-[#8B9E98]">{asArray(row.blocker_codes).map(humanizeToken).join(", ") || "Clear"}</td>
+                                <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.updated_at)}</td>
+                                <td className="py-3">
+                                    {row.public_detail_path ? <Link className="underline underline-offset-2" to={row.public_detail_path}>Open</Link> : "—"}
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="10" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </section>
     );
 }
 
-function Metric({ label, value, sub, testid }) {
+function MessagesView({ messages }) {
     return (
-        <div className="admin-card p-4" data-testid={testid}>
-            <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">{label}</div>
-            <div className="font-mono text-3xl tracking-tight mt-1">{value}</div>
-            {sub && <div className="text-xs font-mono text-[#8B9E98] mt-1">{sub}</div>}
-        </div>
-    );
-}
-
-function LoopCard({ name, loop, unit, countKey, statusMeta }) {
-    const last = loop?.last_run;
-    const lastMs = last ? new Date(last).getTime() : Number.NaN;
-    const ago = Number.isFinite(lastMs) ? Math.max(0, Math.floor((Date.now() - lastMs) / 1000)) : null;
-    const count = countKey ? (loop?.[countKey] ?? "—") : "live";
-    const status = statusMeta?.status || "warn";
-    const tone = status === "ok" ? "text-[#10B981]" : status === "investigate" ? "text-[#FBBF24]" : "text-[#F87171]";
-    const thresholdCopy = statusMeta?.stale_after_s ? ` · stale>${statusMeta.stale_after_s}s` : "";
-    return (
-        <div className="bg-[#0D1412] border border-[#243631] rounded p-3" data-testid={`loop-${name.toLowerCase()}`}>
-            <div className="flex items-center gap-2">
-                <Activity className={`h-3 w-3 ${tone}`} />
-                <div className="text-[10px] uppercase tracking-wider font-mono text-[#8B9E98]">{name}</div>
+        <section className="admin-card p-5 mt-4">
+            <PageHeader title="Messages" description={PAGE_INTROS.messages} />
+            <p className="text-sm text-[#8B9E98] font-mono mt-4">Every recent outgoing message in one readable list, grouped by workflow and delivery result.</p>
+            <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[940px] text-sm">
+                    <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                        <tr>
+                            <th className="pb-3 pr-3">Time</th>
+                            <th className="pb-3 pr-3">Workflow</th>
+                            <th className="pb-3 pr-3">Target</th>
+                            <th className="pb-3 pr-3">Kind</th>
+                            <th className="pb-3 pr-3">Status</th>
+                            <th className="pb-3 pr-3">Provider</th>
+                            <th className="pb-3">Delivery detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {messages.length ? messages.map((row) => (
+                            <tr key={row.id} className="border-t border-[#1E2A27]">
+                                <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.created_at)}</td>
+                                <td className="py-3 pr-3">{row.workflow}</td>
+                                <td className="py-3 pr-3">
+                                    <div className="font-medium">{row.entity_label}</div>
+                                    <div className="text-xs text-[#8B9E98] mt-1">{row.canonical_user_type}</div>
+                                </td>
+                                <td className="py-3 pr-3">{humanizeToken(row.kind)}</td>
+                                <td className="py-3 pr-3"><Badge label={humanizeToken(row.status)} kind="state" /></td>
+                                <td className="py-3 pr-3">{row.provider || "—"}</td>
+                                <td className="py-3">
+                                    <div>Attempt {row.attempt || 0}</div>
+                                    <div className="text-xs text-[#8B9E98] mt-1">HTTP {row.http_status || 0}</div>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="7" className="py-6 text-center text-[#8B9E98] font-mono">No recent messages logged.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
-            <div className="font-mono text-lg mt-1">{count}</div>
-            <div className="text-[10px] font-mono text-[#8B9E98] mt-0.5">{unit}{ago !== null ? ` · ${ago}s ago` : ""}{thresholdCopy}</div>
-            <div className={`text-[10px] font-mono mt-1 ${tone}`}>{status === "ok" ? "Monitor" : status === "investigate" ? "Investigate" : "Escalate"}</div>
-        </div>
+        </section>
     );
 }
 
-function Tile({ label, value, accent = "mute" }) {
-    const klass = accent === "green" ? "admin-tag-green" : accent === "amber" ? "admin-tag-amber" : "admin-tag-mute";
+function BillingReactivationView({ billingCases, reactivationCases }) {
     return (
-        <div className="bg-[#0D1412] border border-[#243631] rounded p-3">
-            <span className={`admin-tag ${klass}`}>{label}</span>
-            <div className="font-mono text-2xl mt-2">{value}</div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <section className="admin-card p-5">
+                <PageHeader title="Billing & Reactivation" description={PAGE_INTROS.billing_reactivation} />
+                <div className="small-caps !text-[#8B9E98] mt-4">Billing problems</div>
+                <div className="mt-4 grid gap-3">
+                    {billingCases.length ? billingCases.map((row) => (
+                        <div key={row.intro_id} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-medium">{row.trainer_name}</div>
+                                <Badge label={humanizeToken(row.billing_retry_state)} kind="state" />
+                            </div>
+                            <div className="mt-2 text-sm text-[#C9C2B1]">
+                                {humanizeToken(row.billing_collection_status)} · {humanizeToken(row.billing_profile_status)} · {audCents(row.intro_fee_cents || 0)}
+                            </div>
+                            <div className="mt-2 text-xs text-[#8B9E98]">
+                                Attempts {row.billing_retry_attempts || 0} · Last update {formatDateTime(row.billing_last_retry_at || row.created_at)}
+                            </div>
+                            {row.trainer_id && row.trainer_action_token ? (
+                                <div className="mt-3">
+                                    <Link
+                                        className="underline underline-offset-2"
+                                        to={`/trainer/billing?trainer_id=${encodeURIComponent(row.trainer_id)}&trainer_action_token=${encodeURIComponent(row.trainer_action_token)}`}
+                                    >
+                                        Open billing view
+                                    </Link>
+                                </div>
+                            ) : null}
+                        </div>
+                    )) : <EmptyCard message="No billing cases are open right now." />}
+                </div>
+            </section>
+
+            <section className="admin-card p-5">
+                <div className="small-caps !text-[#8B9E98]">Reactivation</div>
+                <div className="mt-4 grid gap-3">
+                    {reactivationCases.length ? reactivationCases.map((row) => (
+                        <div key={row.trainer_id || row.email} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-medium">{row.trainer_name || "Unknown trainer"}</div>
+                                <Badge label={humanizeToken(row.last_notification_status || "open")} kind="state" />
+                            </div>
+                            <div className="mt-2 text-sm text-[#C9C2B1]">{asArray(row.reasons).join(", ") || "No reasons listed."}</div>
+                            <div className="mt-2 text-xs text-[#8B9E98]">
+                                Updated {formatDateTime(row.updated_at)} · Last notify {formatDateTime(row.last_notified_at)}
+                            </div>
+                            {row.trainer_id && row.trainer_action_token ? (
+                                <div className="mt-3">
+                                    <Link
+                                        className="underline underline-offset-2"
+                                        to={`/trainer/reactivate?trainer_id=${encodeURIComponent(row.trainer_id)}&trainer_action_token=${encodeURIComponent(row.trainer_action_token)}`}
+                                    >
+                                        Open reactivation view
+                                    </Link>
+                                </div>
+                            ) : null}
+                        </div>
+                    )) : <EmptyCard message="No reactivation cases are open right now." />}
+                </div>
+            </section>
         </div>
     );
 }
 
-function SeverityTag({ s }) {
-    if (s === "high") return <span className="admin-tag admin-tag-red"><AlertTriangle className="h-3 w-3" /> High</span>;
-    if (s === "medium") return <span className="admin-tag admin-tag-amber"><AlertTriangle className="h-3 w-3" /> Med</span>;
-    return <span className="admin-tag admin-tag-mute">Low</span>;
+function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
+    const loopRows = Object.entries(loops || {});
+
+    return (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr,0.8fr]">
+            <section className="admin-card p-5">
+                <PageHeader title="System Activity" description={PAGE_INTROS.system_activity} />
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Loop</th>
+                                <th className="pb-3 pr-3">Status</th>
+                                <th className="pb-3 pr-3">Freshness</th>
+                                <th className="pb-3">Escalates after</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loopRows.map(([key, meta]) => (
+                                <tr key={key} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3">{humanizeToken(key)}</td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(meta.status)} kind="state" /></td>
+                                    <td className="py-3 pr-3 text-[#8B9E98]">
+                                        {meta.age_s == null ? "Unknown" : `${formatShortNumber(meta.age_s)} sec old`}
+                                    </td>
+                                    <td className="py-3 text-[#8B9E98]">
+                                        {meta.stale_after_s == null ? "Unknown" : `${formatShortNumber(meta.stale_after_s)} sec`}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <div className="grid gap-4">
+                <section className="admin-card p-5">
+                    <div className="small-caps !text-[#8B9E98]">Alerts</div>
+                    <div className="mt-4 grid gap-3">
+                        {alerts.length ? alerts.map((row, idx) => (
+                            <div key={`${row?.code || "alert"}-${idx}`} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                                <div className="font-medium">{row.title || row.code || "System alert"}</div>
+                                <div className="text-sm text-[#C9C2B1] mt-2">{row.message || "No extra detail supplied."}</div>
+                            </div>
+                        )) : <EmptyCard message="No active alerts reported." />}
+                    </div>
+                </section>
+                <section className="admin-card p-5">
+                    <div className="small-caps !text-[#8B9E98]">Source ingestion</div>
+                    <div className="mt-4 grid gap-3">
+                        {sourceIngestionSources.length ? sourceIngestionSources.map((row) => (
+                            <div key={row.source_url || row.id} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                                <div className="font-medium truncate">{row.source_url || "Unknown source"}</div>
+                                <div className="text-sm text-[#C9C2B1] mt-2">
+                                    Failures {row.consecutive_failures || 0}
+                                    {row.suppressed_until ? ` · Suppressed until ${formatDateTime(row.suppressed_until)}` : ""}
+                                </div>
+                            </div>
+                        )) : <EmptyCard message="No source ingestion problems are visible." />}
+                    </div>
+                </section>
+            </div>
+        </div>
+    );
 }
 
-function humanizeValue(value) {
-    const raw = String(value || "").trim();
-    if (!raw) return "unknown";
-    return raw.replace(/_/g, " ");
+function RecentChangesView({ recentChanges }) {
+    return (
+        <section className="admin-card p-5 mt-4">
+            <PageHeader title="Recent Changes" description={PAGE_INTROS.recent_changes} />
+            <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[760px] text-sm">
+                    <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                        <tr>
+                            <th className="pb-3 pr-3">Time</th>
+                            <th className="pb-3 pr-3">Event</th>
+                            <th className="pb-3 pr-3">Entity</th>
+                            <th className="pb-3">Actor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {recentChanges.length ? recentChanges.map((row, idx) => (
+                            <tr key={`${row.ts || idx}-${row.action || "change"}`} className="border-t border-[#1E2A27]">
+                                <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.ts)}</td>
+                                <td className="py-3 pr-3">{row.action || "Change recorded"}</td>
+                                <td className="py-3 pr-3">{row.entity_id || row.id || "—"}</td>
+                                <td className="py-3">{row.actor || "system"}</td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan="4" className="py-6 text-center text-[#8B9E98] font-mono">No recent changes recorded.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
 }
 
-function formatDateTime(value) {
-    const raw = String(value || "").trim();
-    return raw ? raw.slice(0, 19).replace("T", " ") : "unknown";
+function StatusLine({ label, value }) {
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{label}</div>
+            <div className="mt-2 text-sm text-[#F5F2EB]">{value}</div>
+        </div>
+    );
+}
+
+function PageHeader({ title, description }) {
+    return (
+        <div className="mb-4">
+            <h2 className="font-serif text-2xl tracking-tight">{title}</h2>
+            <p className="mt-2 text-sm text-[#8B9E98]">{description}</p>
+        </div>
+    );
+}
+
+function SummaryCard({ title, value, note }) {
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{title}</div>
+            <div className="mt-2 font-serif text-3xl">{formatShortNumber(value)}</div>
+            <div className="mt-1 text-sm text-[#8B9E98]">{note}</div>
+        </div>
+    );
+}
+
+function MetricCard({ title, value, note }) {
+    return (
+        <div className="admin-card p-5">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{title}</div>
+            <div className="mt-3 font-serif text-4xl">{formatShortNumber(value)}</div>
+            <div className="mt-2 text-sm text-[#8B9E98]">{note}</div>
+        </div>
+    );
+}
+
+function KeyValueBlock({ title, rows }) {
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{title}</div>
+            <div className="mt-3 grid gap-3">
+                {rows.map(([label, value]) => (
+                    <div key={label} className="flex items-start justify-between gap-4">
+                        <div className="text-sm text-[#8B9E98]">{label}</div>
+                        <div className="text-sm text-right text-[#F5F2EB]">{value}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DetailRowsCard({ title, rows }) {
+    const visibleRows = asArray(rows).filter((row) => row?.label);
+    if (!visibleRows.length) return null;
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{title}</div>
+            <div className="mt-3 grid gap-3">
+                {visibleRows.map((row) => (
+                    <div key={`${row.label}-${String(row.value)}`} className="flex items-start justify-between gap-4">
+                        <div className="text-sm text-[#8B9E98]">{row.label}</div>
+                        <div className="text-sm text-right text-[#F5F2EB]">{typeof row.value === "string" && row.value.includes("T") ? formatDateTime(row.value) : String(row.value ?? "—")}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function LinkRowsCard({ rows }) {
+    const visibleRows = asArray(rows).filter((row) => row?.path && row?.label);
+    if (!visibleRows.length) return null;
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">Related pages</div>
+            <div className="mt-3 grid gap-2">
+                {visibleRows.map((row) => (
+                    <Link key={`${row.label}-${row.path}`} to={row.path} className="underline underline-offset-2 text-sm">
+                        {row.label}
+                    </Link>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function HistoryCard({ rows }) {
+    const history = [...asArray(rows)].reverse();
+    if (!history.length) {
+        return (
+            <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+                <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">Review history</div>
+                <div className="mt-3 text-sm text-[#8B9E98]">No review history has been recorded yet.</div>
+            </div>
+        );
+    }
+    return (
+        <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4">
+            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">Review history</div>
+            <div className="mt-3 grid gap-3">
+                {history.map((row, index) => (
+                    <div key={`${row.updated_at || index}-${row.state || "state"}`} className="rounded-2xl border border-[#22302C] px-3 py-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Badge label={stateLabel(row.state)} kind="state" />
+                            <span className="text-xs text-[#8B9E98]">{row.owner || row.actor || "ops"}</span>
+                            <span className="text-xs text-[#8B9E98]">{formatDateTime(row.updated_at)}</span>
+                        </div>
+                        <div className="mt-2 text-sm text-[#F5F2EB]">{row.note || "No note recorded."}</div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function Badge({ label, kind }) {
+    return (
+        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-mono ${toneClass(kind, label)}`}>
+            {label}
+        </span>
+    );
+}
+
+function EmptyCard({ message }) {
+    return (
+        <div className="rounded-3xl border border-dashed border-[#2A3935] bg-[#111A17] p-4 text-sm text-[#8B9E98] font-mono">
+            {message}
+        </div>
+    );
 }

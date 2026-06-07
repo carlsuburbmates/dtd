@@ -1,0 +1,192 @@
+# Execution Status
+
+## Purpose
+
+This file is the sole current-state controller for DTD execution.
+
+It owns:
+1. current objective
+2. current blocker
+3. current priority order
+4. current accepted scope
+5. explicitly deferred items
+6. current verification status
+7. current risks
+8. restart protocol
+9. concise append-only execution log
+
+It does not define:
+1. product truth
+2. workflow completion rules
+3. page-level behavior
+4. `/ops` product behavior
+5. standards or launch gates
+
+## Current Objective
+
+Restore trust in the DTD environment and data path before any further Ops power
+is added.
+
+The current project execution priority is:
+1. contaminated/reset-era cleanup
+2. seed control and local/live sync
+3. verification of `/ops` against a clean synced state
+4. readiness confirmation before any deferred Ops controls are reconsidered
+
+Current Ops objective:
+1. continue the Operations Console and environment-stabilisation work
+2. do not reopen already-approved Ops direction
+3. do not start deferred high-power Ops controls
+
+## Current Blocker
+
+No active implementation blocker remains for the current website baseline.
+
+Current blockers are trust and verification blockers:
+1. environment/data trust is not yet clean enough
+2. seed-control correctness is not yet proven
+3. local/live sync is not yet proven
+4. provider-coupled and long-window evidence remains incomplete
+5. the worktree contains unrelated and pre-existing local changes that must not be reverted casually
+
+## Current Priority Order
+
+1. clean up contaminated/reset-era drift
+2. lock seed control and sync local with the real deployment path
+3. verify the current Operations Console against the clean synced state
+4. confirm the console is stable, readable, and accurate enough before any further Ops power is considered
+5. only after 1 to 4 are complete may bounded owner controls be reconsidered
+6. only after 5 is proven safe may technical-owner controls be reconsidered
+
+## Current Accepted Scope
+
+In scope now:
+1. contaminated/reset-era cleanup
+2. seed control
+3. local/live sync
+4. `/ops` verification against the clean synced state
+5. launch-readiness proof within the locked current posture
+
+Out of scope now:
+1. Owner Override controls
+2. Technical-Owner controls
+3. public live matching enablement
+4. broad admin CRUD
+5. unrelated code refactors
+6. production/runtime mutations
+
+Guarded defaults that remain in force:
+1. `CONVERSION_BILLING_MODE=track_only`
+2. `PUBLIC_MATCHING_ENABLED=false` for the current supply-first phase
+3. no auth replacement
+4. no billing-model cutover away from intro-first defaults
+
+## Explicitly Deferred Items
+
+Do not implement yet:
+1. bounded owner controls
+2. technical-owner controls
+3. public matching launch enablement
+4. broad Ops mutation controls
+
+## Current Verification Status
+
+Established from current repo evidence:
+1. `/ops` is materially implemented and not merely aspirational
+2. bounded Layer 1 review-state persistence exists in code and tests
+3. the public route set materially matches the canonical page spec
+4. the supply-first, passive owner waitlist posture is materially reflected in current code paths
+
+Not yet proven at the project level:
+1. clean runtime data trustworthiness
+2. seed-control correctness
+3. local/live sync correctness
+4. final live provider exercise for all external lifecycle paths
+
+Current readiness state:
+1. website is owner/public review ready at the current baseline
+2. website is not yet full staging/live E2E complete
+3. website is not yet fully production-ready
+4. status remains `not launch-ready` until `LAUNCH_GATE.md` is fully satisfied with evidence
+
+Known remaining evidence gaps:
+1. live trainer submission E2E
+2. live Stripe/Resend provider exercise
+3. campaign-attribution row persistence on live
+4. discovery pickup proof tied cleanly to a submitted live row
+5. long-running proof across all autonomous loops
+
+## Current Runtime And Infrastructure Truth
+
+Current code/runtime truths worth preserving:
+1. oversight auth currently uses `ADMIN_PASS`
+2. loop ownership is explicit and env-controlled
+3. loop execution is lease-guarded so only one live owner executes loops at a time
+4. startup seeds are now explicit opt-in and API-only through `ENABLE_STARTUP_SEEDS`
+5. the optional local stack is being aligned to the same named DTD runtime path instead of a stale alternate DB name
+6. active scope is region-gated
+7. consent checkpoints are enforced on matching, contact release, and submission paths
+8. intro idempotency remains enforced
+9. conversion billing defaults remain `track_only`
+10. intro billing collection path is Stripe invoice-based when configured
+11. source-ingestion and outreach loops remain implemented in the runtime
+
+Current infrastructure truths worth preserving:
+1. the active Vercel project is `dtd`
+2. custom domains are attached to the active production target
+3. a duplicate `dogtrainersdirectory` Vercel project remains account inventory only and should be treated as drift-risk
+
+## Current Risks
+
+1. the worktree is not clean, so active changes must avoid reverting unrelated local edits
+2. environment trust is still not clean enough to start deferred control layers
+3. remote and live runtime proof for the new startup-seed gate is not yet captured
+4. local, remote, and live are still not yet fully re-synced as one trusted execution path
+5. stale wording outside the canonical pack could still flatten the bounded Layer 1 `/ops` model if not corrected carefully during future edits
+6. latent matching-capable code could be misread as the current product posture if authority order is ignored
+
+## Restart Protocol
+
+Any future session should restart from:
+1. `AGENTS.md`
+2. `.codex/skill-policy.toml`
+3. `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
+4. `docs/governance/CURRENT_TRUTH_INDEX.md`
+5. this file
+6. the current repository state
+
+Session-start rules:
+1. inspect current worktree state first
+2. preserve the locked chunk approvals unless explicitly replaced
+3. preserve `/ops` semantics before aligning surrounding docs
+4. do not reopen deferred high-power Ops controls during trust-first work
+
+Launch authority:
+1. final Go/No-Go authority remains the owner
+2. launch approval must be explicit and evidence-backed
+
+## Append-Only Execution Log
+
+1. `2026-06-03`
+- repo-anchored handoff established as safer than chat-memory continuation
+- trust-first next-work order locked for post-Ops-foundation execution
+
+2. `2026-06-06`
+- documentation cleanup decomposed into locked chunks:
+  - final file set
+  - ownership rules
+  - keep / merge / delete decisions
+  - exact content allocation
+
+3. `2026-06-07`
+- code-informed refinement added to documentation cleanup
+- `/ops` and `OPERATIONS_CONSOLE_SPEC.md` confirmed as preservation-sensitive
+- bounded Layer 1 review-state writes confirmed as implemented truth
+- documentation system cleanup completed:
+  - workflow completion authority created
+  - single execution-status authority created
+  - parallel roadmap/handoff control docs retired
+- startup seed control tightened in code:
+  - seeds require explicit `ENABLE_STARTUP_SEEDS`
+  - worker startup no longer participates in seeding
+- optional local compose stack aligned toward DTD naming and worker topology
