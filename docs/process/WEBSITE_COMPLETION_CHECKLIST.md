@@ -1,8 +1,8 @@
 # DTD Website Completion Checklist
 
-Date: 2026-06-07
+Date: 2026-06-08
 Scope: execution checklist for taking the current DTD website and operator
-surface through the remaining completion and verification work.
+surface through the remaining activation and final approval work.
 
 ## Purpose
 
@@ -30,6 +30,9 @@ Use these authorities first:
 5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
 6. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
 7. `docs/governance/EXECUTION_STATUS.md`
+
+Use `docs/governance/EXECUTION_STATUS.md` for the active phase and current
+decision state. This file holds the executable sequence only.
 
 ## Use Rules
 
@@ -134,31 +137,43 @@ Use these authorities first:
 
 ### Phase 1: Trust And Environment Recovery
 
-- [ ] clean up contaminated/reset-era drift
-- [ ] lock seed behavior
-- [ ] sync local with the real deployment path
-- [ ] make verification meaningful again against one trusted behavior path
+- [x] clean up contaminated/reset-era drift
+- [x] lock seed behavior
+- [x] sync local with the real deployment path
+- [x] make verification meaningful again against one trusted behavior path
 
 ### Phase 2: Workflow Verification Against Clean State
 
-- [ ] verify launch-critical workflows from `WORKFLOW_COMPLETION_SPEC.md`
-- [ ] verify route- and page-level behavior from `COMPLETE_WEBSITE_PAGE_SPEC.md`
-- [ ] verify `/ops` against the clean synced state without degrading current operator behavior
+- [x] verify launch-critical workflows from `WORKFLOW_COMPLETION_SPEC.md`
+- [x] verify route- and page-level behavior from `COMPLETE_WEBSITE_PAGE_SPEC.md`
+- [x] verify `/ops` against the clean synced state without degrading current operator behavior
 
 ### Phase 3: Launch Readiness Proof
 
-- [ ] capture the required launch evidence window
-- [ ] satisfy `LAUNCH_GATE.md`
-- [ ] record final Go/No-Go decision with explicit evidence
+- [x] capture the required launch evidence window
+- [x] satisfy `LAUNCH_GATE.md` for the hosted-path non-provider scope
+- [x] record the bounded Phase 3 Go/No-Go outcome with explicit evidence
 
-## Post-Feature Launch Verification
+### Phase 4: Actual-Domain Activation Slice
+
+- [ ] complete live trainer submission E2E on the actual-domain path
+- [ ] complete live provider exercise for notification and billing-coupled paths
+- [ ] verify `/ops` and runtime evidence remain coherent after the provider-coupled activation checks
+
+### Phase 5: Final Launch Approval
+
+- [ ] confirm `LAUNCH_GATE.md` is satisfied with the actual-domain activation evidence
+- [ ] record the final explicit owner Go/No-Go decision in governance evidence
+- [ ] keep deferred Ops power out of scope unless final launch approval exists
+
+## Final Activation Verification
 
 Do not treat this block as complete until feature and workflow completion are already established.
 
-- [ ] capture a launch evidence window proving:
+- [ ] capture a final activation evidence window proving:
   - no stale core loop beyond `2x` interval
   - no unresolved `severity:high` alerts during that window
-- [ ] complete supply-first launch verification with explicit evidence
+- [ ] complete supply-first launch verification with explicit activation evidence
 - [ ] defer matching-enabled public release evidence to the later controlled live-matching phase
 - [ ] record the explicit final Go/No-Go decision in governance evidence
 
