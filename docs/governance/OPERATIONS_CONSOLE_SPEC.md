@@ -4,7 +4,7 @@
 **Project:** Dog Trainers Directory / DTD  
 **Purpose:** Canonical product spec for the owner-facing Operations Console at `/ops`.  
 **Status:** Canonical implementation-following spec  
-**Last aligned:** 2026-06-03
+**Last aligned:** 2026-06-08
 
 ---
 
@@ -257,7 +257,90 @@ Should show:
 
 ---
 
-## 7. Locked UI Vocabulary
+## 7. Workflow Evidence Coverage
+
+Each `/ops` section exists to evidence specific workflow families.
+
+### 7.1 Overview
+
+Primarily evidences:
+1. `W-DO-1 Owner Waitlist Capture`
+2. `W-TR-3 Publish-Or-Hold Decision`
+3. `W-TR-4 Trainer Activation Readiness`
+4. `W-OP-2 Continuous Oversight Monitoring`
+5. `W-AU-1 Runtime Loop Health And Freshness`
+
+The overview is responsible for making these truths readable first:
+1. current phase
+2. public visibility state
+3. supply readiness
+4. blockers
+5. recommendation
+6. immediate demand/supply abnormalities
+
+### 7.2 Work Queue
+
+Primarily evidences:
+1. `W-TR-2 Trainer Submission`
+2. `W-TR-3 Publish-Or-Hold Decision`
+3. `W-TR-4 Trainer Activation Readiness`
+4. `W-TR-5 Trainer Billing Remediation`
+5. `W-TR-6 Trainer Reactivation`
+6. `W-OP-3 Monitor / Investigate / Escalate Review Flow`
+7. abnormal `W-EX-1 Discovery Queue Contribution` cases where operator review becomes relevant
+
+### 7.3 Trainer Supply
+
+Primarily evidences:
+1. `W-TR-2 Trainer Submission`
+2. `W-TR-3 Publish-Or-Hold Decision`
+3. `W-TR-4 Trainer Activation Readiness`
+
+This section is where the owner should understand:
+1. usable supply
+2. blocked supply
+3. verification status
+4. intro-readiness
+5. safe public detail continuity
+
+### 7.4 Messages
+
+Primarily evidences:
+1. `W-AU-2 Outbound Message And Notification Logging`
+2. `W-DO-6 T+7 Follow-Up`
+3. trainer-notification aspects of `W-TR-2 Trainer Submission`
+
+### 7.5 Billing & Reactivation
+
+Primarily evidences:
+1. `W-TR-5 Trainer Billing Remediation`
+2. `W-TR-6 Trainer Reactivation`
+
+### 7.6 System Activity
+
+Primarily evidences:
+1. `W-EX-1 Discovery Queue Contribution`
+2. `W-AU-1 Runtime Loop Health And Freshness`
+
+This section is where the owner should see:
+1. stale loops
+2. unhealthy loops
+3. ingestion issues
+4. freshness and alert thresholds
+
+### 7.7 Recent Changes
+
+Primarily evidences:
+1. `W-OP-3 Monitor / Investigate / Escalate Review Flow`
+2. audit-visible consequences from launch-readiness and lifecycle monitoring
+
+No single `/ops` section should be treated as the sole proof surface for a
+workflow. The section map above defines the primary operator reading surface, not
+the full system of record.
+
+---
+
+## 8. Locked UI Vocabulary
 
 Use these labels in the owner-facing console:
 
@@ -275,7 +358,7 @@ Avoid making technical internal names the main labels when a plain-language equi
 
 ---
 
-## 8. Responsibility Boundary
+## 9. Responsibility Boundary
 
 The existing four-layer responsibility model still applies.
 
@@ -324,7 +407,7 @@ Still required for:
 
 ---
 
-## 9. Current Data Contract The UI Depends On
+## 10. Current Data Contract The UI Depends On
 
 The console currently depends on these read-only payload areas from `/api/oversight`:
 
@@ -339,7 +422,7 @@ This contract should be extended carefully, not replaced casually.
 
 ---
 
-## 10. Current Gaps That Are Known And Accepted
+## 11. Current Gaps That Are Known And Accepted
 
 These are known and should not be mistaken for accidental omissions:
 
@@ -347,12 +430,14 @@ These are known and should not be mistaken for accidental omissions:
 2. trainer inventory is present, but future filtering and column refinement may still improve it
 3. the queue now supports persisted Layer 1 review state, but it is not a full multi-user case-management product
 4. Owner Override and Technical-Owner controls remain intentionally out of scope
+5. geography coverage visibility is still thinner than ideal for end-of-window supply decisions
+6. trainer acquisition and readiness visibility is still stronger as current counts than as a historical trend view
 
 These are future tasks, not reasons to change the overall console direction.
 
 ---
 
-## 11. Roadmap To Follow
+## 12. Roadmap To Follow
 
 ### Phase 1 — Foundation
 
@@ -415,9 +500,16 @@ Only after:
 2. trust/governance boundaries are explicit
 3. auditability is complete
 
+### Thin evidence additions still needed
+
+These are clarity/evidence additions, not control-scope changes:
+
+1. add supply-by-geography visibility that is readable enough for phase decisions
+2. add trainer acquisition and intro-readiness trend visibility that shows trajectory, not just current totals
+
 ---
 
-## 12. Acceptance Standard For Future Ops Work
+## 13. Acceptance Standard For Future Ops Work
 
 No future `/ops` change should be approved unless it answers:
 

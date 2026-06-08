@@ -1,6 +1,6 @@
 # Current Truth Index
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 ## Purpose
 
@@ -11,7 +11,7 @@ Rules:
 1. only the docs listed under `Canonical implementation pack` govern implementation truth
 2. docs listed under `Execution control` govern current work sequencing and current state only
 3. docs listed under `Verification and evidence` support proof and runtime review only
-4. process and design docs are non-authoritative support material
+4. process docs and any design docs not explicitly listed in the canonical implementation pack are non-authoritative support material
 5. if a doc is not explicitly listed below, it must not drive implementation or truth decisions
 
 ## Core Execution Authorities
@@ -27,14 +27,16 @@ These govern Codex session behavior and execution method, not product truth:
 These docs define the intended DTD website and operating model:
 1. `docs/standards/SSOT.md`
 2. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
-3. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
-4. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
-5. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
-6. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
-7. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
-8. `docs/standards/BUILD_CHECKLIST.md`
-9. `docs/standards/LAUNCH_GATE.md`
-10. `docs/standards/INTEGRITY_AUDIT.md`
+3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
+4. `docs/governance/WORKFLOW_SURFACE_MATRIX.md`
+5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
+6. `docs/design/WIREFRAME_STATE_MAP.md`
+7. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+8. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
+9. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
+10. `docs/standards/BUILD_CHECKLIST.md`
+11. `docs/standards/LAUNCH_GATE.md`
+12. `docs/standards/INTEGRITY_AUDIT.md`
 
 ## Execution Control
 
@@ -61,10 +63,12 @@ When canonical docs disagree, resolve in this order:
 2. `docs/standards/SSOT.md` governs product model, actor types, launch model, and operating rules
 3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` governs end-to-end workflow completion and E2E completion criteria
 4. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` governs page-level and route-level behavior
-5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the current `/ops` product surface and operator-facing semantics
-6. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and escalation layers
-7. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first phase goals and evidence model
-8. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch approval, and verification requirements
+5. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` governs the canonical workflow-to-route-to-ops mapping
+6. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the current `/ops` product surface and operator-facing semantics
+7. `docs/design/WIREFRAME_STATE_MAP.md` governs canonical screen-state coverage under workflow and page truth
+8. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and escalation layers
+9. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first phase goals and evidence model
+10. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch approval, and verification requirements
 
 ## Execution Control Rules
 

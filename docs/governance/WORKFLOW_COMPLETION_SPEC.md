@@ -22,10 +22,12 @@ This document sits under the authority order routed by
 Role boundaries:
 1. `docs/standards/SSOT.md` defines the product model, actor types, and workflow families.
 2. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` defines page- and route-level behavior.
-3. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` defines the owner-facing `/ops` product surface.
-4. this document defines workflow-level completion and E2E verification requirements.
-5. `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` tracks execution work but must not redefine workflow completion.
-6. `docs/governance/EXECUTION_STATUS.md` tracks current state but must not redefine workflow completion.
+3. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` maps workflows to routes, screen states, and required `/ops` evidence.
+4. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` defines the owner-facing `/ops` product surface.
+5. `docs/design/WIREFRAME_STATE_MAP.md` defines canonical screen-state coverage for workflow-serving routes.
+6. this document defines workflow-level completion and E2E verification requirements.
+7. `docs/process/WEBSITE_COMPLETION_CHECKLIST.md` tracks execution work but must not redefine workflow completion.
+8. `docs/governance/EXECUTION_STATUS.md` tracks current state but must not redefine workflow completion.
 
 If workflow completion language in a lower-authority document conflicts with this
 file, this file governs.
@@ -45,14 +47,20 @@ Every workflow in scope must define:
 1. objective
 2. trigger / entry point
 3. frontend surfaces
-4. backend/API/services
-5. product-backed data created or updated
-6. required `/ops` visibility, where relevant
-7. success end state
-8. degraded or failure states
-9. evidence required
-10. exact E2E verification rule
-11. exact completion rule
+4. canonical route or surface path
+5. backend/API/services
+6. product-backed data created or updated
+7. required `/ops` visibility, where relevant
+8. success end state
+9. degraded or failure states
+10. evidence required
+11. exact E2E verification rule
+12. exact completion rule
+
+Traceability rule:
+1. every workflow must remain traceable into `docs/governance/WORKFLOW_SURFACE_MATRIX.md`
+2. every route-serving workflow must remain traceable into `docs/design/WIREFRAME_STATE_MAP.md`
+3. if a workflow has no user-facing route, its monitoring surface must still be explicit
 
 A workflow must not be called complete because a page exists or an isolated API
 passes. It is complete only when the workflow succeeds end to end according to

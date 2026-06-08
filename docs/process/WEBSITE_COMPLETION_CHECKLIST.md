@@ -180,6 +180,8 @@ Do not treat this block as complete until feature and workflow completion are al
 ## Should-Finish For Operator Takeover
 
 - [ ] verify the current `/ops` clarity pass in real owner use and tighten labels only where genuine confusion remains
+- [ ] add supply-by-geography visibility in `/ops` that is decision-grade enough for end-of-window supply review
+- [ ] add trainer acquisition and intro-readiness trend visibility in `/ops` so the owner can read trajectory, not just current totals
 - [ ] replace misleading trainer lifecycle CTAs where they imply pseudo-new submissions instead of contextual lifecycle recovery
 - [ ] unify support-routing language across public and trainer-support surfaces
 - [ ] keep Owner Override and Technical-Owner controls deferred until the visibility model and trust model remain stable under real use
