@@ -42,6 +42,7 @@ from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
+from services import education_catalog
 from services import engine as autonomy
 from services import event_contract
 from services import fraud as fraud_service
@@ -101,6 +102,8 @@ PUBLIC_LAUNCH_PHASE = (
     else "supply_first"
 )
 TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") or "1209600").strip() or "1209600")
+EDUCATION_MAGIC_LINK_TTL_S = int((os.environ.get("EDUCATION_MAGIC_LINK_TTL_S") or "1800").strip() or "1800")
+EDUCATION_SESSION_TTL_S = int((os.environ.get("EDUCATION_SESSION_TTL_S") or "2592000").strip() or "2592000")
 OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
 OVERSIGHT_AUTH_WINDOW_S = int((os.environ.get("OVERSIGHT_AUTH_WINDOW_S") or "600").strip() or "600")
 OVERSIGHT_AUTH_LOCK_S = int((os.environ.get("OVERSIGHT_AUTH_LOCK_S") or "900").strip() or "900")
@@ -353,6 +356,40 @@ class AttributionEntryIn(BaseModel):
     session_id: Optional[str] = ""
 
 
+class EducationRequestLinkIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email: EmailStr
+    redirect_path: Optional[str] = "/education/dashboard"
+    campaign: Optional[str] = ""
+    source: Optional[str] = ""
+    utm_medium: Optional[str] = ""
+    utm_campaign: Optional[str] = ""
+
+
+class EducationVerifyIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    token: str
+
+
+class EducationProgressIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    module_slug: Optional[str] = ""
+    lesson_slug: Optional[str] = ""
+    completed: bool = False
+    capability_updates: Dict[str, str] = Field(default_factory=dict)
+
+
+class EducationTrainerReadinessIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    main_concern: str = Field(min_length=1)
+    trigger_pattern: Optional[str] = ""
+    frequency: Optional[str] = ""
+    owner_attempts: Optional[str] = ""
+    safety_concern: Optional[str] = ""
+    desired_outcome: Optional[str] = ""
+    has_video_reference: bool = False
+
+
 class OversightLogin(BaseModel):
     model_config = ConfigDict(extra="ignore")
     passcode: str
@@ -508,6 +545,266 @@ def _verify_trainer_action_token(
         raise HTTPException(status_code=403, detail="Trainer action token does not match trainer context.")
     if submission_id and token_submission_id and token_submission_id != submission_id:
         raise HTTPException(status_code=403, detail="Trainer action token does not match submission context.")
+
+
+def _education_auth_secret() -> str:
+    secret = (os.environ.get("EDUCATION_AUTH_SECRET") or "").strip()
+    if secret:
+        return secret
+    return _trainer_action_secret()
+
+
+def _issue_education_token(*, kind: str, payload: Dict[str, Any], ttl_s: int) -> str:
+    exp_epoch = int(datetime.now(timezone.utc).timestamp()) + max(60, ttl_s)
+    full_payload = {"kind": kind, "exp": exp_epoch, **payload}
+    payload_blob = json.dumps(full_payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    sig = hmac.new(_education_auth_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    return f"{_token_b64(payload_blob)}.{_token_b64(sig)}"
+
+
+def _verify_education_token(token: str, *, expected_kind: str) -> Dict[str, Any]:
+    raw = (token or "").strip()
+    if "." not in raw:
+        raise HTTPException(status_code=401, detail="Missing or invalid education token.")
+    payload_part, sig_part = raw.split(".", 1)
+    try:
+        payload_blob = _token_unb64(payload_part)
+        provided_sig = _token_unb64(sig_part)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid education token encoding.") from exc
+
+    expected_sig = hmac.new(_education_auth_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    if not hmac.compare_digest(provided_sig, expected_sig):
+        raise HTTPException(status_code=401, detail="Invalid education token signature.")
+
+    try:
+        payload = json.loads(payload_blob.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid education token payload.") from exc
+
+    token_kind = str(payload.get("kind") or "")
+    token_exp = int(payload.get("exp") or 0)
+    now_epoch = int(datetime.now(timezone.utc).timestamp())
+    if token_kind != expected_kind:
+        raise HTTPException(status_code=401, detail="Education token kind mismatch.")
+    if token_exp <= now_epoch:
+        raise HTTPException(status_code=401, detail="Education token expired.")
+    return payload
+
+
+def _education_app_base_url() -> str:
+    return ((os.environ.get("FRONTEND_BASE_URL") or "http://localhost:3000").strip().rstrip("/"))
+
+
+def _sanitize_redirect_path(raw_path: Optional[str]) -> str:
+    value = (raw_path or "").strip()
+    if not value.startswith("/education/"):
+        return "/education/dashboard"
+    return value
+
+
+def _clean_education_attribution_token(value: Optional[str]) -> str:
+    cleaned = str(value or "").strip()
+    return cleaned[:120]
+
+
+def _lesson_progress_key(module_slug: str, lesson_slug: str) -> str:
+    return f"{module_slug}:{lesson_slug}"
+
+
+def _default_capability_tracker() -> Dict[str, str]:
+    return {key: "not_started" for key in education_catalog.capability_keys()}
+
+
+def _default_education_progress(*, owner_id: str) -> Dict[str, Any]:
+    catalog = education_catalog.get_catalog()
+    first_module = (catalog.get("modules") or [{}])[0]
+    first_module_slug = str(first_module.get("slug") or "")
+    first_lesson_slug = str(((first_module.get("lesson_summaries") or [{}])[0]).get("slug") or "")
+    today_action = ""
+    if first_module_slug and first_lesson_slug:
+        first_lesson = education_catalog.get_lesson(first_module_slug, first_lesson_slug)
+        if first_lesson:
+            today_action = str(((first_lesson["lesson"].get("do_now") or [""])[0]) or "")
+    return {
+        "owner_id": owner_id,
+        "current_module": first_module_slug,
+        "completed_lessons": [],
+        "last_viewed_lesson": f"{first_module_slug}:{first_lesson_slug}" if first_module_slug and first_lesson_slug else "",
+        "today_action": today_action,
+        "capability_tracker_state": _default_capability_tracker(),
+        "updated_at": now_iso(),
+    }
+
+
+async def _ensure_owner_education_progress(*, owner_id: str) -> Dict[str, Any]:
+    doc = await db.owner_education_progress.find_one({"owner_id": owner_id}, {"_id": 0})
+    if doc:
+        return doc
+    default_doc = _default_education_progress(owner_id=owner_id)
+    await db.owner_education_progress.update_one({"owner_id": owner_id}, {"$set": default_doc}, upsert=True)
+    return default_doc
+
+
+def _module_status(module_summary: Dict[str, Any], completed_lesson_keys: set[str], current_module: str) -> str:
+    lesson_keys = {_lesson_progress_key(module_summary["slug"], lesson["slug"]) for lesson in module_summary.get("lesson_summaries", [])}
+    if lesson_keys and lesson_keys.issubset(completed_lesson_keys):
+        return "completed"
+    if module_summary["slug"] == current_module or completed_lesson_keys.intersection(lesson_keys):
+        return "in_progress"
+    return "not_started"
+
+
+def _next_incomplete_lesson(current_module: str, completed_lesson_keys: set[str]) -> Optional[Dict[str, str]]:
+    catalog = education_catalog.get_catalog()
+    modules = catalog.get("modules") or []
+    ordered_modules = sorted(
+        modules,
+        key=lambda module: (0 if module.get("slug") == current_module else 1, int(module.get("number") or 0)),
+    )
+    for module in ordered_modules:
+        for lesson in module.get("lesson_summaries", []):
+            lesson_key = _lesson_progress_key(module["slug"], lesson["slug"])
+            if lesson_key not in completed_lesson_keys:
+                return {
+                    "module_slug": module["slug"],
+                    "lesson_slug": lesson["slug"],
+                    "title": lesson["title"],
+                    "path": lesson["path"],
+                }
+    return None
+
+
+def _apply_capability_progress(
+    *,
+    tracker: Dict[str, str],
+    module_slug: str,
+    completed_lesson_keys: set[str],
+) -> Dict[str, str]:
+    module = education_catalog.get_module(module_slug)
+    if not module:
+        return tracker
+    lesson_keys = {_lesson_progress_key(module_slug, lesson["slug"]) for lesson in module.get("lessons", [])}
+    module_complete = bool(lesson_keys) and lesson_keys.issubset(completed_lesson_keys)
+    for capability_key in module.get("capability_keys", []):
+        if module_complete:
+            tracker[capability_key] = "confident"
+        elif tracker.get(capability_key) == "not_started":
+            tracker[capability_key] = "building"
+    return tracker
+
+
+def _education_launch_posture(phase_state: Dict[str, Any]) -> Dict[str, str]:
+    phase = str(phase_state.get("current_phase") or "supply_first")
+    public_emphasis = str(phase_state.get("public_emphasis") or "waitlist_first")
+    owner_waitlist_mode = str(phase_state.get("owner_waitlist_mode") or "passive_only")
+    live_matching = bool(phase_state.get("public_matching_enabled"))
+    if live_matching or phase == "live_matching":
+        return {
+            "phase": "live_matching",
+            "eyebrow": "Launch posture",
+            "title": "Matching is live when you are ready.",
+            "summary": "Keep using the lessons and tools, then bridge into trainer matching only when the owner actually needs support.",
+            "owner_cta_label": "Open owner dashboard",
+            "owner_cta_href": "/education/dashboard",
+            "trainer_cta_label": "Go to matching",
+            "trainer_cta_href": "/",
+        }
+    if phase == "growth":
+        return {
+            "phase": phase,
+            "eyebrow": "Launch posture",
+            "title": "Matching is opening carefully, not broadly.",
+            "summary": "Education stays primary while DTD expands verified coverage. Owners should keep using the guided path and waitlist instead of assuming immediate trainer availability.",
+            "owner_cta_label": "Open owner dashboard",
+            "owner_cta_href": "/education/dashboard",
+            "trainer_cta_label": "Return to owner guide",
+            "trainer_cta_href": "/how-it-works#owner-guide-waitlist",
+        }
+    if phase == "owner_waitlist":
+        return {
+            "phase": phase,
+            "eyebrow": "Launch posture",
+            "title": "The owner waitlist is the bridge right now.",
+            "summary": "Owners can use the full education lane, save progress, and register interest while DTD keeps matching posture conservative.",
+            "owner_cta_label": "Open owner dashboard",
+            "owner_cta_href": "/education/dashboard",
+            "trainer_cta_label": "Join owner waitlist",
+            "trainer_cta_href": "/how-it-works#owner-guide-waitlist",
+        }
+    return {
+        "phase": phase,
+        "eyebrow": "Launch posture",
+        "title": "Education stays in front while trainer supply builds.",
+        "summary": "DTD is still in supply-first prelaunch. The owner lane is active now, while matching stays gated and the waitlist remains passive.",
+        "owner_cta_label": "Explore the curriculum",
+        "owner_cta_href": "/how-it-works#learning-lane-modules",
+        "trainer_cta_label": "Join owner waitlist",
+        "trainer_cta_href": "/how-it-works#owner-guide-waitlist",
+    }
+
+
+def _capability_tracker_payload(
+    *,
+    catalog: Dict[str, Any],
+    tracker: Dict[str, str],
+    current_module_slug: str,
+    next_lesson: Optional[Dict[str, str]],
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    modules = catalog.get("modules") or []
+    for capability in catalog.get("capabilities", []):
+        related_module = next(
+            (module for module in modules if capability["key"] in (module.get("capability_keys") or [])),
+            None,
+        )
+        status = tracker.get(capability["key"], "not_started")
+        action_label = "View module"
+        action_path = related_module["dashboard_path"] if related_module else "/education/dashboard"
+        if status == "confident" and related_module and related_module.get("tool_refs"):
+            tool = related_module["tool_refs"][0]
+            action_label = f"Open {tool['title']}"
+            action_path = f"/education/tools/{tool['slug']}"
+        elif status == "building" and next_lesson and next_lesson.get("module_slug") == current_module_slug:
+            action_label = f"Continue {next_lesson['title']}"
+            action_path = next_lesson["path"]
+        elif status == "not_started" and related_module:
+            action_label = f"Start {related_module['title']}"
+        out.append(
+            {
+                "key": capability["key"],
+                "label": capability["label"],
+                "status": status,
+                "related_module_slug": related_module["slug"] if related_module else "",
+                "related_module_title": related_module["title"] if related_module else "",
+                "action_label": action_label,
+                "action_path": action_path,
+            }
+        )
+    return out
+
+
+async def require_education_owner(x_education_session: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    payload = _verify_education_token(x_education_session or "", expected_kind="education_session")
+    session_id = str(payload.get("session_id") or "")
+    owner_id = str(payload.get("owner_id") or "")
+    if not session_id or not owner_id:
+        raise HTTPException(status_code=401, detail="Invalid education session.")
+    session_doc = await db.owner_education_sessions.find_one({"id": session_id, "status": "active"}, {"_id": 0})
+    if not session_doc:
+        raise HTTPException(status_code=401, detail="Education session not found.")
+    expires_at = str(session_doc.get("expires_at") or "")
+    if expires_at and expires_at <= now_iso():
+        raise HTTPException(status_code=401, detail="Education session expired.")
+    owner = await db.owner_education_owners.find_one({"id": owner_id}, {"_id": 0})
+    if not owner:
+        raise HTTPException(status_code=401, detail="Education owner not found.")
+    await db.owner_education_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"last_seen_at": now_iso()}},
+        upsert=False,
+    )
+    return {"session": session_doc, "owner": owner}
 
 
 async def _record_owner_waitlist_event(
@@ -837,10 +1134,121 @@ async def _trainer_inventory_rows(limit: int = 200) -> List[Dict[str, Any]]:
                 "intros_30d": int(trainer.get("intros_30d") or 0),
                 "conversions_30d": int(trainer.get("conversions_30d") or 0),
                 "public_detail_path": f"/t/{trainer_id}" if trainer_id else "",
+                "created_at": trainer.get("created_at"),
                 "updated_at": trainer.get("updated_at") or trainer.get("created_at"),
             }
         )
     return inventory
+
+
+def _window_start_iso(days: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
+async def _ops_supply_geography_summary(trainer_inventory: List[Dict[str, Any]], waitlist_summary: Dict[str, Any]) -> Dict[str, Any]:
+    trainer_by_suburb: Dict[str, Dict[str, Any]] = {}
+    for row in trainer_inventory:
+        suburb = str(row.get("suburb") or "").strip()
+        if not suburb:
+            continue
+        key = suburb.lower()
+        meta = trainer_by_suburb.setdefault(
+            key,
+            {
+                "suburb": suburb,
+                "live_total": 0,
+                "intro_ready_total": 0,
+                "blocked_total": 0,
+                "verified_total": 0,
+            },
+        )
+        meta["live_total"] += 1
+        if bool(row.get("intro_ready")):
+            meta["intro_ready_total"] += 1
+        blocker_codes = row.get("blocker_codes")
+        if isinstance(blocker_codes, list) and blocker_codes:
+            meta["blocked_total"] += 1
+        if str(row.get("verification_status") or "") == "verified":
+            meta["verified_total"] += 1
+
+    trainer_suburbs = sorted(
+        trainer_by_suburb.values(),
+        key=lambda row: (row["intro_ready_total"], row["live_total"], row["suburb"].lower()),
+        reverse=True,
+    )
+    waitlist_top_rows = waitlist_summary.get("top_suburbs")
+    if not isinstance(waitlist_top_rows, list):
+        waitlist_top_rows = []
+    waitlist_top = [
+        {
+            "suburb": str(row.get("suburb") or ""),
+            "demand_count": int(row.get("count") or 0),
+            "trainer_live_total": int(trainer_by_suburb.get(str(row.get("suburb") or "").lower(), {}).get("live_total") or 0),
+            "intro_ready_total": int(trainer_by_suburb.get(str(row.get("suburb") or "").lower(), {}).get("intro_ready_total") or 0),
+        }
+        for row in waitlist_top_rows
+        if row.get("suburb")
+    ]
+    demand_gaps = [
+        row for row in waitlist_top
+        if int(row.get("trainer_live_total") or 0) == 0 or int(row.get("intro_ready_total") or 0) == 0
+    ]
+    return {
+        "trainer_suburbs_top": trainer_suburbs[:8],
+        "waitlist_suburbs_top": waitlist_top[:8],
+        "demand_gaps": demand_gaps[:5],
+        "trainer_suburb_coverage_count": len(trainer_suburbs),
+        "waitlist_suburb_coverage_count": len([row for row in waitlist_top if row.get("suburb")]),
+    }
+
+
+def _pace_label(short_window: int, long_window: int, short_days: int, long_days: int) -> str:
+    if long_window <= 0 and short_window <= 0:
+        return "quiet"
+    short_daily = short_window / max(1, short_days)
+    long_daily = long_window / max(1, long_days)
+    if long_daily == 0:
+        return "rising" if short_daily > 0 else "quiet"
+    ratio = short_daily / long_daily
+    if ratio >= 1.2:
+        return "rising"
+    if ratio <= 0.8:
+        return "slowing"
+    return "steady"
+
+
+async def _ops_supply_trend_summary(
+    trainer_inventory: List[Dict[str, Any]],
+    submissions_summary: Dict[str, Any],
+    growth_attribution_summary: Dict[str, Any],
+    reactivation_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    submissions_coll = getattr(db, "submissions", None)
+    trainers_coll = getattr(db, "trainers", None)
+    now_7d = _window_start_iso(7)
+    now_30d = _window_start_iso(30)
+
+    submissions_7d = int(await submissions_coll.count_documents({"created_at": {"$gte": now_7d}})) if submissions_coll is not None else 0
+    published_trainers_7d = int(await trainers_coll.count_documents({"published": True, "created_at": {"$gte": now_7d}})) if trainers_coll is not None else 0
+    published_trainers_30d = int(await trainers_coll.count_documents({"published": True, "created_at": {"$gte": now_30d}})) if trainers_coll is not None else 0
+    intro_ready_now = len([row for row in trainer_inventory if bool(row.get("intro_ready"))])
+    blocked_now = len([row for row in trainer_inventory if isinstance(row.get("blocker_codes"), list) and row.get("blocker_codes")])
+
+    submitted_total = int(submissions_summary.get("auto_published") or 0) + int(submissions_summary.get("auto_held") or 0) + int(submissions_summary.get("pending") or 0)
+    waitlist_joins_30d = int((growth_attribution_summary.get("totals") or {}).get("waitlist_joins_30d") or 0)
+    return {
+        "submissions_7d": submissions_7d,
+        "submitted_total": submitted_total,
+        "published_trainers_7d": published_trainers_7d,
+        "published_trainers_30d": published_trainers_30d,
+        "intro_ready_now": intro_ready_now,
+        "blocked_now": blocked_now,
+        "waitlist_joins_30d": waitlist_joins_30d,
+        "reactivation_notified_7d": int(reactivation_summary.get("notified_7d") or 0),
+        "reactivation_resolved_7d": int(reactivation_summary.get("resolved_7d") or 0),
+        "submission_pace": _pace_label(submissions_7d, submitted_total, 7, 30),
+        "published_pace": _pace_label(published_trainers_7d, published_trainers_30d, 7, 30),
+    }
 
 
 async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
@@ -1337,7 +1745,20 @@ def _trainer_blocker_codes(trainer: Dict[str, Any]) -> List[str]:
 
 
 def _trainer_intro_ready(trainer: Dict[str, Any]) -> bool:
-    return bool(trainer.get("published")) and _is_billable_ready(trainer) and float(trainer.get("confidence_score") or 0) >= HOLD_THRESHOLD
+    if not bool(trainer.get("published")):
+        return False
+    if float(trainer.get("confidence_score") or 0) < HOLD_THRESHOLD:
+        return False
+    blocker_codes = set(_trainer_blocker_codes(trainer))
+    disqualifying_codes = {
+        "held_or_unpublished",
+        "low_confidence",
+        "needs_billing_profile",
+        "needs_billing_consent",
+        "billing_system_blocked",
+        "missing_contact_channel",
+    }
+    return not bool(blocker_codes & disqualifying_codes)
 
 
 def _sort_case_priority(case: Dict[str, Any]) -> tuple[int, int, str]:
@@ -1748,6 +2169,399 @@ async def config() -> Dict[str, Any]:
         "claim_block_melbourne_wide_below_state_2": CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
         "suburbs": suburbs,
     }
+
+
+@api.post("/education/auth/request-link")
+async def request_education_magic_link(payload: EducationRequestLinkIn) -> Dict[str, Any]:
+    email = str(payload.email).strip()
+    email_norm = _normalize_email_key(email)
+    redirect_path = _sanitize_redirect_path(payload.redirect_path)
+    link_request_id = new_id()
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=EDUCATION_MAGIC_LINK_TTL_S)).isoformat()
+    token = _issue_education_token(
+        kind="education_magic_link",
+        payload={"link_id": link_request_id, "email_norm": email_norm},
+        ttl_s=EDUCATION_MAGIC_LINK_TTL_S,
+    )
+    debug_magic_link = f"{_education_app_base_url()}/education/auth/callback?token={token}"
+    request_doc = {
+        "id": link_request_id,
+        "email": email,
+        "email_norm": email_norm,
+        "redirect_path": redirect_path,
+        "campaign": _clean_education_attribution_token(payload.campaign),
+        "source": _clean_education_attribution_token(payload.source),
+        "utm_medium": _clean_education_attribution_token(payload.utm_medium),
+        "utm_campaign": _clean_education_attribution_token(payload.utm_campaign),
+        "status": "pending",
+        "expires_at": expires_at,
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.owner_education_magic_links.insert_one(request_doc.copy())
+    notification = await notifications_service.notify_owner_education_magic_link(
+        db,
+        session_request_id=link_request_id,
+        to_email=email,
+        link_url=debug_magic_link,
+    )
+    await db.owner_education_magic_links.update_one(
+        {"id": link_request_id},
+        {
+            "$set": {
+                "delivery_status": notification.get("education_link_status", "failed"),
+                "delivery_attempts": int(notification.get("education_link_attempts") or 0),
+                "updated_at": now_iso(),
+            }
+        },
+    )
+    out = {
+        "accepted": True,
+        "status": "requested",
+        "expires_at": expires_at,
+        "delivery_status": notification.get("education_link_status", "failed"),
+    }
+    if notification.get("education_link_status") != "sent":
+        out["debug_magic_link"] = debug_magic_link
+    return out
+
+
+def _verify_education_magic_link_token(token: str) -> Dict[str, Any]:
+    payload = _verify_education_token(token, expected_kind="education_magic_link")
+    link_id = str(payload.get("link_id") or "")
+    email_norm = str(payload.get("email_norm") or "")
+    if not link_id or not email_norm:
+        raise HTTPException(status_code=401, detail="Education link payload invalid.")
+    return {"link_id": link_id, "email_norm": email_norm}
+
+
+async def _complete_education_magic_link_verification(token: str) -> Dict[str, Any]:
+    verified = _verify_education_magic_link_token(token)
+    link_doc = await db.owner_education_magic_links.find_one({"id": verified["link_id"], "status": "pending"}, {"_id": 0})
+    if not link_doc:
+        raise HTTPException(status_code=401, detail="Education link is invalid or already used.")
+    if str(link_doc.get("email_norm") or "") != verified["email_norm"]:
+        raise HTTPException(status_code=401, detail="Education link identity mismatch.")
+    if str(link_doc.get("expires_at") or "") <= now_iso():
+        raise HTTPException(status_code=401, detail="Education link expired.")
+
+    owner = await db.owner_education_owners.find_one({"email_norm": verified["email_norm"]}, {"_id": 0})
+    if not owner:
+        owner = {
+            "id": new_id(),
+            "email": link_doc["email"],
+            "email_norm": verified["email_norm"],
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        await db.owner_education_owners.insert_one(owner.copy())
+
+    session_id = new_id()
+    session_expires_at = (datetime.now(timezone.utc) + timedelta(seconds=EDUCATION_SESSION_TTL_S)).isoformat()
+    session_doc = {
+        "id": session_id,
+        "owner_id": owner["id"],
+        "status": "active",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "last_seen_at": now_iso(),
+        "expires_at": session_expires_at,
+        "issued_from_link_id": link_doc["id"],
+    }
+    await db.owner_education_sessions.insert_one(session_doc.copy())
+    await db.owner_education_magic_links.update_one(
+        {"id": link_doc["id"]},
+        {"$set": {"status": "used", "used_at": now_iso(), "updated_at": now_iso()}},
+    )
+
+    progress = await _ensure_owner_education_progress(owner_id=owner["id"])
+    session_token = _issue_education_token(
+        kind="education_session",
+        payload={"session_id": session_id, "owner_id": owner["id"]},
+        ttl_s=EDUCATION_SESSION_TTL_S,
+    )
+    return {
+        "accepted": True,
+        "status": "verified",
+        "redirect_path": str(link_doc.get("redirect_path") or "/education/dashboard"),
+        "session": {"token": session_token, "expires_at": session_expires_at},
+        "owner": {"id": owner["id"], "email": owner["email"]},
+        "progress": progress,
+    }
+
+
+@api.get("/education/auth/verify")
+async def verify_education_magic_link_get(token: str = Query(default="")) -> Dict[str, Any]:
+    return await _complete_education_magic_link_verification(token)
+
+
+@api.post("/education/auth/verify")
+async def verify_education_magic_link_post(payload: EducationVerifyIn) -> Dict[str, Any]:
+    return await _complete_education_magic_link_verification(payload.token)
+
+
+@api.get("/education/catalog")
+async def get_education_catalog() -> Dict[str, Any]:
+    phase_state = await _get_or_create_launch_phase_state()
+    return {
+        **education_catalog.get_catalog(),
+        "launch_phase": str(phase_state.get("current_phase") or "supply_first"),
+        "public_emphasis": str(phase_state.get("public_emphasis") or "waitlist_first"),
+        "owner_waitlist_mode": str(phase_state.get("owner_waitlist_mode") or "passive_only"),
+        "launch_posture": _education_launch_posture(phase_state),
+    }
+
+
+@api.get("/education/modules/{module_slug}")
+async def get_education_module_teaser(module_slug: str) -> Dict[str, Any]:
+    module = education_catalog.get_public_module(module_slug)
+    if not module:
+        raise HTTPException(status_code=404, detail="Education module not found.")
+    return module
+
+
+@api.get("/education/modules/{module_slug}/lessons/{lesson_slug}/preview")
+async def get_education_public_lesson_preview(module_slug: str, lesson_slug: str) -> Dict[str, Any]:
+    lesson = education_catalog.get_public_lesson_preview(module_slug, lesson_slug)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Education lesson preview not found.")
+    return lesson
+
+
+@api.get("/education/dashboard")
+async def get_education_dashboard(owner_session: Dict[str, Any] = Depends(require_education_owner)) -> Dict[str, Any]:
+    owner = owner_session["owner"]
+    progress = await _ensure_owner_education_progress(owner_id=owner["id"])
+    readiness = await db.owner_education_readiness.find_one({"owner_id": owner["id"]}, {"_id": 0}) or {}
+    catalog = education_catalog.get_catalog()
+    completed_lesson_keys = set(str(item) for item in (progress.get("completed_lessons") or []))
+    tracker = dict(progress.get("capability_tracker_state") or _default_capability_tracker())
+    for module in catalog.get("modules", []):
+        tracker = _apply_capability_progress(
+            tracker=tracker,
+            module_slug=module["slug"],
+            completed_lesson_keys=completed_lesson_keys,
+        )
+    next_lesson = _next_incomplete_lesson(str(progress.get("current_module") or ""), completed_lesson_keys)
+    today_action = str(progress.get("today_action") or "")
+    if next_lesson and not today_action:
+        lesson_payload = education_catalog.get_lesson(next_lesson["module_slug"], next_lesson["lesson_slug"])
+        if lesson_payload:
+            today_action = str(((lesson_payload["lesson"].get("do_now") or [""])[0]) or "")
+
+    modules = []
+    for module in catalog.get("modules", []):
+        modules.append(
+            {
+                **module,
+                "status": _module_status(module, completed_lesson_keys, str(progress.get("current_module") or "")),
+            }
+        )
+    modules_by_slug = {module["slug"]: module for module in modules}
+    roadmap = []
+    for stage in catalog.get("roadmap", []):
+        roadmap.append(
+            {
+                **stage,
+                "modules": [
+                    {
+                        **modules_by_slug[module["slug"]],
+                    }
+                    for module in stage.get("modules", [])
+                    if module["slug"] in modules_by_slug
+                ],
+            }
+        )
+
+    phase_state = await _get_or_create_launch_phase_state()
+    launch_posture = _education_launch_posture(phase_state)
+    current_module = next((module for module in modules if module["slug"] == progress.get("current_module")), None)
+    trainer_bridge = {
+        "enabled": launch_posture["phase"] == "live_matching",
+        "mode": launch_posture["phase"],
+        "href": launch_posture["trainer_cta_href"],
+        "copy": launch_posture["summary"],
+    }
+    return {
+        "owner": {"id": owner["id"], "email": owner["email"]},
+        "launch_phase": str(phase_state.get("current_phase") or "supply_first"),
+        "public_emphasis": str(phase_state.get("public_emphasis") or "waitlist_first"),
+        "owner_waitlist_mode": str(phase_state.get("owner_waitlist_mode") or "passive_only"),
+        "launch_posture": launch_posture,
+        "current_focus": {
+            "module_slug": str(progress.get("current_module") or ""),
+            "title": next((module["title"] for module in modules if module["slug"] == progress.get("current_module")), ""),
+        },
+        "next_step": next_lesson,
+        "today_action": today_action,
+        "course_overview": {
+            "title": str((catalog.get("course") or {}).get("title") or "DTD Education"),
+            "promise": str((catalog.get("course") or {}).get("promise") or ""),
+            "completed_lessons_count": len(completed_lesson_keys),
+            "total_lessons": int((catalog.get("course") or {}).get("total_lessons") or 0),
+            "estimated_minutes": int((catalog.get("course") or {}).get("estimated_minutes") or 0),
+        },
+        "roadmap": roadmap,
+        "problem_routes": catalog.get("problem_routes") or [],
+        "modules": modules,
+        "capability_tracker": _capability_tracker_payload(
+            catalog=catalog,
+            tracker=tracker,
+            current_module_slug=str(progress.get("current_module") or ""),
+            next_lesson=next_lesson,
+        ),
+        "progress": {
+            "current_module": progress.get("current_module"),
+            "completed_lessons": list(completed_lesson_keys),
+            "last_viewed_lesson": progress.get("last_viewed_lesson"),
+        },
+        "trainer_readiness": readiness,
+        "trainer_readiness_prompt": (
+            str(current_module.get("trainer_readiness_prompt") or "")
+            if current_module
+            else "Complete your trainer summary before you escalate if the issue keeps repeating, feels unsafe, or stops improving."
+        ),
+        "trainer_bridge": trainer_bridge,
+    }
+
+
+@api.get("/education/modules/{module_slug}/guide")
+async def get_education_module_guide(
+    module_slug: str,
+    owner_session: Dict[str, Any] = Depends(require_education_owner),
+) -> Dict[str, Any]:
+    progress = await _ensure_owner_education_progress(owner_id=owner_session["owner"]["id"])
+    completed_lesson_keys = list(progress.get("completed_lessons") or [])
+    guide = education_catalog.get_module_guide(module_slug, completed_lesson_keys=completed_lesson_keys)
+    if not guide:
+        raise HTTPException(status_code=404, detail="Education module not found.")
+    tracker = dict(progress.get("capability_tracker_state") or _default_capability_tracker())
+    return {
+        **guide,
+        "owner": {"id": owner_session["owner"]["id"], "email": owner_session["owner"]["email"]},
+        "capability_snapshot": [
+            {
+                "key": capability_key,
+                "label": education_catalog.capability_labels().get(capability_key, capability_key),
+                "status": str(tracker.get(capability_key) or "not_started"),
+            }
+            for capability_key in guide["module"].get("capability_keys", [])
+        ],
+        "progress_state": {
+            "current_module": str(progress.get("current_module") or ""),
+            "last_viewed_lesson": str(progress.get("last_viewed_lesson") or ""),
+        },
+    }
+
+
+@api.get("/education/modules/{module_slug}/lessons/{lesson_slug}")
+async def get_education_lesson(
+    module_slug: str,
+    lesson_slug: str,
+    owner_session: Dict[str, Any] = Depends(require_education_owner),
+) -> Dict[str, Any]:
+    lesson_payload = education_catalog.get_lesson(module_slug, lesson_slug)
+    if not lesson_payload:
+        raise HTTPException(status_code=404, detail="Education lesson not found.")
+    progress = await _ensure_owner_education_progress(owner_id=owner_session["owner"]["id"])
+    lesson_key = _lesson_progress_key(module_slug, lesson_slug)
+    return {
+        **lesson_payload,
+        "progress": {
+            "completed": lesson_key in set(str(item) for item in (progress.get("completed_lessons") or [])),
+            "last_viewed_lesson": progress.get("last_viewed_lesson"),
+        },
+    }
+
+
+@api.get("/education/tools/{tool_slug}")
+async def get_education_tool(tool_slug: str, owner_session: Dict[str, Any] = Depends(require_education_owner)) -> Dict[str, Any]:
+    tool_payload = education_catalog.get_tool(tool_slug)
+    if not tool_payload:
+        raise HTTPException(status_code=404, detail="Education tool not found.")
+    readiness = {}
+    if tool_slug == "trainer-summary-builder":
+        readiness = await db.owner_education_readiness.find_one({"owner_id": owner_session["owner"]["id"]}, {"_id": 0}) or {}
+    return {**tool_payload, "saved_output": readiness}
+
+
+@api.post("/education/progress")
+async def update_education_progress(
+    payload: EducationProgressIn,
+    owner_session: Dict[str, Any] = Depends(require_education_owner),
+) -> Dict[str, Any]:
+    owner_id = owner_session["owner"]["id"]
+    progress = await _ensure_owner_education_progress(owner_id=owner_id)
+    completed_lesson_keys = set(str(item) for item in (progress.get("completed_lessons") or []))
+    tracker = dict(progress.get("capability_tracker_state") or _default_capability_tracker())
+    module_slug = (payload.module_slug or progress.get("current_module") or "").strip()
+    lesson_slug = (payload.lesson_slug or "").strip()
+    if module_slug and lesson_slug and not education_catalog.get_lesson(module_slug, lesson_slug):
+        raise HTTPException(status_code=404, detail="Education lesson not found.")
+
+    if lesson_slug and module_slug:
+        progress["last_viewed_lesson"] = _lesson_progress_key(module_slug, lesson_slug)
+        progress["current_module"] = module_slug
+        if payload.completed:
+            completed_lesson_keys.add(_lesson_progress_key(module_slug, lesson_slug))
+            tracker = _apply_capability_progress(
+                tracker=tracker,
+                module_slug=module_slug,
+                completed_lesson_keys=completed_lesson_keys,
+            )
+
+    allowed_statuses = {"not_started", "building", "confident"}
+    for capability_key, capability_status in (payload.capability_updates or {}).items():
+        if capability_key in tracker and capability_status in allowed_statuses:
+            tracker[capability_key] = capability_status
+
+    next_lesson = _next_incomplete_lesson(str(progress.get("current_module") or ""), completed_lesson_keys)
+    today_action = ""
+    if next_lesson:
+        lesson_payload = education_catalog.get_lesson(next_lesson["module_slug"], next_lesson["lesson_slug"])
+        if lesson_payload:
+            today_action = str(((lesson_payload["lesson"].get("do_now") or [""])[0]) or "")
+
+    progress_doc = {
+        "owner_id": owner_id,
+        "current_module": str(progress.get("current_module") or ""),
+        "completed_lessons": sorted(completed_lesson_keys),
+        "last_viewed_lesson": str(progress.get("last_viewed_lesson") or ""),
+        "today_action": today_action,
+        "capability_tracker_state": tracker,
+        "updated_at": now_iso(),
+    }
+    await db.owner_education_progress.update_one({"owner_id": owner_id}, {"$set": progress_doc}, upsert=True)
+    return progress_doc
+
+
+@api.post("/education/trainer-readiness")
+async def upsert_trainer_readiness(
+    payload: EducationTrainerReadinessIn,
+    owner_session: Dict[str, Any] = Depends(require_education_owner),
+) -> Dict[str, Any]:
+    owner_id = owner_session["owner"]["id"]
+    readiness_doc = {
+        "owner_id": owner_id,
+        "main_concern": payload.main_concern.strip(),
+        "trigger_pattern": (payload.trigger_pattern or "").strip(),
+        "frequency": (payload.frequency or "").strip(),
+        "owner_attempts": (payload.owner_attempts or "").strip(),
+        "safety_concern": (payload.safety_concern or "").strip(),
+        "desired_outcome": (payload.desired_outcome or "").strip(),
+        "has_video_reference": bool(payload.has_video_reference),
+        "updated_at": now_iso(),
+    }
+    await db.owner_education_readiness.update_one({"owner_id": owner_id}, {"$set": readiness_doc}, upsert=True)
+    progress = await _ensure_owner_education_progress(owner_id=owner_id)
+    tracker = dict(progress.get("capability_tracker_state") or _default_capability_tracker())
+    tracker["trainer_readiness"] = "confident" if readiness_doc["desired_outcome"] else "building"
+    await db.owner_education_progress.update_one(
+        {"owner_id": owner_id},
+        {"$set": {"capability_tracker_state": tracker, "updated_at": now_iso()}},
+        upsert=True,
+    )
+    return readiness_doc
 
 
 @api.post("/match")
@@ -3087,6 +3901,13 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     }
     trainer_inventory = await _trainer_inventory_rows()
     message_log = await _message_log_rows()
+    supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
+    supply_trends = await _ops_supply_trend_summary(
+        trainer_inventory=trainer_inventory,
+        submissions_summary=submissions_summary,
+        growth_attribution_summary=growth_attribution_summary,
+        reactivation_summary=reactivation_summary,
+    )
     ops_cases = await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -3178,6 +3999,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "kpi_prelaunch": kpi_prelaunch,
         "growth_attribution_summary": growth_attribution_summary,
         "reactivation_summary": reactivation_summary,
+        "ops_supply_geography": supply_geography,
+        "ops_supply_trends": supply_trends,
         "trainer_inventory": trainer_inventory,
         "message_log": message_log,
         "ops_cases": ops_cases,
@@ -3416,6 +4239,16 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
     await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
     await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
+    await db.owner_education_magic_links.create_index("id", unique=True, sparse=True)
+    await db.owner_education_magic_links.create_index([("email_norm", 1), ("status", 1)])
+    await db.owner_education_magic_links.create_index("expires_at")
+    await db.owner_education_owners.create_index("id", unique=True, sparse=True)
+    await db.owner_education_owners.create_index("email_norm", unique=True)
+    await db.owner_education_sessions.create_index("id", unique=True, sparse=True)
+    await db.owner_education_sessions.create_index([("owner_id", 1), ("status", 1)])
+    await db.owner_education_sessions.create_index("expires_at")
+    await db.owner_education_progress.create_index("owner_id", unique=True)
+    await db.owner_education_readiness.create_index("owner_id", unique=True)
 
     runtime = runtime_control.resolve_loop_runtime(process_role)
     if _startup_seeds_enabled(process_role):

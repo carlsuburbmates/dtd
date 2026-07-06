@@ -196,6 +196,7 @@ def _fake_oversight_db():
                 "billing_profile_status": "ready",
                 "website": "https://trainer.example.com",
                 "email": "trainer@example.com",
+                "created_at": "2026-05-18T00:00:00+00:00",
                 "updated_at": "2026-05-20T00:00:00+00:00",
                 "intros_30d": 2,
                 "conversions_30d": 1,
@@ -810,6 +811,7 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert trainer_inventory[0]["name"] == "Trainer One"
     assert trainer_inventory[0]["source_kind"] == "submission"
     assert isinstance(trainer_inventory[0]["blocker_codes"], list)
+    assert "created_at" in trainer_inventory[0]
 
     assert isinstance(message_log, list)
     assert message_log
@@ -820,6 +822,32 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert ops_cases
     assert any(case["case_type"] == "trainer_submission_case" for case in ops_cases)
     assert any(case["case_type"] == "trainer_communications_case" for case in ops_cases)
+
+
+def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+
+    out = asyncio.run(server.oversight(None))
+
+    geography = out.get("ops_supply_geography")
+    trends = out.get("ops_supply_trends")
+
+    assert isinstance(geography, dict)
+    assert isinstance(trends, dict)
+    assert isinstance(geography.get("trainer_suburbs_top"), list)
+    assert isinstance(geography.get("waitlist_suburbs_top"), list)
+    assert isinstance(geography.get("demand_gaps"), list)
+    assert isinstance(geography.get("trainer_suburb_coverage_count"), int)
+    assert isinstance(geography.get("waitlist_suburb_coverage_count"), int)
+    assert isinstance(trends.get("submissions_7d"), int)
+    assert isinstance(trends.get("submitted_total"), int)
+    assert isinstance(trends.get("published_trainers_7d"), int)
+    assert isinstance(trends.get("published_trainers_30d"), int)
+    assert isinstance(trends.get("intro_ready_now"), int)
+    assert isinstance(trends.get("blocked_now"), int)
+    assert isinstance(trends.get("waitlist_joins_30d"), int)
+    assert trends.get("submission_pace") in {"rising", "steady", "slowing", "quiet"}
+    assert trends.get("published_pace") in {"rising", "steady", "slowing", "quiet"}
 
 
 def test_oversight_merges_persisted_case_review_state(monkeypatch):

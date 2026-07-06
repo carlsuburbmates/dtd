@@ -68,6 +68,26 @@ const validSnapshot = {
     kpi_prelaunch: {},
     growth_attribution_summary: {},
     reactivation_summary: {},
+    ops_supply_geography: {
+        trainer_suburbs_top: [{ suburb: "Carlton", live_total: 1, intro_ready_total: 1 }],
+        waitlist_suburbs_top: [{ suburb: "Carlton", demand_count: 3, trainer_live_total: 1, intro_ready_total: 1 }],
+        demand_gaps: [],
+        trainer_suburb_coverage_count: 1,
+        waitlist_suburb_coverage_count: 1,
+    },
+    ops_supply_trends: {
+        submissions_7d: 2,
+        submitted_total: 4,
+        published_trainers_7d: 1,
+        published_trainers_30d: 2,
+        intro_ready_now: 1,
+        blocked_now: 1,
+        waitlist_joins_30d: 3,
+        reactivation_notified_7d: 1,
+        reactivation_resolved_7d: 0,
+        submission_pace: "steady",
+        published_pace: "rising",
+    },
     trainer_inventory: [],
     message_log: [],
     ops_cases: [],
@@ -165,6 +185,9 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).toContain("Website status");
         expect(view.container.textContent).toContain("Work Queue");
         expect(view.container.textContent).toContain("Readable website control in one place");
+        expect(view.container.textContent).toContain("Decision summary");
+        expect(view.container.textContent).toContain("Decision-first reading order");
+        expect(view.container.querySelector("[data-testid='ops-shell-nav']")).not.toBeNull();
         view.cleanup();
     });
 
@@ -202,6 +225,9 @@ describe("Ops auth transition", () => {
         const ownerInput = view.container.querySelector("[data-testid='ops-case-owner']");
         const noteInput = view.container.querySelector("[data-testid='ops-case-note']");
         const saveButton = view.container.querySelector("[data-testid='ops-case-save']");
+
+        expect(view.container.textContent).toContain("Decision needed");
+        expect(view.container.textContent).toContain("Reviewer name");
 
         await act(async () => {
             setFieldValue(stateSelect, "investigating");
