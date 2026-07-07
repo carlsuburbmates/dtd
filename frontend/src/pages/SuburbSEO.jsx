@@ -10,6 +10,12 @@ export default function SuburbSEO() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const seoCampaign = `seo_${(suburb || "").toLowerCase()}`;
+    const ownerGuideSearch = buildAttributionSearch({
+        campaign: seoCampaign,
+        source: "seo",
+        utmMedium: "seo",
+        utmCampaign: seoCampaign,
+    });
 
     useEffect(() => {
         let active = true;
@@ -72,18 +78,16 @@ export default function SuburbSEO() {
 
                 <div className="mt-10">
                     <Link
-                        to={`/${buildAttributionSearch({
-                            campaign: seoCampaign,
-                            source: "seo",
-                            utmMedium: "seo",
-                            utmCampaign: seoCampaign,
-                        })}`}
+                        to={`/how-it-works${ownerGuideSearch}&suburb=${encodeURIComponent(page.suburb)}#owner-guide-waitlist`}
                         className="btn-accent"
                         data-testid="seo-cta-match"
                     >
-                        Join {page.suburb} waitlist
+                        Start {page.suburb}&apos;s guide
                         <ArrowRight className="h-4 w-4" />
                     </Link>
+                    <p className="mt-3 text-sm text-[#4A615A]">
+                        The waitlist step sits inside The First Leash while the directory continues to grow.
+                    </p>
                 </div>
 
                 {(copy.sections || []).map((s, i) => (

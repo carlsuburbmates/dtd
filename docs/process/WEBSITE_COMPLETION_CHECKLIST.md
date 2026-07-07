@@ -1,6 +1,6 @@
 # DTD Website Completion Checklist
 
-Date: 2026-06-08
+Date: 2026-06-09
 Scope: execution checklist for taking the current DTD website and operator
 surface through the remaining activation and final approval work.
 
@@ -28,8 +28,9 @@ Use these authorities first:
 3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
 4. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
 5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
-6. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
-7. `docs/governance/EXECUTION_STATUS.md`
+6. `docs/governance/OPS_DAILY_OPERATING_MANUAL.md`
+7. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+8. `docs/governance/EXECUTION_STATUS.md`
 
 Use `docs/governance/EXECUTION_STATUS.md` for the active phase and current
 decision state. This file holds the executable sequence only.
@@ -105,8 +106,8 @@ decision state. This file holds the executable sequence only.
   - `Trainer Supply`
   - `Messages`
   - `Billing & Reactivation`
-  - `System Activity`
   - `Recent Changes`
+  - `System Activity`
 
 ### Backend records and evidence
 
@@ -133,7 +134,7 @@ decision state. This file holds the executable sequence only.
 - [ ] Frontend/build checks cover the current approved public posture.
 - [ ] Release-gate checks catch branding/copy/policy drift.
 
-## Execution Phases
+## Completed Phases
 
 ### Phase 1: Trust And Environment Recovery
 
@@ -154,37 +155,59 @@ decision state. This file holds the executable sequence only.
 - [x] satisfy `LAUNCH_GATE.md` for the hosted-path non-provider scope
 - [x] record the bounded Phase 3 Go/No-Go outcome with explicit evidence
 
-### Phase 4: Actual-Domain Activation Slice
+### Phase 4: `/ops` Decision-Surface Optimisation
+
+- [x] tighten `Overview` so the owner can read readiness, recommendation, blockers, and whether action is needed now
+- [x] tighten `Work Queue` so review items are easier to scan, compare, and action
+- [x] make the selected item detail panel explicit about why the item exists, what decision is needed, and what the recommended next step is
+- [x] reduce noisy or duplicated presentation in the main owner reading flow
+- [x] add decision-grade supply-by-geography visibility in `/ops`
+- [x] add trainer acquisition and intro-readiness trend visibility in `/ops`
+- [x] improve blocker visibility that stops trainers from becoming intro-ready
+- [x] separate monitoring and system health as a supporting section instead of the first-reading surface
+- [x] verify the updated `/ops` flow locally in the browser on desktop and mobile against the updated local oversight contract
+
+## Remaining Work By Priority
+
+### Priority 1: `/ops` Layout Reframe
+
+- [ ] rebuild `/ops` around a stable left-side section navigation
+- [ ] reduce the authenticated top frame to a slimmer utility/context bar
+- [ ] make each section feel like a distinct work mode instead of a stacked report
+- [ ] keep one dominant work surface per section
+- [ ] replace competing card walls with compact summary strips where summary is needed
+- [ ] keep supporting panels below or beside the main work instead of competing with it
+- [ ] keep `Overview`, `Work Queue`, and `Trainer Supply` as the strongest visual priority
+- [ ] keep `System Activity` as a clearly separated supporting section rather than the first-reading surface
+- [ ] preserve the DTD section order and Normal Ops trust boundary during the reframe
+- [ ] verify the reframe against the Ops manual, Ops blueprint, and Ops console spec before final activation work
+
+### Priority 2: Final Verification Group Later
 
 - [ ] complete live trainer submission E2E on the actual-domain path
 - [ ] complete live provider exercise for notification and billing-coupled paths
 - [ ] verify `/ops` and runtime evidence remain coherent after the provider-coupled activation checks
 
-### Phase 5: Final Launch Approval
-
-- [ ] confirm `LAUNCH_GATE.md` is satisfied with the actual-domain activation evidence
-- [ ] record the final explicit owner Go/No-Go decision in governance evidence
-- [ ] keep deferred Ops power out of scope unless final launch approval exists
-
-## Final Activation Verification
-
-Do not treat this block as complete until feature and workflow completion are already established.
-
 - [ ] capture a final activation evidence window proving:
   - no stale core loop beyond `2x` interval
   - no unresolved `severity:high` alerts during that window
 - [ ] complete supply-first launch verification with explicit activation evidence
+- [ ] confirm `LAUNCH_GATE.md` is satisfied with the actual-domain activation evidence
 - [ ] defer matching-enabled public release evidence to the later controlled live-matching phase
+
+### Priority 3: Final Approval
+
 - [ ] record the explicit final Go/No-Go decision in governance evidence
+- [ ] treat the project as launch-approved only if that approval is explicit and evidence-backed
+- [ ] keep deferred Ops power out of scope unless final launch approval exists
 
-## Should-Finish For Operator Takeover
+### Priority 4: Explicitly Deferred
 
-- [ ] verify the current `/ops` clarity pass in real owner use and tighten labels only where genuine confusion remains
-- [ ] add supply-by-geography visibility in `/ops` that is decision-grade enough for end-of-window supply review
-- [ ] add trainer acquisition and intro-readiness trend visibility in `/ops` so the owner can read trajectory, not just current totals
-- [ ] replace misleading trainer lifecycle CTAs where they imply pseudo-new submissions instead of contextual lifecycle recovery
-- [ ] unify support-routing language across public and trainer-support surfaces
 - [ ] keep Owner Override and Technical-Owner controls deferred until the visibility model and trust model remain stable under real use
+- [ ] do not start bounded owner controls
+- [ ] do not start technical-owner controls
+- [ ] do not start public matching launch enablement
+- [ ] do not start broad Ops mutation controls
 
 ## Nice-To-Have Cleanup
 

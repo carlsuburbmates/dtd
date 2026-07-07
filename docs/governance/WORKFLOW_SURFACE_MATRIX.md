@@ -49,6 +49,8 @@ document, the higher-authority document governs.
    it is healthy, degraded, or failing.
 5. `docs/design/WIREFRAME_STATE_MAP.md` must not invent routes or workflows that
    do not appear here.
+6. `docs/governance/OPS_DAILY_OPERATING_MANUAL.md` must stay aligned with the
+   workflow-to-ops evidence order used by the owner day to day.
 
 ## Workflow-To-Surface Matrix
 
@@ -88,14 +90,14 @@ document, the higher-authority document governs.
 4. Route-less workflows still require named operator visibility surfaces. No
    autonomous or ingestion workflow may rely on hidden backend behavior only.
 
-## Known Bridge Gaps Still Open
+## Current Operator Mapping Rule
 
-These are structurally known gaps, not missing workflow definitions:
+The bridge is complete only when the owner can:
+1. read current posture from `Overview`
+2. move to `Work Queue` when a decision is needed
+3. confirm supply sufficiency from `Trainer Supply`
+4. use `Messages`, `Billing & Reactivation`, `Recent Changes`, and
+   `System Activity` as supporting evidence in that order
 
-1. supply-by-geography visibility in `/ops` is still thinner than the supply
-   decision standard requires
-2. trainer acquisition and activation trend visibility in `/ops` is still
-   count-oriented instead of trend-oriented
-
-These gaps do not invalidate the matrix. They identify where the existing
-workflow-to-ops mapping is thinner than the desired operator evidence depth.
+That day-to-day reading order is governed by
+`docs/governance/OPS_DAILY_OPERATING_MANUAL.md`.

@@ -12,14 +12,14 @@ export default function About() {
                     Building a trusted local trainer network.
                 </h1>
                 <p className="mt-5 text-lg text-[#4A615A] max-w-3xl leading-relaxed">
-                    We are in prelaunch. Owners can learn and register interest now. Trainers can join early with verified profiles.
+                    We are in prelaunch. Owners can use The First Leash and register interest now. Trainers can join early with verified profiles.
                 </p>
 
                 <div className="grid md:grid-cols-2 gap-5 mt-10">
                     <article className="card-public p-6">
-                        <h2 className="font-serif text-3xl text-[#1A3A32]">For owners</h2>
-                        <p className="mt-2 text-[#4A615A]">Use guidance now and register interest by suburb.</p>
-                        <Link to="/how-it-works" data-testid="about-owner-cta" className="btn-primary mt-5 inline-flex">For owners</Link>
+                        <h2 className="font-serif text-3xl text-[#1A3A32]">The First Leash</h2>
+                        <p className="mt-2 text-[#4A615A]">Use the free starter guide now and register interest by suburb while the directory grows.</p>
+                        <Link to="/how-it-works" data-testid="about-owner-cta" className="btn-primary mt-5 inline-flex">Start the guide</Link>
                     </article>
                     <article className="card-public p-6">
                         <h2 className="font-serif text-3xl text-[#1A3A32]">For trainers</h2>

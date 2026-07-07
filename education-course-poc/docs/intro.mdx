@@ -1,0 +1,136 @@
+---
+id: start-here
+title: "The First Leash"
+slug: /
+sidebar_label: Start Here
+---
+
+import CourseHero from '@site/src/components/CourseHero';
+import CoursePathway from '@site/src/components/CoursePathway';
+import ChecklistBlock from '@site/src/components/ChecklistBlock';
+import LessonPanel from '@site/src/components/LessonPanel';
+import NextAction from '@site/src/components/NextAction';
+
+<CourseHero
+  eyebrow="Free starter guide"
+  title="The First Leash"
+  body="A calm, practical start for life with a new dog. Seven simple guides for the early weeks at home."
+  primaryHref="/modules/01-the-blueprint/"
+  primaryLabel="Start the guide"
+  secondaryHref="#guide-outline"
+  secondaryLabel="View guide outline"
+/>
+
+## Guide outline
+
+<p>From first setup to everyday confidence.</p>
+
+<CoursePathway modules={[
+  {
+    "number": 1,
+    "title": "The Blueprint",
+    "href": "/modules/01-the-blueprint/",
+    "focus": "Safe home, rest zone, first vet/cost baseline.",
+    "lessonCount": 3,
+    "lessonTitles": [
+      "Build the Home Base",
+      "Remove Household Hazards",
+      "Prepare the First Vet Visit"
+    ],
+    "tool": "Safe Home Checklist"
+  },
+  {
+    "number": 2,
+    "title": "The Transition Phase",
+    "href": "/modules/02-the-transition-phase/",
+    "focus": "Toileting, biting, chewing, owner overwhelm.",
+    "lessonCount": 3,
+    "lessonTitles": [
+      "Accidents Need Routine, Not Anger",
+      "Biting and Chewing Without Chaos",
+      "Owner Overwhelm Is Data"
+    ],
+    "tool": "Potty Routine Reset"
+  },
+  {
+    "number": 3,
+    "title": "The Empathy Engine",
+    "href": "/modules/03-the-empathy-engine/",
+    "focus": "Dog signals, stress signs, illness red flags.",
+    "lessonCount": 4,
+    "lessonTitles": [
+      "Read the Whole Dog",
+      "Stress Signals Are Early Information",
+      "Freeze, Growl, Snap: Do Not Punish the Warning",
+      "Behaviour Change May Be Health Information"
+    ],
+    "tool": "Stress Signal Watch Card"
+  },
+  {
+    "number": 4,
+    "title": "The Social Filter",
+    "href": "/modules/04-the-social-filter/",
+    "focus": "Fear, socialisation, handling, safe exposure.",
+    "lessonCount": 4,
+    "lessonTitles": [
+      "Socialisation Is Not Forced Interaction",
+      "Safe Early Exposure Before the World Gets Too Big",
+      "The Traffic-Light Rule for Fear",
+      "Handling, Grooming, and Vet Touch"
+    ],
+    "tool": "Safe Exposure Checklist"
+  },
+  {
+    "number": 5,
+    "title": "The Sync Mechanics",
+    "href": "/modules/05-the-sync-mechanics/",
+    "focus": "Reward timing, calm routines, household consistency.",
+    "lessonCount": 4,
+    "lessonTitles": [
+      "Reward the Moment You Want",
+      "Stop Accidentally Paying for the Wrong Behaviour",
+      "Calm Routines Before Big Feelings",
+      "One Household, One Rule"
+    ],
+    "tool": "Say Please Routine Card"
+  },
+  {
+    "number": 6,
+    "title": "The Urban Flow & The Shield",
+    "href": "/modules/06-the-urban-flow-and-the-shield/",
+    "focus": "Public stress, street hazards, window barking, alone-time calm.",
+    "lessonCount": 4,
+    "lessonTitles": [
+      "Public Stress: Make the Walk Smaller",
+      "Street Hazards: The Shield",
+      "Window Barking: Build the Shield",
+      "Alone-Time Calm Without Punishing Distress"
+    ],
+    "tool": "Street Hazard Rules"
+  },
+  {
+    "number": 7,
+    "title": "The Freedom Framework",
+    "href": "/modules/07-the-freedom-framework/",
+    "focus": "Boundaries, room access, signal bell, family rules.",
+    "lessonCount": 4,
+    "lessonTitles": [
+      "Freedom Expands Slowly",
+      "Regression Is Information",
+      "Signals and the Optional Toilet Bell",
+      "Family Rules Make Freedom Clearer"
+    ],
+    "tool": "Freedom Expansion Checklist"
+  }
+]} />
+
+## What it covers
+
+<ChecklistBlock title="Guide highlights" items={["Safe home setup", "Early routine control", "Dog-reading basics", "Fear response", "Reward timing", "Public handling", "Freedom boundaries", "Trainer readiness"]} variant="worksheet" />
+
+<NextAction
+  href="/modules/01-the-blueprint/"
+  label="Start the guide"
+  meta="Start here"
+  copy="Open The Blueprint and follow the guide in order."
+/>

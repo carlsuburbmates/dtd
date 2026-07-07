@@ -1,6 +1,6 @@
 # Complete Website Page Spec
 
-Date: 2026-05-25
+Date: 2026-06-09
 Scope: canonical page-level specification for the intended DTD website.
 
 ## Authority
@@ -11,6 +11,9 @@ Rules:
 1. It defines the intended website and page-level behavior.
 2. It does not claim that current code already satisfies every requirement.
 3. If a lower-authority doc conflicts with this page spec, this page spec governs for page-level implementation.
+4. `docs/design/WEBSITE_WIREFRAME_SPEC.md` may define structural layout and
+   module order, but it must not override route purpose or behavior defined
+   here.
 
 ## Locked website posture
 

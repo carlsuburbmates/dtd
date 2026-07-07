@@ -4,7 +4,7 @@ import { Menu, X } from "lucide-react";
 
 const NAV = [
     { to: "/", label: "Home", testid: "nav-match" },
-    { to: "/how-it-works", label: "For owners", testid: "nav-how" },
+    { to: "/how-it-works", label: "Owner guide", testid: "nav-how" },
     { to: "/trainers", label: "For trainers", testid: "nav-trainers" },
     { to: "/trust", label: "Trust", testid: "nav-trust" },
 ];

@@ -28,20 +28,21 @@ Phase 1 trust restoration is complete.
 Phase 2 launch-readiness proof is complete under the current governance scope.
 Phase 3 owner review and bounded Go/No-Go is complete.
 
-The current objective is now the deferred actual-domain activation slice
-inside the locked supply-first posture.
+The first operator-facing `/ops` optimisation pass is now complete.
+
+The current objective is now to complete the `/ops` layout reframe so the live
+screen packaging matches the cleaned decision-first operating model before the
+deferred actual-domain activation slice begins.
 
 The current project execution priority is:
 1. preserve the completed hosted-path evidence set
-2. execute the deferred provider-coupled actual-domain activation proof slice
-3. reach final explicit owner Go/No-Go immediately after that slice
-4. confirm launch readiness before any deferred Ops power is reconsidered
-5. only after 1 to 4 are complete may deferred Ops power be reconsidered
-
-Current Ops objective:
-1. preserve the current Operations Console direction and trust boundary
-2. use `/ops` as the human review surface for launch-readiness proof
-3. do not start deferred high-power Ops controls
+2. preserve the completed `/ops` decision-first implementation and trust boundary
+3. reframe `/ops` into a calmer section shell with stable left-side navigation
+4. keep one dominant work surface per section and move support panels below or beside the main work
+5. keep monitoring and system health visible, but structurally secondary to decision work
+6. only after 1 to 5 are complete, run the deferred provider-coupled actual-domain activation proof slice
+7. reach final explicit owner Go/No-Go immediately after that slice
+8. confirm launch readiness before any deferred Ops power is reconsidered
 
 ## Current Blocker
 
@@ -49,26 +50,36 @@ No active Phase 1 blocker remains.
 No active Phase 2 blocker remains.
 No active Phase 3 blocker remains.
 
-Current remaining gates are final-activation gates:
+Current remaining launch gates are still final-activation gates:
 1. live trainer submission E2E remains reserved for the final actual-domain activation decision
 2. live provider exercise for notification and billing-coupled paths remains reserved for the final actual-domain activation decision
 3. final owner launch approval remains intentionally withheld until the actual-domain activation slice is complete
 
+Current execution blocker:
+1. the current `/ops` screen shell is still noisier than the intended owner-reading model
+2. the remaining launch gates are still reserved for the actual-domain activation slice
+
 ## Current Priority Order
 
 1. preserve the completed hosted-path launch evidence against `LAUNCH_GATE.md`
-2. complete the deferred provider-coupled actual-domain activation slice
-3. complete final owner Go/No-Go
-4. only after 1 to 3 are complete may bounded owner controls be reconsidered
-5. only after 4 is proven safe may technical-owner controls be reconsidered
+2. preserve the completed `/ops` decision-surface improvements
+3. complete the `/ops` layout reframe using the LeaseMate prototype only as layout reference
+4. verify the reframe preserves DTD workflow evidence and Normal Ops boundaries
+5. complete the deferred provider-coupled actual-domain activation slice
+6. complete final owner Go/No-Go
+7. only after 1 to 6 are complete may bounded owner controls be reconsidered
+8. only after 7 is proven safe may technical-owner controls be reconsidered
 
 ## Current Accepted Scope
 
 In scope now:
 1. preservation of the trusted hosted-path evidence set
-2. deferred provider-coupled proof for the actual-domain activation decision
-3. final owner Go/No-Go
-4. `/ops` review of launch-critical workflow evidence during final activation work
+2. completed `/ops` decision-surface implementation as the baseline to preserve
+3. `/ops` shell and section-layout reframe
+4. documentation alignment for the reframe
+5. deferred provider-coupled proof for the actual-domain activation decision
+6. final owner Go/No-Go
+7. `/ops` review of launch-critical workflow evidence during final activation work
 
 Out of scope now:
 1. Owner Override controls
@@ -78,6 +89,7 @@ Out of scope now:
 5. unrelated code refactors
 6. public custom-domain activation
 7. provider-coupled live trainer submission, notification, and billing exercise before the final actual-domain decision
+8. importing LeaseMate business logic, request/cart flows, or non-DTD workflow language into DTD
 
 Guarded defaults that remain in force:
 1. `CONVERSION_BILLING_MODE=track_only`
@@ -120,6 +132,11 @@ Established from current repo and hosted-runtime evidence:
 11. elapsed-window hosted loop proof now exists:
    - repeated hosted samples over time showed `ranking`, `pricing`, and `health` refreshing within expected cadence
    - the hosted discovery loop also advanced from the pre-proof run at `2026-06-07T18:34:09.921276+00:00` to the processed duplicate-path run at `2026-06-07T18:44:10.935161+00:00`
+12. the local end-to-end `/ops` optimisation pass now verifies against the updated local oversight contract:
+   - overview now leads with a decision summary, next safest step, and plain-language attention counts
+   - work queue now exposes a decision column, explicit case intent, and safer review-state guidance
+   - trainer supply now exposes geography coverage, demand gaps, pace, blocked supply, and intro-ready trajectory signals
+   - system activity remains visible as a supporting surface after the main decision surfaces
 
 Still deferred at the project level:
 1. final live provider exercise for external lifecycle paths, reserved for the actual-domain activation decision
@@ -128,9 +145,11 @@ Current readiness state:
 1. website is owner/public review ready at the current baseline
 2. Phase 2 is complete under the current governance scope
 3. Phase 3 owner review is complete with a bounded outcome:
-   - Go to the deferred actual-domain activation slice
-   - No-Go on final public launch approval until that slice passes
-4. final status remains `not launch-approved` until owner review and the deferred actual-domain activation checks are complete
+   - complete `/ops` optimisation before final activation work
+   - keep No-Go on final public launch approval until the full final verification group passes
+4. the first `/ops` optimisation pass is complete
+5. the `/ops` layout reframe is still open before final activation work
+6. final status remains `not launch-approved` until the deferred actual-domain activation checks are complete
 
 Known remaining evidence gaps:
 1. final live trainer submission E2E, deferred to the actual-domain activation decision
@@ -160,9 +179,11 @@ Current infrastructure truths worth preserving:
 
 ## Current Risks
 
-1. the remaining launch gate is now the deferred actual-domain activation slice, not the trusted hosted path
-2. stale local env values can mislead remote verification if they point to a retired backend URL
-3. latent matching-capable code could be misread as the current product posture if authority order is ignored
+1. the current `/ops` shell is still noisier than the intended owner-reading model
+2. copying LeaseMate too literally would risk importing the wrong product model into DTD
+3. the remaining launch gate is now the deferred actual-domain activation slice, not the trusted hosted path
+4. stale local env values can mislead remote verification if they point to a retired backend URL
+5. latent matching-capable code could be misread as the current product posture if authority order is ignored
 
 ## Restart Protocol
 
@@ -179,6 +200,7 @@ Session-start rules:
 2. preserve the locked chunk approvals unless explicitly replaced
 3. preserve `/ops` semantics before aligning surrounding docs
 4. do not reopen deferred high-power Ops controls during trust-first work
+5. preserve the completed decision-first `/ops` implementation during the layout reframe and final activation verification work
 
 Launch authority:
 1. final Go/No-Go authority remains the owner
@@ -258,11 +280,21 @@ Launch authority:
 - hosted evidence now confirms:
   - discovery summary is present with promoted rows
   - loop statuses expose interval and age signals on the trusted hosted path
+
+10. `2026-06-09`
+- remaining DTD work reprioritised around how the owner actually uses `/ops`
+- the new active order is:
+  - decision surfaces first
+  - supply/readiness decision support second
+  - lifecycle/support wording cleanup third
+  - monitoring/system-health separation fourth
+  - final verification group later
+- final public launch approval remains withheld until the later verification group is complete
 - remaining non-provider blocker language narrowed to:
   - campaign-attribution persistence and clean discovery-lineage proof
   - elapsed-window autonomous-loop proof
 
-10. `2026-06-08`
+11. `2026-06-08`
 - hosted Phase 2 non-provider proof completed on the trusted hosted path
 - browser-driven landing and waitlist proof established a retained attribution cohort:
   - `campaign=phase2-proof`
@@ -281,7 +313,7 @@ Launch authority:
 - next active phase is owner review and launch decision preparation
 - only deferred actual-domain activation proofs remain
 
-11. `2026-06-08`
+12. `2026-06-08`
 - Phase 3 owner review and bounded Go/No-Go completed
 - Browser review verified the key trusted hosted surfaces used for owner review:
   - `/`
@@ -289,6 +321,16 @@ Launch authority:
   - `/ops`
 - launch-gate assessment confirmed the hosted-path non-provider evidence set is sufficient to move forward
 - bounded decision recorded:
-  - Go to the deferred actual-domain activation slice
+  - Go to the deferred actual-domain activation slice after remaining `/ops` completion work
   - No-Go on final public launch approval until the provider-coupled actual-domain checks pass
-- next active step is therefore the actual-domain activation slice, not deferred Ops power
+
+13. `2026-06-09`
+- remaining `/ops` optimisation work completed
+- local oversight contract extended with:
+  - `ops_supply_geography`
+  - `ops_supply_trends`
+- overview now leads with decision-summary reading and plain-language next-step guidance
+- work queue now exposes explicit decision guidance in both the table and the detail panel
+- trainer supply now exposes geography coverage, demand gaps, pace, blocked supply, and intro-ready trajectory signals
+- monitoring/system health remains visible as a supporting section instead of the primary operator reading surface
+- local browser verification confirmed the decision-first `/ops` flow on desktop and mobile against the updated local backend contract

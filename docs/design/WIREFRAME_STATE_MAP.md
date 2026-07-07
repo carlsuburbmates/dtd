@@ -1,6 +1,6 @@
 # Wireframe State Map
 
-Date: 2026-06-08
+Date: 2026-06-09
 Scope: canonical screen-state inventory for workflow-serving routes and
 operator-facing surfaces.
 
@@ -27,8 +27,12 @@ Role boundaries:
 1. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` owns route purpose and required sections.
 2. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` owns the workflow-to-surface
    mapping.
-3. this file owns canonical screen-state coverage for those routes.
-4. `docs/design/FIGMA_COMPONENT_MAP.md` owns component naming and component-code
+3. `docs/design/WEBSITE_WIREFRAME_SPEC.md` owns the structural layout of public
+   and lifecycle routes.
+4. `docs/governance/OPS_WIREFRAME_BLUEPRINT.md` owns the structural layout of
+   `/ops`.
+5. this file owns canonical screen-state coverage for those routes.
+6. `docs/design/FIGMA_COMPONENT_MAP.md` owns component naming and component-code
    mapping only.
 
 If this file conflicts with workflow truth, page truth, or `/ops` truth, the
@@ -94,14 +98,14 @@ operator-visible evidence surfaces:
 3. `W-AU-2 Outbound Message And Notification Logging`
    - operator surface: `/ops` messages
 
-## Known Additions Still Needed
+## Daily-Use Alignment Rule
 
-1. trainer supply geography states should become more explicit inside the
-   `Trainer Supply` and/or overview surfaces so launch decisions do not rely on
-   coarse counts only
-2. trainer acquisition and readiness trend states should become more explicit in
-   overview and trainer-supply surfaces so the owner can read trajectory, not
-   just current totals
+The `/ops` screen-state system is aligned only when:
+1. `Overview` states answer posture and immediate action first
+2. `Work Queue` states make review decisions explicit
+3. `Trainer Supply` states make supply sufficiency and coverage readable
+4. `Messages`, `Billing & Reactivation`, `Recent Changes`, and `System Activity`
+   remain supporting surfaces in that order
 
-Until those are added, the current screen-state system is structurally complete
-but still lighter than the desired operator evidence depth.
+That operating order is defined in
+`docs/governance/OPS_DAILY_OPERATING_MANUAL.md`.

@@ -16,6 +16,14 @@ import SuburbSEO from "@/pages/SuburbSEO";
 import Ops from "@/pages/Ops";
 import About from "@/pages/About";
 import HowItWorks from "@/pages/HowItWorks";
+import EducationModuleTeaser from "@/pages/EducationModuleTeaser";
+import EducationModuleGuide from "@/pages/EducationModuleGuide";
+import EducationDashboard from "@/pages/EducationDashboard";
+import EducationLessonPreview from "@/pages/EducationLessonPreview";
+import EducationLesson from "@/pages/EducationLesson";
+import EducationTool from "@/pages/EducationTool";
+import EducationSignIn from "@/pages/EducationSignIn";
+import EducationAuthCallback from "@/pages/EducationAuthCallback";
 import Pricing from "@/pages/Pricing";
 import Trust from "@/pages/Trust";
 import FAQ from "@/pages/FAQ";
@@ -43,6 +51,14 @@ function App() {
                     <Route path="/melbourne/:suburb" element={<SuburbSEO />} />
                     <Route path="/about" element={<About />} />
                     <Route path="/how-it-works" element={<HowItWorks />} />
+                    <Route path="/education/sign-in" element={<EducationSignIn />} />
+                    <Route path="/education/auth/callback" element={<EducationAuthCallback />} />
+                    <Route path="/education/dashboard" element={<EducationDashboard />} />
+                    <Route path="/education/modules/:moduleSlug/guide" element={<EducationModuleGuide />} />
+                    <Route path="/education/modules/:moduleSlug" element={<EducationModuleTeaser />} />
+                    <Route path="/education/modules/:moduleSlug/lessons/:lessonSlug/preview" element={<EducationLessonPreview />} />
+                    <Route path="/education/modules/:moduleSlug/lessons/:lessonSlug" element={<EducationLesson />} />
+                    <Route path="/education/tools/:toolSlug" element={<EducationTool />} />
                     <Route path="/pricing" element={<Pricing />} />
                     <Route path="/trust" element={<Trust />} />
                     <Route path="/faq" element={<FAQ />} />

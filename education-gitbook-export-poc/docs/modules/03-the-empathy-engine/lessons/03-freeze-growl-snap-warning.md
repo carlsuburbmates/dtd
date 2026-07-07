@@ -1,0 +1,54 @@
+
+# Freeze, Growl, Snap: Do Not Punish the Warning
+
+_Module: The Empathy Engine_
+
+## Scenario
+
+Your dog freezes when someone reaches for their collar, growls when a child approaches their bed, or snaps when someone tries to take an item from their mouth while another person says you cannot let the dog 'get away with that.'
+
+## What the owner needs to notice
+
+- Freezing, growling, and snapping are serious warning signals that usually mean the dog feels over threshold or unsafe.
+- The immediate goal is not to win the moment. It is to prevent a bite, reduce pressure, and understand what caused the warning.
+
+## Common mistake
+
+Punishing the warning and teaching the dog to stop warning while the underlying fear, pain, guarding, or discomfort remains.
+
+## Better decision rule
+
+> Thank the warning by making the situation safer. Ask what the dog was trying to stop or avoid, then change the setup.
+
+## What to do now
+
+- Stop moving toward the dog, do not yell, do not grab, and do not punish.
+- Create space, remove people, children, or other animals if needed, wait until the dog is safer and calmer, record what happened, and seek help if the warning repeats or safety is uncertain.
+- If an item is involved, avoid direct confrontation unless there is immediate danger. Use management first and prevent access next time.
+
+## Watch for this
+
+- Identify the trigger category: touch, collar grab, grooming, vet-style handling, food, chew, stolen item, bed, child approach, visitor entry, unfamiliar dog, pain, being cornered, or being woken.
+- Notice the first signal, the final signal, whether the dog could escape, and how long recovery took after pressure changed.
+
+## When to seek help
+
+Trainer or behaviour support is needed if warnings repeat, children are involved, the dog guards food, toys, beds, people, or spaces, the dog snaps or bites, the dog blocks or corners people, or the owner cannot manage safely. Vet advice is needed if the warning is sudden, linked to touch, guarding a body part, or comes with stiffness, limping, yelping, appetite change, lethargy, vomiting, diarrhoea, sleep disruption, or behaviour change after injury, illness, surgery, or medication.
+
+## Trainer-readiness note
+
+Record what triggered the warning, distance from the trigger, who was involved, whether the dog could escape, whether food, bed, toy, touch, or pain may be involved, the first and final signals, whether contact happened, whether anyone was injured, how long recovery took, and what changed afterward.
+
+## Media blocks
+
+### Warning-response ladder
+
+- Type: visual
+- Guidance: A safety-first guide showing how to respond when the dog freezes, growls, snaps, or guards instead of forcing the moment.
+
+## Reflection and interactive blocks
+
+### Make it safer
+
+- Type: prompt
+- Prompt: What was the dog trying to stop or avoid, and what change would lower pressure fastest right now?

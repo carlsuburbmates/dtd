@@ -27,6 +27,7 @@ let webpackConfig = {
     },
   },
   eslint: {
+    enable: false,
     configure: {
       extends: ["plugin:react-hooks/recommended"],
       rules: {

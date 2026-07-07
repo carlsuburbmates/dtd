@@ -8,6 +8,7 @@ export const api = axios.create({ baseURL: API, timeout: 60000 });
 
 const STORAGE_KEY = "dtd-admin-pass";
 const ADMIN_PASS_TTL_MS = 30 * 60 * 1000;
+const EDUCATION_STORAGE_KEY = "dtd-education-session";
 
 export const setAdminPass = (p) => {
     if (!p) {
@@ -37,10 +38,50 @@ export const getAdminPass = () => {
     }
 };
 
+export const clearEducationSession = () => {
+    sessionStorage.removeItem(EDUCATION_STORAGE_KEY);
+};
+
+export const setEducationSession = (row) => {
+    if (!row?.token || !row?.expires_at) {
+        clearEducationSession();
+        return;
+    }
+    sessionStorage.setItem(EDUCATION_STORAGE_KEY, JSON.stringify(row));
+};
+
+export const getEducationSession = () => {
+    const raw = sessionStorage.getItem(EDUCATION_STORAGE_KEY);
+    if (!raw) return null;
+    try {
+        const row = JSON.parse(raw);
+        if (!row?.token || !row?.expires_at) {
+            clearEducationSession();
+            return null;
+        }
+        const expiresAtMs = Date.parse(String(row.expires_at));
+        if (!Number.isFinite(expiresAtMs) || Date.now() > expiresAtMs) {
+            clearEducationSession();
+            return null;
+        }
+        return row;
+    } catch (_) {
+        clearEducationSession();
+        return null;
+    }
+};
+
 export const opsApi = axios.create({ baseURL: API, timeout: 60000 });
 opsApi.interceptors.request.use((config) => {
     const pass = getAdminPass();
     if (pass) config.headers["X-Admin-Pass"] = pass;
+    return config;
+});
+
+export const educationApi = axios.create({ baseURL: API, timeout: 60000 });
+educationApi.interceptors.request.use((config) => {
+    const session = getEducationSession();
+    if (session?.token) config.headers["X-Education-Session"] = session.token;
     return config;
 });
 

@@ -1,6 +1,6 @@
 # Current Truth Index
 
-Last updated: 2026-06-08
+Last updated: 2026-07-02
 
 ## Purpose
 
@@ -29,14 +29,17 @@ These docs define the intended DTD website and operating model:
 2. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
 3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
 4. `docs/governance/WORKFLOW_SURFACE_MATRIX.md`
-5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
-6. `docs/design/WIREFRAME_STATE_MAP.md`
-7. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
-8. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
-9. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
-10. `docs/standards/BUILD_CHECKLIST.md`
-11. `docs/standards/LAUNCH_GATE.md`
-12. `docs/standards/INTEGRITY_AUDIT.md`
+5. `docs/design/WEBSITE_WIREFRAME_SPEC.md`
+6. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
+7. `docs/governance/OPS_WIREFRAME_BLUEPRINT.md`
+8. `docs/governance/OPS_DAILY_OPERATING_MANUAL.md`
+9. `docs/design/WIREFRAME_STATE_MAP.md`
+10. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
+11. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
+12. `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md`
+13. `docs/standards/BUILD_CHECKLIST.md`
+14. `docs/standards/LAUNCH_GATE.md`
+15. `docs/standards/INTEGRITY_AUDIT.md`
 
 ## Execution Control
 
@@ -51,10 +54,11 @@ These docs support verification, runtime review, and proof continuity. They do
 not override normative truth:
 1. `docs/governance/LOCK_STATE.md`
 2. `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`
-3. `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
-4. `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md`
-5. `docs/process/CURATED_SYNC_PACKAGE_PLAN.md`
-6. `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
+3. `docs/governance/CANONICAL_INTEGRATIONS.md`
+4. `docs/process/PRELAUNCH_CHECKS_RUNBOOK.md`
+5. `docs/process/INTEGRATION_CREDENTIALS_RUNBOOK.md`
+6. `docs/process/CURATED_SYNC_PACKAGE_PLAN.md`
+7. `docs/process/IMPLEMENTATION_EVIDENCE_MANIFEST.md`
 
 ## Canonical Pack Precedence
 
@@ -64,11 +68,14 @@ When canonical docs disagree, resolve in this order:
 3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` governs end-to-end workflow completion and E2E completion criteria
 4. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` governs page-level and route-level behavior
 5. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` governs the canonical workflow-to-route-to-ops mapping
-6. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the current `/ops` product surface and operator-facing semantics
-7. `docs/design/WIREFRAME_STATE_MAP.md` governs canonical screen-state coverage under workflow and page truth
-8. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and escalation layers
-9. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first phase goals and evidence model
-10. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch approval, and verification requirements
+6. `docs/design/WEBSITE_WIREFRAME_SPEC.md` governs website-wide structural layout, module order, and visual reading hierarchy outside the detailed `/ops` blueprint
+7. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` governs the current `/ops` product surface and operator-facing semantics
+8. `docs/governance/OPS_WIREFRAME_BLUEPRINT.md` governs the structural layout, grouping, and reading hierarchy of `/ops`
+9. `docs/governance/OPS_DAILY_OPERATING_MANUAL.md` governs day-to-day `/ops` reading order, operating priorities, and visual/data prioritisation for the owner
+10. `docs/design/WIREFRAME_STATE_MAP.md` governs canonical screen-state coverage under workflow and page truth
+11. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` governs `/ops` responsibility boundaries and escalation layers
+12. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `docs/INITIAL_LAUNCH_EVIDENCE_MODEL_SUPPLY_FIRST.md` govern the current supply-first phase goals and evidence model
+13. `docs/standards/BUILD_CHECKLIST.md`, `docs/standards/LAUNCH_GATE.md`, and `docs/standards/INTEGRITY_AUDIT.md` govern build, launch approval, and verification requirements
 
 ## Execution Control Rules
 

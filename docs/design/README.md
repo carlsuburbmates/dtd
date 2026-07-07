@@ -1,18 +1,19 @@
 # Design Continuity Index
 
-Updated: 2026-06-08
+Updated: 2026-06-09
 
 Start here for future design-system sessions.
 
 ## Canonical precedence (highest to lowest)
 
 1. Live implementation files in `frontend/src` and `frontend/src/index.css`
-2. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/WIREFRAME_STATE_MAP.md`
-3. `/Users/carlg/Documents/AI-Coding/dtd/frontend/design-tokens/dtd.figma.tokens.json`
-4. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_COMPONENT_MAP.md`
-5. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_SYNC_PLAYBOOK.md`
-6. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/NO_PAYWALL_WORKFLOW.md`
-7. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/design_guidelines.json` (creative direction reference, not canonical runtime truth)
+2. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/WEBSITE_WIREFRAME_SPEC.md`
+3. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/WIREFRAME_STATE_MAP.md`
+4. `/Users/carlg/Documents/AI-Coding/dtd/frontend/design-tokens/dtd.figma.tokens.json`
+5. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_COMPONENT_MAP.md`
+6. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_SYNC_PLAYBOOK.md`
+7. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/NO_PAYWALL_WORKFLOW.md`
+8. `/Users/carlg/Documents/AI-Coding/dtd/docs/design/design_guidelines.json` (creative direction reference, not canonical runtime truth)
 
 ## Documents
 
@@ -22,10 +23,13 @@ Start here for future design-system sessions.
 2. Canonical workflow-serving screen-state inventory:
 - `/Users/carlg/Documents/AI-Coding/dtd/docs/design/WIREFRAME_STATE_MAP.md`
 
-3. Code-to-Figma component contract:
+3. Canonical website-wide structural wireframe spec:
+- `/Users/carlg/Documents/AI-Coding/dtd/docs/design/WEBSITE_WIREFRAME_SPEC.md`
+
+4. Code-to-Figma component contract:
 - `/Users/carlg/Documents/AI-Coding/dtd/docs/design/FIGMA_COMPONENT_MAP.md`
 
-4. Pre-launch no-paywall operating workflow:
+5. Pre-launch no-paywall operating workflow:
 - `/Users/carlg/Documents/AI-Coding/dtd/docs/design/NO_PAYWALL_WORKFLOW.md`
 
 ## Token file

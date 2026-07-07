@@ -7,15 +7,18 @@ This file owns:
 1. env-file inventory
 2. env ownership rules
 3. required variable map
-4. platform inventory
-5. verification command set
-6. durable integration caveats
+4. verification command set
+5. durable integration caveats
 
 It does not own:
 1. current project status
 2. live launch readiness claims
 3. session handoff logic
 4. dated execution logs
+5. the canonical integration inventory
+
+Canonical integration inventory:
+1. `docs/governance/CANONICAL_INTEGRATIONS.md`
 
 ## Local Env File Inventory
 
@@ -45,21 +48,22 @@ Ownership rule:
 2. if frontend code reads it, put it in `frontend/.env`
 3. if repo scripts or verification tooling use it, put it in root `.env`
 
-## Durable Platform Inventory
+## Canonical Platform Inventory Pointer
 
-Current integrated platforms in use or retained for active verification:
-1. Sentry
-2. PostHog
-3. Resend
-4. Render
-5. MongoDB Atlas
-6. Vercel
-7. Stripe
+The platform inventory now lives in:
+1. `docs/governance/CANONICAL_INTEGRATIONS.md`
 
-Current live project notes:
-1. the active Vercel project is `dtd`
-2. a separate `dogtrainersdirectory` Vercel project remains account inventory only and should be treated as drift-risk, not the active production target
-3. the current frontend runtime key is `REACT_APP_BACKEND_URL`
+Use this runbook for:
+1. env ownership
+2. credential storage rules
+3. verification caveats
+4. command-level verification workflow
+
+Use the canonical integrations file for:
+1. platform list
+2. verified identifiers
+3. account/project/service clues
+4. integration status classification
 
 ## Known Verification Caveats
 

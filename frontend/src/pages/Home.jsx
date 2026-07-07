@@ -2,9 +2,25 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
-import { api, audCents } from "@/lib/api";
-import { mapWaitlistError } from "@/lib/waitlistErrors";
+import { api, audCents, buildAttributionSearch } from "@/lib/api";
+import { captureEducationEvent, captureEducationPageView } from "@/lib/educationAnalytics";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
+import OwnerWaitlistForm from "@/components/OwnerWaitlistForm";
+
+const OWNER_LANE_STEPS = [
+    {
+        id: "Start",
+        copy: "Open The First Leash for calm, practical guidance in the early weeks at home.",
+    },
+    {
+        id: "Share",
+        copy: "Join the waitlist with your suburb so DTD can track demand as the directory grows.",
+    },
+    {
+        id: "Stay ready",
+        copy: "Receive updates as verified trainer coverage expands and launch posture changes.",
+    },
+];
 
 export default function Home() {
     const [search] = useSearchParams();
@@ -14,12 +30,6 @@ export default function Home() {
     const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(true);
     const [ownerWaitlistMode, setOwnerWaitlistMode] = useState("passive_only");
     const [matchSuburbs, setMatchSuburbs] = useState([]);
-    const [waitlistEmail, setWaitlistEmail] = useState("");
-    const [waitlistSuburb, setWaitlistSuburb] = useState("");
-    const [waitlistConsent, setWaitlistConsent] = useState(false);
-    const [waitlistState, setWaitlistState] = useState("idle");
-    const [waitlistMessage, setWaitlistMessage] = useState("");
-
     const [matchDescription, setMatchDescription] = useState("");
     const [matchSuburb, setMatchSuburb] = useState("");
     const [matchConsent, setMatchConsent] = useState(false);
@@ -38,6 +48,17 @@ export default function Home() {
         [search],
     );
 
+    const ownerGuideSearch = useMemo(
+        () =>
+            buildAttributionSearch({
+                campaign: attribution.campaign,
+                source: attribution.source,
+                utmMedium: attribution.utm_medium,
+                utmCampaign: attribution.utm_campaign,
+            }),
+        [attribution],
+    );
+
     useEffect(() => {
         let active = true;
         api.get("/config")
@@ -51,6 +72,10 @@ export default function Home() {
                 setOwnerWaitlistMode(String(config.owner_waitlist_mode || "passive_only"));
                 const suburbs = Array.isArray(config.suburbs) ? config.suburbs : [];
                 setMatchSuburbs(suburbs);
+                captureEducationPageView("home", {
+                    launch_phase: String(config.public_launch_phase || "supply_first"),
+                    public_emphasis: String(config.public_emphasis || "waitlist_first"),
+                });
             })
             .catch(() => {
                 if (!active) return;
@@ -87,63 +112,6 @@ export default function Home() {
             body: "Owners can register interest now while trainer onboarding, activation, and suburb coverage are being recorded cleanly.",
         };
     }, [publicEmphasis, publicLaunchPhase]);
-
-    const submitWaitlist = async (e) => {
-        e?.preventDefault();
-        const email = waitlistEmail.trim();
-        const suburbValue = waitlistSuburb.trim();
-        const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        if (!emailValid) {
-            setWaitlistState("error");
-            setWaitlistMessage("Please enter a valid email.");
-            return;
-        }
-        if (!suburbValue) {
-            setWaitlistState("error");
-            setWaitlistMessage("Please enter your suburb.");
-            return;
-        }
-        if (!waitlistConsent) {
-            setWaitlistState("error");
-            setWaitlistMessage("Please tick consent to continue.");
-            return;
-        }
-
-        setWaitlistState("submitting");
-        setWaitlistMessage("");
-        try {
-            const r = await api.post("/owner-waitlist", {
-                email,
-                suburb: suburbValue,
-                consent_owner_waitlist: true,
-                consent: true,
-                campaign: attribution.campaign,
-                source: attribution.source,
-                utm_medium: attribution.utm_medium,
-                utm_campaign: attribution.utm_campaign,
-            });
-            const status = String(r?.data?.status || "").toLowerCase();
-            const duplicate = Boolean(r?.data?.duplicate) || status === "duplicate" || status === "exists";
-            if (duplicate) {
-                setWaitlistState("duplicate");
-                setWaitlistMessage("You are already on the waitlist for that suburb.");
-                return;
-            }
-            setWaitlistState("success");
-            setWaitlistMessage("Thanks. You are on the owner waitlist.");
-            setWaitlistEmail("");
-            setWaitlistSuburb("");
-            setWaitlistConsent(false);
-        } catch (err) {
-            if (err?.response?.status === 409) {
-                setWaitlistState("duplicate");
-                setWaitlistMessage("You are already on the waitlist for that suburb.");
-                return;
-            }
-            setWaitlistState("error");
-            setWaitlistMessage(mapWaitlistError(err?.response?.data?.detail));
-        }
-    };
 
     const runMatch = async (e) => {
         e?.preventDefault();
@@ -219,13 +187,18 @@ export default function Home() {
                             </p>
 
                             <div className="mt-7 flex flex-wrap items-center gap-3">
-                                <Link to="/how-it-works" className="btn-primary" data-testid="home-owner-entry">
-                                    For owners
+                                <Link
+                                    to={`/how-it-works${ownerGuideSearch}`}
+                                    className="btn-primary"
+                                    data-testid="home-owner-entry"
+                                    onClick={() => captureEducationEvent("home_owner_entry_clicked", { launch_phase: publicLaunchPhase })}
+                                >
+                                    Start the guide
                                 </Link>
                                 {trainerOnboardingOpen && (
                                     <Link to="/trainers" className="btn-ghost" data-testid="home-trainer-entry">
-                                    For trainers
-                                    <ArrowRight className="h-4 w-4" />
+                                        For trainers
+                                        <ArrowRight className="h-4 w-4" />
                                     </Link>
                                 )}
                             </div>
@@ -234,43 +207,34 @@ export default function Home() {
                         <aside className="lg:col-span-5 card-public p-5 sm:p-7 self-start" data-testid={publicMatchingEnabled ? "owner-match-card" : "owner-waitlist-card"}>
                             {!publicMatchingEnabled ? (
                                 <>
-                                    <div className="small-caps">Owner waitlist</div>
-                                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Register your interest.</h2>
+                                    <div className="small-caps">Free starter guide</div>
+                                    <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Start with The First Leash.</h2>
                                     <p className="text-[#4A615A] mt-3 text-sm">
-                                        {ownerWaitlistMode === "passive_only"
-                                            ? "Share your suburb now to receive prelaunch updates as verified coverage grows."
-                                            : "Share your suburb now to receive launch updates as local coverage expands."}
+                                        A calm, practical start for life with a new dog. Use the guide for early setup, everyday decisions, and simple checklists while the directory grows.
                                     </p>
-
-                                    <form onSubmit={submitWaitlist} className="mt-5 space-y-3" data-testid="owner-waitlist-form">
-                                        <label className="sr-only" htmlFor="waitlist-email">Email</label>
-                                        <input id="waitlist-email" type="email" value={waitlistEmail} onChange={(e) => setWaitlistEmail(e.target.value)} placeholder="you@example.com" className="input-public" data-testid="owner-waitlist-email" autoComplete="email" />
-                                        <label className="sr-only" htmlFor="waitlist-suburb">Suburb</label>
-                                        <input id="waitlist-suburb" type="text" value={waitlistSuburb} onChange={(e) => setWaitlistSuburb(e.target.value)} placeholder="Your suburb" className="input-public" data-testid="owner-waitlist-suburb" />
-                                        <label className="flex items-start gap-2 text-xs text-[#4A615A]">
-                                            <input type="checkbox" checked={waitlistConsent} onChange={(e) => setWaitlistConsent(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1A3A32]" data-testid="owner-waitlist-consent" />
-                                            <span>I agree to receive prelaunch waitlist updates.</span>
-                                        </label>
-                                        {waitlistState !== "idle" && (
-                                            <div
-                                                className={`text-sm ${
-                                                    waitlistState === "success"
-                                                        ? "text-emerald-700"
-                                                        : waitlistState === "duplicate"
-                                                            ? "text-amber-700"
-                                                            : waitlistState === "submitting"
-                                                                ? "text-[#4A615A]"
-                                                                : "text-rose-700"
-                                                }`}
-                                                data-testid="owner-waitlist-status"
-                                            >
-                                                {waitlistState === "submitting" ? "Submitting..." : waitlistMessage}
-                                            </div>
-                                        )}
-                                        <button type="submit" className="btn-primary w-full justify-center" data-testid="owner-waitlist-submit" disabled={waitlistState === "submitting"}>
-                                            {waitlistState === "submitting" ? "Submitting..." : "Join waitlist"}
-                                        </button>
-                                    </form>
+                                    <div className="mt-5 flex flex-wrap gap-3">
+                                        <Link
+                                            to={`/how-it-works${ownerGuideSearch}`}
+                                            className="btn-accent"
+                                            data-testid="home-owner-guide-cta"
+                                            onClick={() => captureEducationEvent("home_owner_guide_clicked", { launch_phase: publicLaunchPhase })}
+                                        >
+                                            Start the guide
+                                            <ArrowRight className="h-4 w-4" />
+                                        </Link>
+                                    </div>
+                                    <div className="mt-6 border-t border-[#E5DFD3] pt-6">
+                                        <div className="small-caps">Quick waitlist</div>
+                                        <p className="text-[#4A615A] mt-2 text-sm">
+                                            {ownerWaitlistMode === "passive_only"
+                                                ? "Share your suburb now to receive prelaunch updates as verified coverage grows."
+                                                : "Share your suburb now to receive launch updates as local coverage expands."}
+                                        </p>
+                                        <OwnerWaitlistForm
+                                            attribution={attribution}
+                                            analyticsContext={{ source_surface: "home_waitlist", launch_phase: publicLaunchPhase }}
+                                        />
+                                    </div>
                                 </>
                             ) : (
                                 <>
@@ -316,6 +280,38 @@ export default function Home() {
                         </aside>
                     </div>
                 </section>
+
+                {!publicMatchingEnabled ? (
+                    <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pb-14" data-testid="home-owner-lane">
+                        <div className="flex flex-wrap items-end justify-between gap-4">
+                            <div>
+                                <div className="small-caps">The First Leash</div>
+                                <h2 className="font-serif text-4xl text-[#1A3A32] mt-2">A useful starter guide while the directory grows.</h2>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                <Link
+                                    to={`/how-it-works${ownerGuideSearch}`}
+                                    className="btn-primary inline-flex"
+                                    data-testid="home-owner-lane-guide"
+                                    onClick={() => captureEducationEvent("home_owner_lane_clicked", { launch_phase: publicLaunchPhase })}
+                                >
+                                    Start the guide
+                                </Link>
+                                <Link to="/faq" className="btn-ghost inline-flex">FAQ</Link>
+                                <Link to="/contact" className="btn-ghost inline-flex">Contact</Link>
+                            </div>
+                        </div>
+
+                        <div className="grid md:grid-cols-3 gap-4 mt-8">
+                            {OWNER_LANE_STEPS.map((step) => (
+                                <article key={step.id} className="card-public p-6">
+                                    <div className="small-caps">{step.id}</div>
+                                    <p className="text-[#4A615A] mt-3">{step.copy}</p>
+                                </article>
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
 
                 {publicMatchingEnabled && matches.length > 0 ? (
                     <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pb-14" data-testid="home-match-results">

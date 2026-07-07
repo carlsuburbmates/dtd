@@ -177,6 +177,45 @@ def _public_app_base_url() -> str:
     )
 
 
+async def notify_owner_education_magic_link(
+    db,
+    *,
+    session_request_id: str,
+    to_email: str,
+    link_url: str,
+) -> Dict[str, Any]:
+    email = _safe_text(to_email)
+    if not email:
+        return {
+            "education_link_status": "skipped",
+            "education_link_attempts": 0,
+            "education_link_reason": "missing_email",
+        }
+
+    subject = "Your First Leash sign-in link"
+    html = (
+        "<p>Your First Leash link is ready.</p>"
+        f'<p><a href="{link_url}">Open your saved guide</a></p>'
+        "<p>This link is single-use and expires shortly. If you did not request it, you can ignore this email.</p>"
+    )
+    outcome = await _send_with_retry(
+        db,
+        target_kind="owner_education_magic_link",
+        target_id=session_request_id,
+        kind="owner_education_magic_link",
+        to_email=email,
+        subject=subject,
+        html=html,
+    )
+    result = {
+        "education_link_status": outcome.get("status", "failed"),
+        "education_link_attempts": int(outcome.get("attempts") or 0),
+    }
+    if outcome.get("error"):
+        result["education_link_error"] = str(outcome["error"])[:240]
+    return result
+
+
 async def notify_trainer_new_intro(db, trainer: Dict[str, Any], intro: Dict[str, Any]) -> Dict[str, Any]:
     trainer_id = str(trainer.get("id") or "")
     email = _safe_text(trainer.get("billing_email")) or _safe_text(trainer.get("email"))

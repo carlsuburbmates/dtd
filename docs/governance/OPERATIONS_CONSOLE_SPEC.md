@@ -4,7 +4,7 @@
 **Project:** Dog Trainers Directory / DTD  
 **Purpose:** Canonical product spec for the owner-facing Operations Console at `/ops`.  
 **Status:** Canonical implementation-following spec  
-**Last aligned:** 2026-06-08
+**Last aligned:** 2026-06-09
 
 ---
 
@@ -19,6 +19,12 @@ This document is the canonical followable reference for:
 3. what a human owner should be able to understand quickly
 4. what is intentionally out of scope for now
 5. what future Ops work should build next without changing direction
+
+For the owner’s day-to-day use of `/ops`, read
+`docs/governance/OPS_DAILY_OPERATING_MANUAL.md` alongside this file.
+
+For the structural screen layout and grouping of `/ops`, read
+`docs/governance/OPS_WIREFRAME_BLUEPRINT.md` alongside this file.
 
 If implementation, planning, or future UI work conflicts with this file, this file wins unless explicitly replaced by a newer approved spec.
 
@@ -57,8 +63,8 @@ The current realistic-now Operations Console includes:
 3. `Trainer Supply`
 4. `Messages`
 5. `Billing & Reactivation`
-6. `System Activity`
-7. `Recent Changes`
+6. `Recent Changes`
+7. `System Activity`
 
 It also includes the backend read models that power those sections:
 
@@ -108,10 +114,27 @@ The console should support this reading order:
 4. `Trainer Supply`
 5. `Messages`
 6. `Billing & Reactivation`
-7. `System Activity`
-8. `Recent Changes`
+7. `Recent Changes`
+8. `System Activity`
 
 This ordering matters more than decorative density.
+
+The structural blueprint that should enforce this reading order lives in
+`docs/governance/OPS_WIREFRAME_BLUEPRINT.md`.
+
+Priority rule for future work:
+1. decision-making surfaces come first
+2. supply/readiness decision support comes second
+3. lifecycle wording and action clarity come third
+4. monitoring and system health remain important, but should be a supporting section rather than the main driver of the owner priority order
+
+Layout rule for the next implementation pass:
+1. keep the DTD operating model and workflow evidence exactly as the source of truth
+2. adopt a calmer section shell with stable left-side navigation
+3. give each section one dominant work surface
+4. use compact summary strips rather than competing card walls
+5. keep support panels below or beside the main work instead of competing above it
+6. do not import LeaseMate request/cart workflow language or business logic into DTD
 
 ---
 
@@ -124,6 +147,7 @@ Purpose:
 1. answer the website status first
 2. show the highest-priority review items
 3. show a small number of plain-language summary blocks
+4. keep the first read compact and decisive rather than report-like
 
 The owner should understand:
 
@@ -142,6 +166,7 @@ Purpose:
 1. show what needs review in a single place
 2. group work by readable lifecycle
 3. make the selected item explain itself
+4. let the queue remain the dominant work surface for the section
 
 Queue groups:
 
@@ -179,6 +204,7 @@ Purpose:
 
 1. make trainer-side truth readable in one place
 2. prevent hidden backend-only supply from surprising the owner
+3. support proceed/hold judgment before deep table inspection
 
 Each row should show:
 
@@ -231,6 +257,8 @@ Purpose:
 
 1. show whether the autonomous parts of the website are healthy
 2. keep runtime visibility readable for a non-technical owner
+3. support launch-trust monitoring without polluting the main decision-reading surface
+4. stay visually quieter than Overview, Work Queue, and Trainer Supply
 
 Should show:
 
@@ -417,6 +445,8 @@ The console currently depends on these read-only payload areas from `/api/oversi
 4. `ops_cases`
 5. existing `ops_investigation` sections
 6. existing `audit_recent`
+7. `ops_supply_geography`
+8. `ops_supply_trends`
 
 This contract should be extended carefully, not replaced casually.
 
@@ -430,8 +460,6 @@ These are known and should not be mistaken for accidental omissions:
 2. trainer inventory is present, but future filtering and column refinement may still improve it
 3. the queue now supports persisted Layer 1 review state, but it is not a full multi-user case-management product
 4. Owner Override and Technical-Owner controls remain intentionally out of scope
-5. geography coverage visibility is still thinner than ideal for end-of-window supply decisions
-6. trainer acquisition and readiness visibility is still stronger as current counts than as a historical trend view
 
 These are future tasks, not reasons to change the overall console direction.
 
@@ -500,12 +528,29 @@ Only after:
 2. trust/governance boundaries are explicit
 3. auditability is complete
 
-### Thin evidence additions still needed
+### Thin evidence additions completed
 
-These are clarity/evidence additions, not control-scope changes:
+These clarity/evidence additions are now implemented:
 
-1. add supply-by-geography visibility that is readable enough for phase decisions
-2. add trainer acquisition and intro-readiness trend visibility that shows trajectory, not just current totals
+1. supply-by-geography visibility is now exposed in overview and trainer-supply decision surfaces
+2. trainer acquisition and intro-readiness trend visibility is now exposed in overview and trainer-supply decision surfaces
+
+### Active remaining priority order
+
+1. preserve the completed decision-first reading order and trust boundary
+2. use the current console to support the deferred actual-domain activation slice
+3. verify that provider-coupled activation checks do not break the current console truth
+4. keep deferred high-power Ops controls out of scope until final launch approval exists
+
+### Daily-use authority
+
+The product/UI shape in this file is not the same as the owner’s operating
+method.
+
+For day-to-day operation, the owner should follow:
+1. `docs/governance/OPS_DAILY_OPERATING_MANUAL.md` for section order, reading order, and decision use
+2. this file for the intended `/ops` surface and section semantics
+3. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md` for escalation boundaries
 
 ---
 

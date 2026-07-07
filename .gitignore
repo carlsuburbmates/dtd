@@ -82,5 +82,10 @@ android-sdk/
 .emergent/
 
 # Codex local skill artifacts (machine-local; not part of app runtime)
+.codex/
 .agents/
 skills-lock.json
+
+# Local review/test artifacts
+frontend/test-results/
+playwright-report/
