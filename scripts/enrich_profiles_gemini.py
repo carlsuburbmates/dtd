@@ -31,11 +31,12 @@ with open(Path(__file__).parent.parent / "backend/.env") as f:
             k, _, v = line.partition("=")
             os.environ.setdefault(k.strip(), v.strip())
 
-import google.generativeai as genai
+from google import genai
 from motor.motor_asyncio import AsyncIOMotorClient
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-1.5-flash")
+gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+client_ai = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
+model_name = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
 MONGO_URL = os.environ["MONGO_URL"]
 AU_PHONE_RE = re.compile(
@@ -92,9 +93,14 @@ async def gemini_extract(website_text: str) -> dict:
     """Call Gemini to extract business facts from website text."""
     if website_text.startswith("FETCH_ERROR"):
         return {"_error": website_text}
+    if not client_ai:
+        return {"_error": "GEMINI_API_KEY not configured"}
     try:
         prompt = ENRICHMENT_PROMPT.format(content=website_text)
-        resp = model.generate_content(prompt)
+        resp = client_ai.models.generate_content(
+            model=model_name,
+            contents=prompt,
+        )
         raw = resp.text.strip()
         # Strip markdown code fences if present
         raw = re.sub(r"^```json\s*", "", raw)
@@ -179,9 +185,9 @@ async def main():
         if updates:
             updates["enrichment_evidence"] = evidence
             updates["enriched_at"] = datetime.now(timezone.utc).isoformat()
-            updates["enrichment_model"] = "gemini-1.5-flash"
+            updates["enrichment_model"] = model_name
             await db.trainers.update_one({"id": tid}, {"$set": updates})
-            print(f"  📝 Updated {len(updates)-3} fields in Atlas")
+            print(f"  📝 Updated {len(updates)-3} fields in database")
             results.append({"id": tid, "name": name, "status": "enriched", "updates": list(updates.keys())})
         else:
             print(f"  ⏸  No enrichable fields found — profile held as-is")
@@ -193,7 +199,7 @@ async def main():
     log = {
         "run_id": f"enrichment-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}",
         "run_at": datetime.now(timezone.utc).isoformat(),
-        "model": "gemini-1.5-flash",
+        "model": model_name,
         "targets": len(targets),
         "results": results,
     }
@@ -208,7 +214,7 @@ async def main():
     print(f"\n=== SUMMARY ===")
     print(f"Enriched: {enriched} | No data found: {no_data} | Errors: {failed}")
 
-    await client.close()
+    client.close()
 
 
 if __name__ == "__main__":

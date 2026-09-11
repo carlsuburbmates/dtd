@@ -1,0 +1,291 @@
+{
+  "run_id": "enrichment-20260911T111044",
+  "run_at": "2026-09-11T11:10:44.925553+00:00",
+  "model": "gemini-3.6-flash",
+  "targets": 31,
+  "results": [
+    {
+      "id": "cccb2ceb-a316-4c0d-9b38-49cea0668ad9",
+      "name": "Bark With Buster",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "3e625589-bbda-449b-a217-fda7462ae488",
+      "name": "Dale For Dogs",
+      "status": "fetch_failed",
+      "error": "FETCH_ERROR: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "d71b292b-81df-4586-9f1e-ea0c02de8b06",
+      "name": "Direct K9 Services",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "19cb81bc-f1d7-4556-b7cf-aa0bd2bf297f",
+      "name": "Pupagander",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "4461b72e-6f48-4929-908a-5fa2dab7a10f",
+      "name": "Homestead Boarding Kennels",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "3bdcfb77-dc3c-4efc-8b74-2660290267aa",
+      "name": "Vern Ryan's Pet Resort",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "f5b45484-282c-40ec-8cfa-6d6c74ed82ae",
+      "name": "Laika Pet Training",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "2edfb2e6-6e7b-45a7-8200-b92b169ae2d4",
+      "name": "Barking Mad Dog Training",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "2e96e1f1-620c-46db-9b56-014f4d1bf543",
+      "name": "Trained Tails",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "e2fd2b20-fbe7-4555-bd1c-b7c6ad8f77e5:t",
+      "name": "Urban Paws Melbourne",
+      "status": "fetch_failed",
+      "error": "FETCH_ERROR: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "b79fa4cf-1a7c-497c-98f7-66f9f54e178a:t",
+      "name": "Dog Force 1",
+      "status": "fetch_failed",
+      "error": "FETCH_ERROR: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "6bbdb4e1-0df5-4418-9dae-78b491744b19:t",
+      "name": "Melbourne K9 Force",
+      "status": "fetch_failed",
+      "error": "FETCH_ERROR: <urlopen error [Errno 8] nodename nor servname provided, or not known>"
+    },
+    {
+      "id": "9e688908-8c3b-48d0-9e93-97e96dd7fa28",
+      "name": "Melbourne Dog Trainers",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "kintala",
+      "name": "Kintala",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "dogs-and-bonds",
+      "name": "Dogs and Bonds",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "pet-pursuits",
+      "name": "Pet Pursuits",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "focus-on-dog-training",
+      "name": "Focus On Dog Training",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "northside-dog-training",
+      "name": "Northside Dog Training",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "pawsitive-bonds",
+      "name": "Pawsitive Bonds",
+      "status": "no_enrichment_possible"
+    },
+    {
+      "id": "from-a-dogs-view",
+      "name": "From A Dog's View",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "mind-my-lead",
+      "name": "Mind My Lead",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "thrive-canine",
+      "name": "Thrive Canine",
+      "status": "enriched",
+      "updates": [
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "command-dog-training-school",
+      "name": "Command Dog Training School",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "urban-dogs-hq",
+      "name": "Urban Dogs HQ",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "bayside-dog-behaviour",
+      "name": "Bayside Dog Behaviour",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "whyte-whispers",
+      "name": "Whyte Whispers",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "westside-paws",
+      "name": "Westside Paws",
+      "status": "enriched",
+      "updates": [
+        "phone",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "refine-your-canine",
+      "name": "Refine Your Canine",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "kip-melbourne-dog-training",
+      "name": "Kip Melbourne Dog Training",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "hellopuppy-dog-training",
+      "name": "HelloPuppy Dog Training",
+      "status": "enriched",
+      "updates": [
+        "email",
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    },
+    {
+      "id": "the-pawsitive-canine",
+      "name": "The Pawsitive Canine",
+      "status": "enriched",
+      "updates": [
+        "bio",
+        "enrichment_evidence",
+        "enriched_at",
+        "enrichment_model"
+      ]
+    }
+  ]
+}
