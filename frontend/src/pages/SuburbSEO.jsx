@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { MapPin, ArrowRight } from "lucide-react";
-import { api, buildAttributionSearch } from "@/lib/api";
+import { api } from "@/lib/api";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 export default function SuburbSEO() {
@@ -9,32 +9,27 @@ export default function SuburbSEO() {
     const [page, setPage] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [trainers, setTrainers] = useState([]);
     const seoCampaign = `seo_${(suburb || "").toLowerCase()}`;
-    const ownerGuideSearch = buildAttributionSearch({
-        campaign: seoCampaign,
-        source: "seo",
-        utmMedium: "seo",
-        utmCampaign: seoCampaign,
-    });
-
     useEffect(() => {
         let active = true;
         setLoading(true);
         setError("");
-        api.get(`/seo/${suburb.toLowerCase()}`)
-            .then((r) => {
+        Promise.all([api.get(`/seo/${suburb.toLowerCase()}`), api.get("/trainers", { params: { suburb } })])
+            .then(([seoResponse, directoryResponse]) => {
                 if (!active) return;
-                setPage(r.data);
+                setPage(seoResponse.data);
+                setTrainers(Array.isArray(directoryResponse?.data?.trainers) ? directoryResponse.data.trainers : []);
             })
             .catch(() => {
                 if (!active) return;
                 setPage(null);
+                setTrainers([]);
                 setError("This page is temporarily unavailable.");
             })
             .finally(() => {
                 if (active) setLoading(false);
             });
-        // Prelaunch route: SEO pages point visitors to guidance and demand capture.
         return () => {
             active = false;
         };
@@ -78,17 +73,38 @@ export default function SuburbSEO() {
 
                 <div className="mt-10">
                     <Link
-                        to={`/how-it-works${ownerGuideSearch}&suburb=${encodeURIComponent(page.suburb)}#owner-guide-waitlist`}
+                        to={`/trainers?suburb=${encodeURIComponent(page.suburb)}`}
                         className="btn-accent"
                         data-testid="seo-cta-match"
                     >
-                        Start {page.suburb}&apos;s guide
+                        Browse {page.suburb} trainers
                         <ArrowRight className="h-4 w-4" />
                     </Link>
                     <p className="mt-3 text-sm text-[#4A615A]">
-                        The waitlist step sits inside The First Leash while the directory continues to grow.
+                        You can also use guided matching from the homepage for up to three tailored results.
                     </p>
                 </div>
+
+                <section className="mt-14" aria-live="polite" data-testid="suburb-directory-results">
+                    <div className="small-caps">Local directory</div>
+                    <h2 className="editorial-h2 text-3xl text-[#1A3A32] mt-3">Trainers serving {page.suburb}</h2>
+                    {trainers.length ? (
+                        <div className="mt-5 grid gap-5 md:grid-cols-2">
+                            {trainers.slice(0, 6).map((trainer) => (
+                                <article key={trainer.id} className="card-public bg-white p-5">
+                                    <h3 className="font-serif text-2xl text-[#1A3A32]">{trainer.name}</h3>
+                                    <p className="mt-2 text-sm text-[#4A615A]">{(trainer.specialties || trainer.services || []).slice(0, 3).join(" · ") || "Dog training services"}</p>
+                                    <Link to={`/t/${trainer.slug || trainer.id}`} className="btn-primary mt-5" data-testid={`suburb-open-${trainer.id}`}>View profile <ArrowRight className="h-4 w-4" /></Link>
+                                </article>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="card-public p-6 mt-5" data-testid="suburb-directory-empty">
+                            <p className="text-[#4A615A]">No exact local profiles are available yet. Browse nearby and Melbourne-wide trainers instead.</p>
+                            <Link to="/trainers" className="btn-ghost mt-4">Browse all trainers</Link>
+                        </div>
+                    )}
+                </section>
 
                 {(copy.sections || []).map((s, i) => (
                     <section key={i} className="mt-14 max-w-2xl">

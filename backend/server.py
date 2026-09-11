@@ -1,15 +1,12 @@
-"""Dog Trainers Directory — pay-on-outcome dog-training match engine.
+"""Dog Trainers Directory — Greater Melbourne dog-training discovery and matching platform.
 
 Design intent:
-  - The product is the match, not the directory. There is no browse view.
-  - Visibility is earned only through outcome signals (billed intros + tracked outcomes)
-    via a Bayesian outcome score recomputed every minute by services.engine.
-  - There are no manual approvals. Submissions auto-publish when score ≥ 0.60
-    (≥0.85 is marked verified) and auto-hold when < 0.60.
-  - Launch monetisation is intro-first: per-intro fee only.
-    Conversions are tracked signals by default (bill mode is feature-flagged).
+  - Open directory discovery and diagnostic matching for dog owners.
+  - Digital storefronts, direct owner enquiries, and optional flat SaaS subscriptions
+    (Pro $19/mo, Suburb Featured Sponsor $39/mo, Melbourne-Wide Sponsor $199/mo) for trainers.
+  - Value precedes paid upgrades: zero per-intro fees, zero lead fees, and zero commissions.
   - The oversight surface is visibility-first and Normal Ops by default.
-    It allows only bounded Layer 1 review-state persistence; it does not
+    It allows bounded Layer 1 review-state persistence; it does not
     mutate live policy, provider state, runtime, or direct data on a human's
     behalf.
 
@@ -28,27 +25,33 @@ import hmac
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode, urlparse
 
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request, Query
 from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pymongo.errors import DuplicateKeyError
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
+from services import claim_engine
 from services import education_catalog
 from services import engine as autonomy
 from services import event_contract
+from services import follow_up_tokens
 from services import fraud as fraud_service
 from services import notifications as notifications_service
 from services import runtime_control
 from services import stripe_billing
+from services import suburb_inventory
+from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
 
 try:
@@ -59,9 +62,18 @@ except Exception:  # noqa: BLE001
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-mongo_url = os.environ["MONGO_URL"]
-mongo_client = AsyncIOMotorClient(mongo_url)
-db = mongo_client[os.environ["DB_NAME"]]
+mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+mongo_timeout_ms = int(os.environ.get("MONGO_TIMEOUT_MS", "5000"))
+mongo_max_pool = int(os.environ.get("MONGO_MAX_POOL_SIZE", "15"))
+mongo_min_pool = int(os.environ.get("MONGO_MIN_POOL_SIZE", "1"))
+mongo_client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=mongo_timeout_ms,
+    maxPoolSize=mongo_max_pool,
+    minPoolSize=mongo_min_pool,
+)
+db_name = os.environ.get("DB_NAME", "dtd")
+db = mongo_client[db_name]
 
 app = FastAPI(title="Dog Trainers Directory Match Engine")
 api = APIRouter(prefix="/api")
@@ -79,29 +91,31 @@ ACTIVE_REGIONS = [r.strip() for r in os.environ.get("ACTIVE_REGIONS", ACTIVE_REG
 ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
 BILLABILITY_POLICY = (os.environ.get("BILLABILITY_POLICY") or "allow").strip().lower()
 CONTACT_READY_POLICY = (os.environ.get("CONTACT_READY_POLICY") or "allow").strip().lower()
-PUBLIC_MATCHING_ENABLED = (os.environ.get("PUBLIC_MATCHING_ENABLED") or "false").strip().lower() in TRUTHY_ENV_VALUES
 
-PUBLIC_MONETIZATION_COPY_MODE = (os.environ.get("PUBLIC_MONETIZATION_COPY_MODE") or "legacy_intro_fee").strip()
-if PUBLIC_MONETIZATION_COPY_MODE not in {"legacy_intro_fee", "founding_profile_prelaunch"}:
-    PUBLIC_MONETIZATION_COPY_MODE = "legacy_intro_fee"
+PUBLIC_MONETIZATION_COPY_MODE = (os.environ.get("PUBLIC_MONETIZATION_COPY_MODE") or "flat_subscription").strip()
+if PUBLIC_MONETIZATION_COPY_MODE not in {"flat_subscription", "founding_profile_prelaunch", "legacy_intro_fee"}:
+    PUBLIC_MONETIZATION_COPY_MODE = "flat_subscription"
 
-PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "0").strip().lower() in TRUTHY_ENV_VALUES
+PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "1").strip().lower() in TRUTHY_ENV_VALUES
 PUBLIC_SHOW_FOUNDING_PROFILE_COPY = (os.environ.get("PUBLIC_SHOW_FOUNDING_PROFILE_COPY") or "0").strip().lower() in TRUTHY_ENV_VALUES
 
-CLAIM_STATE_MODEL_ENABLED = (os.environ.get("CLAIM_STATE_MODEL_ENABLED") or "0").strip().lower() in TRUTHY_ENV_VALUES
-_claim_state_current_env = (os.environ.get("CLAIM_STATE_CURRENT") or "STATE_0").strip().upper()
-CLAIM_STATE_CURRENT = _claim_state_current_env if _claim_state_current_env in {"STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"} else "STATE_0"
-CLAIM_ENFORCEMENT_MODE = (os.environ.get("CLAIM_ENFORCEMENT_MODE") or "report_only").strip().lower()
-if CLAIM_ENFORCEMENT_MODE not in {"report_only", "block_invalid"}:
-    CLAIM_ENFORCEMENT_MODE = "report_only"
-CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = ((os.environ.get("CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2") or "1").strip().lower() in TRUTHY_ENV_VALUES)
-_public_launch_phase_env = (os.environ.get("PUBLIC_LAUNCH_PHASE") or "supply_first").strip().lower()
+# Decommissioned marketing-claim gates (Task P1-A)
+CLAIM_STATE_MODEL_ENABLED = False
+CLAIM_STATE_CURRENT = "STATE_4"
+CLAIM_ENFORCEMENT_MODE = "disabled"
+CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 = False
+_public_launch_phase_env = (os.environ.get("PUBLIC_LAUNCH_PHASE") or "live_matching").strip().lower()
 PUBLIC_LAUNCH_PHASE = (
     _public_launch_phase_env
     if _public_launch_phase_env in {"supply_first", "owner_waitlist", "live_matching", "growth"}
-    else "supply_first"
+    else "live_matching"
 )
 TRAINER_ACTION_TOKEN_TTL_S = int((os.environ.get("TRAINER_ACTION_TOKEN_TTL_S") or "1209600").strip() or "1209600")
+TRAINER_CLAIM_OTP_TTL_S = int((os.environ.get("TRAINER_CLAIM_OTP_TTL_S") or "900").strip() or "900")
+TRAINER_CLAIM_OTP_MAX_ATTEMPTS = int((os.environ.get("TRAINER_CLAIM_OTP_MAX_ATTEMPTS") or "5").strip() or "5")
+TRAINER_CLAIM_SESSION_TTL_S = int((os.environ.get("TRAINER_CLAIM_SESSION_TTL_S") or "86400").strip() or "86400")
+TRAINER_CLAIM_RESEND_COOLDOWN_S = int((os.environ.get("TRAINER_CLAIM_RESEND_COOLDOWN_S") or "60").strip() or "60")
+FOLLOW_UP_LINK_TTL_S = follow_up_tokens.follow_up_token_ttl_s()
 EDUCATION_MAGIC_LINK_TTL_S = int((os.environ.get("EDUCATION_MAGIC_LINK_TTL_S") or "1800").strip() or "1800")
 EDUCATION_SESSION_TTL_S = int((os.environ.get("EDUCATION_SESSION_TTL_S") or "2592000").strip() or "2592000")
 OVERSIGHT_AUTH_MAX_ATTEMPTS = int((os.environ.get("OVERSIGHT_AUTH_MAX_ATTEMPTS") or "10").strip() or "10")
@@ -138,6 +152,13 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_iso(value: str) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
 def new_id() -> str:
     return str(uuid.uuid4())
 
@@ -163,15 +184,6 @@ def _scrub(doc: Dict[str, Any]) -> Dict[str, Any]:
     return safe if isinstance(safe, dict) else {}
 
 
-def _require_public_matching(path_label: str) -> None:
-    if PUBLIC_MATCHING_ENABLED:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail=f"{path_label} is unavailable during education-first prelaunch.",
-    )
-
-
 async def _audit(action: str, target: str, before: Any = None, after: Any = None, actor: str = "system") -> None:
     try:
         await db.audit_log.insert_one(
@@ -187,6 +199,59 @@ async def _audit(action: str, target: str, before: Any = None, after: Any = None
         )
     except Exception:  # noqa: BLE001
         logger.exception("audit write failed action=%s target=%s actor=%s", action, target, actor)
+
+
+async def _resolve_follow_up_intro(token: str) -> Dict[str, Any]:
+    raw = (token or "").strip()
+    if "." in raw:
+        try:
+            payload = follow_up_tokens.verify_follow_up_token(raw)
+        except follow_up_tokens.FollowUpTokenExpired as exc:
+            raise HTTPException(status_code=410, detail="Follow-up link expired.") from exc
+        except follow_up_tokens.FollowUpTokenInvalid as exc:
+            raise HTTPException(status_code=404, detail="Follow-up link invalid.") from exc
+
+        intro = await db.intros.find_one({"id": str(payload.get("intro_id") or "")}, {"_id": 0})
+        if not intro:
+            raise HTTPException(status_code=404, detail="Follow-up link invalid.")
+        intro["follow_up_expires_at"] = datetime.fromtimestamp(
+            int(payload["exp"]), tz=timezone.utc
+        ).isoformat()
+        intro["follow_up_token_mode"] = "signed"
+        return intro
+
+    intro = await db.intros.find_one({"id": raw}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Follow-up link invalid.")
+
+    legacy_support_until = follow_up_tokens.legacy_intro_id_support_until()
+    if legacy_support_until is not None and datetime.now(timezone.utc) >= legacy_support_until:
+        raise HTTPException(
+            status_code=410,
+            detail="Follow-up link expired. Please use the latest follow-up email or contact support.",
+        )
+
+    reference_at = str(intro.get("follow_up_sent_at") or "")
+    if not reference_at:
+        outreach_coll = getattr(db, "outreach_events", None)
+        if outreach_coll is not None:
+            outreach = await outreach_coll.find_one(
+                {"intro_id": intro["id"], "kind": "t7_hire_check"},
+                {"_id": 0, "created_at": 1},
+            ) or {}
+            reference_at = str(outreach.get("created_at") or "")
+    if not reference_at:
+        reference_at = str(intro.get("created_at") or "")
+
+    reference_dt = _parse_iso(reference_at)
+    if reference_dt is not None:
+        expires_at = reference_dt + timedelta(seconds=max(60, FOLLOW_UP_LINK_TTL_S))
+        if expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Follow-up link expired.")
+        intro["follow_up_expires_at"] = expires_at.isoformat()
+    intro["follow_up_token_mode"] = "legacy_intro_id"
+
+    return intro
 
 
 def _client_ip(request: Request) -> str:
@@ -274,9 +339,9 @@ class InstantMatchIn(BaseModel):
 class IntroIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     trainer_id: str
-    description: str
-    user_email: Optional[EmailStr] = None
-    user_name: Optional[str] = None
+    description: str = Field(min_length=3, max_length=2000)
+    user_email: EmailStr
+    user_name: str = Field(min_length=1, max_length=120)
     user_phone: Optional[str] = None
     suburb: Optional[str] = None
     match_id: Optional[str] = None
@@ -329,10 +394,37 @@ class SubmissionIn(BaseModel):
     bio: Optional[str] = ""
     image_url: Optional[str] = ""
     source_evidence_url: Optional[str] = ""
+    tier: Optional[str] = ""
+    claim_status: Optional[str] = ""
+    abn: Optional[str] = ""
+    entity_name: Optional[str] = ""
+    trading_name: Optional[str] = ""
+    business_type: Optional[str] = ""
+    abn_status: Optional[str] = ""
+    abn_verified: Optional[bool] = False
+    training_philosophy: Optional[str] = ""
+    specialties: List[str] = Field(default_factory=list)
+    service_formats: List[str] = Field(default_factory=list)
+    serviced_suburbs: List[str] = Field(default_factory=list)
+    catchment_type: Optional[str] = ""
+    booking_url: Optional[str] = ""
+    gallery_images: List[str] = Field(default_factory=list)
+    sponsored_suburbs: List[str] = Field(default_factory=list)
+    review_summary: Optional[str] = ""
     submitter_email: Optional[EmailStr] = None
     consent_public_listing: bool = False
     consent_information_accuracy: bool = False
     consent_intro_billing_terms: bool = False
+
+    @field_validator("website", "booking_url", "image_url", "source_evidence_url")
+    @classmethod
+    def validate_external_url(cls, value: Optional[str]) -> str:
+        return _safe_external_url(value, field_name="URL")
+
+    @field_validator("gallery_images")
+    @classmethod
+    def validate_gallery_urls(cls, values: List[str]) -> List[str]:
+        return [_safe_external_url(value, field_name="Gallery URL") for value in values]
 
 
 class OwnerWaitlistJoinIn(BaseModel):
@@ -340,6 +432,16 @@ class OwnerWaitlistJoinIn(BaseModel):
     email: EmailStr
     suburb: str = Field(min_length=1)
     consent_owner_waitlist: bool = False
+    campaign: Optional[str] = ""
+    source: Optional[str] = ""
+    utm_medium: Optional[str] = ""
+    utm_campaign: Optional[str] = ""
+
+
+class FirstLeashLeadIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email: EmailStr
+    user_type: str = Field(min_length=1)
     campaign: Optional[str] = ""
     source: Optional[str] = ""
     utm_medium: Optional[str] = ""
@@ -415,11 +517,49 @@ class TrainerBillingActionIn(BaseModel):
     trainer_action_token: Optional[str] = None
 
 
+class TrainerCheckoutIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str = Field(min_length=1)
+    tier: str = Field(min_length=1)
+    suburb: Optional[str] = ""
+    interval: str = "month"
+    consent_subscription_billing_terms: bool = False
+    trainer_claim_session: Optional[str] = ""
+    trainer_action_token: Optional[str] = ""
+
+
+class TrainerPortalIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str = Field(min_length=1)
+    trainer_claim_session: Optional[str] = ""
+    trainer_action_token: Optional[str] = ""
+
+
+class OpsSubscriptionRefundIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str = Field(min_length=1)
+    stripe_subscription_id: str = Field(min_length=1)
+    payment_intent_id: str = Field(min_length=1)
+    reason: str = Field(min_length=3, max_length=240)
+
+
 class TrainerReactivateIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     trainer_id: Optional[str] = None
     submission_id: Optional[str] = None
     trainer_action_token: Optional[str] = None
+
+
+class TrainerClaimStartIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email: EmailStr
+    method: str = "email"
+
+
+class TrainerClaimVerifyIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    claim_event_id: str = Field(min_length=1)
+    otp: str = Field(min_length=6, max_length=6)
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +589,7 @@ def _has_contact_channel(trainer: Dict[str, Any]) -> bool:
 
 
 def _is_billable_ready(trainer: Dict[str, Any]) -> bool:
-    return (trainer.get("billing_profile_status") or "").strip().lower() == "ready"
+    return True
 
 
 def _region_allowed(region: Optional[str]) -> bool:
@@ -462,13 +602,6 @@ def _require_region(region: Optional[str]) -> None:
     if not _region_allowed(region):
         allowed = ", ".join(ACTIVE_REGIONS)
         raise HTTPException(status_code=403, detail=f"Region not in active scope. Active region(s): {allowed}.")
-
-
-def _normalize_claim_state(raw_state: Optional[str]) -> str:
-    token = (raw_state or CLAIM_STATE_CURRENT).strip().upper()
-    if token in {"STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"}:
-        return token
-    return CLAIM_STATE_CURRENT
 
 
 def _normalize_suburb_key(raw_suburb: Optional[str]) -> str:
@@ -545,6 +678,93 @@ def _verify_trainer_action_token(
         raise HTTPException(status_code=403, detail="Trainer action token does not match trainer context.")
     if submission_id and token_submission_id and token_submission_id != submission_id:
         raise HTTPException(status_code=403, detail="Trainer action token does not match submission context.")
+
+
+def _issue_trainer_claim_session(*, trainer_id: str, claim_event_id: str) -> Dict[str, Any]:
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(60, TRAINER_CLAIM_SESSION_TTL_S))
+    payload = {
+        "kind": "trainer_claim_session",
+        "trainer_id": trainer_id,
+        "claim_event_id": claim_event_id,
+        "exp": int(expires_at.timestamp()),
+    }
+    payload_blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    signature = hmac.new(_trainer_action_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    return {"token": f"{_token_b64(payload_blob)}.{_token_b64(signature)}", "expires_at": expires_at.isoformat()}
+
+
+def _verify_trainer_claim_session(token: str, *, trainer_id: str) -> Dict[str, Any]:
+    """Verify the narrow post-claim session used for trainer self-service actions."""
+    raw = (token or "").strip()
+    if "." not in raw:
+        raise HTTPException(status_code=401, detail="Missing or invalid trainer claim session.")
+    payload_part, sig_part = raw.split(".", 1)
+    try:
+        payload_blob = _token_unb64(payload_part)
+        provided_sig = _token_unb64(sig_part)
+        payload = json.loads(payload_blob.decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid trainer claim session encoding.") from exc
+    expected_sig = hmac.new(_trainer_action_secret().encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    if not hmac.compare_digest(provided_sig, expected_sig):
+        raise HTTPException(status_code=401, detail="Invalid trainer claim session signature.")
+    if str(payload.get("kind") or "") != "trainer_claim_session":
+        raise HTTPException(status_code=401, detail="Invalid trainer claim session kind.")
+    if str(payload.get("trainer_id") or "") != trainer_id:
+        raise HTTPException(status_code=403, detail="Trainer claim session does not match trainer context.")
+    if int(payload.get("exp") or 0) <= int(datetime.now(timezone.utc).timestamp()):
+        raise HTTPException(status_code=401, detail="Trainer claim session expired.")
+    if not str(payload.get("claim_event_id") or ""):
+        raise HTTPException(status_code=401, detail="Trainer claim session is incomplete.")
+    return payload
+
+
+async def _abn_profile_fields(raw_abn: Optional[str]) -> Dict[str, Any]:
+    abn = (raw_abn or "").strip()
+    if not abn:
+        return {
+            "abn": "",
+            "entity_name": "",
+            "trading_name": "",
+            "business_type": "",
+            "abn_status": "not_provided",
+            "abn_verified": False,
+        }
+    result = await AbrClient(db).lookup(abn)
+    if not result.get("ok"):
+        return {
+            "abn": str(result.get("abn") or abn),
+            "entity_name": "",
+            "trading_name": "",
+            "business_type": "",
+            "abn_status": str(result.get("state") or "abr_unavailable"),
+            "abn_verified": False,
+            "abn_verification_reason": str(result.get("reason") or "ABN could not be verified."),
+            "abn_checked_at": now_iso(),
+        }
+    record = result.get("data") or {}
+    entity_name = str(record.get("entity_name") or "").strip()
+    business_names = record.get("business_names") or []
+    trading_name = str(record.get("trading_name") or (business_names[0] if business_names else entity_name)).strip()
+    business_type = str(record.get("business_type") or record.get("entity_type_name") or "").strip()
+    return {
+        "abn": str(record.get("abn") or abn),
+        "entity_name": entity_name,
+        "trading_name": trading_name,
+        "business_type": business_type,
+        "abn_status": str(record.get("abn_status") or result.get("state") or "unknown").lower(),
+        "abn_verified": bool(record.get("is_active")),
+        "abn_verified_at": now_iso() if record.get("is_active") else "",
+        "abn_verification_reason": "active" if record.get("is_active") else "inactive",
+        "abn_checked_at": now_iso(),
+        "abn_badge_payload": {
+            "abn": record.get("abn_formatted") or record.get("abn") or abn,
+            "status": record.get("abn_status") or "Unknown",
+            "entity_name": entity_name,
+            "trading_name": trading_name,
+            "business_type": business_type,
+        },
+    }
 
 
 def _education_auth_secret() -> str:
@@ -698,8 +918,8 @@ def _education_launch_posture(phase_state: Dict[str, Any]) -> Dict[str, str]:
     phase = str(phase_state.get("current_phase") or "supply_first")
     public_emphasis = str(phase_state.get("public_emphasis") or "waitlist_first")
     owner_waitlist_mode = str(phase_state.get("owner_waitlist_mode") or "passive_only")
-    live_matching = bool(phase_state.get("public_matching_enabled"))
-    if live_matching or phase == "live_matching":
+    live_matching = bool(phase_state.get("public_matching_enabled", True))
+    if phase == "live_matching":
         return {
             "phase": "live_matching",
             "eyebrow": "Launch posture",
@@ -976,17 +1196,10 @@ async def _kpi_prelaunch_summary() -> Dict[str, Any]:
 
 def _activation_state_for_submission(*, submission_status: str, billing_profile_status: str) -> str:
     status = (submission_status or "").strip().lower()
-    billing = (billing_profile_status or "").strip().lower()
     if status == "held":
         return "held_for_review"
     if status == "pending":
         return "pending_autonomous_review"
-    if billing in {"missing_email", "profile_incomplete"}:
-        return "needs_billing_profile"
-    if billing == "consent_required":
-        return "needs_billing_consent"
-    if billing in {"stripe_unconfigured", "stripe_error"}:
-        return "billing_system_blocked"
     if status == "published":
         return "intro_ready"
     return "unknown"
@@ -1098,6 +1311,7 @@ async def _trainer_inventory_rows(limit: int = 200) -> List[Dict[str, Any]]:
             "suburb": 1,
             "published": 1,
             "verification_status": 1,
+            "claim_status": 1,
             "confidence_score": 1,
             "billing_profile_status": 1,
             "website": 1,
@@ -1124,6 +1338,7 @@ async def _trainer_inventory_rows(limit: int = 200) -> List[Dict[str, Any]]:
                 "suburb": trainer.get("suburb") or "",
                 "published": bool(trainer.get("published")),
                 "verification_status": trainer.get("verification_status") or "unknown",
+                "claim_status": trainer.get("claim_status") or "unclaimed",
                 "intro_ready": _trainer_intro_ready(trainer),
                 "confidence_score": float(trainer.get("confidence_score") or 0),
                 "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
@@ -1253,17 +1468,46 @@ async def _ops_supply_trend_summary(
 
 async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
     notifications_coll = getattr(db, "notification_events", None)
-    if notifications_coll is None:
+    outreach_coll = getattr(db, "outreach_events", None)
+    if notifications_coll is None and outreach_coll is None:
         return []
 
-    events = await notifications_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    notification_events = (
+        await notifications_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        if notifications_coll is not None
+        else []
+    )
+    outreach_events = (
+        await outreach_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        if outreach_coll is not None
+        else []
+    )
+
+    events: List[Dict[str, Any]] = [
+        {"source_kind": "notification_event", **event}
+        for event in notification_events
+    ] + [
+        {
+            "source_kind": "outreach_event",
+            "target_kind": "intro",
+            "target_id": str(event.get("intro_id") or ""),
+            "to_email": event.get("email") or "",
+            "attempt": int(event.get("attempt") or 1),
+            **event,
+        }
+        for event in outreach_events
+    ]
+    events.sort(key=lambda event: str(event.get("created_at") or ""), reverse=True)
+    events = events[:limit]
+
+    intro_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "intro" and e.get("target_id")}
     trainer_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "trainer" and e.get("target_id")}
     submission_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "submission" and e.get("target_id")}
-    intro_ids = {str(e.get("target_id") or "") for e in events if str(e.get("target_kind") or "") == "intro" and e.get("target_id")}
 
-    trainers = await db.trainers.find({"id": {"$in": sorted(trainer_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(max(1, len(trainer_ids))) if trainer_ids else []
     submissions = await db.submissions.find({"id": {"$in": sorted(submission_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(max(1, len(submission_ids))) if submission_ids else []
     intros = await db.intros.find({"id": {"$in": sorted(intro_ids)}}, {"_id": 0, "id": 1, "trainer_id": 1}).to_list(max(1, len(intro_ids))) if intro_ids else []
+    trainer_ids.update(str(row.get("trainer_id") or "") for row in intros if row.get("trainer_id"))
+    trainers = await db.trainers.find({"id": {"$in": sorted(trainer_ids)}}, {"_id": 0, "id": 1, "name": 1}).to_list(max(1, len(trainer_ids))) if trainer_ids else []
 
     trainers_by_id = {str(row.get("id") or ""): row for row in trainers}
     submissions_by_id = {str(row.get("id") or ""): row for row in submissions}
@@ -1271,6 +1515,7 @@ async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
 
     rows: List[Dict[str, Any]] = []
     for event in events:
+        source_kind = str(event.get("source_kind") or "notification_event")
         target_kind = str(event.get("target_kind") or "")
         target_id = str(event.get("target_id") or "")
         entity_label = target_id or "unknown"
@@ -1292,6 +1537,9 @@ async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
             entity_label = str(trainer.get("name") or target_id or "intro")
             workflow = "trainer intro"
             canonical_user_type = "Trainer / business submitter"
+            if source_kind == "outreach_event":
+                workflow = "t+7 follow-up"
+                canonical_user_type = "Dog owner"
 
         rows.append(
             {
@@ -1303,11 +1551,13 @@ async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
                 "status": event.get("status") or "unknown",
                 "attempt": int(event.get("attempt") or 0),
                 "http_status": int(event.get("http_status") or 0),
-                "to_email": event.get("to_email") or "",
+                "to_email": claim_engine.mask_email(str(event.get("to_email") or "")),
+                "error": str(event.get("error") or "")[:240],
                 "entity_label": entity_label,
                 "workflow": workflow,
                 "canonical_user_type": canonical_user_type,
                 "provider": event.get("provider") or "",
+                "source_kind": source_kind,
             }
         )
     return rows
@@ -1317,21 +1567,23 @@ def _build_message_case(row: Dict[str, Any]) -> Dict[str, Any]:
     status = str(row.get("status") or "unknown")
     severity = "high" if status == "failed" else "low"
     state = "detected" if status == "failed" else "notified"
+    canonical_user_type = row.get("canonical_user_type") or "Trainer / business submitter"
+    case_type = "owner_follow_up_case" if canonical_user_type == "Dog owner" else "trainer_communications_case"
     return {
         "case_id": f"message:{row.get('id')}",
-        "case_type": "trainer_communications_case",
-        "canonical_user_type": row.get("canonical_user_type") or "Trainer / business submitter",
+        "case_type": case_type,
+        "canonical_user_type": canonical_user_type,
         "workflow": row.get("workflow") or "communications",
         "entity_type": row.get("target_kind") or "message",
         "entity_id": row.get("target_id") or row.get("id"),
         "title": f"{humanize_case_token(row.get('kind') or 'message')} · {row.get('entity_label') or 'unknown'}",
-        "summary": f"Delivery status is {status}. Review message history before more contact is sent.",
+        "summary": f"Delivery status is {status}. Review message history before trusting the workflow state.",
         "severity": severity,
         "state": state,
         "owner": "",
         "detected_at": row.get("created_at"),
         "last_updated_at": row.get("created_at"),
-        "source_refs": [{"kind": "notification_event", "id": row.get("id")}],
+        "source_refs": [{"kind": row.get("source_kind") or "notification_event", "id": row.get("id")}],
         "risk_reason_codes": [f"notification_{status}"],
         "recommended_next_step": "Review message history and linked workflow.",
         "responsibility_layer": "Layer 1 — Normal Ops",
@@ -1404,20 +1656,40 @@ async def _ops_case_rows(
     discovery_summary: Dict[str, Any],
     waitlist_summary: Dict[str, Any],
     loop_statuses: Dict[str, Any],
-    billing_recovery_case_rows: List[Dict[str, Any]],
+    fraud_suppression_cases: Optional[List[Dict[str, Any]]] = None,
+    claim_cases: Optional[List[Dict[str, Any]]] = None,
+    abn_degradation_cases: Optional[List[Dict[str, Any]]] = None,
+    billing_recovery_case_rows: Optional[List[Dict[str, Any]]] = None,
+    subscription_billing_case_rows: Optional[List[Dict[str, Any]]] = None,
     reactivation_case_rows: List[Dict[str, Any]],
     source_ingestion_state_rows: List[Dict[str, Any]],
     message_log: List[Dict[str, Any]],
+    ai_degradation_cases: Optional[List[Dict[str, Any]]] = None,
+    sponsor_inventory_cases: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
-    held_submissions = await db.submissions.find(
+    submissions_coll = getattr(db, "submissions", None)
+    held_submissions = await submissions_coll.find(
         {"status": {"$in": ["pending", "held"]}},
-        {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1},
-    ).sort("created_at", -1).limit(50).to_list(50)
+        {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1, "confidence_score": 1, "verification_model": 1, "reason": 1, "duplicate": 1},
+    ).sort("created_at", -1).limit(50).to_list(50) if submissions_coll is not None and hasattr(submissions_coll, "find") else []
     for row in held_submissions:
         status = str(row.get("status") or "pending")
         severity = "high" if status == "held" else "medium"
+        detail_rows = [
+            {"label": "Submission status", "value": status},
+            {"label": "Created", "value": row.get("created_at")},
+            {"label": "Entity", "value": row.get("id")},
+        ]
+        if row.get("confidence_score") is not None:
+            detail_rows.append({"label": "AI confidence", "value": str(row.get("confidence_score"))})
+        if row.get("verification_model"):
+            detail_rows.append({"label": "AI model", "value": str(row.get("verification_model"))})
+        if row.get("duplicate"):
+            detail_rows.append({"label": "Duplicate", "value": "true"})
+        if row.get("reason"):
+            detail_rows.append({"label": "Hold reason", "value": str(row.get("reason"))})
         cases.append(
             {
                 "case_id": f"submission:{row.get('id')}",
@@ -1427,21 +1699,17 @@ async def _ops_case_rows(
                 "entity_type": "submission",
                 "entity_id": row.get("id"),
                 "title": f"{row.get('name') or 'Unnamed trainer'} · {humanize_case_token(status)}",
-                "summary": "Submission needs review in the trainer workflow.",
+                "summary": str(row.get("reason") or "Submission needs review in the trainer workflow."),
                 "severity": severity,
                 "state": "detected",
                 "owner": "",
                 "detected_at": row.get("created_at"),
                 "last_updated_at": row.get("created_at"),
                 "source_refs": [{"kind": "submission", "id": row.get("id")}],
-                "risk_reason_codes": [f"submission_{status}"],
+                "risk_reason_codes": [f"submission_{status}"] + ([str(row.get("reason"))] if row.get("reason") else []),
                 "recommended_next_step": "Review submission status and linked trainer readiness.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
-                "detail_rows": [
-                    {"label": "Submission status", "value": status},
-                    {"label": "Created", "value": row.get("created_at")},
-                    {"label": "Entity", "value": row.get("id")},
-                ],
+                "detail_rows": detail_rows,
                 "linked_paths": [],
                 "audit_refs": [],
             }
@@ -1507,6 +1775,35 @@ async def _ops_case_rows(
             }
         )
 
+    if int(discovery_summary.get("suppressed") or 0) > 0:
+        cases.append(
+            {
+                "case_id": "discovery:suppressed",
+                "case_type": "discovery_suppression_case",
+                "canonical_user_type": "External contributor / ecosystem actor",
+                "workflow": "lawful source ingestion",
+                "entity_type": "discovery_queue",
+                "entity_id": "suppressed",
+                "title": "Delisted identities blocked from re-ingestion",
+                "summary": f"{int(discovery_summary.get('suppressed') or 0)} discovery candidates matched the delisting suppression register.",
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "discovery_summary", "id": "suppressed"}],
+                "risk_reason_codes": ["discovery_delisted_identity_suppressed"],
+                "recommended_next_step": "Confirm suppression is expected; do not re-publish without technical-owner review.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Suppressed discovery items", "value": int(discovery_summary.get("suppressed") or 0)},
+                    {"label": "Duplicates", "value": int(discovery_summary.get("duplicate") or 0)},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
     for key, status_meta in loop_statuses.items():
         loop_status = str(status_meta.get("status") or "ok")
         if loop_status == "ok":
@@ -1542,43 +1839,212 @@ async def _ops_case_rows(
             }
         )
 
-    for row in billing_recovery_case_rows:
-        retry_state = str(row.get("billing_retry_state") or "needs_remediation")
-        state = "monitoring" if retry_state == "retry_sent" else "detected"
-        severity = "high" if retry_state in {"retry_exhausted", "retry_failed"} else "medium"
-        trainer_id = str(row.get("trainer_id") or "")
-        trainer_token = str(row.get("trainer_action_token") or "")
+    for row in (fraud_suppression_cases or []):
+        reasons = row.get("fraud_reasons") or row.get("reasons") or ["suppressed"]
+        intro_id = str(row.get("id") or row.get("intro_id") or "")
         cases.append(
             {
-                "case_id": f"billing:{row.get('intro_id')}",
-                "case_type": "trainer_billing_case",
-                "canonical_user_type": "Trainer / business submitter",
-                "workflow": "billing remediation",
+                "case_id": f"fraud:{intro_id}",
+                "case_type": "fraud_suppression_case",
+                "canonical_user_type": "Public consumer",
+                "workflow": "fraud suppression",
                 "entity_type": "intro",
-                "entity_id": row.get("intro_id"),
-                "title": f"{row.get('trainer_name') or 'Trainer'} · {humanize_case_token(retry_state)}",
-                "summary": f"Billing state is {humanize_case_token(row.get('billing_collection_status') or 'unknown')} with {int(row.get('billing_retry_attempts') or 0)} attempts.",
-                "severity": severity,
-                "state": state,
+                "entity_id": intro_id,
+                "title": f"Intro suppressed · {', '.join(reasons)}",
+                "summary": "Introduction suppressed by anti-gaming rules to protect ranking quality.",
+                "severity": "medium",
+                "state": "detected",
                 "owner": "",
                 "detected_at": row.get("created_at"),
-                "last_updated_at": row.get("billing_last_retry_at") or row.get("created_at"),
-                "source_refs": [{"kind": "intro", "id": row.get("intro_id")}],
-                "risk_reason_codes": [f"billing_{retry_state}"],
-                "recommended_next_step": "Review billing health and use the lifecycle route if follow-up is needed.",
+                "last_updated_at": row.get("created_at"),
+                "source_refs": [{"kind": "intro", "id": intro_id}],
+                "risk_reason_codes": reasons,
+                "recommended_next_step": "Review IP and duplicate intro signals to confirm legitimate suppression.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
-                    {"label": "Billing collection status", "value": row.get("billing_collection_status") or "unknown"},
-                    {"label": "Billing profile status", "value": row.get("billing_profile_status") or "unknown"},
-                    {"label": "Retry attempts", "value": int(row.get("billing_retry_attempts") or 0)},
-                    {"label": "Intro fee", "value": int(row.get("intro_fee_cents") or 0)},
+                    {"label": "Delivery status", "value": row.get("delivery_status") or "suppressed"},
+                    {"label": "Reasons", "value": ", ".join(reasons)},
+                    {"label": "Trainer", "value": row.get("trainer_name") or row.get("trainer_id") or "unknown"},
                 ],
-                "linked_paths": [
-                    {
-                        "label": "Open billing view",
-                        "path": f"/trainer/billing?trainer_id={trainer_id}&trainer_action_token={trainer_token}",
-                    }
-                ] if trainer_id and trainer_token else [],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in (claim_cases or []):
+        status = str(row.get("status") or "unknown")
+        reason = str(row.get("reason") or row.get("delivery_error") or "")
+        if status in {"claim_disputed", "locked", "delivery_failed"}:
+            severity = "high"
+        elif status in {"pending_verification"}:
+            severity = "low"
+        else:
+            severity = "medium"
+        profile_ownership_state = str(row.get("profile_claim_status") or ("claim_disputed" if status == "claim_disputed" else ""))
+        detail_rows = [
+            {"label": "Claim status", "value": status},
+            {"label": "Delivery status", "value": row.get("delivery_status") or "not_applicable"},
+            {"label": "Method", "value": row.get("method") or "unknown"},
+            {"label": "Destination", "value": row.get("masked_destination") or "not_recorded"},
+            {"label": "Attempts", "value": row.get("attempts", 0)},
+        ]
+        if profile_ownership_state:
+            detail_rows.append({"label": "Profile ownership state", "value": profile_ownership_state})
+            detail_rows.append({"label": "Profile claim status", "value": profile_ownership_state})
+        cases.append(
+            {
+                "case_id": f"trainer_claim:{row.get('id')}",
+                "case_type": "trainer_claim_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "trainer profile claim",
+                "entity_type": "trainer",
+                "entity_id": row.get("trainer_id"),
+                "title": f"Trainer claim · {humanize_case_token(status)}",
+                "summary": reason or f"Trainer claim in {humanize_case_token(status)} state requires workflow review.",
+                "severity": severity,
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("updated_at") or row.get("created_at"),
+                "source_refs": [{"kind": "claim_event", "id": row.get("id")}],
+                "risk_reason_codes": [status] + ([reason] if reason else []) + ([f"profile_{profile_ownership_state}"] if profile_ownership_state else []),
+                "recommended_next_step": "Review claim evidence and delivery status before changing listing ownership.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": detail_rows,
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in (abn_degradation_cases or []):
+        trainer_id = str(row.get("id") or "")
+        cases.append(
+            {
+                "case_id": f"abn_verification:{trainer_id}",
+                "case_type": "abn_verification_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "ABN verification",
+                "entity_type": "trainer",
+                "entity_id": trainer_id,
+                "title": f"ABN verification · {row.get('name') or 'Trainer'}",
+                "summary": str(row.get("abn_verification_reason") or "ABR verification is unavailable."),
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("abn_checked_at") or row.get("created_at"),
+                "source_refs": [{"kind": "trainer", "id": trainer_id}],
+                "risk_reason_codes": [str(row.get("abn_status") or "abr_unavailable")],
+                "recommended_next_step": "Check ABR service configuration or retry verification; do not present an ABN-verified badge until it succeeds.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "ABN", "value": row.get("abn") or "not_recorded"},
+                    {"label": "ABN status", "value": row.get("abn_status") or "abr_unavailable"},
+                    {"label": "Verification", "value": "not_verified"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in (ai_degradation_cases or []):
+        cases.append(row)
+
+    for row in (subscription_billing_case_rows or []):
+        status = str(row.get("status") or "needs_review")
+        trainer_id = str(row.get("trainer_id") or "")
+        reason = str(row.get("reason") or "subscription_event_needs_review")
+        cases.append(
+            {
+                "case_id": f"subscription_billing:{row.get('id')}",
+                "case_type": "subscription_billing_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "trainer subscription billing",
+                "entity_type": "stripe_event",
+                "entity_id": row.get("id"),
+                "title": "Subscription billing needs review",
+                "summary": f"{humanize_case_token(status)} · {humanize_case_token(reason)}",
+                "severity": "high" if status == "provider_unavailable" else "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("processed_at") or row.get("created_at"),
+                "source_refs": [{"kind": "stripe_event", "id": row.get("id")}],
+                "risk_reason_codes": [status, reason],
+                "recommended_next_step": "Check the Stripe event and trainer subscription state before changing access manually.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Event", "value": row.get("type") or "unknown"},
+                    {"label": "Trainer", "value": trainer_id or "unresolved"},
+                    {"label": "Plan", "value": row.get("subscription_tier") or "unknown"},
+                    {"label": "Reason", "value": reason},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in (sponsor_inventory_cases or []):
+        reason = str(row.get("reason") or row.get("event_type") or "sponsor_inventory_needs_review")
+        cases.append(
+            {
+                "case_id": f"sponsor_inventory:{row.get('id')}",
+                "case_type": "sponsor_inventory_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "sponsor inventory",
+                "entity_type": "sponsor_inventory",
+                "entity_id": row.get("reservation_id") or row.get("id"),
+                "title": "Sponsor inventory needs review",
+                "summary": humanize_case_token(reason),
+                "severity": "high" if row.get("status") == "failed" else "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at"),
+                "last_updated_at": row.get("created_at"),
+                "source_refs": [{"kind": "sponsor_inventory_event", "id": row.get("id")}],
+                "risk_reason_codes": [reason],
+                "recommended_next_step": "Review the reservation and linked subscription before changing sponsor placement.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Trainer", "value": row.get("trainer_id") or "unresolved"},
+                    {"label": "Scope", "value": row.get("scope") or "unknown"},
+                    {"label": "Suburb", "value": row.get("suburb") or "not_applicable"},
+                    {"label": "Reason", "value": reason},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    for row in (billing_recovery_case_rows or []):
+        trainer_id = str(row.get("trainer_id") or "")
+        sub_status = str(row.get("subscription_status") or "unknown")
+        cases.append(
+            {
+                "case_id": f"trainer_subscription:{trainer_id}",
+                "case_type": "subscription_billing_case",
+                "canonical_user_type": "Trainer / business submitter",
+                "workflow": "trainer subscription billing",
+                "entity_type": "trainer",
+                "entity_id": trainer_id,
+                "title": f"Subscription exception · {row.get('trainer_name') or 'Trainer'}",
+                "summary": f"Subscription status {sub_status} requires attention.",
+                "severity": "high" if sub_status in {"past_due", "unpaid"} else "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": row.get("created_at") or now_iso(),
+                "last_updated_at": row.get("created_at") or now_iso(),
+                "source_refs": [{"kind": "trainer", "id": trainer_id}],
+                "risk_reason_codes": [sub_status],
+                "recommended_next_step": "Review trainer subscription and billing status.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Trainer", "value": row.get("trainer_name") or trainer_id},
+                    {"label": "Tier", "value": row.get("subscription_tier") or "core"},
+                    {"label": "Status", "value": sub_status},
+                    {"label": "Billing status", "value": row.get("subscription_billing_status") or "unknown"},
+                ],
+                "linked_paths": [f"/trainer/billing?trainer_id={trainer_id}"] if trainer_id else [],
                 "audit_refs": [],
             }
         )
@@ -1624,8 +2090,11 @@ async def _ops_case_rows(
 
     for row in source_ingestion_state_rows:
         failures = int(row.get("consecutive_failures") or 0)
-        if failures <= 0 and not row.get("suppressed_until"):
+        has_error = bool(row.get("last_error") or row.get("last_error_code"))
+        if failures <= 0 and not row.get("suppressed_until") and not has_error:
             continue
+        err_msg = str(row.get("last_error") or f"{row.get('source_url') or 'Source'} has {failures} consecutive failures.")
+        risk_code = str(row.get("last_error_code") or "source_ingestion_failures")
         cases.append(
             {
                 "case_id": f"source:{hashlib.sha1(str(row.get('source_url') or '').encode('utf-8')).hexdigest()[:12]}",
@@ -1635,19 +2104,20 @@ async def _ops_case_rows(
                 "entity_type": "source_url",
                 "entity_id": row.get("source_url"),
                 "title": "Source ingestion needs review",
-                "summary": f"{row.get('source_url') or 'Source'} has {failures} consecutive failures.",
+                "summary": err_msg,
                 "severity": "medium",
                 "state": "detected",
                 "owner": "",
                 "detected_at": row.get("last_ok_at") or now_iso(),
                 "last_updated_at": row.get("suppressed_until") or row.get("last_ok_at") or now_iso(),
                 "source_refs": [{"kind": "source_ingestion_state", "id": row.get("source_url")}],
-                "risk_reason_codes": ["source_ingestion_failures"],
+                "risk_reason_codes": [risk_code],
                 "recommended_next_step": "Inspect source health and confirm it should remain in the pipeline.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
                     {"label": "Source URL", "value": row.get("source_url") or "unknown"},
                     {"label": "Consecutive failures", "value": failures},
+                    {"label": "Last error", "value": row.get("last_error") or "none"},
                     {"label": "Suppressed until", "value": row.get("suppressed_until") or "not_suppressed"},
                     {"label": "Last success", "value": row.get("last_ok_at") or "unknown"},
                 ],
@@ -1669,14 +2139,12 @@ async def _ops_case_rows(
 def _loop_interval_seconds() -> Dict[str, int]:
     return {
         "ranking": autonomy.RANKING_INTERVAL_S,
-        "pricing": autonomy.PRICING_INTERVAL_S,
         "verification": autonomy.VERIFICATION_INTERVAL_S,
         "discovery": autonomy.DISCOVERY_INTERVAL_S,
         "inference": autonomy.INFERENCE_INTERVAL_S,
         "health": autonomy.HEALTH_INTERVAL_S,
         "source_ingestion": autonomy.SOURCE_INGEST_INTERVAL_S,
         "outreach": autonomy.OUTREACH_INTERVAL_S,
-        "billing_recovery": autonomy.BILLING_RECOVERY_INTERVAL_S,
         "nurture": autonomy.NURTURE_INTERVAL_S,
         "reactivation_route": autonomy.REACTIVATION_ROUTE_INTERVAL_S,
     }
@@ -1785,13 +2253,14 @@ def _sort_case_priority(case: Dict[str, Any]) -> tuple[int, int, str]:
 
 def _claim_policy_snapshot() -> Dict[str, Any]:
     return {
-        "enabled": CLAIM_STATE_MODEL_ENABLED,
-        "state": CLAIM_STATE_CURRENT,
-        "model_enabled": CLAIM_STATE_MODEL_ENABLED,
-        "state_current": CLAIM_STATE_CURRENT,
-        "enforcement_mode": CLAIM_ENFORCEMENT_MODE,
-        "block_melbourne_wide_below_state_2": CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
-        "melbourne_wide_min_state": "STATE_2" if CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2 else "STATE_0",
+        "status": "decommissioned",
+        "enabled": False,
+        "state": "STATE_4",
+        "model_enabled": False,
+        "state_current": "STATE_4",
+        "enforcement_mode": "disabled",
+        "block_melbourne_wide_below_state_2": False,
+        "melbourne_wide_min_state": "STATE_0",
     }
 
 
@@ -1802,7 +2271,7 @@ def _phase_public_emphasis(*, phase: str, public_matching_enabled: bool) -> str:
         return "growth_prep"
     if phase == "owner_waitlist":
         return "owner_waitlist"
-    return "waitlist_first"
+    return "live_matching"
 
 
 def _default_launch_phase_state() -> Dict[str, Any]:
@@ -1810,12 +2279,9 @@ def _default_launch_phase_state() -> Dict[str, Any]:
     return {
         "key": "launch_phase_state",
         "current_phase": current_phase,
-        "matching_exposure_enabled": bool(PUBLIC_MATCHING_ENABLED),
-        "public_matching_enabled": bool(PUBLIC_MATCHING_ENABLED),
-        "public_emphasis": _phase_public_emphasis(
-            phase=current_phase,
-            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
-        ),
+        "matching_exposure_enabled": True,
+        "public_matching_enabled": True,
+        "public_emphasis": "live_matching",
         "trainer_onboarding_open": True,
         "owner_waitlist_mode": "passive_only",
         "evidence_window_mode": "30_day_prelaunch_evidence_window",
@@ -1823,8 +2289,27 @@ def _default_launch_phase_state() -> Dict[str, Any]:
         "active_regions": list(ACTIVE_REGIONS),
         "updated_at": now_iso(),
         "updated_by": "system",
-        "reason": "default_supply_first_prelaunch_lock",
+        "reason": "default_supply_first_matching_open",
     }
+
+
+async def _read_launch_phase_state() -> Dict[str, Any]:
+    system_state = getattr(db, "system_state", None)
+    default_state = _default_launch_phase_state()
+    if system_state is None:
+        return default_state
+
+    row = await system_state.find_one({"key": "launch_phase_state"}, {"_id": 0})
+    if row:
+        state = {**default_state, **row}
+        state["matching_exposure_enabled"] = True
+        state["public_matching_enabled"] = True
+        state["public_emphasis"] = "live_matching"
+        if state.get("current_phase") in {"supply_first", "owner_waitlist"} and PUBLIC_LAUNCH_PHASE == "live_matching":
+            state["current_phase"] = "live_matching"
+        return state
+
+    return default_state
 
 
 async def _get_or_create_launch_phase_state() -> Dict[str, Any]:
@@ -1836,13 +2321,18 @@ async def _get_or_create_launch_phase_state() -> Dict[str, Any]:
     row = await system_state.find_one({"key": "launch_phase_state"}, {"_id": 0})
     if row:
         state = {**default_state, **row}
-        state["matching_exposure_enabled"] = bool(PUBLIC_MATCHING_ENABLED)
-        state["public_matching_enabled"] = bool(PUBLIC_MATCHING_ENABLED)
-        state["public_emphasis"] = _phase_public_emphasis(
-            phase=str(state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
-            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
-        )
-        if state != row:
+        state["matching_exposure_enabled"] = True
+        state["public_matching_enabled"] = True
+        state["public_emphasis"] = "live_matching"
+        if state.get("current_phase") in {"supply_first", "owner_waitlist"} and PUBLIC_LAUNCH_PHASE == "live_matching":
+            state["current_phase"] = "live_matching"
+        if (
+            row.get("matching_exposure_enabled") is not True
+            or row.get("public_matching_enabled") is not True
+            or row.get("public_emphasis") != "live_matching"
+            or row.get("current_phase") != state.get("current_phase")
+            or state != row
+        ):
             await system_state.update_one({"key": "launch_phase_state"}, {"$set": state}, upsert=True)
         return state
 
@@ -1860,33 +2350,13 @@ async def _phase_blocker_summary() -> Dict[str, Any]:
             "reason_codes": ["phase_blocker_summary_unavailable"],
         }
 
-    intro_ready_query = {
-        "published": True,
-        "billing_profile_status": {
-            "$nin": ["missing_email", "profile_incomplete", "consent_required", "stripe_unconfigured", "stripe_error"]
-        },
-    }
-    intro_ready_trainer_count = int(await trainers_coll.count_documents(intro_ready_query))
+    intro_ready_trainer_count = int(await trainers_coll.count_documents({"published": True}))
     held_or_unpublished_count = int(await trainers_coll.count_documents({"published": False}))
-    needs_profile_count = int(
-        await trainers_coll.count_documents(
-            {"billing_profile_status": {"$in": ["missing_email", "profile_incomplete"]}}
-        )
-    )
-    consent_required_count = int(await trainers_coll.count_documents({"billing_profile_status": "consent_required"}))
-    billing_system_blocked_count = int(
-        await trainers_coll.count_documents(
-            {"billing_profile_status": {"$in": ["stripe_unconfigured", "stripe_error"]}}
-        )
-    )
 
     blocker_buckets = {
         "held_or_unpublished": held_or_unpublished_count,
-        "needs_billing_profile": needs_profile_count,
-        "needs_billing_consent": consent_required_count,
-        "billing_system_blocked": billing_system_blocked_count,
     }
-    blocked_trainer_count = sum(blocker_buckets.values())
+    blocked_trainer_count = held_or_unpublished_count
     return {
         "intro_ready_trainer_count": intro_ready_trainer_count,
         "blocked_trainer_count": blocked_trainer_count,
@@ -1919,11 +2389,8 @@ async def _build_phase_readiness_snapshot(phase_state: Dict[str, Any]) -> Dict[s
     return {
         "snapshot_kind": "latest",
         "phase": str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
-        "matching_exposure_enabled": bool(PUBLIC_MATCHING_ENABLED),
-        "public_emphasis": phase_state.get("public_emphasis") or _phase_public_emphasis(
-            phase=str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
-            public_matching_enabled=bool(PUBLIC_MATCHING_ENABLED),
-        ),
+        "matching_exposure_enabled": bool(phase_state.get("matching_exposure_enabled", True)),
+        "public_emphasis": str(phase_state.get("public_emphasis") or "live_matching"),
         "readiness_status": readiness_status,
         "recommendation": recommendation,
         "blockers_to_next_phase": blocker_reasons,
@@ -1978,7 +2445,7 @@ async def _ensure_phase_transition_baseline(
         "decision_outcome": "approved",
         "from_phase": None,
         "to_phase": str(phase_state.get("current_phase") or PUBLIC_LAUNCH_PHASE),
-        "public_matching_enabled": bool(PUBLIC_MATCHING_ENABLED),
+        "public_matching_enabled": bool(phase_state.get("public_matching_enabled", True)),
         "recommendation_at_decision_time": readiness_snapshot.get("recommendation"),
         "readiness_status_at_decision_time": readiness_snapshot.get("readiness_status"),
         "snapshot_kind": readiness_snapshot.get("snapshot_kind"),
@@ -2035,83 +2502,100 @@ def _require_trainer_action_token(
     _verify_trainer_action_token(token or "", trainer_id=trainer_id, submission_id=submission_id)
 
 
-def _evaluate_claim_local(claim: str, state: str) -> Dict[str, Any]:
-    claim_norm = " ".join((claim or "").strip().lower().replace("_", " ").replace("-", " ").split())
-    is_melbourne_wide = claim_norm in {"melbourne wide", "all melbourne", "greater melbourne wide"}
-    blocks_melbourne_wide = (
-        CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2
-        and is_melbourne_wide
-        and state in {"STATE_0", "STATE_1"}
-    )
-    reason_codes: List[str] = []
-    if is_melbourne_wide:
-        reason_codes.append("claim.melbourne_wide_detected")
-    if blocks_melbourne_wide:
-        reason_codes.append("claim.melbourne_wide_requires_state_2")
-    return {
-        "allowed": not blocks_melbourne_wide,
-        "reason_codes": reason_codes,
-        "normalized_claim": claim_norm,
-        "normalized_state": state,
-    }
-
-
-async def _evaluate_claim(claim: str, state: str) -> Dict[str, Any]:
-    fallback = _evaluate_claim_local(claim, state)
-    try:
-        from services import claim_state as claim_state_service
-    except Exception:  # noqa: BLE001
-        return {**fallback, "source": "server_local_fallback", "service_available": False}
-
-    evaluator = getattr(claim_state_service, "evaluate_claim", None)
-    if not callable(evaluator):
-        return {**fallback, "source": "server_local_fallback", "service_available": False}
-
-    try:
-        result = evaluator(
-            claim=claim,
-            state=state,
-            enforcement_mode=CLAIM_ENFORCEMENT_MODE,
-            block_melbourne_wide_below_state_2=CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
-            enabled=CLAIM_STATE_MODEL_ENABLED,
-        )
-        if asyncio.iscoroutine(result):
-            result = await result
-        if not isinstance(result, dict):
-            return {**fallback, "source": "server_local_fallback", "service_available": True}
-    except TypeError:
-        try:
-            result = evaluator(claim, state)
-            if asyncio.iscoroutine(result):
-                result = await result
-            if not isinstance(result, dict):
-                return {**fallback, "source": "server_local_fallback", "service_available": True}
-        except Exception:  # noqa: BLE001
-            return {**fallback, "source": "server_local_fallback", "service_available": True}
-    except Exception:  # noqa: BLE001
-        return {**fallback, "source": "server_local_fallback", "service_available": True}
-
-    return {
-        "allowed": bool(result.get("allowed", fallback["allowed"])),
-        "reason_codes": list(result.get("reason_codes", fallback["reason_codes"])),
-        "normalized_claim": str(result.get("normalized_claim", fallback["normalized_claim"])),
-        "normalized_state": str(result.get("normalized_state", result.get("state", fallback["normalized_state"]))),
-        "source": "services.claim_state",
-        "service_available": True,
-    }
+def _trainer_serves_suburb(trainer: Dict[str, Any], suburb: str) -> bool:
+    target = _normalize_suburb_key(suburb)
+    covered = {_normalize_suburb_key(str(trainer.get("suburb") or ""))}
+    covered.update(_normalize_suburb_key(str(value)) for value in (trainer.get("serviced_suburbs") or []))
+    return bool(target and target in covered)
 
 
 async def _decorate_with_pricing(trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Attach the current intro fee snapshot for each trainer's suburb."""
-    suburbs = list({t.get("suburb") for t in trainers if t.get("suburb")})
-    pricing = await db.pricing_state.find({"suburb": {"$in": suburbs}}, {"_id": 0}).to_list(500)
-    by_suburb = {p["suburb"]: p for p in pricing}
-    for t in trainers:
-        ps = by_suburb.get(t.get("suburb"))
-        t["intro_fee_cents"] = int(ps["intro_fee_cents"]) if ps else autonomy.FIXED_INTRO_FEE_CENTS
-        t["demand_multiplier"] = float(ps["multiplier"]) if ps else 1.0
-        t["intro_fee_mode"] = str((ps or {}).get("pricing_mode") or "fixed")
+    """Pass-through for trainers without legacy pricing metadata."""
     return trainers
+
+
+def _safe_external_url(value: Optional[str], *, field_name: str = "URL") -> str:
+    """Permit only absolute HTTP(S) links on public trainer surfaces."""
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    parsed = urlparse(candidate)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"{field_name} must be an absolute http or https URL.")
+    return candidate
+
+
+def _safe_stored_url(value: Any) -> Optional[str]:
+    """Fail closed for historical or imported records that predate validation."""
+    try:
+        return _safe_external_url(str(value or "")) or None
+    except ValueError:
+        return None
+
+
+def _released_contact_payload(trainer: Dict[str, Any], *, fallback_name: Optional[str] = None, fallback_suburb: Optional[str] = None) -> Dict[str, Any]:
+    return {
+        "name": trainer.get("name") or fallback_name,
+        "website": _safe_stored_url(trainer.get("website")),
+        "phone": trainer.get("phone"),
+        "email": trainer.get("email"),
+        "suburb": trainer.get("suburb") or fallback_suburb,
+    }
+
+
+def _public_trainer_payload(trainer: Dict[str, Any], *, include_match: bool = False) -> Dict[str, Any]:
+    """Return storefront-safe fields without releasing protected contact data."""
+    allowed = {
+        "id", "slug", "name", "suburb", "region", "bio", "services", "categories",
+        "specialties", "training_philosophy", "service_formats", "serviced_suburbs",
+        "catchment_type", "price_range", "review_summary", "review_rating", "review_count",
+        "claim_status", "tier", "verification_status", "abn_verified", "abn_badge_payload",
+        "image_url", "gallery_images", "booking_url", "website", "published", "contact_ready",
+        "placement",
+    }
+    if include_match:
+        allowed.add("match_reasoning")
+    public = {key: value for key, value in trainer.items() if key in allowed}
+    tier = str(trainer.get("tier") or "").lower()
+    if tier not in {"pro", "suburb_sponsor", "citywide"}:
+        public.pop("booking_url", None)
+        public.pop("website", None)
+    else:
+        for field in ("website", "booking_url"):
+            safe_url = _safe_stored_url(public.get(field))
+            if safe_url:
+                public[field] = safe_url
+            else:
+                public.pop(field, None)
+    safe_image = _safe_stored_url(public.get("image_url"))
+    if safe_image:
+        public["image_url"] = safe_image
+    else:
+        public.pop("image_url", None)
+    if "gallery_images" in public:
+        public["gallery_images"] = [
+            safe_url for value in (public.get("gallery_images") or [])
+            if (safe_url := _safe_stored_url(value))
+        ]
+    return public
+
+
+def _directory_sort_key(trainer: Dict[str, Any], suburb: Optional[str]) -> tuple:
+    tier = str(trainer.get("tier") or "").lower()
+    tier_weight = {"citywide": 4, "suburb_sponsor": 3, "pro": 2, "claimed": 1}.get(tier, 0)
+    suburb_sponsor = 1 if suburb and _normalize_suburb_key(suburb) in {
+        _normalize_suburb_key(str(value)) for value in (trainer.get("sponsored_suburbs") or [])
+    } else 0
+    verified = 1 if trainer.get("verification_status") == "verified" else 0
+    return (
+        suburb_sponsor,
+        tier_weight,
+        verified,
+        float(trainer.get("review_rating") or 0),
+        int(trainer.get("review_count") or 0),
+        float(trainer.get("outcome_score") or 0),
+        str(trainer.get("name") or "").lower(),
+    )
 
 
 async def _resolve_submission(submission_id: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -2140,33 +2624,59 @@ async def root() -> Dict[str, Any]:
     return {"service": "dog-trainers-directory-match-engine", "ok": True, "ts": now_iso()}
 
 
+@api.get("/health")
+async def health() -> JSONResponse:
+    """Deep runtime health used by production probes and launch verification."""
+    try:
+        await db.command("ping")
+    except Exception:  # noqa: BLE001
+        logger.exception("Deep health check failed")
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "service": "dog-trainers-directory-match-engine", "database": "unavailable"},
+        )
+    return JSONResponse(
+        status_code=200,
+        content={"ok": True, "service": "dog-trainers-directory-match-engine", "database": "available"},
+    )
+
+
+@app.get("/")
+async def app_root() -> Dict[str, Any]:
+    return await root()
+
+
+@app.get("/health")
+async def app_health() -> JSONResponse:
+    return await health()
+
+
 @api.get("/config")
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
-    suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
-    phase_state = await _get_or_create_launch_phase_state()
+    try:
+        suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
+    except Exception as exc:
+        logger.warning("Database unavailable reading suburbs for /config: %s", exc)
+        suburbs = []
+    try:
+        phase_state = await _read_launch_phase_state()
+    except Exception as exc:
+        logger.warning("Database unavailable reading phase state for /config: %s", exc)
+        phase_state = {}
     return {
-        "base_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
-        "fixed_intro_fee_cents": autonomy.FIXED_INTRO_FEE_CENTS,
         "trainer_free_intro_days": stripe_billing.trainer_free_intro_days(),
-        "base_conversion_fee_cents": autonomy.BASE_CONVERSION_FEE,
         "active_regions": ACTIVE_REGIONS,
         "active_region_default": ACTIVE_REGION,
-        "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
-        "stripe_intro_billing_enabled": stripe_billing.billing_enabled(),
         "stripe_webhook_enabled": stripe_billing.webhook_enabled(),
-        "public_matching_enabled": PUBLIC_MATCHING_ENABLED,
-        "public_launch_phase": phase_state.get("current_phase"),
-        "public_emphasis": phase_state.get("public_emphasis"),
+        "public_matching_enabled": True,
+        "public_launch_phase": phase_state.get("current_phase", "live_matching"),
+        "public_emphasis": phase_state.get("public_emphasis", "trainers_and_owners"),
         "trainer_onboarding_open": bool(phase_state.get("trainer_onboarding_open", True)),
-        "owner_waitlist_mode": phase_state.get("owner_waitlist_mode"),
+        "owner_waitlist_mode": phase_state.get("owner_waitlist_mode", "disabled"),
         "public_monetization_copy_mode": PUBLIC_MONETIZATION_COPY_MODE,
         "public_hide_legacy_intro_fee_copy": PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY,
         "public_show_founding_profile_copy": PUBLIC_SHOW_FOUNDING_PROFILE_COPY,
-        "claim_state_model_enabled": CLAIM_STATE_MODEL_ENABLED,
-        "claim_state_current": CLAIM_STATE_CURRENT,
-        "claim_enforcement_mode": CLAIM_ENFORCEMENT_MODE,
-        "claim_block_melbourne_wide_below_state_2": CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2,
         "suburbs": suburbs,
     }
 
@@ -2302,7 +2812,7 @@ async def verify_education_magic_link_post(payload: EducationVerifyIn) -> Dict[s
 
 @api.get("/education/catalog")
 async def get_education_catalog() -> Dict[str, Any]:
-    phase_state = await _get_or_create_launch_phase_state()
+    phase_state = await _read_launch_phase_state()
     return {
         **education_catalog.get_catalog(),
         "launch_phase": str(phase_state.get("current_phase") or "supply_first"),
@@ -2373,7 +2883,7 @@ async def get_education_dashboard(owner_session: Dict[str, Any] = Depends(requir
             }
         )
 
-    phase_state = await _get_or_create_launch_phase_state()
+    phase_state = await _read_launch_phase_state()
     launch_posture = _education_launch_posture(phase_state)
     current_module = next((module for module in modules if module["slug"] == progress.get("current_module")), None)
     trainer_bridge = {
@@ -2567,7 +3077,6 @@ async def upsert_trainer_readiness(
 @api.post("/match")
 async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
     """Single input → 3 trainers. The only product surface for end users."""
-    _require_public_matching("Public matching")
     if not payload.consent_match_processing:
         raise HTTPException(status_code=400, detail="Consent required to process match request.")
 
@@ -2587,16 +3096,11 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
         if not t:
             continue
         contact_ready = _has_contact_channel(t)
-        billable_ready = _is_billable_ready(t)
         if CONTACT_READY_POLICY == "block" and not contact_ready:
-            continue
-        if BILLABILITY_POLICY == "block" and not billable_ready:
             continue
         policy_penalty = 0.0
         if CONTACT_READY_POLICY == "rerank" and not contact_ready:
             policy_penalty += 0.15
-        if BILLABILITY_POLICY == "rerank" and not billable_ready:
-            policy_penalty += 0.20
         # outcome_score already on the doc; AI provides relevance reason.
         selected.append(
             {
@@ -2604,7 +3108,7 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
                 "match_score": m["score"],
                 "match_reasoning": m["reasoning"],
                 "contact_ready": contact_ready,
-                "billable_ready": billable_ready,
+                "billable_ready": True,
                 "_policy_penalty": policy_penalty,
             }
         )
@@ -2631,7 +3135,7 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
             "created_at": now_iso(),
         }
     )
-    return {"match_id": match_id, "matches": selected}
+    return {"match_id": match_id, "matches": [_public_trainer_payload(t, include_match=True) for t in selected]}
 
 
 @api.post("/match/connect-click")
@@ -2665,13 +3169,51 @@ async def record_match_connect_click(payload: ConnectClickIn) -> Dict[str, Any]:
     return _scrub(ev)
 
 
+@api.get("/trainers")
+async def list_trainers(
+    suburb: Optional[str] = Query(default=None, max_length=100),
+    category: Optional[str] = Query(default=None, max_length=100),
+    limit: int = Query(default=60, ge=1, le=100),
+) -> Dict[str, Any]:
+    filters: List[Dict[str, Any]] = []
+    if suburb and suburb.strip():
+        exact_suburb = {"$regex": f"^{re.escape(suburb.strip())}$", "$options": "i"}
+        filters.append({"$or": [{"suburb": exact_suburb}, {"serviced_suburbs": exact_suburb}]})
+    if category and category.strip():
+        category_token = {"$regex": re.escape(category.strip()), "$options": "i"}
+        filters.append({"$or": [{"specialties": category_token}, {"services": category_token}, {"categories": category_token}]})
+
+    query: Dict[str, Any] = {"published": True, "region": {"$in": ACTIVE_REGIONS}}
+    if filters:
+        query["$and"] = filters
+    try:
+        rows = await db.trainers.find(query, {"_id": 0}).to_list(limit)
+        rows.sort(key=lambda trainer: _directory_sort_key(trainer, suburb), reverse=True)
+        rows = await suburb_inventory.rotate_public_trainers(db, rows, suburb=suburb)
+    except Exception as exc:
+        logger.warning("Database unavailable reading trainers for /trainers: %s", exc)
+        rows = []
+    return {
+        "trainers": [_public_trainer_payload(row) for row in rows],
+        "total": len(rows),
+        "filters": {"suburb": (suburb or "").strip(), "category": (category or "").strip()},
+    }
+
+
 @api.get("/trainers/{trainer_id}")
 async def get_trainer(trainer_id: str) -> Dict[str, Any]:
-    doc = await db.trainers.find_one({"id": trainer_id, "published": True, "region": {"$in": ACTIVE_REGIONS}}, {"_id": 0})
+    doc = await db.trainers.find_one(
+        {
+            "$or": [{"id": trainer_id}, {"slug": trainer_id}],
+            "published": True,
+            "region": {"$in": ACTIVE_REGIONS},
+        },
+        {"_id": 0},
+    )
     if not doc:
         raise HTTPException(status_code=404, detail="Not found")
     decorated = await _decorate_with_pricing([doc])
-    return decorated[0]
+    return _public_trainer_payload(decorated[0])
 
 
 @api.post("/intros")
@@ -2680,7 +3222,6 @@ async def create_intro(
     request: Request,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ) -> Dict[str, Any]:
-    _require_public_matching("Public contact release")
     if not payload.consent_contact_release or not payload.consent_outcome_tracking:
         raise HTTPException(status_code=400, detail="Consent required before contact release.")
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
@@ -2688,25 +3229,28 @@ async def create_intro(
         raise HTTPException(status_code=404, detail="Trainer not found")
     _require_region(trainer.get("region"))
 
-    idem = (idempotency_key or payload.client_token or "").strip()
+    raw_idem = idempotency_key if isinstance(idempotency_key, str) else None
+    idem = (raw_idem or payload.client_token or "").strip()
     if idem:
         existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
         if existing:
+            if existing.get("trainer_id") != payload.trainer_id or str(existing.get("user_email") or "").lower() != str(payload.user_email).lower():
+                raise HTTPException(status_code=409, detail="Idempotency key already used for a different enquiry.")
             existing_trainer = await db.trainers.find_one({"id": existing["trainer_id"]}, {"_id": 0})
-            contact_existing = {
-                "name": existing_trainer.get("name") if existing_trainer else existing.get("trainer_name"),
-                "website": existing_trainer.get("website") if existing_trainer else None,
-                "phone": existing_trainer.get("phone") if existing_trainer else None,
-                "email": existing_trainer.get("email") if existing_trainer else None,
-                "suburb": existing_trainer.get("suburb") if existing_trainer else existing.get("suburb"),
-            }
+            contact_existing = _released_contact_payload(
+                existing_trainer or {},
+                fallback_name=existing.get("trainer_name"),
+                fallback_suburb=existing.get("suburb"),
+            )
             return _scrub({**existing, "contact": contact_existing})
 
-    fee = await autonomy.get_intro_fee(db, trainer.get("suburb"))
     ip = (request.client.host if request.client else "") or ""
 
-    # Anti-gaming evaluation. Always record; sometimes mark suppressed.
+    # Anti-gaming evaluation. Always record; mark suppressed if suspicious.
     fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email or "")
+    delivery_status = fraud.get("delivery_status") or "delivered"
+    fraud_status = fraud.get("fraud_status") or "clear"
+    fraud_reasons = fraud.get("reasons") or []
 
     intro = {
         "id": new_id(),
@@ -2718,9 +3262,12 @@ async def create_intro(
         "user_email": payload.user_email or "",
         "user_phone": payload.user_phone or "",
         "suburb": trainer.get("suburb"),
-        "intro_fee_cents": fee if fraud["billing_status"] == "billed" else 0,
-        "billing_status": fraud["billing_status"],
-        "fraud_reasons": fraud["reasons"],
+        "consent_contact_release": True,
+        "consent_outcome_tracking": True,
+        "delivery_status": delivery_status,
+        "status": delivery_status,
+        "fraud_status": fraud_status,
+        "fraud_reasons": fraud_reasons,
         "ip": ip,
         "user_agent": request.headers.get("user-agent", "")[:200],
         "created_at": now_iso(),
@@ -2742,24 +3289,27 @@ async def create_intro(
         if idem:
             existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
             if existing:
+                if existing.get("trainer_id") != payload.trainer_id or str(existing.get("user_email") or "").lower() != str(payload.user_email).lower():
+                    raise HTTPException(status_code=409, detail="Idempotency key already used for a different enquiry.")
                 existing_trainer = await db.trainers.find_one({"id": existing["trainer_id"]}, {"_id": 0})
-                contact_existing = {
-                    "name": existing_trainer.get("name") if existing_trainer else existing.get("trainer_name"),
-                    "website": existing_trainer.get("website") if existing_trainer else None,
-                    "phone": existing_trainer.get("phone") if existing_trainer else None,
-                    "email": existing_trainer.get("email") if existing_trainer else None,
-                    "suburb": existing_trainer.get("suburb") if existing_trainer else existing.get("suburb"),
-                }
+                contact_existing = _released_contact_payload(
+                    existing_trainer or {},
+                    fallback_name=existing.get("trainer_name"),
+                    fallback_suburb=existing.get("suburb"),
+                )
                 return _scrub({**existing, "contact": contact_existing})
         raise
-    await _audit("intro", trainer["id"], after={"intro_id": intro["id"], "billing_status": fraud["billing_status"], "reasons": fraud["reasons"]}, actor="user")
-
-    # Bill the trainer side in Stripe (fail-soft). User-facing connect flow must
-    # continue even when billing infrastructure is unavailable.
-    billing_meta = await stripe_billing.bill_intro(db, trainer, intro)
-    if billing_meta:
-        await db.intros.update_one({"id": intro["id"]}, {"$set": billing_meta})
-        intro.update(billing_meta)
+    await _audit(
+        "intro",
+        trainer["id"],
+        after={
+            "intro_id": intro["id"],
+            "delivery_status": delivery_status,
+            "fraud_status": fraud_status,
+            "reasons": fraud_reasons,
+        },
+        actor="user",
+    )
 
     # Notify trainer about the new intro; never block owner experience.
     try:
@@ -2770,13 +3320,7 @@ async def create_intro(
     except Exception:  # noqa: BLE001
         logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
 
-    contact = {
-        "name": trainer.get("name"),
-        "website": trainer.get("website"),
-        "phone": trainer.get("phone"),
-        "email": trainer.get("email"),
-        "suburb": trainer.get("suburb"),
-    }
+    contact = _released_contact_payload(trainer)
     return _scrub({**intro, "contact": contact})
 
 
@@ -2802,7 +3346,7 @@ async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
     distinct_kinds = await db.engagements.distinct("kind", {"intro_id": payload.intro_id})
     if len(distinct_kinds) >= 2 and not await db.conversions.find_one({"intro_id": payload.intro_id}):
         confidence = min(0.85, 0.55 + 0.10 * len(distinct_kinds))
-        target_status = "billed" if autonomy.CONVERSION_BILLING_MODE == "bill" else "pending"
+        target_status = "pending"
         await db.conversions.insert_one(
             {
                 "id": new_id(),
@@ -2811,8 +3355,9 @@ async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
                 "match_id": intro.get("match_id"),
                 "campaign": intro.get("campaign", ""),
                 "attribution_source": intro.get("source", ""),
-                "fee_cents": autonomy.BASE_CONVERSION_FEE if target_status == "billed" else 0,
                 "billing_status": target_status,
+                "status": target_status,
+                "quality_status": target_status,
                 "inferred": True,
                 "confidence": round(confidence, 2),
                 "source": "engagement_inference",
@@ -2829,21 +3374,30 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
     if not intro:
         raise HTTPException(status_code=404, detail="Intro not found")
     if not payload.confirmed:
-        return {"ok": True, "billed": False}
+        return {"ok": True, "confirmed": False, "billed": False}
     existing = await db.conversions.find_one(
-        {"intro_id": payload.intro_id, "billing_status": {"$in": ["tracked", "billed", "suspicious"]}},
+        {
+            "intro_id": payload.intro_id,
+            "$or": [
+                {"billing_status": {"$in": ["tracked", "billed", "suspicious"]}},
+                {"status": {"$in": ["tracked", "billed", "suspicious"]}},
+            ],
+        },
         {"_id": 0},
     )
     if existing:
-        return {"ok": True, "billed": False, "existing": True, "billing_status": existing.get("billing_status")}
+        return {
+            "ok": True,
+            "confirmed": True,
+            "billed": False,
+            "existing": True,
+            "status": existing.get("status") or existing.get("billing_status"),
+            "billing_status": existing.get("billing_status") or existing.get("status"),
+        }
 
     decision = await fraud_service.evaluate_conversion(db, intro)
-    if decision["billing_status"] == "suspicious":
-        status = "suspicious"
-    elif autonomy.CONVERSION_BILLING_MODE == "bill":
-        status = "billed"
-    else:
-        status = "tracked"
+    quality_status = decision.get("quality_status") or decision.get("status") or ("suspicious" if decision.get("billing_status") == "suspicious" else "tracked")
+    status = "suspicious" if quality_status == "suspicious" else "tracked"
 
     conv = {
         "id": new_id(),
@@ -2852,30 +3406,28 @@ async def create_conversion(payload: ConversionIn) -> Dict[str, Any]:
         "match_id": intro.get("match_id"),
         "campaign": intro.get("campaign", ""),
         "attribution_source": intro.get("source", ""),
-        "fee_cents": autonomy.BASE_CONVERSION_FEE if status == "billed" else 0,
         "billing_status": status,
-        "fraud_reason": decision["reason"],
+        "status": status,
+        "quality_status": status,
+        "fraud_reason": decision.get("reason", ""),
         "inferred": False,
         "confidence": 1.0,
         "source": "manual_confirm",
         "created_at": now_iso(),
-        "billed_at": now_iso() if status == "billed" else None,
     }
     # If a prior pending inferred conversion exists, supersede it.
     await db.conversions.update_many(
         {"intro_id": payload.intro_id, "billing_status": "pending"},
-        {"$set": {"billing_status": "superseded"}},
+        {"$set": {"billing_status": "superseded", "status": "superseded"}},
     )
     await db.conversions.insert_one(conv.copy())
-    await _audit("conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "billing_status": conv["billing_status"]}, actor="user")
-    return _scrub({**conv, "billed": status == "billed"})
+    await _audit("conversion", intro["trainer_id"], after={"intro_id": payload.intro_id, "status": conv["status"], "billing_status": conv["billing_status"]}, actor="user")
+    return _scrub({**conv, "confirmed": True, "billed": False, "fee_cents": 0})
 
 
 @api.get("/follow-up/{token}")
 async def get_follow_up(token: str) -> Dict[str, Any]:
-    intro = await db.intros.find_one({"id": token}, {"_id": 0})
-    if not intro:
-        raise HTTPException(status_code=404, detail="Follow-up link invalid or expired.")
+    intro = await _resolve_follow_up_intro(token)
 
     trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
     existing = await db.conversions.find_one(
@@ -2887,6 +3439,7 @@ async def get_follow_up(token: str) -> Dict[str, Any]:
         "intro_id": intro["id"],
         "description": intro.get("description", ""),
         "created_at": intro.get("created_at"),
+        "expires_at": intro.get("follow_up_expires_at"),
         "already_confirmed": bool(existing),
         "conversion_status": (existing or {}).get("billing_status"),
         "trainer": {
@@ -2902,9 +3455,7 @@ async def get_follow_up(token: str) -> Dict[str, Any]:
 
 @api.post("/follow-up/{token}/outcome")
 async def submit_follow_up_outcome(token: str, payload: FollowUpOutcomeIn) -> Dict[str, Any]:
-    intro = await db.intros.find_one({"id": token}, {"_id": 0})
-    if not intro:
-        raise HTTPException(status_code=404, detail="Follow-up link invalid or expired.")
+    intro = await _resolve_follow_up_intro(token)
 
     action = (payload.action or "").strip().lower()
     if action == "hired":
@@ -2929,10 +3480,12 @@ async def submit_follow_up_outcome(token: str, payload: FollowUpOutcomeIn) -> Di
 
 @api.post("/discovery")
 async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
-    """Public endpoint to feed the autonomous ingestion queue.
+    """Accept an untrusted legacy URL contribution into the held queue.
 
-    Anyone (or any external scraper) can post candidate URLs.  The discovery
-    loop deduplicates, scores, and decides — no human review.
+    This endpoint is not proof of source rights and is not the pending licensed
+    Sensis/Thryv adapter. The discovery loop may deduplicate or discard the
+    contribution, but any promoted trainer remains unpublished and unverified
+    until separate statutory and source evidence passes the publication gate.
     """
     doc = {
         "id": new_id(),
@@ -2950,42 +3503,147 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
 
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
-    """Submit a real Melbourne trainer. Auto-publishes if AI score ≥ 0.60."""
+    """Submit a real Melbourne trainer; publish only with active ABR evidence and the quality gate."""
     if not payload.consent_public_listing or not payload.consent_information_accuracy:
         raise HTTPException(status_code=400, detail="Consent required for public listing.")
 
     sub = payload.model_dump()
     sub["region"] = (sub.get("region") or ACTIVE_REGION).strip() or ACTIVE_REGION
+    # Claims and commercial tier are server-owned. A public submission may
+    # enrich a profile, but cannot self-assert ownership or verification.
+    sub["tier"] = "unclaimed"
+    sub["claim_status"] = "unclaimed"
+    sub.update(await _abn_profile_fields(sub.get("abn")))
     # Preserve explicit submitter email when provided; otherwise fall back to
     # the listing email so status notifications are still deliverable.
     sub["submitter_email"] = (sub.get("submitter_email") or sub.get("email") or "").strip()
     _require_region(sub["region"])
     score = await ai_service.score_trainer(_verification_payload(sub))
     conf = float(score["confidence"])
-    status = ai_service.status_for_score(conf)
+
+    # Duplicate identity matching:
+    # 1. By non-empty ABN
+    # 2. By non-empty email
+    # 3. By non-empty website
+    existing_trainer = None
+    clean_abn = str(sub.get("abn") or "").strip()
+    if clean_abn:
+        existing_trainer = await db.trainers.find_one({"abn": clean_abn}, {"_id": 0})
+    if not existing_trainer and sub.get("email"):
+        existing_trainer = await db.trainers.find_one({"email": str(sub["email"]).strip()}, {"_id": 0})
+    if not existing_trainer and sub.get("website"):
+        existing_trainer = await db.trainers.find_one({"website": str(sub["website"]).strip()}, {"_id": 0})
+
+    if existing_trainer and str(existing_trainer.get("claim_status") or "").lower() in {"claimed", "claim_disputed"}:
+        sub_doc = {
+            "id": new_id(),
+            "trainer_id": existing_trainer["id"],
+            "status": "held",
+            "duplicate": True,
+            "reason": "profile_already_claimed",
+            "created_at": now_iso(),
+            "confidence_score": conf,
+            "verification_status": "hold",
+            "verification_reasoning": "Competing submission for an already claimed listing.",
+            "verification_signals": score.get("signals", []),
+            "verification_model": score.get("model", "heuristic"),
+            **sub,
+        }
+        await db.submissions.insert_one(sub_doc.copy())
+        await _audit("trainer_submission_disputed", existing_trainer["id"], after={"submission_id": sub_doc["id"], "reason": "profile_already_claimed"}, actor="system")
+        return _scrub({
+            "id": sub_doc["id"],
+            "status": sub_doc["status"],
+            "confidence_score": conf,
+            "verification_status": sub_doc["verification_status"],
+            "verification_reasoning": sub_doc["verification_reasoning"],
+            "verification_signals": sub_doc["verification_signals"],
+            "trainer_id": existing_trainer["id"],
+            "billing_profile_status": "not_applicable",
+            "submitter_notification_status": "skipped",
+            "trainer_action_token": "",
+            "duplicate": True,
+            "reason": "profile_already_claimed",
+        })
+
+    # M1-AI Safety Boundary: Gemini or heuristic confidence assessment alone NEVER
+    # publishes a profile or marks it verified. Canonical non-AI quality evidence
+    # (statutory ABN verification via ABR Web Services) is strictly required before
+    # publication or verified lifecycle status.
+    has_statutory_abn = bool(sub.get("abn_verified"))
+    is_eligible_for_publish = has_statutory_abn and conf >= HOLD_THRESHOLD
+
+    if is_eligible_for_publish:
+        published = True
+        verification_status = "verified"
+        contact_ready = bool(sub.get("website") or sub.get("phone") or sub.get("email"))
+        auto_action = "auto_published"
+        sub_status = "published"
+    else:
+        published = False
+        verification_status = "unverified" if conf >= HOLD_THRESHOLD else "hold"
+        contact_ready = False
+        auto_action = "auto_held"
+        sub_status = "held"
 
     sub_doc = {
         "id": new_id(),
-        "status": "pending",
+        "status": sub_status,
         "created_at": now_iso(),
         "confidence_score": conf,
+        "verification_status": verification_status,
         "verification_reasoning": score.get("reasoning", ""),
         "verification_signals": score.get("signals", []),
         "verification_model": score.get("model", "heuristic"),
         **sub,
     }
 
-    auto_action: str
-    trainer_id: Optional[str] = None
-    if conf >= PUBLISH_THRESHOLD:
-        auto_action = "auto_published"
-    elif conf >= HOLD_THRESHOLD:
-        auto_action = "auto_published_unverified"
+    if existing_trainer:
+        trainer_id = existing_trainer["id"]
+        update_fields = {
+            "name": sub.get("name") or existing_trainer.get("name"),
+            "suburb": sub.get("suburb") or existing_trainer.get("suburb"),
+            "region": sub.get("region") or existing_trainer.get("region", ""),
+            "website": sub.get("website") or existing_trainer.get("website", ""),
+            "phone": sub.get("phone") or existing_trainer.get("phone", ""),
+            "email": sub.get("email") or existing_trainer.get("email", ""),
+            "categories": sub.get("categories") or existing_trainer.get("categories", []),
+            "services": sub.get("services") or existing_trainer.get("services", []),
+            "bio": sub.get("bio") or existing_trainer.get("bio", ""),
+            "image_url": sub.get("image_url") or existing_trainer.get("image_url", ""),
+            "source_evidence_url": sub.get("source_evidence_url") or existing_trainer.get("source_evidence_url", ""),
+            "abn": sub.get("abn") or existing_trainer.get("abn", ""),
+            "entity_name": sub.get("entity_name") or existing_trainer.get("entity_name", ""),
+            "trading_name": sub.get("trading_name") or existing_trainer.get("trading_name", ""),
+            "business_type": sub.get("business_type") or existing_trainer.get("business_type", ""),
+            "abn_status": sub.get("abn_status") or existing_trainer.get("abn_status", "not_provided"),
+            "abn_verified": bool(sub.get("abn_verified")),
+            "abn_verified_at": sub.get("abn_verified_at") or existing_trainer.get("abn_verified_at", ""),
+            "abn_verification_reason": sub.get("abn_verification_reason") or existing_trainer.get("abn_verification_reason", ""),
+            "abn_badge_payload": sub.get("abn_badge_payload") or existing_trainer.get("abn_badge_payload"),
+            "training_philosophy": sub.get("training_philosophy") or existing_trainer.get("training_philosophy", ""),
+            "specialties": sub.get("specialties") or existing_trainer.get("specialties", []),
+            "service_formats": sub.get("service_formats") or existing_trainer.get("service_formats", []),
+            "serviced_suburbs": sub.get("serviced_suburbs") or existing_trainer.get("serviced_suburbs", []),
+            "catchment_type": sub.get("catchment_type") or existing_trainer.get("catchment_type", ""),
+            "booking_url": sub.get("booking_url") or existing_trainer.get("booking_url", ""),
+            "gallery_images": sub.get("gallery_images") or existing_trainer.get("gallery_images", []),
+            "sponsored_suburbs": sub.get("sponsored_suburbs") or existing_trainer.get("sponsored_suburbs", []),
+            "review_summary": sub.get("review_summary") or existing_trainer.get("review_summary", ""),
+            "confidence_score": conf,
+            "verification_status": verification_status,
+            "verification_reasoning": score.get("reasoning", ""),
+            "verification_signals": score.get("signals", []),
+            "verification_model": score.get("model", "heuristic"),
+            "verified_at": now_iso() if verification_status == "verified" else "",
+            "published": published,
+            "contact_ready": contact_ready,
+            "updated_at": now_iso(),
+            "via_submission_id": sub_doc["id"],
+        }
+        await db.trainers.update_one({"id": trainer_id}, {"$set": update_fields})
+        trainer_doc = {**existing_trainer, **update_fields}
     else:
-        auto_action = "auto_held"
-
-    if conf >= HOLD_THRESHOLD:
-        # Insert a published trainer immediately — no human in the loop.
         trainer_id = new_id()
         trainer_doc = {
             "id": trainer_id,
@@ -3000,39 +3658,57 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "bio": sub.get("bio", ""),
             "image_url": sub.get("image_url", ""),
             "source_evidence_url": sub.get("source_evidence_url", ""),
+            "tier": "unclaimed",
+            "claim_status": "unclaimed",
+            "abn": sub.get("abn", ""),
+            "entity_name": sub.get("entity_name", ""),
+            "trading_name": sub.get("trading_name", ""),
+            "business_type": sub.get("business_type", ""),
+            "abn_status": sub.get("abn_status", "not_provided"),
+            "abn_verified": bool(sub.get("abn_verified")),
+            "abn_verified_at": sub.get("abn_verified_at", ""),
+            "abn_verification_reason": sub.get("abn_verification_reason", ""),
+            "abn_badge_payload": sub.get("abn_badge_payload"),
+            "training_philosophy": sub.get("training_philosophy", ""),
+            "specialties": sub.get("specialties", []),
+            "service_formats": sub.get("service_formats", []),
+            "serviced_suburbs": sub.get("serviced_suburbs", []),
+            "catchment_type": sub.get("catchment_type", ""),
+            "booking_url": sub.get("booking_url", ""),
+            "gallery_images": sub.get("gallery_images", []),
+            "sponsored_suburbs": sub.get("sponsored_suburbs", []),
+            "review_summary": sub.get("review_summary", ""),
             "confidence_score": conf,
-            "verification_status": status,
+            "verification_status": verification_status,
             "verification_reasoning": score.get("reasoning", ""),
             "verification_signals": score.get("signals", []),
             "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso(),
+            "verified_at": now_iso() if verification_status == "verified" else "",
             "outcome_score": 0.05,
             "intros_30d": 0,
             "conversions_30d": 0,
-            "published": True,
-            "contact_ready": bool(sub.get("website") or sub.get("phone") or sub.get("email")),
+            "published": published,
+            "contact_ready": contact_ready,
             "registered_at": now_iso(),
             "created_at": now_iso(),
             "via_submission_id": sub_doc["id"],
         }
         await db.trainers.insert_one(trainer_doc.copy())
-        # Prepare trainer billing profile (fail-soft). This does not block
-        # publication and gives ops visibility into billing readiness.
-        billing_profile = await stripe_billing.provision_trainer_billing_profile(
-            db,
-            trainer_doc,
-            consent_granted=payload.consent_intro_billing_terms,
-        )
-        trainer_action_token = _issue_trainer_action_token(
-            trainer_id=trainer_id,
-            submission_id=sub_doc["id"],
-        )
-        sub_doc["status"] = "published"
-        sub_doc["trainer_id"] = trainer_id
-        sub_doc["billing_profile_status"] = billing_profile.get("billing_profile_status")
-        sub_doc["trainer_action_token"] = trainer_action_token
-    else:
-        sub_doc["status"] = "held"
+
+    # Prepare trainer billing profile (fail-soft). This does not block
+    # publication and gives ops visibility into billing readiness.
+    billing_profile = await stripe_billing.provision_trainer_billing_profile(
+        db,
+        trainer_doc,
+        consent_granted=payload.consent_intro_billing_terms,
+    )
+    trainer_action_token = _issue_trainer_action_token(
+        trainer_id=trainer_id,
+        submission_id=sub_doc["id"],
+    )
+    sub_doc["trainer_id"] = trainer_id
+    sub_doc["billing_profile_status"] = billing_profile.get("billing_profile_status")
+    sub_doc["trainer_action_token"] = trainer_action_token
 
     try:
         await db.submissions.insert_one(sub_doc.copy())
@@ -3049,13 +3725,23 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     except Exception:  # noqa: BLE001
         logger.exception("submission notification failed for submission_id=%s", sub_doc.get("id"))
 
-    await _audit(auto_action, sub_doc["id"], after={"confidence": conf, "trainer_id": trainer_id}, actor="system")
+    await _audit(
+        auto_action,
+        sub_doc["id"],
+        after={
+            "confidence": conf,
+            "trainer_id": trainer_id,
+            "published": published,
+            "verification_status": verification_status,
+        },
+        actor="system",
+    )
     return _scrub(
         {
             "id": sub_doc["id"],
             "status": sub_doc["status"],
             "confidence_score": conf,
-            "verification_status": status,
+            "verification_status": verification_status,
             "verification_reasoning": sub_doc["verification_reasoning"],
             "verification_signals": sub_doc["verification_signals"],
             "trainer_id": trainer_id,
@@ -3064,6 +3750,252 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "trainer_action_token": sub_doc.get("trainer_action_token"),
         }
     )
+
+
+@api.post("/trainers/{trainer_id}/claim")
+async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> Dict[str, Any]:
+    """Start a bounded profile claim against the listing's existing email."""
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+
+    now = datetime.now(timezone.utc)
+    claimant_email = _normalize_email_key(str(payload.email))
+    listed_email = _normalize_email_key(str(trainer.get("billing_email") or trainer.get("email") or ""))
+    method = (payload.method or "email").strip().lower()
+
+    current_status = str(trainer.get("claim_status") or "").lower()
+    if current_status in {"claimed", "claim_disputed"}:
+        raise HTTPException(
+            status_code=409,
+            detail="This profile already has a claim. A review case has been opened." if current_status == "claim_disputed" else "This profile has already been claimed.",
+        )
+
+    if method != "email":
+        event = {
+            "id": new_id(),
+            "trainer_id": trainer_id,
+            "claimant_email": claimant_email,
+            "masked_destination": claim_engine.mask_email(claimant_email),
+            "method": method or "unknown",
+            "status": "provider_unavailable",
+            "reason": "sms_unavailable_firebase_phone_auth_not_configured",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        await db.claim_events.insert_one(event)
+        raise HTTPException(status_code=503, detail="SMS/phone claim verification is not available yet. Use the listed email address.")
+
+    if not listed_email:
+        event = {
+            "id": new_id(),
+            "trainer_id": trainer_id,
+            "claimant_email": claimant_email,
+            "masked_destination": claim_engine.mask_email(claimant_email),
+            "method": "email",
+            "status": "needs_review",
+            "reason": "listing_has_no_claim_email",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        await db.claim_events.insert_one(event)
+        raise HTTPException(status_code=409, detail="This profile has no claimable email address. A review case has been opened.")
+
+    if claimant_email != listed_email:
+        event = {
+            "id": new_id(),
+            "trainer_id": trainer_id,
+            "claimant_email": claimant_email,
+            "masked_destination": claim_engine.mask_email(claimant_email),
+            "method": "email",
+            "status": "needs_review",
+            "reason": "claim_email_does_not_match_listing",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+        await db.claim_events.insert_one(event)
+        raise HTTPException(status_code=403, detail="Use the email address currently recorded on this listing.")
+
+    # Rate limit: enforce cooldown between challenge dispatches for the same listing
+    if TRAINER_CLAIM_RESEND_COOLDOWN_S > 0:
+        recent_pending = await db.claim_events.find_one(
+            {"trainer_id": trainer_id, "status": "pending_verification"}
+        )
+        if recent_pending:
+            created_dt = _parse_iso(recent_pending.get("created_at"))
+            if created_dt and (now - created_dt).total_seconds() < TRAINER_CLAIM_RESEND_COOLDOWN_S:
+                cooldown_remaining = max(1, int(TRAINER_CLAIM_RESEND_COOLDOWN_S - (now - created_dt).total_seconds()))
+                event = {
+                    "id": new_id(),
+                    "trainer_id": trainer_id,
+                    "claimant_email": claimant_email,
+                    "masked_destination": claim_engine.mask_email(claimant_email),
+                    "method": method,
+                    "status": "rate_limited",
+                    "reason": "resend_cooldown_active",
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }
+                await db.claim_events.insert_one(event)
+                await _audit("trainer_claim_rate_limited", trainer_id, after={"claim_event_id": event["id"], "cooldown_remaining": cooldown_remaining}, actor="user")
+                raise HTTPException(status_code=429, detail=f"Please wait {cooldown_remaining}s before requesting another claim code.")
+
+    # New challenges supersede older unsatisfied attempts for this trainer.
+    await db.claim_events.update_many(
+        {"trainer_id": trainer_id, "status": "pending_verification"},
+        {"$set": {"status": "superseded", "updated_at": now.isoformat()}},
+    )
+    otp = claim_engine.generate_otp()
+    event = {
+        "id": new_id(),
+        "trainer_id": trainer_id,
+        "claimant_email": claimant_email,
+        "masked_destination": claim_engine.mask_email(listed_email),
+        "method": "email",
+        "otp_digest": claim_engine.otp_digest(otp),
+        "attempts": 0,
+        "max_attempts": max(1, TRAINER_CLAIM_OTP_MAX_ATTEMPTS),
+        "status": "pending_verification",
+        "delivery_status": "pending",
+        "expires_at": (now + timedelta(seconds=max(60, TRAINER_CLAIM_OTP_TTL_S))).isoformat(),
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
+    await db.claim_events.insert_one(event)
+    await db.trainers.update_one({"id": trainer_id}, {"$set": {"claim_status": "pending_verification", "claim_pending_at": now.isoformat()}})
+
+    try:
+        delivery = await notifications_service.notify_trainer_claim_otp(db, trainer, to_email=listed_email, otp=otp)
+    except Exception:  # noqa: BLE001
+        logger.exception("trainer claim notification failed trainer_id=%s", trainer_id)
+        delivery = {"claim_notification_status": "failed", "claim_notification_attempts": 0, "claim_notification_error": "notification_exception"}
+    delivery_status = str(delivery.get("claim_notification_status") or "failed")
+    event_status = "pending_verification" if delivery_status == "sent" else "delivery_failed"
+    if event_status == "delivery_failed":
+        await db.trainers.update_one({"id": trainer_id, "claim_status": "pending_verification"}, {"$set": {"claim_status": "unclaimed"}})
+    await db.claim_events.update_one(
+        {"id": event["id"]},
+        {"$set": {"status": event_status, "delivery_status": delivery_status, "delivery_attempts": int(delivery.get("claim_notification_attempts") or 0), "delivery_error": str(delivery.get("claim_notification_error") or delivery.get("claim_notification_reason") or "")[:240], "updated_at": now_iso()}},
+    )
+    await _audit("trainer_claim_started", trainer_id, after={"claim_event_id": event["id"], "delivery_status": delivery_status}, actor="user")
+    return _scrub({
+        "claim_event_id": event["id"],
+        "status": event_status,
+        "delivery_status": delivery_status,
+        "masked_destination": event["masked_destination"],
+        "expires_at": event["expires_at"],
+    })
+
+
+@api.post("/trainers/{trainer_id}/claim/verify")
+@api.post("/trainers/{trainer_id}/verify")
+async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -> Dict[str, Any]:
+    """Verify an email challenge and create a narrow, signed claim session."""
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+    now = datetime.now(timezone.utc)
+    if str(trainer.get("claim_status") or "").lower() == "claim_disputed":
+        if payload.claim_event_id:
+            await db.claim_events.update_one(
+                {"id": payload.claim_event_id, "trainer_id": trainer_id, "status": "pending_verification"},
+                {"$set": {"status": "stale", "reason": "profile_claim_disputed", "updated_at": now.isoformat()}},
+            )
+        raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
+    event = await db.claim_events.find_one({"id": payload.claim_event_id, "trainer_id": trainer_id}, {"_id": 0})
+    if not event:
+        raise HTTPException(status_code=404, detail="Claim challenge not found.")
+    if str(event.get("status") or "") != "pending_verification":
+        raise HTTPException(status_code=409, detail="Claim challenge is not available for verification.")
+
+    expires_at = _parse_iso(str(event.get("expires_at") or ""))
+    if not expires_at or expires_at <= now:
+        await db.claim_events.update_one({"id": event["id"]}, {"$set": {"status": "expired", "updated_at": now.isoformat()}})
+        raise HTTPException(status_code=410, detail="Claim code expired. Request a new code.")
+    attempts = int(event.get("attempts") or 0)
+    max_attempts = max(1, int(event.get("max_attempts") or TRAINER_CLAIM_OTP_MAX_ATTEMPTS))
+    if attempts >= max_attempts:
+        await db.claim_events.update_one({"id": event["id"]}, {"$set": {"status": "locked", "updated_at": now.isoformat()}})
+        raise HTTPException(status_code=429, detail="Claim code is locked. Request a new code.")
+    if not claim_engine.otp_matches(payload.otp, str(event.get("otp_digest") or "")):
+        next_attempt = attempts + 1
+        status = "locked" if next_attempt >= max_attempts else "pending_verification"
+        await db.claim_events.update_one(
+            {"id": event["id"]},
+            {"$set": {"attempts": next_attempt, "status": status, "updated_at": now.isoformat()}},
+        )
+        if status == "locked":
+            raise HTTPException(status_code=429, detail="Claim code is locked. Request a new code.")
+        raise HTTPException(status_code=400, detail="Claim code is invalid.")
+
+    current_status = str(trainer.get("claim_status") or "").lower()
+    if current_status == "claimed":
+        await db.claim_events.update_one(
+            {"id": event["id"]},
+            {"$set": {"status": "stale", "reason": "profile_already_claimed", "updated_at": now.isoformat()}},
+        )
+        raise HTTPException(status_code=409, detail="This profile has already been claimed.")
+    if current_status == "claim_disputed":
+        await db.claim_events.update_one(
+            {"id": event["id"]},
+            {"$set": {"status": "stale", "reason": "profile_claim_disputed", "updated_at": now.isoformat()}},
+        )
+        raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
+
+    claim_update = await db.trainers.update_one(
+        {"id": trainer_id, "claim_status": {"$in": ["", "unclaimed", "pending_verification"]}},
+        {"$set": {"claim_status": "claimed", "tier": "claimed", "claimed_at": now.isoformat(), "claim_event_id": event["id"]}},
+    )
+    if getattr(claim_update, "matched_count", 1) != 1:
+        await db.claim_events.update_one(
+            {"id": event["id"], "status": "pending_verification"},
+            {"$set": {"status": "stale", "reason": "profile_already_claimed", "updated_at": now.isoformat()}},
+        )
+        raise HTTPException(status_code=409, detail="This profile has already been claimed.")
+    await db.claim_events.update_one(
+        {"id": event["id"], "status": "pending_verification"},
+        {"$set": {"status": "verified", "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
+    )
+    session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
+    await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
+    return _scrub({"ok": True, "trainer_id": trainer_id, "claim_status": "claimed", "tier": "claimed", "session": session})
+
+
+@api.post("/first-leash")
+async def capture_first_leash_lead(payload: FirstLeashLeadIn) -> Dict[str, Any]:
+    email_norm = _normalize_email_key(str(payload.email))
+    user_type = payload.user_type.strip().lower()
+    campaign = (payload.campaign or "").strip()
+    source = (payload.source or "").strip()
+    utm_medium = (payload.utm_medium or "").strip()
+    utm_campaign = (payload.utm_campaign or "").strip()
+
+    if user_type not in ["owner", "trainer"]:
+        raise HTTPException(status_code=400, detail="Invalid user type")
+
+    leads_coll = getattr(db, "first_leash_leads", None)
+    if leads_coll is None:
+        raise HTTPException(status_code=503, detail="Database unready")
+
+    now = datetime.now(timezone.utc)
+
+    existing = await leads_coll.find_one({"email_norm": email_norm})
+    if existing:
+        return {"status": "exists", "id": str(existing["_id"])}
+
+    doc = {
+        "email_norm": email_norm,
+        "email_raw": str(payload.email),
+        "user_type": user_type,
+        "created_at": now,
+        "campaign": campaign,
+        "source": source,
+        "utm_medium": utm_medium,
+        "utm_campaign": utm_campaign,
+    }
+
+    res = await leads_coll.insert_one(doc)
+    return {"status": "success", "id": str(res.inserted_id)}
 
 
 @api.post("/owner-waitlist")
@@ -3256,12 +4188,13 @@ async def get_submission_status(submission_id: str) -> Dict[str, Any]:
     blockers: List[Dict[str, str]] = []
     if sub.get("status") == "held":
         blockers.append({"code": "held", "message": "Submission is held. Add stronger evidence and contact details."})
-    if billing_profile_status in {"missing_email", "profile_incomplete"}:
-        blockers.append({"code": "billing_profile", "message": "Billing profile is incomplete. Add billing email and trainer details."})
-    if billing_profile_status == "consent_required":
-        blockers.append({"code": "billing_consent", "message": "Billing consent is required to activate collection."})
-    if billing_profile_status in {"stripe_unconfigured", "stripe_error"}:
-        blockers.append({"code": "billing_integration", "message": "Billing integration needs remediation before collection."})
+    if sub.get("status") != "published":
+        if billing_profile_status in {"missing_email", "profile_incomplete"}:
+            blockers.append({"code": "billing_profile", "message": "Billing profile is incomplete. Add billing email and trainer details."})
+        if billing_profile_status == "consent_required":
+            blockers.append({"code": "billing_consent", "message": "Billing consent is required to activate collection."})
+        if billing_profile_status in {"stripe_unconfigured", "stripe_error"}:
+            blockers.append({"code": "billing_integration", "message": "Billing integration needs remediation before collection."})
     activation_state = _activation_state_for_submission(
         submission_status=str(sub.get("status") or ""),
         billing_profile_status=str(billing_profile_status or ""),
@@ -3299,46 +4232,55 @@ async def get_trainer_billing_health(
     trainer_id: Optional[str] = Query(default=None),
     submission_id: Optional[str] = Query(default=None),
     trainer_action_token: Optional[str] = None,
+    trainer_claim_session: Optional[str] = None,
 ) -> Dict[str, Any]:
     trainer = await _resolve_trainer(trainer_id=trainer_id, submission_id=submission_id)
     sub = await _resolve_submission(submission_id)
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer context not found.")
-    _require_trainer_action_token(
-        token=trainer_action_token,
-        trainer_id=str(trainer.get("id") or ""),
-        submission_id=submission_id,
-    )
+    if str(trainer_claim_session or "").strip():
+        _verify_trainer_claim_session(str(trainer_claim_session), trainer_id=str(trainer.get("id") or ""))
+    else:
+        _require_trainer_action_token(
+            token=trainer_action_token,
+            trainer_id=str(trainer.get("id") or ""),
+            submission_id=submission_id,
+        )
 
     intros = await db.intros.find(
         {"trainer_id": trainer.get("id")},
-        {"_id": 0, "intro_fee_cents": 1, "billing_collection_status": 1, "billing_retry_state": 1},
+        {"_id": 0, "intro_fee_cents": 1, "billing_collection_status": 1},
     ).to_list(1000)
     statuses: Dict[str, int] = {}
     billed_total_cents = 0
-    retry_states: Dict[str, int] = {}
     for intro in intros:
         status = str(intro.get("billing_collection_status") or "not_billable")
         statuses[status] = statuses.get(status, 0) + 1
         billed_total_cents += int(intro.get("intro_fee_cents") or 0)
-        retry_state = str(intro.get("billing_retry_state") or "")
-        if retry_state:
-            retry_states[retry_state] = retry_states.get(retry_state, 0) + 1
+
+    sub_tier = str(trainer.get("subscription_tier") or trainer.get("tier") or "claimed")
+    sub_status = str(trainer.get("subscription_status") or ("active" if sub_tier in stripe_billing.SUBSCRIPTION_PLANS else "free"))
+    sub_billing_status = str(trainer.get("subscription_billing_status") or "normal")
+    sub_suburb = trainer.get("subscription_suburb") or trainer.get("suburb")
+    trial = stripe_billing.trial_status(trainer)
+    eligible_suburbs = list(
+        dict.fromkeys(
+            str(value).strip()
+            for value in ([trainer.get("suburb")] + list(trainer.get("serviced_suburbs") or []))
+            if str(value or "").strip()
+        )
+    )
+    sponsor_inventory = await suburb_inventory.availability(db, eligible_suburbs)
 
     issues = {
         "profile_incomplete": str(trainer.get("billing_profile_status") or "") in {"missing_email", "profile_incomplete"},
         "consent_required": str(trainer.get("billing_profile_status") or "") == "consent_required",
         "stripe_unconfigured": str(trainer.get("billing_profile_status") or "") in {"stripe_unconfigured", "stripe_error"},
-        "payment_failed_or_disputed": (statuses.get("payment_failed", 0) + statuses.get("disputed", 0) + statuses.get("uncollectible", 0)) > 0,
+        "payment_failed_or_disputed": (
+            sub_status in {"past_due", "unpaid"}
+            or sub_billing_status == "payment_failed"
+        ),
     }
-    try:
-        max_attempts = max(1, int(os.environ.get("BILLING_RETRY_MAX_ATTEMPTS", "3")))
-    except ValueError:
-        max_attempts = 3
-    try:
-        base_delay_hours = max(1, int(os.environ.get("BILLING_RETRY_BASE_DELAY_HOURS", "24")))
-    except ValueError:
-        base_delay_hours = 24
     return {
         "trainer": {
             "id": trainer.get("id"),
@@ -3346,16 +4288,31 @@ async def get_trainer_billing_health(
             "billing_email": trainer.get("billing_email") or trainer.get("email"),
             "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
             "stripe_customer_id": trainer.get("stripe_customer_id"),
+            "tier": sub_tier,
+            "subscription_tier": sub_tier,
+            "subscription_status": sub_status,
+            "subscription_billing_status": sub_billing_status,
+            "subscription_suburb": sub_suburb,
+        },
+        "subscription": {
+            "tier": sub_tier,
+            "status": sub_status,
+            "billing_status": sub_billing_status,
+            "suburb": sub_suburb,
+            "stripe_subscription_id": trainer.get("stripe_subscription_id"),
+            "stripe_customer_id": trainer.get("stripe_customer_id"),
+            "trial": trial,
         },
         "submission_id": (sub or {}).get("id"),
         "status_counts": statuses,
-        "retry_state_counts": retry_states,
-        "retry_policy": {
-            "max_attempts": max_attempts,
-            "base_delay_hours": base_delay_hours,
-        },
+        "retry_state_counts": {},
+        "retry_policy": {},
         "billed_total_cents": billed_total_cents,
+        "historical_billed_total_cents": billed_total_cents,
+        "historical_intro_count": len(intros),
         "issues": issues,
+        "eligible_suburbs": eligible_suburbs,
+        "sponsor_inventory": sponsor_inventory,
     }
 
 
@@ -3380,6 +4337,234 @@ async def reconnect_trainer_billing(payload: TrainerBillingActionIn) -> Dict[str
     profile = await stripe_billing.provision_trainer_billing_profile(db, trainer, consent_granted=False)
     await _audit("trainer_billing_reconnect", trainer["id"], after={"billing_profile_status": profile.get("billing_profile_status")}, actor="user")
     return {"ok": True, "trainer_id": trainer["id"], "billing_profile_status": profile.get("billing_profile_status")}
+
+
+@api.post("/trainer/billing/checkout")
+async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[str, Any]:
+    """Start a hosted subscription checkout for the verified profile owner."""
+    trainer_id = payload.trainer_id.strip()
+    auth_reference = ""
+    if str(payload.trainer_claim_session or "").strip():
+        claim_session = _verify_trainer_claim_session(str(payload.trainer_claim_session), trainer_id=trainer_id)
+        auth_reference = str(claim_session.get("claim_event_id") or "")
+    elif str(payload.trainer_action_token or "").strip():
+        action_payload = _verify_trainer_action_token(str(payload.trainer_action_token), trainer_id=trainer_id)
+        auth_reference = str(action_payload.get("submission_id") or action_payload.get("trainer_id") or "")
+    else:
+        raise HTTPException(status_code=401, detail="A current trainer session or action link is required.")
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+    if str(trainer.get("claim_status") or "").lower() != "claimed":
+        raise HTTPException(status_code=403, detail="Only a claimed trainer profile can start subscription checkout.")
+    if not payload.consent_subscription_billing_terms:
+        raise HTTPException(status_code=400, detail="Subscription billing consent is required before checkout.")
+
+    try:
+        plan = stripe_billing.subscription_plan(tier=payload.tier, suburb=payload.suburb, interval=payload.interval)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if plan["tier"] == "suburb_sponsor" and not _trainer_serves_suburb(trainer, plan["suburb"]):
+        raise HTTPException(status_code=403, detail="Suburb sponsorship must match a suburb served by this profile.")
+
+    reservation: Dict[str, Any] = {}
+    if plan["tier"] in {"suburb_sponsor", "citywide"}:
+        reservation_result = await suburb_inventory.reserve(
+            db,
+            trainer_id=trainer_id,
+            tier=plan["tier"],
+            suburb=plan["suburb"],
+            idempotency_key=f"{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+        )
+        if not reservation_result.get("ok"):
+            code = str(reservation_result.get("code") or "inventory_unavailable")
+            status_code = 409 if code in {"inventory_sold_out", "duplicate_sponsor_for_suburb", "trainer_suburb_cap_reached"} else 503
+            raise HTTPException(status_code=status_code, detail=code)
+        reservation = dict(reservation_result.get("reservation") or {})
+
+    checkout = await stripe_billing.create_checkout_session(
+        db,
+        trainer,
+        tier=plan["tier"],
+        suburb=plan["suburb"],
+        interval=plan["interval"],
+        consent_granted=payload.consent_subscription_billing_terms,
+        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+        reservation_id=str(reservation.get("reservation_id") or ""),
+        billing_return_url=(
+            f"{(os.environ.get('FRONTEND_BASE_URL') or 'http://127.0.0.1:3001').strip().rstrip('/')}/trainer/billing?"
+            f"{urlencode({'trainerId': trainer_id})}"
+        ),
+    )
+    if not checkout.get("ok"):
+        code = str(checkout.get("code") or "stripe_checkout_failed")
+        status = "provider_unavailable" if code == "stripe_unconfigured" else "needs_review"
+        event_id = f"checkout:{new_id()}"
+        await db.stripe_events.insert_one(
+            {
+                "id": event_id,
+                "type": "checkout.session.create",
+                "status": status,
+                "trainer_id": trainer_id,
+                "subscription_tier": plan["tier"],
+                "suburb": plan["suburb"],
+                "reason": code,
+                "created_at": now_iso(),
+            }
+        )
+        await _audit("trainer_subscription_checkout_failed", trainer_id, after={"reason": code, "stripe_event_id": event_id}, actor="user")
+        if reservation.get("reservation_id"):
+            await suburb_inventory.release_reservation(
+                db,
+                reservation_id=str(reservation["reservation_id"]),
+                reason="checkout_failed",
+            )
+        http_status = 503 if code in {"stripe_unconfigured", "stripe_error"} else 409
+        raise HTTPException(status_code=http_status, detail="Subscription checkout is unavailable. The issue has been recorded for review.")
+
+    try:
+        await db.stripe_events.insert_one(
+            {
+                "id": f"checkout:{checkout['session_id']}",
+                "type": "checkout.session.created",
+                "status": "created",
+                "trainer_id": trainer_id,
+                "stripe_checkout_session_id": checkout["session_id"],
+                "stripe_customer_id": checkout.get("customer_id"),
+                "subscription_tier": plan["tier"],
+                "suburb": plan["suburb"],
+                "reservation_id": reservation.get("reservation_id"),
+                "reservation_expires_at": reservation.get("expires_at"),
+                "created_at": now_iso(),
+            }
+        )
+    except DuplicateKeyError:
+        pass
+    await _audit("trainer_subscription_checkout_started", trainer_id, after={"tier": plan["tier"], "suburb": plan["suburb"], "session_id": checkout["session_id"]}, actor="user")
+    return {
+        "ok": True,
+        "url": checkout["url"],
+        "session_id": checkout["session_id"],
+        "tier": plan["tier"],
+        "suburb": plan["suburb"],
+        "reservation_id": reservation.get("reservation_id"),
+        "reservation_expires_at": reservation.get("expires_at"),
+    }
+
+
+@api.post("/trainer/billing/portal")
+async def create_trainer_billing_portal(payload: TrainerPortalIn) -> Dict[str, Any]:
+    trainer_id = payload.trainer_id.strip()
+    if str(payload.trainer_claim_session or "").strip():
+        _verify_trainer_claim_session(str(payload.trainer_claim_session), trainer_id=trainer_id)
+    elif str(payload.trainer_action_token or "").strip():
+        _verify_trainer_action_token(str(payload.trainer_action_token), trainer_id=trainer_id)
+    else:
+        raise HTTPException(status_code=401, detail="A current trainer session or action link is required.")
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+    frontend_base = (os.environ.get("FRONTEND_BASE_URL") or "http://127.0.0.1:3001").strip().rstrip("/")
+    portal = await stripe_billing.create_customer_portal_session(
+        trainer,
+        return_url=f"{frontend_base}/trainer/billing?{urlencode({'trainerId': trainer_id})}",
+    )
+    if not portal.get("ok"):
+        await db.stripe_events.insert_one(
+            {
+                "id": f"portal:{new_id()}",
+                "type": "billing_portal.session.create",
+                "status": "provider_unavailable" if portal.get("code") == "stripe_unconfigured" else "needs_review",
+                "trainer_id": trainer_id,
+                "subscription_tier": trainer.get("subscription_tier") or trainer.get("tier"),
+                "reason": str(portal.get("code") or "stripe_portal_failed"),
+                "created_at": now_iso(),
+            }
+        )
+        raise HTTPException(status_code=503, detail="Subscription management is unavailable. The issue has been recorded for review.")
+    await _audit("trainer_subscription_portal_opened", trainer_id, actor="user")
+    return {"ok": True, "url": portal["url"]}
+
+
+@api.get("/sponsor-inventory")
+async def get_sponsor_inventory(suburb: Optional[str] = Query(default=None)) -> Dict[str, Any]:
+    return await suburb_inventory.availability(db, [suburb] if suburb else [])
+
+
+@api.post("/oversight/subscriptions/refund")
+async def refund_trainer_subscription(
+    payload: OpsSubscriptionRefundIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    if (os.environ.get("ENABLE_OPS_STRIPE_REFUNDS") or "0").strip().lower() not in TRUTHY_ENV_VALUES:
+        raise HTTPException(status_code=503, detail="Stripe refunds are not enabled in this runtime.")
+    trainer = await db.trainers.find_one(
+        {"id": payload.trainer_id, "stripe_subscription_id": payload.stripe_subscription_id},
+        {"_id": 0},
+    )
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Subscription trainer not found.")
+    started_at = _parse_iso(trainer.get("subscription_active_at"))
+    interval = str(trainer.get("subscription_interval") or "month")
+    guarantee_days = 30 if interval == "year" else 14
+    if not started_at or datetime.now(timezone.utc) > started_at + timedelta(days=guarantee_days):
+        raise HTTPException(status_code=409, detail="This subscription is outside the configured money-back window.")
+
+    event_id = f"refund:{payload.payment_intent_id}"
+    try:
+        await db.stripe_events.insert_one(
+            {
+                "id": event_id,
+                "type": "subscription.refund.requested",
+                "status": "processing",
+                "trainer_id": payload.trainer_id,
+                "subscription_tier": trainer.get("subscription_tier") or trainer.get("tier"),
+                "reason": payload.reason.strip(),
+                "created_at": now_iso(),
+            }
+        )
+    except DuplicateKeyError:
+        return {"ok": True, "duplicate": True}
+
+    refund = await stripe_billing.refund_subscription_payment(
+        payment_intent_id=payload.payment_intent_id,
+        idempotency_key=event_id,
+    )
+    if not refund.get("ok"):
+        await db.stripe_events.update_one(
+            {"id": event_id},
+            {"$set": {"status": "needs_review", "reason": str(refund.get("code") or "stripe_refund_failed"), "processed_at": now_iso()}},
+        )
+        raise HTTPException(status_code=503, detail="Refund could not be completed. The case remains visible for review.")
+
+    await db.trainers.update_one(
+        {"id": payload.trainer_id, "stripe_subscription_id": payload.stripe_subscription_id},
+        {
+            "$set": {
+                "tier": "claimed",
+                "subscription_status": "refunded",
+                "subscription_billing_status": "refunded",
+                "subscription_ended_at": now_iso(),
+            }
+        },
+    )
+    await suburb_inventory.release_reservation(
+        db,
+        reservation_id=str(trainer.get("sponsor_reservation_id") or ""),
+        subscription_id="" if trainer.get("sponsor_reservation_id") else payload.stripe_subscription_id,
+        reason="refunded",
+    )
+    await db.stripe_events.update_one(
+        {"id": event_id},
+        {"$set": {"status": "processed", "stripe_refund_id": refund.get("refund_id"), "processed_at": now_iso()}},
+    )
+    await _audit(
+        "trainer_subscription_refunded",
+        payload.trainer_id,
+        after={"stripe_subscription_id": payload.stripe_subscription_id, "stripe_refund_id": refund.get("refund_id")},
+        actor="operator",
+    )
+    return {"ok": True, "refund_id": refund.get("refund_id"), "status": refund.get("status")}
 
 
 @api.get("/trainer/reactivate")
@@ -3437,22 +4622,46 @@ async def reactivate_trainer_listing(payload: TrainerReactivateIn) -> Dict[str, 
 
     score = await ai_service.score_trainer(_verification_payload(trainer))
     conf = float(score.get("confidence") or 0)
-    status = ai_service.status_for_score(conf)
-    published = conf >= HOLD_THRESHOLD
+    has_statutory_abn = bool(trainer.get("abn_verified"))
+    is_eligible_for_publish = has_statutory_abn and conf >= HOLD_THRESHOLD
+
+    if is_eligible_for_publish:
+        published = True
+        verification_status = "verified"
+        contact_ready = bool(trainer.get("website") or trainer.get("phone") or trainer.get("email"))
+        verified_at = trainer.get("verified_at") or now_iso()
+    else:
+        published = False
+        verification_status = "unverified" if conf >= HOLD_THRESHOLD else "hold"
+        contact_ready = False
+        verified_at = trainer.get("verified_at") if has_statutory_abn else ""
+
     await db.trainers.update_one(
         {"id": trainer["id"]},
         {"$set": {
             "confidence_score": conf,
-            "verification_status": status,
+            "verification_status": verification_status,
             "verification_reasoning": score.get("reasoning", ""),
             "verification_signals": score.get("signals", []),
             "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso(),
+            "verified_at": verified_at,
             "published": published,
+            "contact_ready": contact_ready,
         }},
     )
-    await _audit("trainer_reactivate", trainer["id"], after={"published": published, "confidence_score": conf}, actor="user")
-    return {"ok": True, "trainer_id": trainer["id"], "published": published, "confidence_score": conf, "verification_status": status}
+    await _audit(
+        "trainer_reactivate",
+        trainer["id"],
+        after={"published": published, "confidence_score": conf, "verification_status": verification_status},
+        actor="user",
+    )
+    return {
+        "ok": True,
+        "trainer_id": trainer["id"],
+        "published": published,
+        "confidence_score": conf,
+        "verification_status": verification_status,
+    }
 
 
 @api.get("/seo/{slug:path}")
@@ -3488,6 +4697,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         "promoted": await db.discovery_queue.count_documents({"status": "promoted"}),
         "duplicate": await db.discovery_queue.count_documents({"status": "duplicate"}),
         "discarded": await db.discovery_queue.count_documents({"status": "discarded"}),
+        "suppressed": await db.discovery_queue.count_documents({"status": "suppressed"}),
     }
     waitlist_summary = await _owner_waitlist_summary()
     now_dt = datetime.now(timezone.utc)
@@ -3503,7 +4713,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
-    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).to_list(20) if source_ingestion_state_coll is not None else []
+    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
         key=lambda row: (
             int(row.get("consecutive_failures") or 0),
@@ -3512,48 +4722,60 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         ),
         reverse=True,
     )
-    billing_recovery_cases = await db.intros.find(
+    trainers_coll = getattr(db, "trainers", None)
+    subscription_exception_trainers = await trainers_coll.find(
         {
-            "billing_status": "billed",
-            "billing_retry_state": {"$in": ["retry_exhausted", "retry_failed", "needs_remediation", "retry_sent"]},
+            "$or": [
+                {"subscription_status": {"$in": ["past_due", "unpaid", "incomplete_expired"]}},
+                {"subscription_billing_status": "payment_failed"},
+                {
+                    "tier": {"$in": ["pro", "suburb_sponsor", "citywide"]},
+                    "billing_profile_status": {"$in": ["stripe_error", "stripe_unconfigured"]},
+                },
+            ]
         },
         {
             "_id": 0,
             "id": 1,
-            "trainer_id": 1,
-            "billing_collection_status": 1,
-            "billing_retry_state": 1,
-            "billing_retry_attempts": 1,
-            "billing_last_retry_at": 1,
-            "intro_fee_cents": 1,
+            "name": 1,
+            "tier": 1,
+            "subscription_tier": 1,
+            "subscription_status": 1,
+            "subscription_billing_status": 1,
+            "subscription_suburb": 1,
+            "billing_profile_status": 1,
+            "billing_email": 1,
+            "email": 1,
+            "updated_at": 1,
             "created_at": 1,
         },
-    ).to_list(20)
-    trainer_ids_for_cases = sorted({str(row.get("trainer_id") or "") for row in billing_recovery_cases if row.get("trainer_id")})
-    trainer_rows = await db.trainers.find(
-        {"id": {"$in": trainer_ids_for_cases}},
-        {"_id": 0, "id": 1, "name": 1, "billing_profile_status": 1, "published": 1, "confidence_score": 1},
-    ).to_list(max(1, len(trainer_ids_for_cases))) if trainer_ids_for_cases else []
-    trainers_by_id = {str(row.get("id") or ""): row for row in trainer_rows}
+    ).to_list(20) if trainers_coll is not None else []
     billing_recovery_case_rows: List[Dict[str, Any]] = []
-    for row in billing_recovery_cases:
-        trainer = trainers_by_id.get(str(row.get("trainer_id") or ""), {})
-        trainer_id = str(row.get("trainer_id") or "")
+    for t in subscription_exception_trainers:
+        t_id = str(t.get("id") or "")
+        sub_status = str(t.get("subscription_status") or "none")
+        billing_status = str(t.get("subscription_billing_status") or t.get("billing_profile_status") or "normal")
         billing_recovery_case_rows.append(
             {
-                "intro_id": row.get("id"),
-                "trainer_id": trainer_id,
-                "trainer_name": trainer.get("name") or trainer_id or "unknown",
-                "billing_collection_status": row.get("billing_collection_status") or "unknown",
-                "billing_retry_state": row.get("billing_retry_state") or "unknown",
-                "billing_retry_attempts": int(row.get("billing_retry_attempts") or 0),
-                "billing_last_retry_at": row.get("billing_last_retry_at"),
-                "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
-                "intro_fee_cents": int(row.get("intro_fee_cents") or 0),
-                "created_at": row.get("created_at"),
-                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+                "trainer_id": t_id,
+                "trainer_name": t.get("name") or t_id or "unknown",
+                "tier": t.get("subscription_tier") or t.get("tier") or "core",
+                "subscription_tier": t.get("subscription_tier") or t.get("tier") or "core",
+                "subscription_status": sub_status,
+                "subscription_billing_status": billing_status,
+                "billing_collection_status": billing_status,
+                "billing_profile_status": t.get("billing_profile_status") or "unknown",
+                "billing_retry_state": sub_status if sub_status in {"past_due", "unpaid"} else billing_status,
+                "suburb": t.get("subscription_suburb") or "",
+                "created_at": t.get("updated_at") or t.get("created_at"),
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=t_id) if t_id else None,
             }
         )
+    stripe_events_coll = getattr(db, "stripe_events", None)
+    subscription_billing_case_rows = await stripe_events_coll.find(
+        {"status": {"$in": ["provider_unavailable", "needs_review", "failed"]}},
+        {"_id": 0, "id": 1, "type": 1, "status": 1, "trainer_id": 1, "subscription_tier": 1, "reason": 1, "created_at": 1, "processed_at": 1},
+    ).sort("created_at", -1).limit(50).to_list(50) if stripe_events_coll is not None and hasattr(stripe_events_coll, "find") else []
     reactivation_candidates_coll = getattr(db, "reactivation_candidates", None)
     reactivation_case_rows_raw = await reactivation_candidates_coll.find(
         {"status": "open"},
@@ -3585,14 +4807,19 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         }.items()
     }
     message_log = await _message_log_rows()
+    ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
+    sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
         loop_statuses=loop_statuses,
         billing_recovery_case_rows=billing_recovery_case_rows,
+        subscription_billing_case_rows=subscription_billing_case_rows,
         reactivation_case_rows=reactivation_case_rows,
         source_ingestion_state_rows=source_ingestion_state_rows,
         message_log=message_log,
+        ai_degradation_cases=ai_degradation_cases,
+        sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
     )
 
 
@@ -3672,108 +4899,76 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     readiness_snapshot = phase_runtime["readiness_snapshot"]
     phase_decisions = phase_runtime["phase_decisions"]
     conversion_statuses = autonomy.confirmed_conversion_statuses()
-    intros_24 = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": "billed"})
-    intros_7d = await db.intros.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": "billed"})
-    conv_24 = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()}, "billing_status": {"$in": conversion_statuses}})
-    conv_7d = await db.conversions.count_documents({"created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()}, "billing_status": {"$in": conversion_statuses}})
+    delivered_intro_filter = {
+        "$or": [
+            {"delivery_status": "delivered"},
+            {"status": "delivered"},
+            {"billing_status": "billed"},
+        ],
+        "billing_status": {"$ne": "suppressed"},
+        "delivery_status": {"$ne": "suppressed"},
+    }
+    conversion_statuses = autonomy.confirmed_conversion_statuses()
+    intros_24 = await db.intros.count_documents({
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()},
+        **delivered_intro_filter,
+    })
+    intros_7d = await db.intros.count_documents({
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()},
+        **delivered_intro_filter,
+    })
+    conv_24 = await db.conversions.count_documents({
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()},
+        "billing_status": {"$in": conversion_statuses},
+    })
+    conv_7d = await db.conversions.count_documents({
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()},
+        "billing_status": {"$in": conversion_statuses},
+    })
 
-    intros = await db.intros.find({"billing_status": "billed"}, {"_id": 0}).to_list(2000)
+    intros = await db.intros.find(delivered_intro_filter, {"_id": 0}).to_list(2000)
     conversions = await db.conversions.find({"billing_status": {"$in": conversion_statuses}}, {"_id": 0}).to_list(2000)
-    suppressed = await db.intros.count_documents({"billing_status": "suppressed"})
-    suspicious_conv = await db.conversions.count_documents({"billing_status": "suspicious"})
-    inferred_pending = await db.conversions.count_documents({"inferred": True, "billing_status": "pending"})
+    suppressed = await db.intros.count_documents({
+        "$or": [{"delivery_status": "suppressed"}, {"billing_status": "suppressed"}]
+    })
+    suspicious_conv = await db.conversions.count_documents({
+        "$or": [{"status": "suspicious"}, {"billing_status": "suspicious"}]
+    })
+    inferred_pending = await db.conversions.count_documents({
+        "inferred": True,
+        "$or": [{"status": "pending"}, {"billing_status": "pending"}],
+    })
     engagements_total = await db.engagements.count_documents({})
 
-    billing_status_defaults = {
-        "invoice_sent": 0,
-        "invoice_finalized": 0,
-        "paid": 0,
-        "trial_free": 0,
-        "payment_failed": 0,
-        "uncollectible": 0,
-        "waived": 0,
-        "refunded": 0,
-        "disputed": 0,
-        "dispute_resolved": 0,
-        "profile_incomplete": 0,
-        "consent_required": 0,
-        "stripe_unconfigured": 0,
-        "invoice_error": 0,
-        "not_billable": 0,
-    }
-    billing_rows = await db.intros.aggregate(
-        [
-            {"$match": {"billing_collection_status": {"$exists": True}}},
-            {"$group": {"_id": "$billing_collection_status", "n": {"$sum": 1}}},
-        ]
-    ).to_list(100)
-    billing_summary = dict(billing_status_defaults)
-    for row in billing_rows:
-        k = str(row.get("_id") or "")
-        if not k:
-            continue
-        billing_summary[k] = int(row.get("n") or 0)
-
-    non_billable_causes = {
-        "trial_free": billing_summary.get("trial_free", 0),
-        "profile_incomplete": billing_summary.get("profile_incomplete", 0),
-        "consent_required": billing_summary.get("consent_required", 0),
-        "stripe_unconfigured": billing_summary.get("stripe_unconfigured", 0),
-        "invoice_error": billing_summary.get("invoice_error", 0),
-    }
+    converted_intro_ids = await db.conversions.distinct("intro_id")
+    stalled_intros = await db.intros.count_documents({
+        "id": {"$nin": converted_intro_ids},
+        "created_at": {"$lt": (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()},
+        **delivered_intro_filter,
+    })
 
     notification_summary = {
         "trainer_intro_sent": await db.intros.count_documents({"trainer_notification_status": "sent"}),
         "trainer_intro_failed": await db.intros.count_documents({"trainer_notification_status": "failed"}),
         "trainer_intro_skipped": await db.intros.count_documents({"trainer_notification_status": "skipped"}),
+        "trainer_intro_suppressed": await db.intros.count_documents({"trainer_notification_status": "suppressed"}),
         "submission_sent": await db.submissions.count_documents({"submitter_notification_status": "sent"}),
         "submission_failed": await db.submissions.count_documents({"submitter_notification_status": "failed"}),
         "submission_skipped": await db.submissions.count_documents({"submitter_notification_status": "skipped"}),
     }
-
-    revenue_intro_cents = sum(i.get("intro_fee_cents", 0) for i in intros)
-    revenue_conv_cents = sum(c.get("fee_cents", 0) for c in conversions)
-    revenue_total_cents = revenue_intro_cents + revenue_conv_cents
-    collected_statuses = {"paid", "dispute_resolved"}
-    at_risk_statuses = {
-        "payment_failed",
-        "uncollectible",
-        "disputed",
-        "invoice_error",
-        "profile_incomplete",
-        "consent_required",
-        "stripe_unconfigured",
-    }
-    collected_intro_cents = sum(
-        int(i.get("intro_fee_cents", 0) or 0)
-        for i in intros
-        if str(i.get("billing_collection_status") or "") in collected_statuses
-    )
-    at_risk_intro_cents = sum(
-        int(i.get("intro_fee_cents", 0) or 0)
-        for i in intros
-        if str(i.get("billing_collection_status") or "") in at_risk_statuses
-    )
-    booked_revenue_cents = revenue_total_cents
-    collected_revenue_cents = collected_intro_cents
-    at_risk_revenue_cents = at_risk_intro_cents
 
     intros_total = max(1, len(intros))
     intro_to_conv = round(len(conversions) / intros_total, 3)
 
     health = await db.system_state.find_one({"key": "health"}, {"_id": 0}) or {}
     ranking = await db.system_state.find_one({"key": "ranking"}, {"_id": 0}) or {}
-    pricing = await db.system_state.find_one({"key": "pricing"}, {"_id": 0}) or {}
     verification = await db.system_state.find_one({"key": "verification"}, {"_id": 0}) or {}
     discovery = await db.system_state.find_one({"key": "discovery"}, {"_id": 0}) or {}
     inference = await db.system_state.find_one({"key": "inference"}, {"_id": 0}) or {}
     source_ingestion = await db.system_state.find_one({"key": "source_ingestion"}, {"_id": 0}) or {}
     outreach = await db.system_state.find_one({"key": "outreach"}, {"_id": 0}) or {}
-    billing_recovery = await db.system_state.find_one({"key": "billing_recovery"}, {"_id": 0}) or {}
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
-
-    pricing_state = await db.pricing_state.find({}, {"_id": 0}).sort("suburb", 1).to_list(200)
 
     top_trainers = await db.trainers.find(
         {"published": True},
@@ -3795,6 +4990,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "promoted": await db.discovery_queue.count_documents({"status": "promoted"}),
         "duplicate": await db.discovery_queue.count_documents({"status": "duplicate"}),
         "discarded": await db.discovery_queue.count_documents({"status": "discarded"}),
+        "suppressed": await db.discovery_queue.count_documents({"status": "suppressed"}),
     }
 
     integrity = {
@@ -3817,7 +5013,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     reactivation_summary = await _reactivation_summary()
     now_dt = datetime.now(timezone.utc)
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
-    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).to_list(20) if source_ingestion_state_coll is not None else []
+    source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
         key=lambda row: (
             int(row.get("consecutive_failures") or 0),
@@ -3826,46 +5022,148 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         ),
         reverse=True,
     )
-    billing_recovery_cases = await db.intros.find(
+    delivered_cases_raw = await db.intros.find(
+        delivered_intro_filter,
+        {"_id": 0, "id": 1, "trainer_id": 1, "delivery_status": 1, "created_at": 1, "region": 1, "suburb": 1},
+    ).sort("created_at", -1).limit(20).to_list(20)
+    intro_delivery_cases = [
         {
-            "billing_status": "billed",
-            "billing_retry_state": {"$in": ["retry_exhausted", "retry_failed", "needs_remediation", "retry_sent"]},
+            "intro_id": row.get("id"),
+            "trainer_id": row.get("trainer_id"),
+            "delivery_status": row.get("delivery_status") or "delivered",
+            "created_at": row.get("created_at"),
+            "region": row.get("region") or "",
+            "suburb": row.get("suburb") or "",
+        }
+        for row in delivered_cases_raw
+    ]
+    fraud_cases_raw = await db.intros.find(
+        {"$or": [{"delivery_status": "suppressed"}, {"billing_status": "suppressed"}]},
+        {"_id": 0, "id": 1, "trainer_id": 1, "delivery_status": 1, "fraud_status": 1, "fraud_reasons": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(20).to_list(20)
+    fraud_suppression_cases = [
+        {
+            "intro_id": row.get("id"),
+            "trainer_id": row.get("trainer_id"),
+            "delivery_status": row.get("delivery_status") or "suppressed",
+            "fraud_status": row.get("fraud_status") or "suppressed",
+            "fraud_reasons": row.get("fraud_reasons") or [],
+            "created_at": row.get("created_at"),
+        }
+        for row in fraud_cases_raw
+    ]
+    conversion_cases_raw = await db.conversions.find(
+        {},
+        {"_id": 0, "id": 1, "intro_id": 1, "trainer_id": 1, "status": 1, "billing_status": 1, "inferred": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(20).to_list(20)
+    conversion_quality_cases = [
+        {
+            "conversion_id": row.get("id"),
+            "intro_id": row.get("intro_id"),
+            "trainer_id": row.get("trainer_id"),
+            "status": row.get("status") or row.get("billing_status") or "tracked",
+            "inferred": bool(row.get("inferred")),
+            "created_at": row.get("created_at"),
+        }
+        for row in conversion_cases_raw
+    ]
+    claim_events_coll = getattr(db, "claim_events", None)
+    claim_cases = await claim_events_coll.find(
+        {"status": {"$nin": ["verified", "superseded"]}},
+        {"_id": 0, "id": 1, "trainer_id": 1, "status": 1, "reason": 1, "delivery_status": 1, "delivery_error": 1, "method": 1, "masked_destination": 1, "attempts": 1, "profile_claim_status": 1, "created_at": 1, "updated_at": 1},
+    ).sort("updated_at", -1).limit(50).to_list(50) if claim_events_coll is not None else []
+    abn_degradation_cases = []
+    if not (os.environ.get("ABR_GUID") or "").strip():
+        abn_degradation_cases.append(
+            {
+                "id": "system_abr_guid_missing",
+                "name": "ABR Web Services",
+                "abn": "",
+                "abn_status": "abr_guid_missing",
+                "abn_verification_reason": "ABR_GUID is not configured in the environment.",
+                "abn_checked_at": now_iso(),
+                "created_at": now_iso(),
+            }
+        )
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is not None:
+        trainer_degraded = await trainers_coll.find(
+            {
+                "$or": [
+                    {
+                        "abn_status": {
+                            "$in": [
+                                "abr_unavailable",
+                                "degraded",
+                                "abr_guid_missing",
+                                "abr_maintenance",
+                                "abr_network_error",
+                                "pending_verification",
+                                "invalid_checksum",
+                                "checksum_failed",
+                                "invalid_length",
+                                "unverified",
+                            ]
+                        }
+                    },
+                    {"abn": {"$ne": "", "$exists": True}, "abn_verified": False},
+                ]
+            },
+            {"_id": 0, "id": 1, "name": 1, "abn": 1, "abn_status": 1, "abn_verification_reason": 1, "abn_checked_at": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(50).to_list(50)
+        abn_degradation_cases.extend(trainer_degraded)
+    ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
+    stripe_events_coll = getattr(db, "stripe_events", None)
+    subscription_billing_case_rows = await stripe_events_coll.find(
+        {"status": {"$in": ["provider_unavailable", "needs_review", "failed"]}},
+        {"_id": 0, "id": 1, "type": 1, "status": 1, "trainer_id": 1, "subscription_tier": 1, "reason": 1, "created_at": 1, "processed_at": 1},
+    ).sort("created_at", -1).limit(50).to_list(50) if stripe_events_coll is not None and hasattr(stripe_events_coll, "find") else []
+    subscription_exception_trainers = await trainers_coll.find(
+        {
+            "$or": [
+                {"subscription_status": {"$in": ["past_due", "unpaid", "incomplete_expired"]}},
+                {"subscription_billing_status": "payment_failed"},
+                {
+                    "tier": {"$in": ["pro", "suburb_sponsor", "citywide"]},
+                    "billing_profile_status": {"$in": ["stripe_error", "stripe_unconfigured"]},
+                },
+            ]
         },
         {
             "_id": 0,
             "id": 1,
-            "trainer_id": 1,
-            "billing_collection_status": 1,
-            "billing_retry_state": 1,
-            "billing_retry_attempts": 1,
-            "billing_last_retry_at": 1,
-            "intro_fee_cents": 1,
+            "name": 1,
+            "tier": 1,
+            "subscription_tier": 1,
+            "subscription_status": 1,
+            "subscription_billing_status": 1,
+            "subscription_suburb": 1,
+            "billing_profile_status": 1,
+            "billing_email": 1,
+            "email": 1,
+            "updated_at": 1,
             "created_at": 1,
         },
-    ).to_list(20)
-    trainer_ids_for_cases = sorted({str(row.get("trainer_id") or "") for row in billing_recovery_cases if row.get("trainer_id")})
-    trainer_rows = await db.trainers.find(
-        {"id": {"$in": trainer_ids_for_cases}},
-        {"_id": 0, "id": 1, "name": 1, "billing_profile_status": 1, "published": 1, "confidence_score": 1},
-    ).to_list(max(1, len(trainer_ids_for_cases))) if trainer_ids_for_cases else []
-    trainers_by_id = {str(row.get("id") or ""): row for row in trainer_rows}
+    ).to_list(20) if trainers_coll is not None else []
     billing_recovery_case_rows = []
-    for row in billing_recovery_cases:
-        trainer = trainers_by_id.get(str(row.get("trainer_id") or ""), {})
-        trainer_id = str(row.get("trainer_id") or "")
+    for t in subscription_exception_trainers:
+        t_id = str(t.get("id") or "")
+        sub_status = str(t.get("subscription_status") or "none")
+        billing_status = str(t.get("subscription_billing_status") or t.get("billing_profile_status") or "normal")
         billing_recovery_case_rows.append(
             {
-                "intro_id": row.get("id"),
-                "trainer_id": trainer_id,
-                "trainer_name": trainer.get("name") or trainer_id or "unknown",
-                "billing_collection_status": row.get("billing_collection_status") or "unknown",
-                "billing_retry_state": row.get("billing_retry_state") or "unknown",
-                "billing_retry_attempts": int(row.get("billing_retry_attempts") or 0),
-                "billing_last_retry_at": row.get("billing_last_retry_at"),
-                "billing_profile_status": trainer.get("billing_profile_status") or "unknown",
-                "intro_fee_cents": int(row.get("intro_fee_cents") or 0),
-                "created_at": row.get("created_at"),
-                "trainer_action_token": _issue_trainer_action_token(trainer_id=trainer_id) if trainer_id else None,
+                "trainer_id": t_id,
+                "trainer_name": t.get("name") or t_id or "unknown",
+                "tier": t.get("subscription_tier") or t.get("tier") or "core",
+                "subscription_tier": t.get("subscription_tier") or t.get("tier") or "core",
+                "subscription_status": sub_status,
+                "subscription_billing_status": billing_status,
+                "billing_collection_status": billing_status,
+                "billing_profile_status": t.get("billing_profile_status") or "unknown",
+                "billing_retry_state": sub_status if sub_status in {"past_due", "unpaid"} else billing_status,
+                "suburb": t.get("subscription_suburb") or "",
+                "created_at": t.get("updated_at") or t.get("created_at"),
+                "trainer_action_token": _issue_trainer_action_token(trainer_id=t_id) if t_id else None,
             }
         )
     reactivation_candidates_coll = getattr(db, "reactivation_candidates", None)
@@ -3887,19 +5185,18 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         key: _loop_status(key, loop, now_dt=now_dt)
         for key, loop in {
             "ranking": ranking,
-            "pricing": pricing,
             "verification": verification,
             "discovery": discovery,
             "inference": inference,
             "source_ingestion": source_ingestion,
             "outreach": outreach,
             "health": health,
-            "billing_recovery": billing_recovery,
             "nurture": nurture,
             "reactivation_route": reactivation_route,
         }.items()
     }
     trainer_inventory = await _trainer_inventory_rows()
+    sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
     message_log = await _message_log_rows()
     supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
     supply_trends = await _ops_supply_trend_summary(
@@ -3912,26 +5209,19 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
         loop_statuses=loop_statuses,
+        fraud_suppression_cases=fraud_suppression_cases,
+        claim_cases=claim_cases,
+        abn_degradation_cases=abn_degradation_cases,
         billing_recovery_case_rows=billing_recovery_case_rows,
+        subscription_billing_case_rows=subscription_billing_case_rows,
         reactivation_case_rows=reactivation_case_rows,
         source_ingestion_state_rows=source_ingestion_state_rows,
         message_log=message_log,
+        ai_degradation_cases=ai_degradation_cases,
+        sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
     )
 
     return _scrub({
-        "revenue": {
-            "booked_revenue_cents": booked_revenue_cents,
-            "collected_revenue_cents": collected_revenue_cents,
-            "at_risk_revenue_cents": at_risk_revenue_cents,
-            "booked_intro_cents": revenue_intro_cents,
-            "booked_conversion_cents": revenue_conv_cents,
-            "collected_intro_cents": collected_intro_cents,
-            "at_risk_intro_cents": at_risk_intro_cents,
-            "intro_cents": revenue_intro_cents,
-            "conversion_cents": revenue_conv_cents,
-            "total_cents": revenue_total_cents,
-            "conversion_billing_mode": autonomy.CONVERSION_BILLING_MODE,
-        },
         "throughput": {
             "intros_24h": intros_24,
             "intros_7d": intros_7d,
@@ -3939,6 +5229,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "conversions_7d": conv_7d,
             "intro_to_conversion_rate": intro_to_conv,
             "engagements_total": engagements_total,
+            "stalled_intros": stalled_intros,
         },
         "trust": {
             "intros_suppressed": suppressed,
@@ -3947,27 +5238,30 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         },
         "loops": {
             "ranking": ranking,
-            "pricing": pricing,
             "verification": verification,
             "discovery": discovery,
             "inference": inference,
             "source_ingestion": source_ingestion,
             "outreach": outreach,
             "health": health,
-            "billing_recovery": billing_recovery,
             "nurture": nurture,
             "reactivation_route": reactivation_route,
         },
         "alerts": health.get("alerts", []),
         "rollback_recent": rollback_recent,
-        "pricing_state": pricing_state,
         "top_trainers": top_trainers,
         "audit_recent": audit_recent,
         "submissions_summary": submissions_summary,
         "discovery_summary": discovery_summary,
-        "billing_summary": billing_summary,
-        "non_billable_causes": non_billable_causes,
         "notification_summary": notification_summary,
+        "intro_delivery_cases": intro_delivery_cases,
+        "fraud_suppression_cases": fraud_suppression_cases,
+        "conversion_quality_cases": conversion_quality_cases,
+        "trainer_claim_cases": claim_cases,
+        "abn_degradation_cases": abn_degradation_cases,
+        "ai_degradation_cases": ai_degradation_cases,
+        "subscription_billing_cases": subscription_billing_case_rows,
+        "billing_recovery_cases": billing_recovery_case_rows,
         "integrity": integrity,
         "claim_policy": claim_policy,
         "claim_policy_summary": {
@@ -4002,11 +5296,21 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
         "trainer_inventory": trainer_inventory,
+        "sponsor_inventory": sponsor_inventory_snapshot,
         "message_log": message_log,
         "ops_cases": ops_cases,
+        "cases": ops_cases,
         "ops_investigation": {
             "loop_statuses": loop_statuses,
+            "intro_delivery_cases": intro_delivery_cases,
+            "fraud_suppression_cases": fraud_suppression_cases,
+            "conversion_quality_cases": conversion_quality_cases,
+            "trainer_claim_cases": claim_cases,
+            "abn_degradation_cases": abn_degradation_cases,
+            "ai_degradation_cases": ai_degradation_cases,
             "billing_recovery_cases": billing_recovery_case_rows,
+            "subscription_billing_cases": subscription_billing_case_rows,
+            "sponsor_inventory_cases": sponsor_inventory_snapshot.get("exceptions", []),
             "reactivation_cases": reactivation_case_rows,
             "source_ingestion_sources": source_ingestion_state_rows,
             "discovery_alerts": discovery_alerts,
@@ -4018,41 +5322,40 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
 @api.get("/claims/validate")
 async def validate_claim(
     claim: str = Query(..., min_length=1),
-    state: Optional[str] = Query(default=None),
+    state: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Read-only deterministic claim validation. Never mutates state."""
-    effective_state = _normalize_claim_state(state)
-    evaluation = await _evaluate_claim(claim, effective_state)
-    claim_policy = _claim_policy_snapshot()
-
-    allowed = bool(evaluation.get("allowed", False))
-    would_block = bool(CLAIM_STATE_MODEL_ENABLED and not allowed)
-    if CLAIM_ENFORCEMENT_MODE == "block_invalid" and would_block:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "claim_blocked",
-                "claim": claim,
-                "state": effective_state,
-                "reason_codes": evaluation.get("reason_codes", []),
-            },
-        )
-
+    """Read-only non-blocking compatibility claim validation. Never blocks or mutates state."""
+    normalized_claim = " ".join((claim or "").strip().split())
     return {
         "ok": True,
         "claim": claim,
-        "state": effective_state,
-        "allowed": allowed,
-        "would_block": would_block,
-        "enforced": CLAIM_ENFORCEMENT_MODE == "block_invalid",
-        "enforcement_mode": CLAIM_ENFORCEMENT_MODE,
-        "reason_codes": evaluation.get("reason_codes", []),
-        "normalized_claim": evaluation.get("normalized_claim"),
-        "evaluation_source": evaluation.get("source"),
-        "service_available": evaluation.get("service_available"),
-        "claim_policy": claim_policy,
+        "normalized_claim": normalized_claim,
+        "allowed": True,
+        "valid": True,
+        "status": "valid",
         "ts": now_iso(),
     }
+
+
+def _is_subscription_event(event_type: str, obj: Dict[str, Any]) -> bool:
+    return (
+        event_type == "checkout.session.completed"
+        or event_type.startswith("customer.subscription.")
+        or (event_type.startswith("invoice.") and bool(stripe_billing.subscription_id_for_event(obj)))
+        or (event_type == "charge.refunded" and bool((obj.get("metadata") or {}).get("trainer_id")))
+    )
+
+
+async def _subscription_trainer_id(event_type: str, obj: Dict[str, Any]) -> str:
+    trainer_id = stripe_billing.subscription_trainer_id(event_type, obj)
+    if trainer_id:
+        return trainer_id
+    subscription_id = stripe_billing.subscription_id_for_event(obj)
+    trainers_coll = getattr(db, "trainers", None)
+    if not subscription_id or trainers_coll is None:
+        return ""
+    trainer = await trainers_coll.find_one({"stripe_subscription_id": subscription_id}, {"_id": 0, "id": 1})
+    return str((trainer or {}).get("id") or "")
 
 
 @api.post("/stripe/webhook")
@@ -4071,6 +5374,8 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
         charge_id = str(obj.get("charge") or "")
         invoice_id = stripe_billing.invoice_id_from_charge(charge_id)
     event_id = str(event.get("id") or "")
+    subscription_event = _is_subscription_event(event_type, obj)
+    trainer_id = await _subscription_trainer_id(event_type, obj) if subscription_event else ""
     if event_id:
         try:
             await db.stripe_events.insert_one(
@@ -4079,27 +5384,99 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
                     "type": event_type,
                     "invoice_id": invoice_id,
                     "status": "processing",
+                    "trainer_id": trainer_id,
                     "created_at": now_iso(),
                 }
             )
         except DuplicateKeyError:
             return {"ok": True, "duplicate": True}
 
-    intro_id = str(((obj.get("metadata") or {}).get("intro_id")) or "")
-    updates: Dict[str, Any] = {"stripe_last_event_type": event_type, "stripe_last_event_at": now_iso()}
-    updates.update(stripe_billing.billing_updates_for_event(event_type, obj))
-
-    if invoice_id:
-        await db.intros.update_many({"stripe_invoice_id": invoice_id}, {"$set": updates})
-    elif intro_id:
-        await db.intros.update_many({"id": intro_id}, {"$set": updates})
+    processed_status = "processed"
+    processed_reason = ""
+    if subscription_event:
+        subscription_updates = stripe_billing.subscription_update_for_event(event_type, obj)
+        if not trainer_id:
+            processed_status = "needs_review"
+            processed_reason = "subscription_trainer_unresolved"
+            subscription_updates = {}
+        elif subscription_updates:
+            metadata = stripe_billing.subscription_metadata(obj)
+            event_tier = str(metadata.get("tier") or subscription_updates.get("subscription_tier") or "").lower()
+            event_status = str(subscription_updates.get("subscription_status") or obj.get("status") or "").lower()
+            reservation_id = str(metadata.get("reservation_id") or subscription_updates.get("sponsor_reservation_id") or "")
+            subscription_id_for_inventory = str(
+                subscription_updates.get("stripe_subscription_id") or obj.get("subscription") or obj.get("id") or ""
+            )
+            if event_tier in {"suburb_sponsor", "citywide"} and event_status in stripe_billing.ACTIVE_SUBSCRIPTION_STATUSES:
+                activation = await suburb_inventory.activate_reservation(
+                    db,
+                    reservation_id=reservation_id,
+                    subscription_id=subscription_id_for_inventory,
+                )
+                if not activation.get("ok"):
+                    processed_status = "needs_review"
+                    processed_reason = str(activation.get("code") or "sponsor_inventory_activation_failed")
+                    subscription_updates = {}
+            trainer_filter: Dict[str, Any] = {"id": trainer_id}
+            subscription_id = str(subscription_updates.get("stripe_subscription_id") or "")
+            if event_type in {
+                "customer.subscription.updated",
+                "customer.subscription.resumed",
+                "customer.subscription.deleted",
+                "customer.subscription.paused",
+            } and subscription_id:
+                trainer_filter["stripe_subscription_id"] = subscription_id
+            if subscription_updates:
+                result = await db.trainers.update_one(trainer_filter, {"$set": subscription_updates})
+                if getattr(result, "matched_count", 1) != 1:
+                    processed_status = "needs_review"
+                    processed_reason = "subscription_trainer_state_conflict"
+                elif subscription_updates.get("subscription_metadata_error"):
+                    processed_status = "needs_review"
+                    processed_reason = "subscription_metadata_invalid"
+                elif (
+                    event_type in {"customer.subscription.deleted", "customer.subscription.paused"}
+                    or event_status == "incomplete_expired"
+                ) and (reservation_id or subscription_id_for_inventory):
+                    await suburb_inventory.release_reservation(
+                        db,
+                        reservation_id=reservation_id,
+                        subscription_id="" if reservation_id else subscription_id_for_inventory,
+                        reason="cancelled" if event_type.endswith("deleted") else "released",
+                    )
+                elif event_type == "charge.refunded" and (reservation_id or subscription_id_for_inventory):
+                    await suburb_inventory.release_reservation(
+                        db,
+                        reservation_id=reservation_id,
+                        subscription_id="" if reservation_id else subscription_id_for_inventory,
+                        reason="refunded",
+                    )
+        else:
+            processed_status = "needs_review"
+            processed_reason = "subscription_event_unsupported"
+    else:
+        intro_id = str(((obj.get("metadata") or {}).get("intro_id")) or "")
+        updates: Dict[str, Any] = {"stripe_last_event_type": event_type, "stripe_last_event_at": now_iso()}
+        updates.update(stripe_billing.billing_updates_for_event(event_type, obj))
+        if invoice_id:
+            await db.intros.update_many({"stripe_invoice_id": invoice_id}, {"$set": updates})
+        elif intro_id:
+            await db.intros.update_many({"id": intro_id}, {"$set": updates})
 
     if event_id:
         await db.stripe_events.update_one(
             {"id": event_id},
-            {"$set": {"status": "processed", "processed_at": now_iso()}},
+            {
+                "$set": {
+                    "status": processed_status,
+                    "trainer_id": trainer_id,
+                    "processed_at": now_iso(),
+                    "reason": processed_reason,
+                    "subscription_tier": str((obj.get("metadata") or {}).get("tier") or ""),
+                }
+            },
         )
-    return {"ok": True}
+    return {"ok": True, "needs_review": processed_status == "needs_review"}
 
 
 # ---------------------------------------------------------------------------
@@ -4108,10 +5485,15 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
 
 app.include_router(api)
 
+raw_cors = os.environ.get("CORS_ORIGINS", "*")
+parsed_origins = [o.strip() for o in re.split(r"[,|\s]+", raw_cors) if o.strip()]
+if not parsed_origins:
+    parsed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=parsed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -4128,42 +5510,22 @@ _BG_TASKS: List[asyncio.Task] = []
 async def _seed_if_empty() -> None:
     if await db.trainers.count_documents({}) > 0:
         return
-    logger.info("Empty trainer collection — seeding %s real Melbourne trainers", len(MELBOURNE_TRAINERS))
-    for entry in MELBOURNE_TRAINERS:
-        doc = {
-            "id": new_id(),
-            "verification_status": "pending",
-            "published": False,
-            "contact_ready": bool(entry.get("website") or entry.get("phone") or entry.get("email")),
-            "outcome_score": 0.05,
-            "intros_30d": 0,
-            "conversions_30d": 0,
-            "created_at": now_iso(),
-            **entry,
-        }
-        # remove the legacy 'tier' field — visibility is no longer tier-driven
-        doc.pop("tier", None)
-        await db.trainers.insert_one(doc.copy())
-        try:
-            score = await ai_service.score_trainer(_verification_payload(doc))
-            conf = float(score["confidence"])
-            status = ai_service.status_for_score(conf)
-            await db.trainers.update_one(
-                {"id": doc["id"]},
-                {
-                    "$set": {
-                        "confidence_score": conf,
-                        "verification_status": status,
-                        "verification_reasoning": score.get("reasoning", ""),
-                        "verification_signals": score.get("signals", []),
-                        "verification_model": score.get("model", "heuristic"),
-                        "verified_at": now_iso(),
-                        "published": conf >= HOLD_THRESHOLD,
-                    }
-                },
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("seed verify failed for %s", entry.get("name"))
+    # Delegate to the canonical seeding pipeline to prevent any bypass of
+    # schema validation, deduplication, claimed-profile preservation, or /ops failure recording.
+    from scripts.seed_melbourne_trainers import process_seeding, DEFAULT_SEED_FILE, load_seed_file
+    try:
+        candidates, _ = load_seed_file(DEFAULT_SEED_FILE)
+    except Exception:
+        logger.exception("Failed to load seed file %s for startup seeding", DEFAULT_SEED_FILE)
+        candidates = []
+
+    if not candidates:
+        logger.info("Canonical seed file contains 0 candidates; startup seeding creates 0 records")
+        return
+
+    logger.info("Empty trainer collection — canonical startup seeding %s candidates", len(candidates))
+    summary = await process_seeding(db, candidates, dry_run=False)
+    logger.info("Canonical startup seeding completed: %s", summary)
 
 
 async def _seed_discovery_if_empty() -> None:
@@ -4172,34 +5534,15 @@ async def _seed_discovery_if_empty() -> None:
     """
     if await db.discovery_queue.count_documents({}) > 0:
         return
-    candidates = [
-        {
-            "url": "https://urbanpawsmelbourne.com.au",
-            "hint_name": "Urban Paws Melbourne",
-            "hint_suburb": "Melbourne",
-            "hint_bio": "Melbourne dog training and behaviour services.",
-            "source": "discovery_seed",
-        },
-        {
-            "url": "https://www.dogforce1.com.au",
-            "hint_name": "Dog Force 1",
-            "hint_suburb": "Melbourne",
-            "hint_bio": "Melbourne dog training franchise focusing on behaviour.",
-            "source": "discovery_seed",
-        },
-        {
-            "url": "https://www.melbournek9.com.au",
-            "hint_name": "Melbourne K9 Force",
-            "hint_suburb": "Melbourne",
-            "hint_bio": "Specialist behaviour modification and obedience training in Melbourne.",
-            "source": "discovery_seed",
-        },
-    ]
+    # Any candidates with unresolved DNS, 404s, or lacking primary source evidence
+    # must not be seeded. Currently 0 authentic primary sources qualify locally.
+    candidates: List[Dict[str, Any]] = []
     for c in candidates:
         await db.discovery_queue.insert_one(
             {"id": new_id(), "status": "pending", "created_at": now_iso(), **c}
         )
-    logger.info("seeded %s discovery URLs", len(candidates))
+    if candidates:
+        logger.info("seeded %s discovery URLs", len(candidates))
 
 
 def _cancel_bg_tasks() -> None:
@@ -4208,52 +5551,102 @@ def _cancel_bg_tasks() -> None:
     _BG_TASKS.clear()
 
 
+async def _ensure_indexes() -> None:
+    try:
+        await db.trainers.create_index("id", unique=True, sparse=True)
+        await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
+        await db.intros.create_index("ip")
+        await db.intros.create_index("idempotency_key", unique=True, sparse=True)
+        await db.intros.create_index("stripe_invoice_id", sparse=True)
+        await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
+        await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
+        await db.submissions.create_index("status")
+        await db.audit_log.create_index("ts")
+        await db.pricing_state.create_index("suburb", unique=True)
+        await db.system_state.create_index("key", unique=True)
+        await db.discovery_queue.create_index("status")
+        await db.discovery_queue.create_index("url")
+        await db.discovery_queue.create_index([("source_url", 1), ("status", 1)])
+        delisted_coll = getattr(db, "delisted_entities", None)
+        if delisted_coll is not None and hasattr(delisted_coll, "create_index"):
+            await delisted_coll.create_index("abn", sparse=True)
+            await delisted_coll.create_index("normalized_phone", sparse=True)
+            await delisted_coll.create_index("website_domain", sparse=True)
+        await db.trainers.create_index("stripe_customer_id", sparse=True)
+        await db.trainers.create_index("stripe_subscription_id", sparse=True)
+        await db.trainers.create_index("claim_status")
+        await db.trainers.create_index("abn", sparse=True)
+        claim_events_coll = getattr(db, "claim_events", None)
+        if claim_events_coll is not None and hasattr(claim_events_coll, "create_index"):
+            await claim_events_coll.create_index("id", unique=True, sparse=True)
+            await claim_events_coll.create_index([("trainer_id", 1), ("status", 1), ("updated_at", -1)])
+            await claim_events_coll.create_index("expires_at")
+            await claim_events_coll.create_index("status")
+        abn_cache_coll = getattr(db, "abn_cache", None)
+        if abn_cache_coll is not None and hasattr(abn_cache_coll, "create_index"):
+            await abn_cache_coll.create_index("abn", unique=True, sparse=True)
+            await abn_cache_coll.create_index("cached_at")
+            await abn_cache_coll.create_index("expires_at", expireAfterSeconds=0, sparse=True)
+        await db.stripe_events.create_index("id", unique=True, sparse=True)
+        await db.stripe_events.create_index([("status", 1), ("created_at", -1)])
+        await db.stripe_events.create_index([("trainer_id", 1), ("created_at", -1)])
+        sponsor_inventory_coll = getattr(db, "sponsor_inventory", None)
+        if sponsor_inventory_coll is not None and hasattr(sponsor_inventory_coll, "create_index"):
+            await sponsor_inventory_coll.create_index("id", unique=True)
+            await sponsor_inventory_coll.create_index("occupancy_key", unique=True, sparse=True)
+            await sponsor_inventory_coll.create_index([("scope", 1), ("key", 1), ("status", 1)])
+            await sponsor_inventory_coll.create_index([("trainer_id", 1), ("status", 1)])
+            await sponsor_inventory_coll.create_index("expires_at", sparse=True)
+        sponsor_events_coll = getattr(db, "sponsor_inventory_events", None)
+        if sponsor_events_coll is not None and hasattr(sponsor_events_coll, "create_index"):
+            await sponsor_events_coll.create_index("id", unique=True)
+            await sponsor_events_coll.create_index([("status", 1), ("created_at", -1)])
+        sponsor_rotation_coll = getattr(db, "sponsor_rotation_counters", None)
+        if sponsor_rotation_coll is not None and hasattr(sponsor_rotation_coll, "create_index"):
+            await sponsor_rotation_coll.create_index("id", unique=True)
+        await db.config_snapshots.create_index("applied_at")
+        await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
+        await db.notification_events.create_index("id", unique=True, sparse=True)
+        await db.ops_case_states.create_index("case_id", unique=True, sparse=True)
+        await db.ops_case_states.create_index("updated_at")
+        await db.auth_attempts.create_index("key", unique=True)
+        await db.auth_attempts.create_index("updated_at")
+        await db.phase_readiness_snapshots.create_index("snapshot_kind", unique=True)
+        await db.phase_transition_decisions.create_index("id", unique=True, sparse=True)
+        await db.phase_transition_decisions.create_index("decided_at")
+        await db.owner_waitlist.create_index([("email_norm", 1), ("suburb_norm", 1), ("status", 1)], unique=True)
+        await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
+        await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
+        await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
+        await db.owner_education_magic_links.create_index("id", unique=True, sparse=True)
+        await db.owner_education_magic_links.create_index([("email_norm", 1), ("status", 1)])
+        await db.owner_education_magic_links.create_index("expires_at")
+        await db.owner_education_owners.create_index("id", unique=True, sparse=True)
+        await db.owner_education_owners.create_index("email_norm", unique=True)
+        await db.owner_education_sessions.create_index("id", unique=True, sparse=True)
+        await db.owner_education_sessions.create_index([("owner_id", 1), ("status", 1)])
+        await db.owner_education_sessions.create_index("expires_at")
+        await db.owner_education_progress.create_index("owner_id", unique=True)
+        await db.owner_education_readiness.create_index("owner_id", unique=True)
+    except Exception as exc:
+        logger.warning("Startup database index creation non-fatal warning: %s", exc)
+
+
 @app.on_event("startup")
 async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_loop_schedule: bool = True) -> None:
-    await db.trainers.create_index("id", unique=True, sparse=True)
-    await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
-    await db.intros.create_index("ip")
-    await db.intros.create_index("idempotency_key", unique=True, sparse=True)
-    await db.intros.create_index("stripe_invoice_id", sparse=True)
-    await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
-    await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
-    await db.submissions.create_index("status")
-    await db.audit_log.create_index("ts")
-    await db.pricing_state.create_index("suburb", unique=True)
-    await db.system_state.create_index("key", unique=True)
-    await db.discovery_queue.create_index("status")
-    await db.discovery_queue.create_index("url")
-    await db.trainers.create_index("stripe_customer_id", sparse=True)
-    await db.stripe_events.create_index("id", unique=True, sparse=True)
-    await db.config_snapshots.create_index("applied_at")
-    await db.outreach_events.create_index([("intro_id", 1), ("kind", 1)], unique=True)
-    await db.notification_events.create_index("id", unique=True, sparse=True)
-    await db.ops_case_states.create_index("case_id", unique=True, sparse=True)
-    await db.ops_case_states.create_index("updated_at")
-    await db.auth_attempts.create_index("key", unique=True)
-    await db.auth_attempts.create_index("updated_at")
-    await db.phase_readiness_snapshots.create_index("snapshot_kind", unique=True)
-    await db.phase_transition_decisions.create_index("id", unique=True, sparse=True)
-    await db.phase_transition_decisions.create_index("decided_at")
-    await db.owner_waitlist.create_index([("email_norm", 1), ("suburb_norm", 1), ("status", 1)], unique=True)
-    await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
-    await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
-    await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
-    await db.owner_education_magic_links.create_index("id", unique=True, sparse=True)
-    await db.owner_education_magic_links.create_index([("email_norm", 1), ("status", 1)])
-    await db.owner_education_magic_links.create_index("expires_at")
-    await db.owner_education_owners.create_index("id", unique=True, sparse=True)
-    await db.owner_education_owners.create_index("email_norm", unique=True)
-    await db.owner_education_sessions.create_index("id", unique=True, sparse=True)
-    await db.owner_education_sessions.create_index([("owner_id", 1), ("status", 1)])
-    await db.owner_education_sessions.create_index("expires_at")
-    await db.owner_education_progress.create_index("owner_id", unique=True)
-    await db.owner_education_readiness.create_index("owner_id", unique=True)
+    ai_service.set_db(db)
+    try:
+        await asyncio.wait_for(_ensure_indexes(), timeout=10.0)
+    except Exception as exc:
+        logger.warning("Startup database indexing deferred: %s", exc)
 
     runtime = runtime_control.resolve_loop_runtime(process_role)
     if _startup_seeds_enabled(process_role):
-        await _seed_if_empty()
-        await _seed_discovery_if_empty()
+        try:
+            await asyncio.wait_for(_seed_if_empty(), timeout=10.0)
+            await asyncio.wait_for(_seed_discovery_if_empty(), timeout=10.0)
+        except Exception as exc:
+            logger.warning("Startup seeding deferred: %s", exc)
     else:
         logger.info(
             "startup seeds skipped: process=%s %s=%s",
@@ -4271,7 +5664,11 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
             ttl_s=runtime.lease_ttl_s,
             renew_s=runtime.lease_renew_s,
         )
-        startup_holder = await lease_probe.heartbeat()
+        try:
+            startup_holder = await lease_probe.heartbeat()
+        except Exception as exc:
+            startup_holder = False
+            logger.warning("Startup lease heartbeat probe non-fatal warning: %s", exc)
         if not startup_holder:
             logger.info(
                 "initial loop pass skipped: lease not held by owner_id=%s (current_owner=%s)",
@@ -4281,7 +5678,6 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
     if allow_loop_schedule and startup_holder:
         try:
             await autonomy.recompute_ranking(db)
-            await autonomy.recompute_pricing(db)
             await autonomy.update_health(db)
             await _refresh_phase_runtime_records()
         except Exception:  # noqa: BLE001

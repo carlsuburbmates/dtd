@@ -1,0 +1,100 @@
+{
+  "candidates": [
+    {
+      "id": "cand_01",
+      "name": "RSPCA Dog Training Academy",
+      "suburb": "Burwood East",
+      "abn": "51 824 753 556",
+      "phone": "03 9224 2222",
+      "website": "https://rspcavic.org/dog-training",
+      "services": ["Puppy School", "Adult Dog Training", "Reactivity Classes"],
+      "categories": ["puppy", "obedience", "behaviour"],
+      "bio": "Official dog training programs by RSPCA Victoria certified instructors.",
+      "source_name": "google_places"
+    },
+    {
+      "id": "cand_02",
+      "name": "Melbourne K9 Balance",
+      "suburb": "Richmond",
+      "abn": "10 000 000 032",
+      "phone": "0412 345 678",
+      "website": "https://k9balance.com.au",
+      "services": ["Private in-home training", "Puppy development"],
+      "categories": ["obedience", "in-home"],
+      "bio": "Specialized in-home dog training and behavioural consultations across Richmond and Inner Melbourne.",
+      "source_name": "instagram_business"
+    },
+    {
+      "id": "cand_03",
+      "name": "Positive K9 Training",
+      "suburb": "Hawthorn",
+      "abn": "10 000 000 064",
+      "phone": "03 9819 0000",
+      "website": "https://positivek9training.com.au",
+      "services": ["In-home training", "Group classes", "Puppy school"],
+      "categories": ["obedience", "puppy"],
+      "bio": "Positive reinforcement dog training in Melbourne eastern suburbs.",
+      "source_name": "business_directory"
+    },
+    {
+      "id": "cand_04_invalid_checksum",
+      "name": "Fake Trainer Dog School",
+      "suburb": "Fitzroy",
+      "abn": "12 345 678 901",
+      "phone": "0400 000 000",
+      "website": "https://faketrainer.com.au",
+      "services": ["Obedience"],
+      "source_name": "unverified_form"
+    },
+    {
+      "id": "cand_05_bad_length",
+      "name": "Short ABN Trainer",
+      "suburb": "Carlton",
+      "abn": "12345",
+      "phone": "0411 111 111",
+      "website": "https://shortabn.com.au",
+      "services": ["Puppy"],
+      "source_name": "unverified_form"
+    },
+    {
+      "id": "cand_06_cancelled_abn",
+      "name": "Old Dog Training Co",
+      "suburb": "Melbourne",
+      "abn": "10 000 000 096",
+      "phone": "03 9000 0000",
+      "website": "https://olddogtraining.com.au",
+      "services": ["Obedience"],
+      "source_name": "historical_archive"
+    },
+    {
+      "id": "cand_07_interstate",
+      "name": "Sydney Dogs in Melbourne",
+      "suburb": "Melbourne",
+      "abn": "48 123 123 124",
+      "phone": "02 9000 1111",
+      "website": "https://sydneydogs.com.au",
+      "services": ["Agility"],
+      "source_name": "interstate_directory"
+    },
+    {
+      "id": "cand_08_duplicate_of_cand_03",
+      "name": "Positive K9 Melbourne East",
+      "suburb": "Hawthorn",
+      "abn": "10 000 000 064",
+      "phone": "03 9819 0000",
+      "website": "https://positivek9training.com.au/suburbs",
+      "services": ["Agility", "Advanced Behavioural"],
+      "gallery_images": ["https://images.unsplash.com/photo-1587300003388-59208cc962cb"],
+      "source_name": "google_places_duplicate"
+    }
+  ],
+  "delisted_suppression_list": [
+    {
+      "abn": "10 000 000 000",
+      "phone": "0499 999 999",
+      "website": "https://optouttrainer.com.au",
+      "reason": "Trainer submitted official delisting request per Privacy Policy.",
+      "delisted_at": "2026-07-01T00:00:00Z"
+    }
+  ]
+}

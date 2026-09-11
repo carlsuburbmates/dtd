@@ -4,7 +4,7 @@ Date: 2026-06-08
 Project: `/Users/carlg/Documents/AI-Coding/dtd`
 
 This file is runtime/governance snapshot evidence.
-It does not override `docs/standards/SSOT.md` or `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`.
+It does not override `docs/standards/DTD_PROJECT_CONTEXT.md` or `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`.
 It must not be treated as the canonical route or page contract.
 
 ## Governance Locks

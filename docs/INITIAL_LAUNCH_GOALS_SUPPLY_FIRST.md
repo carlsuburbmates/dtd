@@ -16,7 +16,7 @@ It does not claim that the current system already satisfies every requirement.
 This document is a launch companion standard for the supply-first phase.
 
 It must conform to:
-1. `docs/standards/SSOT.md`
+1. `docs/standards/DTD_PROJECT_CONTEXT.md`
 2. `docs/standards/BUILD_CHECKLIST.md`
 3. `docs/standards/LAUNCH_GATE.md`
 4. `docs/standards/INTEGRITY_AUDIT.md`

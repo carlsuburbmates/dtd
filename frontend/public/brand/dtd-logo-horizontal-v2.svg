@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 360" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Dog Trainers Directory Melbourne</title>
+  <desc id="desc">A warm gold and terracotta geometric paw next to the Dog Trainers Directory Melbourne wordmark.</desc>
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#FFE19A"/>
+      <stop offset="0.48" stop-color="#F4BD55"/>
+      <stop offset="1" stop-color="#D9932E"/>
+    </linearGradient>
+    <linearGradient id="terracotta" x1="0" y1="0" x2="0.8" y2="1">
+      <stop stop-color="#EF7850"/>
+      <stop offset="1" stop-color="#C64E2E"/>
+    </linearGradient>
+    <filter id="depth" x="-25%" y="-20%" width="150%" height="155%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="7" flood-color="#000000" flood-opacity="0.78"/>
+    </filter>
+  </defs>
+  <g transform="translate(42 35) scale(.62)" filter="url(#depth)" stroke="#0A0A0A" stroke-width="13" stroke-linejoin="round">
+    <path d="M165 137C128 165 72 205 48 265C29 313 50 358 91 376L147 438C157 448 173 448 183 438L239 376C280 358 301 313 282 265C258 205 202 165 165 137Z" fill="url(#gold)"/>
+    <ellipse cx="49" cy="147" rx="45" ry="76" transform="rotate(-23 49 147)" fill="url(#gold)"/>
+    <ellipse cx="117" cy="75" rx="54" ry="86" transform="rotate(-10 117 75)" fill="url(#terracotta)"/>
+    <ellipse cx="213" cy="75" rx="54" ry="86" transform="rotate(10 213 75)" fill="url(#terracotta)"/>
+    <ellipse cx="281" cy="147" rx="45" ry="76" transform="rotate(23 281 147)" fill="url(#gold)"/>
+  </g>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif" text-anchor="start">
+    <text x="315" y="167" fill="#EAB308" font-size="52" font-weight="700" letter-spacing="-1.8">DOG TRAINERS DIRECTORY</text>
+    <text x="315" y="235" fill="#FFFFFF" font-size="50" font-weight="400" letter-spacing="-1.5">melbourne</text>
+  </g>
+</svg>

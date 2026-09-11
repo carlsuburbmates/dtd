@@ -16,7 +16,7 @@ jest.mock("sonner", () => ({
 }));
 
 import Ops from "./Ops";
-import { opsApi, setAdminPass } from "../lib/api";
+import { getAdminPass, opsApi, setAdminPass } from "../lib/api";
 
 function renderOps() {
     const container = document.createElement("div");
@@ -172,6 +172,30 @@ describe("Ops auth transition", () => {
         sessionStorage.clear();
     });
 
+    it("shows the passcode form before making an oversight request in a fresh session", () => {
+        setAdminPass("");
+
+        const view = renderOps();
+
+        expect(view.container.querySelector("[data-testid='ops-login-form']")).not.toBeNull();
+        expect(getSpy).not.toHaveBeenCalled();
+        view.cleanup();
+    });
+
+    it("returns to the passcode form when a saved passcode is rejected", async () => {
+        getSpy.mockRejectedValueOnce({ response: { status: 401 } });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(view.container.querySelector("[data-testid='ops-login-form']")).not.toBeNull();
+        expect(getAdminPass()).toBe("");
+        view.cleanup();
+    });
+
     it("renders the authenticated dashboard after a successful oversight fetch", async () => {
         getSpy.mockResolvedValueOnce({ data: validSnapshot });
 
@@ -202,6 +226,30 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).not.toContain("Loading…");
         expect(view.container.textContent).toContain("Unable to load oversight snapshot");
         expect(view.container.querySelector("[data-testid='ops-refresh-empty']")).not.toBeNull();
+        view.cleanup();
+    });
+
+    it("renders the Pipeline Flow view after an authenticated oversight fetch", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                throughput: { intros_7d: 4, conversions_7d: 1, stalled_intros: 2, engagements_total: 7 },
+                waitlist_summary: { unassigned_count: 3 },
+            },
+        });
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            view.container.querySelector("[data-testid='ops-nav-pipeline_flow']").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.textContent).toContain("Pipeline Flow");
+        expect(view.container.textContent).toContain("Introductions");
+        expect(view.container.textContent).toContain("Stalled Introductions");
         view.cleanup();
     });
 
@@ -248,6 +296,40 @@ describe("Ops auth transition", () => {
         });
         expect(mockToastSuccess).toHaveBeenCalled();
         postSpy.mockRestore();
+        view.cleanup();
+    });
+
+    it("renders recent automated changes with readable event and entity labels", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                audit_recent: [
+                    {
+                        id: "audit-1",
+                        action: "result_connect_click",
+                        target: "trainer_1",
+                        actor: "user",
+                        ts: "2026-05-26T11:35:27.120695+00:00",
+                        after: { match_id: "match_1", rank: 1 },
+                    },
+                ],
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const recentChangesButton = view.container.querySelector("[data-testid='ops-nav-recent_changes']");
+        await act(async () => {
+            recentChangesButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.textContent).toContain("Owner opened trainer contact from match results");
+        expect(view.container.textContent).toContain("Trainer trainer_1");
+        expect(view.container.textContent).toContain("Dog owner");
         view.cleanup();
     });
 });

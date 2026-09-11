@@ -42,6 +42,25 @@ let webpackConfig = {
     },
     configure: (webpackConfig) => {
 
+      // Add MDX loader for .mdx files correctly inside the oneOf array
+      const oneOfRule = webpackConfig.module.rules.find((rule) => rule.oneOf);
+      if (oneOfRule) {
+        oneOfRule.oneOf.unshift({
+          test: /\.mdx?$/,
+          use: [
+            {
+              loader: '@mdx-js/loader',
+              options: {
+                providerImportSource: '@mdx-js/react'
+              }
+            },
+            {
+              loader: path.resolve(__dirname, 'plugins/strip-frontmatter-loader.js')
+            }
+          ]
+        });
+      }
+
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
           ...webpackConfig.watchOptions,

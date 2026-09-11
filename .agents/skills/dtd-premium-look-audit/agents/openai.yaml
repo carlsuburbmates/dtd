@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTD Premium look audit"
+  short_description: "Audit and refine DTD public website pages"
+  default_prompt: "Use $dtd-premium-look-audit to audit and refine DTD public website pages while preserving the current business priority and locked launch posture."

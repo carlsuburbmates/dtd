@@ -13,6 +13,7 @@ export default function Submit() {
         suburb: "",
         region: "",
         website: "",
+        abn: "",
         phone: "",
         email: "",
         submitter_email: "",
@@ -53,6 +54,7 @@ export default function Submit() {
                 suburb,
                 region: form.region.trim(),
                 website: form.website.trim(),
+                abn: form.abn.replace(/\D/g, ""),
                 phone: form.phone.trim(),
                 email: form.email.trim(),
                 submitter_email: form.submitter_email.trim() || undefined,
@@ -62,7 +64,7 @@ export default function Submit() {
                 categories: form.categories ? form.categories.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [],
             });
             setResult(r.data);
-            toast.success(r.data.status === "published" ? "Live now." : r.data.status === "held" ? "Held — needs more evidence." : "Submitted.");
+            toast.success(r.data.status === "published" ? "Live now." : r.data.status === "held" ? "Received, more detail may be needed." : "Submitted.");
         } catch (err) {
             const detail = err?.response?.data?.detail;
             toast.error(typeof detail === "string" && detail ? detail : "Submit failed.");
@@ -75,15 +77,44 @@ export default function Submit() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <main className="max-w-3xl mx-auto px-6 md:px-10 pt-12 pb-20">
-                <div className="small-caps">Apply as trainer</div>
-                <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-3">Create a verified trainer profile.</h1>
+            <main className="flex-1 relative overflow-hidden bg-background pb-20">
+                {/* Hero Section */}
+                <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-20 md:pt-32 pb-16 relative">
+                    <div className="text-center max-w-4xl mx-auto">
+                        <div className="small-caps inline-flex items-center gap-2 rounded-full border border-dtd-border bg-white px-4 py-2 text-dtd-content mb-8">
+                            Trainer Application
+                        </div>
+                        <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-dtd-heading mb-6">
+                            Join the <span className="text-accent italic">directory.</span>
+                        </h1>
+                        <p className="text-dtd-content text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
+                            We are currently accepting applications for our initial Melbourne rollout. Profiles are reviewed and selected based on experience, public proof, and alignment with our standards.
+                        </p>
+                    </div>
+                </section>
 
-                <form onSubmit={submit} className="card-public p-7 mt-10 grid sm:grid-cols-2 gap-3" data-testid="submit-form">
+                <section className="max-w-4xl mx-auto px-4 sm:px-6 md:px-10">
+                    <div className="grid md:grid-cols-3 gap-6 mb-12">
+                        <article className="card-public p-6 bg-white border border-dtd-border rounded-[1.5rem] hover:shadow-md transition-shadow">
+                            <div className="small-caps text-dtd-content/70 mb-3">What to prepare</div>
+                            <p className="text-sm text-dtd-content leading-relaxed">Business basics, service categories, and one public proof link are enough to start cleanly.</p>
+                        </article>
+                        <article className="card-public p-6 bg-white border border-dtd-border rounded-[1.5rem] hover:shadow-md transition-shadow">
+                            <div className="small-caps text-dtd-content/70 mb-3">How review works</div>
+                            <p className="text-sm text-dtd-content leading-relaxed">Profiles are checked before wider public visibility. The point is quality control, not volume.</p>
+                        </article>
+                        <article className="card-public p-6 bg-white border border-dtd-border rounded-[1.5rem] hover:shadow-md transition-shadow">
+                            <div className="small-caps text-dtd-content/70 mb-3">Commercial terms</div>
+                            <p className="text-sm text-dtd-content leading-relaxed">Core listing is free forever with zero intro fees. Optional flat-rate subscriptions are available for featured placement.</p>
+                        </article>
+                    </div>
+
+                    <form onSubmit={submit} className="card-public p-8 sm:p-10 bg-white border border-dtd-border rounded-[2rem] grid sm:grid-cols-2 gap-5" data-testid="submit-form">
                     <Field label="Business name *"><input data-testid="submit-name" required className="input-public" value={form.name} onChange={change("name")} /></Field>
                     <Field label="Suburb *"><input data-testid="submit-suburb" required className="input-public" value={form.suburb} onChange={change("suburb")} /></Field>
                     <Field label="Region (optional)"><input data-testid="submit-region" className="input-public" value={form.region} onChange={change("region")} placeholder="Greater Melbourne" /></Field>
                     <Field label="Website" full><input data-testid="submit-website" type="url" className="input-public" value={form.website} onChange={change("website")} placeholder="https://" /></Field>
+                    <Field label="ABN *"><input data-testid="submit-abn" required inputMode="numeric" pattern="[0-9 ]{11,14}" className="input-public" value={form.abn} onChange={change("abn")} placeholder="11 digit Australian Business Number" /></Field>
                     <Field label="Phone"><input data-testid="submit-phone" className="input-public" value={form.phone} onChange={change("phone")} /></Field>
                     <Field label="Email"><input data-testid="submit-email" type="email" className="input-public" value={form.email} onChange={change("email")} /></Field>
                     <Field label="Notification email"><input data-testid="submitter-email" type="email" className="input-public" value={form.submitter_email} onChange={change("submitter_email")} placeholder="Where updates are sent" /></Field>
@@ -119,7 +150,7 @@ export default function Submit() {
                             className="mt-0.5 h-4 w-4 accent-[#1A3A32]"
                             data-testid="submit-consent-billing"
                         />
-                        <span>{monetizationCopy.submitConsentBillingLabel || "I acknowledge billing terms and invoices may be sent to my billing email."}</span>
+                        <span>{monetizationCopy.submitConsentBillingLabel || "I acknowledge the trainer directory terms and platform policies."}</span>
                     </label>
                     <div className="sm:col-span-2 flex flex-wrap items-center gap-3 text-xs text-[#4A615A]">
                         <Link to="/pricing" className="underline underline-offset-2">View pricing</Link>
@@ -129,8 +160,8 @@ export default function Submit() {
 
                     <div className="sm:col-span-2 flex items-center justify-between mt-3">
                         <span className="text-xs font-mono text-[#5C6D59]">Profiles that pass checks are published.</span>
-                        <button type="submit" disabled={busy} data-testid="submit-go" className="btn-primary disabled:opacity-50">
-                            {busy ? "Scoring…" : "Submit"}
+                        <button type="submit" disabled={busy} data-testid="submit-go" className="btn-primary">
+                            {busy ? "Verifying…" : "Submit"}
                         </button>
                     </div>
                 </form>
@@ -141,11 +172,11 @@ export default function Submit() {
                             {result.status === "published" ? (
                                 <span className="pill pill-verified"><ShieldCheck className="h-3 w-3" /> Live now</span>
                             ) : result.status === "held" ? (
-                                <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> Held — more evidence needed</span>
+                                <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> Needs more detail</span>
                             ) : (
                                 <span className="pill pill-unverified">{result.status}</span>
                             )}
-                            <span className="text-xs font-mono text-[#5C6D59]">confidence · {Math.round((result.confidence_score || 0) * 100)}%</span>
+                            <span className="text-xs text-[#5C6D59] font-medium">Automated check complete</span>
                         </div>
                         <p className="mt-3 text-sm text-[#4A615A] leading-relaxed">{result.verification_reasoning}</p>
                         {(result.submission_id || result.id || (result.submission && result.submission.id)) && (
@@ -167,6 +198,7 @@ export default function Submit() {
                         )}
                     </div>
                 )}
+                </section>
             </main>
             <PublicFooter />
         </div>

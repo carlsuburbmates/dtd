@@ -19,14 +19,15 @@ def _iso_ago(hours: int = 0, minutes: int = 0) -> str:
 
 
 async def evaluate_intro(db, ip: str, trainer_id: str, user_email: str) -> Dict[str, Any]:
-    """Return {accept: bool, billing_status: str, reasons: [str]}.
+    """Return {accept: bool, delivery_status: str, status: str, fraud_status: str, reasons: [str]}.
 
     Soft-suppresses obvious abuse so the data doesn't poison ranking, but never
-    hard-blocks the user (we want them to find a trainer; we just won't bill).
+    hard-blocks the user (we want them to find a trainer; we just suppress the delivery/fraud signal).
     """
     reasons: list[str] = []
     accept = True
-    billing_status = "billed"
+    delivery_status = "delivered"
+    fraud_status = "clear"
 
     if ip:
         # rate-limit per IP / hour
@@ -35,14 +36,16 @@ async def evaluate_intro(db, ip: str, trainer_id: str, user_email: str) -> Dict[
         )
         if recent >= 6:
             reasons.append("ip_rate_limited")
-            billing_status = "suppressed"
+            delivery_status = "suppressed"
+            fraud_status = "suppressed"
         # same-trainer same-IP within 24h → probably duplicate / clicker
         dup = await db.intros.count_documents(
             {"ip": ip, "trainer_id": trainer_id, "created_at": {"$gte": _iso_ago(hours=24)}}
         )
         if dup >= 1:
             reasons.append("ip_trainer_dup_24h")
-            billing_status = "suppressed"
+            delivery_status = "suppressed"
+            fraud_status = "suppressed"
 
     if user_email:
         # repeat from same email to same trainer within 7d → suppressed (still record)
@@ -52,19 +55,24 @@ async def evaluate_intro(db, ip: str, trainer_id: str, user_email: str) -> Dict[
         )
         if em >= 1:
             reasons.append("email_trainer_dup_7d")
-            billing_status = "suppressed"
+            delivery_status = "suppressed"
+            fraud_status = "suppressed"
 
-    return {"accept": accept, "billing_status": billing_status, "reasons": reasons}
+    return {
+        "accept": accept,
+        "delivery_status": delivery_status,
+        "status": delivery_status,
+        "fraud_status": fraud_status,
+        "reasons": reasons,
+    }
 
 
 async def evaluate_conversion(db, intro: Dict[str, Any]) -> Dict[str, Any]:
-    """Decide whether a manual conversion should be billed.
+    """Decide whether a manual conversion is suspicious or tracked.
 
     Conversions confirmed within ``CONVERSION_MIN_AGE_MINUTES`` of the intro
-    are flagged as suspicious and stored as ``inferred=False, billing_status='suspicious'``.
-    The inference loop never auto-promotes 'suspicious' rows, so they don't earn
-    the conversion fee unless an operator (or future fraud-arbitration logic)
-    flips them.
+    are flagged as suspicious and stored as ``inferred=False, billing_status='suspicious', status='suspicious'``.
+    The inference loop never auto-promotes 'suspicious' rows.
     """
     created = intro.get("created_at")
     age_min = 999
@@ -74,5 +82,5 @@ async def evaluate_conversion(db, intro: Dict[str, Any]) -> Dict[str, Any]:
         except ValueError:
             pass
     if age_min < 5:
-        return {"billing_status": "suspicious", "reason": "too_fast"}
-    return {"billing_status": "billed", "reason": ""}
+        return {"quality_status": "suspicious", "status": "suspicious", "reason": "too_fast"}
+    return {"quality_status": "tracked", "status": "tracked", "reason": ""}

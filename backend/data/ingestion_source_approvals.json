@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "state": "approved_for_initial_website_abr_batch",
+  "policy": "No provider request, harvest, seed, or publication without an approved source-use record and required credentials.",
+  "sources": [
+    {
+      "provider": "public_business_websites",
+      "approved": true,
+      "approved_by": "DTD owner",
+      "terms_reviewed_at": "2026-09-11",
+      "approved_uses": ["trainer_profile_source"],
+      "constraints": "Public business facts from each trainer's own website only; respect robots and site terms; no private, inferred, testimonial, review, or unsupported claim data."
+    },
+    {
+      "provider": "abr_web_services",
+      "approved": true,
+      "approved_by": "DTD owner",
+      "terms_reviewed_at": "2026-09-11",
+      "terms_url": "https://abr.business.gov.au/Tools/WebServicesAgreement",
+      "approved_uses": ["abn_name_search", "abn_verification"],
+      "constraints": "Identity and active-status verification only; retain source attribution, do not imply Commonwealth endorsement, and honour withdrawn or suppressed details."
+    },
+    {
+      "provider": "google_places",
+      "approved": false,
+      "approved_by": "DTD owner",
+      "terms_reviewed_at": "2026-09-11",
+      "terms_url": "https://developers.google.com/maps/documentation/places/web-service/policies",
+      "approved_uses": [],
+      "reason": "Google Maps content must not be copied or persisted to build the DTD listing dataset."
+    },
+    {
+      "provider": "sensis_thryv_business_feed",
+      "approved": false,
+      "approved_by": "",
+      "terms_reviewed_at": "",
+      "approved_uses": [],
+      "status": "supplier_enquiry_pending",
+      "reason": "Sensis publicly advertises a business-search API, but DTD has not received a contract, sample schema, credential, pricing, or written rights for retention, public display, SEO indexation, Gemini processing, claim outreach, attribution, suppression, or post-contract handling."
+    },
+    {
+      "provider": "thryv_macromatch_totalcheck",
+      "approved": false,
+      "approved_by": "",
+      "terms_reviewed_at": "",
+      "approved_uses": [],
+      "status": "not_selected_for_discovery",
+      "reason": "Public product material describes validation, cleansing, and enrichment of records already held; it is not evidence of a licensed trainer-discovery feed."
+    }
+  ]
+}

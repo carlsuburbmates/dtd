@@ -1,0 +1,105 @@
+{
+  "51824753556": {
+    "abn": "51824753556",
+    "abn_status": "Active",
+    "abn_status_effective_from": "2000-05-01",
+    "entity_name": "ROYAL SOCIETY FOR THE PREVENTION OF CRUELTY TO ANIMALS (VICTORIA)",
+    "business_names": [
+      "RSPCA VICTORIA",
+      "RSPCA DOG TRAINING ACADEMY"
+    ],
+    "entity_type_name": "Other Incorporated Entity",
+    "address_state": "VIC",
+    "address_postcode": "3131",
+    "gst_status": "Active",
+    "abn_formatted": "51 824 753 556",
+    "source": "mock_database",
+    "cached": false,
+    "retrieved_at": "2026-08-31T16:09:53.596546+00:00",
+    "is_active": true,
+    "is_victoria": true,
+    "_cached_at_ts": 1788192593.596531
+  },
+  "10000000032": {
+    "abn": "10000000032",
+    "abn_status": "Active",
+    "abn_status_effective_from": "2018-03-15",
+    "entity_name": "SMITH, JANE ELIZABETH",
+    "business_names": [
+      "MELBOURNE K9 BALANCE",
+      "K9 REHABILITATION RICHMOND"
+    ],
+    "entity_type_name": "Individual/Sole Trader",
+    "address_state": "VIC",
+    "address_postcode": "3121",
+    "gst_status": "Active",
+    "abn_formatted": "10 000 000 032",
+    "source": "mock_database",
+    "cached": false,
+    "retrieved_at": "2026-08-31T16:09:53.596988+00:00",
+    "is_active": true,
+    "is_victoria": true,
+    "_cached_at_ts": 1788192593.596986
+  },
+  "10000000064": {
+    "abn": "10000000064",
+    "abn_status": "Active",
+    "abn_status_effective_from": "2020-07-01",
+    "entity_name": "POSITIVE K9 TRAINING PTY LTD",
+    "business_names": [
+      "POSITIVE K9 MELBOURNE",
+      "EASTERN SUBURBS K9"
+    ],
+    "entity_type_name": "Australian Private Company",
+    "address_state": "VIC",
+    "address_postcode": "3122",
+    "gst_status": "Active",
+    "abn_formatted": "10 000 000 064",
+    "source": "mock_database",
+    "cached": false,
+    "retrieved_at": "2026-08-31T16:09:53.597148+00:00",
+    "is_active": true,
+    "is_victoria": true,
+    "_cached_at_ts": 1788192593.597146
+  },
+  "10000000096": {
+    "abn": "10000000096",
+    "abn_status": "Cancelled",
+    "abn_status_effective_from": "2015-01-01",
+    "entity_name": "DEREGISTERED PET TRAINING PTY LTD",
+    "business_names": [
+      "OLD DOG TRAINING CO"
+    ],
+    "entity_type_name": "Australian Private Company",
+    "address_state": "VIC",
+    "address_postcode": "3000",
+    "gst_status": "Cancelled",
+    "abn_formatted": "10 000 000 096",
+    "source": "mock_database",
+    "cached": false,
+    "retrieved_at": "2026-08-31T16:09:53.597348+00:00",
+    "is_active": false,
+    "is_victoria": true,
+    "_cached_at_ts": 1788192593.597346
+  },
+  "48123123124": {
+    "abn": "48123123124",
+    "abn_status": "Active",
+    "abn_status_effective_from": "2019-06-10",
+    "entity_name": "SYDNEY CANINE COACHING",
+    "business_names": [
+      "SYDNEY DOGS"
+    ],
+    "entity_type_name": "Individual/Sole Trader",
+    "address_state": "NSW",
+    "address_postcode": "2000",
+    "gst_status": "Active",
+    "abn_formatted": "48 123 123 124",
+    "source": "mock_database",
+    "cached": false,
+    "retrieved_at": "2026-08-31T16:09:53.597511+00:00",
+    "is_active": true,
+    "is_victoria": false,
+    "_cached_at_ts": 1788192593.5975091
+  }
+}

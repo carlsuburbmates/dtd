@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" fill="none" role="img" aria-labelledby="tfl-light-title tfl-light-desc">
+  <title id="tfl-light-title">The First Leash — Dog Trainers Directory</title>
+  <desc id="tfl-light-desc">The First Leash logo featuring the DTD paw mark and editorial typography for light backgrounds.</desc>
+  <defs>
+    <linearGradient id="tfl-gold" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#FCE19D"/>
+      <stop offset="50%" stop-color="#EBC16A"/>
+      <stop offset="100%" stop-color="#D49A32"/>
+    </linearGradient>
+    <linearGradient id="tfl-terracotta" x1="0" y1="0" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#E87652"/>
+      <stop offset="50%" stop-color="#D35D39"/>
+      <stop offset="100%" stop-color="#B84220"/>
+    </linearGradient>
+    <filter id="paw-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="5" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+</defs>
+  <g transform="translate(30 20) scale(0.75)">
+    
+  <g filter="url(#paw-shadow)" stroke="#111111" stroke-width="9" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Main Diamond Shield Pad -->
+    <path d="M 160 88 C 150 115 125 132 108 145 C 80 167 56 182 58 202 C 60 220 75 235 96 254 L 152 308 C 156 312 164 312 168 308 L 224 254 C 245 235 260 220 262 202 C 264 182 240 167 212 145 C 195 132 170 115 160 88 Z" fill="url(#tfl-gold)" />
+    
+    <!-- Toe 1 (Outer Left - Gold) -->
+    <ellipse cx="43" cy="115" rx="34" ry="47" transform="rotate(-24 43 115)" fill="url(#tfl-gold)" />
+    
+    <!-- Toe 2 (Inner Left - Terracotta) -->
+    <ellipse cx="109" cy="62" rx="37" ry="50" transform="rotate(-9 109 62)" fill="url(#tfl-terracotta)" />
+    
+    <!-- Toe 3 (Inner Right - Gold) -->
+    <ellipse cx="211" cy="62" rx="37" ry="50" transform="rotate(9 211 62)" fill="url(#tfl-gold)" />
+    
+    <!-- Toe 4 (Outer Right - Terracotta) -->
+    <ellipse cx="277" cy="115" rx="34" ry="47" transform="rotate(24 277 115)" fill="url(#tfl-terracotta)" />
+  </g>
+
+  </g>
+  <g font-family="Montserrat, Avenir Next, -apple-system, system-ui, sans-serif" text-anchor="start">
+    <text x="310" y="132" fill="#1A3A32" font-size="52" font-weight="800" letter-spacing="1.5">THE FIRST LEASH</text>
+    <text x="312" y="184" fill="#9B4F31" font-size="24" font-weight="700" letter-spacing="4">DOG TRAINERS DIRECTORY</text>
+    <text x="312" y="218" fill="#4A615A" font-size="14" font-weight="600" letter-spacing="3" text-transform="uppercase">Owner Education &amp; Behavioral Blueprint</text>
+  </g>
+</svg>

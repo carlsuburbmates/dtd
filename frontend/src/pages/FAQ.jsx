@@ -8,12 +8,12 @@ const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 export default function FAQ() {
     const monetizationCopy = usePublicMonetizationCopy();
     const faqs = [
-        { q: "Can I browse every trainer?", a: "No. Dog Trainers Directory is prelaunch and prioritizes verified rollout by suburb." },
-        { q: "What can owners do right now?", a: "Owners can use guidance content and register waitlist interest by suburb." },
-        { q: "How do I submit a trainer profile?", a: "Go to the For Trainers page and click Apply as trainer. Profiles pass automated publish-or-hold checks before going live." },
-        { q: "What happens after I submit?", a: "You receive a submission ID you can use to check your current status, activation state, and any blockers at any time." },
+        { q: "Can I browse every trainer?", a: "Yes. You can browse verified dog trainers across Greater Melbourne by suburb or use our diagnostic matching tool to find trainers matching your dog's needs." },
+        { q: "What can owners do on the directory?", a: "Owners can browse local trainers, run instant diagnostic matching, view verified credentials, and connect directly with trainers at zero cost." },
+        { q: "How do I submit or claim a trainer profile?", a: "Go to the For Trainers page to claim an existing listing or create a new profile. Profiles are ABR-verified before full publication." },
+        { q: "What happens after I submit?", a: "You receive a submission ID so you can track your listing verification status, required details, and next steps." },
         { q: "Do trainers pay monthly?", a: monetizationCopy.faqTrainerPricing },
-        { q: "Are leads or bookings guaranteed?", a: "No. The platform does not guarantee leads or bookings." },
+        { q: "Are leads or bookings guaranteed?", a: "No. Dog Trainers Directory facilitates direct discovery and connection, but does not guarantee leads, conversions, or bookings." },
     ];
 
     return (

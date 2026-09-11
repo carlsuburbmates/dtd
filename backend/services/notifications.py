@@ -219,6 +219,23 @@ async def notify_owner_education_magic_link(
 async def notify_trainer_new_intro(db, trainer: Dict[str, Any], intro: Dict[str, Any]) -> Dict[str, Any]:
     trainer_id = str(trainer.get("id") or "")
     email = _safe_text(trainer.get("billing_email")) or _safe_text(trainer.get("email"))
+    if str(intro.get("delivery_status") or "").lower() == "suppressed":
+        await _record_event(
+            db,
+            kind="trainer_intro_notification",
+            target_kind="intro",
+            target_id=str(intro.get("id") or ""),
+            to_email=email,
+            attempt=0,
+            status="suppressed",
+            http_status=0,
+            error="fraud_or_duplicate_suppression",
+        )
+        return {
+            "trainer_notification_status": "suppressed",
+            "trainer_notification_attempts": 0,
+            "trainer_notification_reason": "fraud_or_duplicate_suppression",
+        }
     if not email:
         return {
             "trainer_notification_status": "skipped",
@@ -294,6 +311,34 @@ async def notify_submitter_result(db, submission: Dict[str, Any]) -> Dict[str, A
         result["submitter_notification_sent_at"] = now_iso()
     if outcome.get("error"):
         result["submitter_notification_error"] = str(outcome["error"])[:240]
+    return result
+
+
+async def notify_trainer_claim_otp(db, trainer: Dict[str, Any], *, to_email: str, otp: str) -> Dict[str, Any]:
+    """Deliver a short-lived profile claim code without persisting the raw code."""
+    email = _safe_text(to_email)
+    trainer_id = str(trainer.get("id") or "")
+    if not email:
+        return {"claim_notification_status": "failed", "claim_notification_reason": "missing_email", "claim_notification_attempts": 0}
+    outcome = await _send_with_retry(
+        db,
+        target_kind="trainer_claim",
+        target_id=trainer_id,
+        kind="trainer_claim_otp",
+        to_email=email,
+        subject="Your Dog Trainers Directory claim code",
+        html=(
+            f"<p>Your code for <strong>{_safe_text(trainer.get('name')) or 'your listing'}</strong> is:</p>"
+            f"<p style=\"font-size: 24px; letter-spacing: 4px;\"><strong>{otp}</strong></p>"
+            "<p>This code expires in 15 minutes. If you did not request it, you can ignore this email.</p>"
+        ),
+    )
+    result = {
+        "claim_notification_status": outcome.get("status", "failed"),
+        "claim_notification_attempts": int(outcome.get("attempts") or 0),
+    }
+    if outcome.get("error"):
+        result["claim_notification_error"] = str(outcome["error"])[:240]
     return result
 
 

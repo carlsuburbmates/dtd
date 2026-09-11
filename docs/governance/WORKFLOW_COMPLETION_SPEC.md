@@ -20,7 +20,7 @@ This document sits under the authority order routed by
 `docs/governance/CURRENT_TRUTH_INDEX.md`.
 
 Role boundaries:
-1. `docs/standards/SSOT.md` defines the product model, actor types, and workflow families.
+1. `docs/standards/DTD_PROJECT_CONTEXT.md` defines the product model, actor types, and workflow families.
 2. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` defines page- and route-level behavior.
 3. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` maps workflows to routes, screen states, and required `/ops` evidence.
 4. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` defines the owner-facing `/ops` product surface.
@@ -734,14 +734,16 @@ Objective:
 1. admit external discovery/source contributions into the product pipeline safely
 
 Trigger / entry point:
-1. discovery source ingestion or equivalent contribution path
+1. an approved licensed discovery feed, trainer submission, owner-authorised
+   URL, or other explicitly approved contribution path
 
 Frontend surfaces:
 1. none required in the public website
 
 Backend/API/services:
-1. discovery queue ingestion
-2. verification and normalization paths
+1. fail-closed source approval and contract/use gate
+2. discovery queue ingestion
+3. verification and normalization paths
 
 Data created or updated:
 1. discovery queue records
@@ -755,15 +757,18 @@ Success end state:
 1. external contributions enter the intended autonomous pipeline and become reviewable if abnormal
 
 Degraded or failure states:
-1. source ingestion stalls
-2. unsafe or malformed source remains invisible
+1. supplier rights, credentials, schema, or contract state are missing or revoked
+2. source ingestion stalls
+3. unsafe or malformed source remains invisible
+4. a validation-only product is mistakenly treated as a discovery feed
 
 Evidence required:
 1. source-ingestion/runtime evidence
 2. operator visibility where failures occur
 
 E2E verification rule:
-1. a source contribution path must be observable from ingestion into monitoring state without silent failure
+1. a source contribution path must prove approved use, provenance, ingestion,
+   duplicate/suppression handling, and monitoring state without silent failure
 
 Completion rule:
 1. workflow is complete only when contribution health is observable and abnormalities are surfaced

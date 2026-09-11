@@ -62,20 +62,20 @@ export default function EducationSignIn() {
         <div className="App min-h-screen">
             <PublicHeader />
             <main className="max-w-4xl mx-auto px-4 sm:px-6 md:px-10 pt-12 pb-12">
-                <div className="small-caps">The First Leash sign-in</div>
+                <div className="small-caps">Education Lane Access</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">
-                    Open your saved guide with one email link.
+                    Unlock full access to the Education Lane.
                 </h1>
                 <p className="text-[#4A615A] mt-4 max-w-2xl">
-                    Save your place, checklists, and notes without turning the public guide into a heavy locked experience.
+                    DTD is currently in a supply-building phase. Register your email as an owner or trainer to get instant, full access to our guides and training materials.
                 </p>
 
                 <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-5 mt-10">
                     <article className="card-public p-6 sm:p-7">
                         <div className="small-caps">Guide access</div>
-                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Request a magic link</h2>
+                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Register to unlock</h2>
                         <p className="text-sm text-[#4A615A] mt-3">
-                            Use the same email each time and DTD will take you back to your saved guide.
+                            Enter your email to join the waitlist or register as a trainer. You'll receive a magic link for instant access to the curriculum.
                         </p>
                         <form className="mt-5 space-y-3" onSubmit={submit} data-testid="education-signin-form">
                             <label className="sr-only" htmlFor="education-signin-email">Email</label>
@@ -98,7 +98,7 @@ export default function EducationSignIn() {
                                 </div>
                             ) : null}
                             <button type="submit" className="btn-primary w-full justify-center" data-testid="education-signin-submit" disabled={state === "submitting" || !email.trim()}>
-                                {state === "submitting" ? "Requesting..." : "Email my guide link"}
+                                {state === "submitting" ? "Requesting..." : "Unlock full access"}
                             </button>
                         </form>
                         {debugMagicLink ? (
@@ -112,12 +112,12 @@ export default function EducationSignIn() {
                     </article>
 
                     <aside className="card-public p-6 sm:p-7">
-                        <div className="small-caps">Why save your place</div>
-                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Keep your place, checklists, and notes together.</h2>
+                        <div className="small-caps">Why join DTD?</div>
+                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Connecting owners with premium trainers.</h2>
                         <ul className="mt-4 space-y-3 text-sm text-[#4A615A]">
-                            <li>Keep your current guide and last lesson in one place.</li>
-                            <li>Save useful notes before you need outside help.</li>
-                            <li>Return without losing your place.</li>
+                            <li><strong>Trainers:</strong> Apply for a directory listing to reach high-intent owners.</li>
+                            <li><strong>Owners:</strong> Join the waitlist to be notified when matching opens in your area.</li>
+                            <li><strong>Everyone:</strong> Get immediate access to The First Leash and other educational guides.</li>
                         </ul>
                         {existingSession ? (
                             <Link to={nextPath} className="btn-accent mt-5 inline-flex" data-testid="education-dashboard-existing">

@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The First Leash: Guide 4 — The Social Filter • The First Leash</title>
+  <meta name="description" content="Safe Exposure & Urban Resilience" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+
+:root {
+  --ink: #1A3A32;
+  --ink-light: #4A615A;
+  --moss: #5C6D59;
+  --terracotta: #9B4F31;
+  --cream: #F5F2EB;
+  --surface: #FAFAF7;
+  --border: #E5DFD3;
+  --card-bg: #FFFFFF;
+  --warn-bg: #FBF5F0;
+  --decision-bg: #F0F4F2;
+  --text: #2B3330;
+  --font-serif: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--cream);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.document-container {
+  max-width: 860px;
+  margin: 40px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(26, 58, 50, 0.06);
+  overflow: hidden;
+}
+
+/* Header & Cover Banner */
+.cover-banner {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+  border-bottom: 3px solid var(--terracotta);
+}
+
+.cover-header {
+  padding: 40px 48px 24px;
+}
+
+.badge-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.badge-pill.terracotta {
+  background: var(--terracotta);
+}
+
+.badge-pill.moss {
+  background: var(--moss);
+}
+
+h1.doc-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+p.doc-subtitle {
+  font-size: 18px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* Meta Card */
+.meta-card {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--moss);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--ink-light);
+  margin-bottom: 32px;
+}
+
+.meta-card strong {
+  color: var(--ink);
+}
+
+/* Content Area */
+.content-body {
+  padding: 0 48px 48px;
+}
+
+.guide-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 48px 0;
+}
+
+/* Module Section */
+.guide-header {
+  margin-bottom: 32px;
+}
+
+.guide-hero-img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+
+h2.guide-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+p.guide-strapline {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--terracotta);
+  margin-bottom: 14px;
+}
+
+p.guide-intro {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Lesson Cards */
+.lesson-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(26, 58, 50, 0.03);
+}
+
+.lesson-meta-strip {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink-light);
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h3.lesson-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 18px;
+  line-height: 1.35;
+}
+
+.subheading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+p.lesson-text {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+/* Checklist Protocol */
+.protocol-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.protocol-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.protocol-list li::before {
+  content: "•";
+  position: absolute;
+  left: 10px;
+  color: var(--moss);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.checkbox-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.checkbox-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+}
+
+.checkbox-list input[type="checkbox"] {
+  margin-top: 4px;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+
+/* Callout Boxes */
+.callout-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-left: 4px solid;
+}
+
+.callout-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callout-caution {
+  background: var(--warn-bg);
+  border-left-color: var(--terracotta);
+}
+
+.callout-caution .callout-title {
+  color: var(--terracotta);
+}
+
+.callout-decision {
+  background: var(--decision-bg);
+  border-left-color: var(--ink);
+}
+
+.callout-decision .callout-title {
+  color: var(--ink);
+}
+
+.callout-escalation {
+  background: var(--cream);
+  border-left-color: var(--moss);
+}
+
+.callout-escalation .callout-title {
+  color: var(--moss);
+}
+
+/* Puppy Photo Break */
+.puppy-break-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+}
+
+/* Footer */
+.doc-footer {
+  padding: 32px 48px;
+  background: var(--cream);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.doc-footer a {
+  color: var(--terracotta);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.doc-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Next Step CTA Banner */
+.next-step-cta {
+  background: var(--ink);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 36px;
+  text-align: center;
+}
+
+.next-step-cta h4 {
+  font-size: 18px;
+  font-family: var(--font-serif);
+  margin-bottom: 8px;
+}
+
+.next-step-cta p {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 16px;
+}
+
+.cta-button {
+  display: inline-block;
+  background: var(--terracotta);
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.cta-button:hover {
+  opacity: 0.9;
+}
+
+/* Print Styles for 1-Click PDF Generation */
+@media print {
+  body {
+    background: #ffffff;
+    font-size: 13px;
+  }
+
+  .document-container {
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .cover-banner {
+    height: 240px;
+  }
+
+  .guide-divider {
+    break-after: page;
+    height: 0;
+    margin: 0;
+    border: none;
+  }
+
+  .lesson-card {
+    box-shadow: none;
+    border: 1px solid #cccccc;
+    break-inside: avoid;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .next-step-cta {
+    display: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+  </style>
+</head>
+<body>
+
+  <main class="document-container">
+    <!-- Cover Banner -->
+    <img src="../images/mod_04_cover.jpg" alt="The First Leash: Guide 4 — The Social Filter Cover" class="cover-banner" />
+
+    <header class="cover-header">
+      <span class="badge-pill ">GUIDE 4 OF 7</span>
+      <h1 class="doc-title">The First Leash: Guide 4 — The Social Filter</h1>
+      <p class="doc-subtitle">Safe Exposure & Urban Resilience</p>
+
+      <div class="meta-card">
+        <strong>Publisher:</strong> Dog Trainers Directory (Melbourne, Victoria)<br/>
+        <strong>Curriculum:</strong> Evidence-Based Positive Reinforcement &amp; Clinical De-Escalation<br/>
+        <strong>Access Level:</strong> 100% Free Public Guide • 
+        <a href="https://dogtrainersdirectory.com.au" style="color: var(--terracotta); text-decoration: none; font-weight: 600;">
+          dogtrainersdirectory.com.au
+        </a>
+      </div>
+    </header>
+
+    <div class="content-body">
+<section class="guide-section" id="guide-4">
+  <img src="../images/mod_04_cover.jpg" alt="The Social Filter Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 4 OF 7</span>
+    <h2 class="guide-title">Guide 4 — The Social Filter</h2>
+    <p class="guide-strapline">Safe Exposure & Urban Resilience</p>
+    <p class="guide-intro">Real socialization is not about forcing your dog to greet every dog and human. This guide builds environmental neutrality, distance management, and cooperative handling confidence.</p>
+  </div>
+  <img src="../images/mod_04_puppy.jpg" alt="Guide 4 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.1</span>
+      <span>•</span>
+      <span>FOCUS: Socialisation</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Quality Over Quantity: Socialisation ≠ Contact</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">An owner takes a 12-week puppy to a crowded off-leash dog park, allowing chaotic dogs to overwhelm the puppy.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">The primary developmental window closes between 12-16 weeks. Traumatic single-event learning during fear periods can cause permanent reactivity.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Neutrality Protocol: Sit on a quiet park bench 30m away from paths. Reward calm observation of cyclists, prams, and dogs.</li>
+      <li>The 3-Second Greeting Rule: If greeting on-leash, allow max 3 seconds (sniff, sniff, call away with praise) before arousal turns into tension.</li>
+      <li>Avoid Chaotic Dog Parks: Off-leash dog parks encourage bullying, defensive aggression, and uncontrolled greetings.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Believing your dog needs to physically interact with every person and dog it encounters.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>We train our dogs to be neutral to the world, not desperate to engage with it.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If your puppy panics, hides, or screams during mild exposure at distance, halt sessions and consult a trainer.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.2</span>
+      <span>•</span>
+      <span>FOCUS: Reactivity</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The 3-Zone Threshold Bubble</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your dog spots another dog across the street, freezes, whines, and lunges at the end of the lead.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">When a dog crosses their threshold distance, amygdala activation suppresses cognitive learning and appetite.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Green Zone (Sub-Threshold): Loose body, glances at trigger, takes treats easily. (This is where counter-conditioning works).</li>
+      <li>Yellow Zone (Threshold Edge): Stiffens, fixes gaze, slow treat taking. (Action: Increase distance by 5-10m immediately).</li>
+      <li>Red Zone (Over-Threshold): Lunging, barking, spinning, refusing food. (Action: Turn around, jog away, evacuate without scolding).</li>
+      <li>Arcing Maneuver: Never approach head-on. Step into driveways or arc widely across the road.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Standing in the Red Zone repeatedly commanding the dog to 'Sit' while they are in a physiological panic state.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Distance is your primary safety tool. When in doubt, add 10 meters of space.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Inability to maintain a Green Zone at >30m distance indicates moderate-to-severe reactivity requiring structured desensitization.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.3</span>
+      <span>•</span>
+      <span>FOCUS: Husbandry & Grooming</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">Cooperative Care & Low-Stress Handling</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Nail trimming or ear cleaning requires three adults pinning the dog down while the dog thrashes in terror.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Restraint-based force generates learned helplessness or active defensive biting. Cooperative care gives the dog a predictable consent mechanism.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Chin Rest Consent Cue: Train the dog to rest their chin on your open hand for high-value rewards.</li>
+      <li>The Consent Contract: As long as the chin stays down, gentle handling proceeds. If chin lifts, handling stops immediately.</li>
+      <li>Desensitization Ladder: Day 1-3 (touch paw with clipper handle) -> Day 4-7 (tap nail) -> Day 8+ (trim 1 nail tip -> jackpot treat).</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Forcing grooming procedures through restraint, which intensifies fear and escalates to defensive snapping.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Consent and predictable agency eliminate terror in healthcare and grooming.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Extreme fear, growling, or snapping during routine veterinary touch requires an accredited fear-free trainer.</p>
+    </aside>
+  </article>
+  <div class="next-step-cta">
+    <h4>Completed Guide 4?</h4>
+    <p>Your foundation is active. Continue to <strong>Guide 5: The Sync Mechanics</strong> (Reward Timing, Cues & Household Consistency)</p>
+    <a href="the-first-leash-guide-5.html" class="cta-button">Open Guide 5 →</a>
+  </div>
+</section>
+    </div>
+
+    <footer class="doc-footer">
+      <div>
+        <strong>The First Leash</strong> • Dog Trainers Directory
+      </div>
+      <div>
+        <a href="https://dogtrainersdirectory.com.au/match">Find a Verified Melbourne Trainer →</a>
+      </div>
+    </footer>
+  </main>
+
+</body>
+</html>

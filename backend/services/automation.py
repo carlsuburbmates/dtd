@@ -7,14 +7,18 @@ These workflows are intentionally fail-soft:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import hashlib
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urljoin, urlparse
 
 import requests
+
+from . import follow_up_tokens
 
 
 def _now() -> datetime:
@@ -81,6 +85,7 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
     alerts: List[Dict[str, Any]] = []
     reason_codes: List[str] = []
     now_dt = _now()
+    last_request_by_domain: Dict[str, float] = {}
     for src in sources:
         state = await db.source_ingestion_state.find_one({"source_url": src}, {"_id": 0}) or {}
         suppressed_until = _parse_iso(str(state.get("suppressed_until") or ""))
@@ -92,8 +97,28 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
 
         scanned += 1
         try:
-            r = requests.get(src, timeout=20)
+            domain = (urlparse(src).hostname or "").lower()
+            elapsed = time.monotonic() - last_request_by_domain.get(domain, 0.0)
+            if domain and elapsed < 2.0:
+                await asyncio.sleep(2.0 - elapsed)
+            r = await asyncio.to_thread(
+                requests.get,
+                src,
+                timeout=20,
+                headers={"User-Agent": "DTD-Bot/1.0 (+https://dogtrainersdirectory.com.au/trust)"},
+            )
+            if domain:
+                last_request_by_domain[domain] = time.monotonic()
             r.raise_for_status()
+            headers = getattr(r, "headers", {}) or {}
+            content_type = str(headers.get("content-type") or "text/html").lower()
+            if "text/html" not in content_type:
+                raise ValueError("source_content_type_not_html")
+            content = getattr(r, "content", None)
+            if content is None:
+                content = str(getattr(r, "text", "")).encode("utf-8")
+            if len(content) > 2_000_000:
+                raise ValueError("source_response_too_large")
             links = _extract_links(r.text, src)
             candidates = [u for u in links if _candidate_link(u)]
             for candidate in candidates:
@@ -108,6 +133,13 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
                     "hint_suburb": "",
                     "hint_bio": "",
                     "source": f"source_scan:{src}",
+                    "source_url": src,
+                    "source_type": "configured_public_index",
+                    "source_evidence": {
+                        "discovered_url": candidate,
+                        "retrieved_at": _now_iso(),
+                        "source_sha256": hashlib.sha256(content).hexdigest(),
+                    },
                     "status": "pending",
                     "created_at": _now_iso(),
                 }
@@ -229,7 +261,8 @@ async def send_t7_outreach(db) -> Dict[str, Any]:
         follow_up_html = _outreach_html(intro.get("trainer_name", ""))
         base = _public_app_base_url()
         if base:
-            follow_link = f"{base}/follow-up/{intro_id}"
+            follow_token = follow_up_tokens.issue_follow_up_token(intro_id=intro_id)
+            follow_link = f"{base}/follow-up/{follow_token}"
             follow_up_html += f'<p><a href="{follow_link}">Confirm outcome</a></p>'
 
         payload = {

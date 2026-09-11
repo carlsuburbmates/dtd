@@ -1,182 +1,74 @@
-"""Seed data for real Melbourne dog-training businesses.
+"""Lawful seed data loader for authentic Greater Melbourne dog-training businesses.
 
-Sources are public business websites / directories. We store source_evidence
-URLs alongside listings so the verification system has something to reason about.
-Listings are inserted in 'pending' state so the verification engine assigns
-confidence scores on first run.
+Replaces the unverified legacy baseline with candidates loaded from the
+curated, primary-source candidate dataset at `backend/data/melbourne_trainers_seed.json`.
+
+Zero invented trainer profiles, ABNs, services, locations, images, reviews, or
+contact details. All candidates default to:
+- tier: 'unclaimed'
+- claim_status: 'unclaimed'
+- abn_verified: False
+- published: False
 """
 
 from __future__ import annotations
 
-from typing import List, Dict, Any
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List
 
-MELBOURNE_TRAINERS: List[Dict[str, Any]] = [
-    {
-        "name": "Positive K9 Training",
-        "suburb": "Eastern Suburbs",
-        "region": "Melbourne East",
-        "website": "https://positivek9training.com.au",
-        "phone": "",
-        "email": "",
-        "categories": ["obedience", "puppy", "behaviour"],
-        "services": ["In-home training", "Group classes", "One-on-one"],
-        "bio": "Certified trainers offering in-home and group sessions across Melbourne's Eastern Suburbs, the Dandenongs and Mornington Peninsula. Top-rated on Google and Facebook.",
-        "image_url": "https://images.unsplash.com/photo-1660849636221-9a1fc064d57a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBkb2clMjB0cmFpbmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc3MTE1NTM4fDA&ixlib=rb-4.1.0&q=85",
-        "source_evidence_url": "https://positivek9training.com.au",
-        "tier": "featured",
-    },
-    {
-        "name": "Melbourne Dog Trainers",
-        "suburb": "Ormond",
-        "region": "Melbourne Inner South",
-        "website": "https://melbournedogtrainers.com.au",
-        "phone": "",
-        "email": "",
-        "categories": ["obedience", "puppy"],
-        "services": ["Obedience", "Puppy school", "Group classes"],
-        "bio": "Expert team focused on practical obedience training. Office in Ormond at 659a North Road, open Monday to Friday.",
-        "image_url": "https://images.unsplash.com/photo-1752090660908-6523cd11604c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBkb2clMjB0cmFpbmVyJTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc3MTE1NTM4fDA&ixlib=rb-4.1.0&q=85",
-        "source_evidence_url": "https://melbournedogtrainers.com.au",
-        "tier": "free",
-    },
-    {
-        "name": "The K9 Company",
-        "suburb": "Eltham",
-        "region": "Melbourne North East",
-        "website": "https://thek9company.com.au",
-        "phone": "",
-        "email": "",
-        "categories": ["behaviour", "obedience", "private"],
-        "services": ["Private in-home training", "Behaviour modification"],
-        "bio": "Private in-home dog training based in Eltham. Trainers certified through the National Dog Trainers Federation.",
-        "image_url": "https://images.pexels.com/photos/37107251/pexels-photo-37107251.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "source_evidence_url": "https://www.vdta.com.au/friends-of-vdta/",
-        "tier": "premium",
-    },
-    {
-        "name": "Bark With Buster",
-        "suburb": "Ascot Vale",
-        "region": "Melbourne West",
-        "website": "https://www.localsearch.com.au/profile/bark-with-buster/ascot-vale-vic",
-        "phone": "",
-        "email": "",
-        "categories": ["obedience", "puppy"],
-        "services": ["In-home training", "24-hour booking"],
-        "bio": "Ascot Vale based dog training service. Listed on Localsearch with strong availability.",
-        "image_url": "https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600",
-        "source_evidence_url": "https://www.localsearch.com.au/find/dog-trainers/melbourne-western-suburbs-vic",
-        "tier": "free",
-    },
-    {
-        "name": "Dale For Dogs",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://daledogtraining.com.au",
-        "phone": "",
-        "email": "",
-        "categories": ["puppy", "adolescent", "obedience"],
-        "services": ["In-home one-on-one", "Puppy training", "Adolescent dog training"],
-        "bio": "10+ years of experience focused on puppy and adolescent dog training. Covers Melbourne via in-home, one-on-one sessions.",
-        "image_url": "https://images.unsplash.com/photo-1558929996-da64ba858215?w=600",
-        "source_evidence_url": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "tier": "featured",
-    },
-    {
-        "name": "Direct K9 Services",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "phone": "",
-        "email": "",
-        "categories": ["balanced", "behaviour", "household"],
-        "services": ["Balanced training", "Household-focused programs"],
-        "bio": "Balanced training approach with Certificate III in Dog Training and Behaviour. Household-focused programs.",
-        "image_url": "https://images.unsplash.com/photo-1601758124277-f0086d5ab050?w=600",
-        "source_evidence_url": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "tier": "free",
-    },
-    {
-        "name": "Pupagander",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "phone": "",
-        "email": "",
-        "categories": ["walking", "training"],
-        "services": ["Premium walking", "Basic training"],
-        "bio": "Premium dog walking combined with training, at affordable rates across Melbourne.",
-        "image_url": "https://images.unsplash.com/photo-1601758174114-e711c0cbaa69?w=600",
-        "source_evidence_url": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "tier": "free",
-    },
-    {
-        "name": "Homestead Boarding Kennels",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "phone": "",
-        "email": "",
-        "categories": ["boarding", "training"],
-        "services": ["Boarding", "Training programs"],
-        "bio": "Operating since 1977 with high-level pet care plus dog-training programs.",
-        "image_url": "https://images.unsplash.com/photo-1583512603805-3cc6b41f3edb?w=600",
-        "source_evidence_url": "https://www.bark.com/en/au/dog-training/victoria/melbourne/",
-        "tier": "free",
-    },
-    {
-        "name": "Vern Ryan's Pet Resort",
-        "suburb": "Balliang East",
-        "region": "Melbourne West",
-        "website": "https://www.localsearch.com.au/find/dog-trainers/melbourne-western-suburbs-vic",
-        "phone": "",
-        "email": "",
-        "categories": ["boarding", "training"],
-        "services": ["Pet resort", "Training"],
-        "bio": "Pet resort and dog training facility located on Geelong-Bacchus Marsh Road, Balliang East.",
-        "image_url": "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=600",
-        "source_evidence_url": "https://www.localsearch.com.au/find/dog-trainers/melbourne-western-suburbs-vic",
-        "tier": "free",
-    },
-    {
-        "name": "Laika Pet Training",
-        "suburb": "Melbourne",
-        "region": "Melbourne CBD",
-        "website": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "phone": "",
-        "email": "",
-        "categories": ["obedience", "puppy"],
-        "services": ["Obedience", "Puppy school"],
-        "bio": "Local Melbourne dog trainer offering obedience and puppy training, available via Oneflare quote requests.",
-        "image_url": "https://images.unsplash.com/photo-1546975490-a72b67e1cf6d?w=600",
-        "source_evidence_url": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "tier": "free",
-    },
-    {
-        "name": "Barking Mad Dog Training",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "phone": "",
-        "email": "",
-        "categories": ["obedience", "behaviour"],
-        "services": ["Obedience", "Behaviour"],
-        "bio": "Melbourne-based trainer listed on Oneflare with quotes available on request.",
-        "image_url": "https://images.unsplash.com/photo-1577175552636-3f7a6abe1e21?w=600",
-        "source_evidence_url": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "tier": "free",
-    },
-    {
-        "name": "Trained Tails",
-        "suburb": "Melbourne",
-        "region": "Greater Melbourne",
-        "website": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "phone": "",
-        "email": "",
-        "categories": ["puppy", "obedience"],
-        "services": ["Puppy training", "Obedience"],
-        "bio": "Melbourne dog-training operator offering puppy and obedience programs (verified via Oneflare).",
-        "image_url": "https://images.unsplash.com/photo-1591946614720-90a587da4a36?w=600",
-        "source_evidence_url": "https://www.oneflare.com.au/dog-training/vic/melbourne",
-        "tier": "free",
-    },
-]
+logger = logging.getLogger(__name__)
+
+SEED_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "melbourne_trainers_seed.json"
+
+
+def _load_candidates() -> List[Dict[str, Any]]:
+    if not SEED_DATA_PATH.is_file():
+        logger.warning("melbourne_trainers_seed.json not found at %s; seed supply is empty", SEED_DATA_PATH)
+        return []
+    try:
+        with SEED_DATA_PATH.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+        raw_candidates = data.get("candidates") or []
+    except Exception as exc:
+        logger.error("Failed to parse %s: %s", SEED_DATA_PATH, exc)
+        return []
+
+    processed: List[Dict[str, Any]] = []
+    for cand in raw_candidates:
+        # Build fail-closed candidate record
+        entry = {
+            "name": str(cand.get("name") or "").strip(),
+            "suburb": str(cand.get("suburb") or "").strip(),
+            "region": str(cand.get("region") or "Greater Melbourne").strip(),
+            "website": str(cand.get("website") or "").strip(),
+            "phone": str(cand.get("phone") or "").strip(),
+            "email": str(cand.get("email") or "").strip(),
+            "categories": list(cand.get("categories") or []),
+            "services": list(cand.get("services") or []),
+            "service_formats": list(cand.get("service_formats") or []),
+            "training_philosophy": str(cand.get("training_philosophy") or "").strip(),
+            "specialties": list(cand.get("specialties") or []),
+            "bio": str(cand.get("bio") or "").strip(),
+            "image_url": str(cand.get("image_url") or "").strip(),
+            "source_evidence_url": str(cand.get("source_url") or "").strip(),
+            "source_provenance": {
+                "source_url": str(cand.get("source_url") or "").strip(),
+                "source_type": str(cand.get("source_type") or "public_directory").strip(),
+                "retrieved_at": str(cand.get("retrieved_at") or "").strip(),
+                "raw_evidence": cand.get("raw_evidence") or {},
+            },
+            "tier": "unclaimed",
+            "claim_status": "unclaimed",
+            "abn": str(cand.get("abn") or "").strip(),
+            "abn_status": "not_provided" if not cand.get("abn") else "pending_verification",
+            "abn_verified": False,
+            "abn_verified_at": "",
+            "abn_verification_reason": "Candidate requires ABR lookup verification before public badge.",
+        }
+        processed.append(entry)
+    return processed
+
+
+MELBOURNE_TRAINERS: List[Dict[str, Any]] = _load_candidates()

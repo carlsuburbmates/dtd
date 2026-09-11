@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Volume2, Square } from "lucide-react";
+import confetti from "canvas-confetti";
 import { clearEducationSession, educationApi } from "@/lib/api";
 import { captureEducationEvent, captureEducationPageView } from "@/lib/educationAnalytics";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
@@ -47,6 +48,7 @@ export default function EducationLesson() {
     const [statusMessage, setStatusMessage] = useState("");
     const [saving, setSaving] = useState(false);
     const [reflectionNotes, setReflectionNotes] = useState({});
+    const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -136,6 +138,15 @@ export default function EducationLesson() {
             }));
             setStatusMessage("Lesson marked complete.");
             captureEducationEvent("lesson_completed", { module_slug: moduleSlug, lesson_slug: lessonSlug });
+
+            // Fire confetti!
+            const end = Date.now() + 1000;
+            const colors = ['#9B4F31', '#F5F2EB', '#5C6D59'];
+            (function frame() {
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
         } catch (err) {
             if (err?.response?.status === 401) {
                 clearEducationSession();
@@ -179,8 +190,55 @@ export default function EducationLesson() {
             <PublicHeader />
             <main className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-12 pb-12">
                 <div className="small-caps">{payload.module.eyebrow} · Section {currentLessonNumber} of {lessonRows.length}</div>
-                <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">{lesson.title}</h1>
-                <p className="text-[#4A615A] mt-4 max-w-3xl">{payload.module.outcome || payload.module.objective}</p>
+
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mt-3">
+                    <div>
+                        <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32]">{lesson.title}</h1>
+                        <p className="text-[#4A615A] mt-4 max-w-3xl">{payload.module.outcome || payload.module.objective}</p>
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            if (isPlayingAudio) {
+                                window.speechSynthesis.cancel();
+                                setIsPlayingAudio(false);
+                            } else {
+                                const text = `${lesson.title}. \n` +
+                                    `Scenario: ${lesson.scenario}. \n` +
+                                    `What the owner needs to notice: ${(lesson.notice || []).join('. ')}. \n` +
+                                    `Common mistake: ${lesson.common_mistake}. \n` +
+                                    `Better decision rule: ${lesson.decision_rule}. \n` +
+                                    `What to do now: ${(lesson.do_now || []).join('. ')}. \n` +
+                                    `When to seek help: ${lesson.when_to_seek_help}.`;
+
+                                const utterance = new SpeechSynthesisUtterance(text);
+                                const voices = window.speechSynthesis.getVoices();
+                                const preferredVoice = voices.find(v => v.name.includes('Samantha') || v.name.includes('Google US English'));
+                                if (preferredVoice) utterance.voice = preferredVoice;
+
+                                utterance.rate = 0.95;
+                                utterance.pitch = 1;
+                                utterance.onend = () => setIsPlayingAudio(false);
+
+                                setIsPlayingAudio(true);
+                                window.speechSynthesis.speak(utterance);
+                            }
+                        }}
+                        className="flex items-center gap-2 bg-[#FBFAF6] hover:bg-[#F2EEE3] text-[#4A615A] hover:text-[#1A3A32] px-4 py-2 rounded-full text-sm font-medium transition-colors border border-[#E5DFD3] shrink-0 h-fit"
+                    >
+                        {isPlayingAudio ? (
+                            <>
+                                <Square className="w-4 h-4 fill-current text-[#D06D4F]" />
+                                Stop Listening
+                            </>
+                        ) : (
+                            <>
+                                <Volume2 className="w-4 h-4 text-[#D06D4F]" />
+                                Listen to Lesson
+                            </>
+                        )}
+                    </button>
+                </div>
 
                 <div className="grid lg:grid-cols-[minmax(0,1.05fr)_360px] gap-5 mt-10">
                     <section className="card-public p-6 sm:p-7">

@@ -70,7 +70,7 @@ The shell should always preserve:
 1. clear trainer path continuity
 2. clear owner path continuity
 3. no implication of broad live matching while the current posture remains
-   supply-first and waitlist-first
+   supply-first
 4. calm mobile readability
 
 ## Global Navigation Model
@@ -167,8 +167,8 @@ Route:
 
 | Route | Primary user / workflow support | First-read purpose | Structural module order | Primary action or outcome |
 |---|---|---|---|---|
-| `/` | Dog owner `W-DO-1`, trainer signpost `W-TR-1` | explain current posture and offer the right entry | hero and posture summary -> owner guidance -> waitlist form -> trainer CTA -> supporting trust/help blocks | join waitlist or continue to trainer path |
-| `/how-it-works` | owner/trainer orientation | explain how DTD works now | hero explanation -> supply-first explanation -> owner path -> trainer path -> trust/support clarification | move into the right path with accurate expectations |
+| `/` | trainer acquisition `W-TR-1`, owner orientation `W-DO-1` | explain the directory posture and drive the right early commitment | premium directory hero -> trainer proof and selectivity -> trainer CTA path -> secondary owner waitlist path -> contained owner-help block -> trust/help continuity | proceed to trainer submission or join owner waitlist |
+| `/how-it-works` | owner/trainer orientation | explain how DTD works now without making the guide the main homepage identity | hero explanation -> supply-first explanation -> trainer path -> owner waitlist path -> contained First Leash support -> trust/support clarification | move into the right path with accurate expectations |
 | `/about` | product framing | explain what DTD is and is not | product framing -> why quality/supply matters -> oversight/automation model -> trust continuity | improve trust and route into next relevant path |
 | `/pricing` | trainer commercial understanding | explain the trainer-side model honestly | pricing framing -> intro-first model -> billing-readiness explanation -> non-guarantee clarification -> support path | continue to trainer submission path |
 | `/trust` | trust/consent understanding | remove hesitation by clarifying boundaries | trust hero -> consent/contact-release explanation -> verification framing -> oversight/accountability framing | continue with a clearer trust model |

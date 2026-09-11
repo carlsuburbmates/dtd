@@ -20,76 +20,35 @@ def test_billing_updates_for_extended_lifecycle_states():
     assert stripe_billing.billing_updates_for_event("charge.dispute.closed", {}).get("billing_collection_status") == "dispute_resolved"
 
 
-def test_bill_intro_invoice_sent_with_mocked_stripe(monkeypatch):
+def test_bill_intro_is_decommissioned():
+    out = asyncio.run(stripe_billing.bill_intro(object(), {}, {}))
+    assert out["billed"] is False
+    assert out["billing_collection_status"] == "decommissioned"
+    assert out["fee_cents"] == 0
+
+
+def test_provision_trainer_billing_profile_creates_customer(monkeypatch):
     class FakeStripe:
-        class Invoice:
+        class Customer:
             @staticmethod
             def create(**kwargs):
-                assert kwargs["customer"] == "cus_123"
-                return SimpleNamespace(id="in_123")
+                assert kwargs["email"] == "trainer@example.com"
+                return SimpleNamespace(id="cus_created_123")
 
-            @staticmethod
-            def finalize_invoice(_invoice_id):
-                return {"status": "open", "hosted_invoice_url": "https://example.com/inv"}
+    class _Trainers:
+        def __init__(self):
+            self.updated = []
 
-            @staticmethod
-            def send_invoice(_invoice_id):
-                return {"status": "open", "hosted_invoice_url": "https://example.com/inv"}
+        async def update_one(self, filt, update):
+            self.updated.append((filt, update))
 
-        class InvoiceItem:
-            @staticmethod
-            def create(**kwargs):
-                assert kwargs["invoice"] == "in_123"
-                return {"id": "ii_123"}
-
-    async def fake_profile(_db, _trainer, *, consent_granted):
-        assert consent_granted is False
-        return {"stripe_customer_id": "cus_123", "billing_profile_status": "ready"}
-
+    fake_db = SimpleNamespace(trainers=_Trainers())
     monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
-    monkeypatch.setattr(stripe_billing, "provision_trainer_billing_profile", fake_profile)
-    monkeypatch.setattr(stripe_billing, "_consent_ok", lambda _trainer, consent_granted: True)
-
-    trainer = {"id": "t_1", "name": "Trainer", "stripe_customer_id": "", "billing_profile_status": "ready"}
-    intro = {"id": "i_1", "billing_status": "billed", "intro_fee_cents": 500, "match_id": "m_1"}
-    out = asyncio.run(stripe_billing.bill_intro(object(), trainer, intro))
-    assert out["billing_collection_status"] == "invoice_sent"
-    assert out["stripe_invoice_id"] == "in_123"
-
-
-def test_bill_intro_profile_incomplete_when_customer_unavailable(monkeypatch):
-    async def fake_profile(_db, _trainer, *, consent_granted):
-        assert consent_granted is False
-        return {"billing_profile_status": "missing_email"}
-
-    monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
-    monkeypatch.setattr(stripe_billing, "provision_trainer_billing_profile", fake_profile)
-    monkeypatch.setattr(stripe_billing, "_consent_ok", lambda _trainer, consent_granted: True)
-
-    trainer = {"id": "t_1", "name": "Trainer", "stripe_customer_id": ""}
-    intro = {"id": "i_1", "billing_status": "billed", "intro_fee_cents": 500}
-    out = asyncio.run(stripe_billing.bill_intro(object(), trainer, intro))
-    assert out["billing_collection_status"] == "profile_incomplete"
-    assert out["billing_profile_status"] == "missing_email"
-
-
-def test_bill_intro_trial_free_skips_invoice(monkeypatch):
-    monkeypatch.setenv("TRAINER_FREE_INTRO_DAYS", "30")
-    monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
-    monkeypatch.setattr(stripe_billing, "_consent_ok", lambda _trainer, consent_granted: True)
-
-    trainer = {
-        "id": "t_1",
-        "name": "Trainer",
-        "via_submission_id": "sub_1",
-        "created_at": stripe_billing.now_iso(),
-    }
-    intro = {"id": "i_1", "billing_status": "billed", "intro_fee_cents": 500}
-    out = asyncio.run(stripe_billing.bill_intro(object(), trainer, intro))
-    assert out["billing_collection_status"] == "trial_free"
-    assert out["intro_fee_cents"] == 0
-    assert out["intro_fee_list_cents"] == 500
+    trainer = {"id": "t_1", "email": "trainer@example.com", "name": "Trainer"}
+    out = asyncio.run(stripe_billing.provision_trainer_billing_profile(fake_db, trainer, consent_granted=True))
+    assert out["billing_profile_status"] == "ready"
+    assert out["stripe_customer_id"] == "cus_created_123"
 
 
 class _Req:

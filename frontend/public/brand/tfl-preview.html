@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The First Leash — Brand Identity & Logo Suite</title>
+  <style>
+    :root {
+      --forest: #1A3A32;
+      --forest-dark: #0F241F;
+      --cream: #F5F2EB;
+      --cream-card: #FAF8F5;
+      --terracotta: #9B4F31;
+      --gold: #EBC16A;
+      --border: #E5DFD3;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #111816;
+      color: #EAE6DF;
+      padding: 40px 24px;
+      line-height: 1.5;
+    }
+    .container { max-width: 1140px; margin: 0 auto; }
+    header { margin-bottom: 40px; }
+    h1 { font-size: 32px; font-weight: 800; color: #FFF; margin-bottom: 8px; }
+    p.lead { color: #A3B8B0; font-size: 16px; max-width: 700px; }
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      margin: 40px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .card {
+      border-radius: 16px;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 240px;
+      position: relative;
+    }
+    .card.dark {
+      background: var(--forest);
+      border: 1px solid #285448;
+    }
+    .card.light {
+      background: var(--cream);
+      border: 1px solid var(--border);
+      color: var(--forest);
+    }
+    .card .label {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.7;
+    }
+    .card img { max-width: 100%; height: auto; display: block; }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(235, 193, 106, 0.15);
+      color: var(--gold);
+      margin-bottom: 12px;
+    }
+    @media (max-width: 800px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">Master Brand Suite</span>
+      <h1>The First Leash: Official Logo System</h1>
+      <p class="lead">
+        Derived directly from the verified Dog Trainers Directory paw mark geometry. Alternating gold &amp; terracotta toes, diamond shield pad, and dual dark/light editorial lockups.
+      </p>
+    </header>
+
+    <div class="section-title">1. Primary Horizontal Wordmark Lockup</div>
+    <div class="grid-2">
+      <div class="card dark">
+        <span class="label">Dark Background (Header / Nav)</span>
+        <img src="tfl-logo-horizontal-dark.svg" alt="The First Leash Dark Horizontal Logo" style="max-height: 110px;">
+      </div>
+      <div class="card light">
+        <span class="label">Light Background (Handbook / Document)</span>
+        <img src="tfl-logo-horizontal-light.svg" alt="The First Leash Light Horizontal Logo" style="max-height: 110px;">
+      </div>
+    </div>
+
+    <div class="section-title">2. Stacked / Square Lockup (App Icon &amp; Covers)</div>
+    <div class="grid-2">
+      <div class="card dark">
+        <span class="label">Dark Stacked Square</span>
+        <img src="tfl-logo-stacked-dark.svg" alt="The First Leash Dark Stacked Logo" style="max-height: 220px;">
+      </div>
+      <div class="card light">
+        <span class="label">Light Stacked Square</span>
+        <img src="tfl-logo-stacked-light.svg" alt="The First Leash Light Stacked Logo" style="max-height: 220px;">
+      </div>
+    </div>
+
+    <div class="section-title">3. App Icon &amp; Monogram Marks</div>
+    <div class="grid-3">
+      <div class="card dark">
+        <span class="label">Standalone Paw Mark</span>
+        <img src="tfl-mark.svg" alt="The First Leash Paw Mark" style="max-height: 120px;">
+      </div>
+      <div class="card dark">
+        <span class="label">Squircle App Tile</span>
+        <img src="tfl-app-icon.svg" alt="The First Leash Squircle Icon" style="max-height: 120px;">
+      </div>
+      <div class="card light">
+        <span class="label">Light Paw Mark</span>
+        <img src="tfl-mark.svg" alt="The First Leash Paw Mark on Light" style="max-height: 120px;">
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The First Leash: Guide 5 — The Sync Mechanics • The First Leash</title>
+  <meta name="description" content="Reward Timing, Cues & Household Consistency" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+
+:root {
+  --ink: #1A3A32;
+  --ink-light: #4A615A;
+  --moss: #5C6D59;
+  --terracotta: #9B4F31;
+  --cream: #F5F2EB;
+  --surface: #FAFAF7;
+  --border: #E5DFD3;
+  --card-bg: #FFFFFF;
+  --warn-bg: #FBF5F0;
+  --decision-bg: #F0F4F2;
+  --text: #2B3330;
+  --font-serif: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--cream);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.document-container {
+  max-width: 860px;
+  margin: 40px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(26, 58, 50, 0.06);
+  overflow: hidden;
+}
+
+/* Header & Cover Banner */
+.cover-banner {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+  border-bottom: 3px solid var(--terracotta);
+}
+
+.cover-header {
+  padding: 40px 48px 24px;
+}
+
+.badge-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.badge-pill.terracotta {
+  background: var(--terracotta);
+}
+
+.badge-pill.moss {
+  background: var(--moss);
+}
+
+h1.doc-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+p.doc-subtitle {
+  font-size: 18px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* Meta Card */
+.meta-card {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--moss);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--ink-light);
+  margin-bottom: 32px;
+}
+
+.meta-card strong {
+  color: var(--ink);
+}
+
+/* Content Area */
+.content-body {
+  padding: 0 48px 48px;
+}
+
+.guide-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 48px 0;
+}
+
+/* Module Section */
+.guide-header {
+  margin-bottom: 32px;
+}
+
+.guide-hero-img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+
+h2.guide-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+p.guide-strapline {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--terracotta);
+  margin-bottom: 14px;
+}
+
+p.guide-intro {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Lesson Cards */
+.lesson-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(26, 58, 50, 0.03);
+}
+
+.lesson-meta-strip {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink-light);
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h3.lesson-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 18px;
+  line-height: 1.35;
+}
+
+.subheading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+p.lesson-text {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+/* Checklist Protocol */
+.protocol-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.protocol-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.protocol-list li::before {
+  content: "•";
+  position: absolute;
+  left: 10px;
+  color: var(--moss);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.checkbox-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.checkbox-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+}
+
+.checkbox-list input[type="checkbox"] {
+  margin-top: 4px;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+
+/* Callout Boxes */
+.callout-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-left: 4px solid;
+}
+
+.callout-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callout-caution {
+  background: var(--warn-bg);
+  border-left-color: var(--terracotta);
+}
+
+.callout-caution .callout-title {
+  color: var(--terracotta);
+}
+
+.callout-decision {
+  background: var(--decision-bg);
+  border-left-color: var(--ink);
+}
+
+.callout-decision .callout-title {
+  color: var(--ink);
+}
+
+.callout-escalation {
+  background: var(--cream);
+  border-left-color: var(--moss);
+}
+
+.callout-escalation .callout-title {
+  color: var(--moss);
+}
+
+/* Puppy Photo Break */
+.puppy-break-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+}
+
+/* Footer */
+.doc-footer {
+  padding: 32px 48px;
+  background: var(--cream);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.doc-footer a {
+  color: var(--terracotta);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.doc-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Next Step CTA Banner */
+.next-step-cta {
+  background: var(--ink);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 36px;
+  text-align: center;
+}
+
+.next-step-cta h4 {
+  font-size: 18px;
+  font-family: var(--font-serif);
+  margin-bottom: 8px;
+}
+
+.next-step-cta p {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 16px;
+}
+
+.cta-button {
+  display: inline-block;
+  background: var(--terracotta);
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.cta-button:hover {
+  opacity: 0.9;
+}
+
+/* Print Styles for 1-Click PDF Generation */
+@media print {
+  body {
+    background: #ffffff;
+    font-size: 13px;
+  }
+
+  .document-container {
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .cover-banner {
+    height: 240px;
+  }
+
+  .guide-divider {
+    break-after: page;
+    height: 0;
+    margin: 0;
+    border: none;
+  }
+
+  .lesson-card {
+    box-shadow: none;
+    border: 1px solid #cccccc;
+    break-inside: avoid;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .next-step-cta {
+    display: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+  </style>
+</head>
+<body>
+
+  <main class="document-container">
+    <!-- Cover Banner -->
+    <img src="../images/mod_05_cover.jpg" alt="The First Leash: Guide 5 — The Sync Mechanics Cover" class="cover-banner" />
+
+    <header class="cover-header">
+      <span class="badge-pill ">GUIDE 5 OF 7</span>
+      <h1 class="doc-title">The First Leash: Guide 5 — The Sync Mechanics</h1>
+      <p class="doc-subtitle">Reward Timing, Cues & Household Consistency</p>
+
+      <div class="meta-card">
+        <strong>Publisher:</strong> Dog Trainers Directory (Melbourne, Victoria)<br/>
+        <strong>Curriculum:</strong> Evidence-Based Positive Reinforcement &amp; Clinical De-Escalation<br/>
+        <strong>Access Level:</strong> 100% Free Public Guide • 
+        <a href="https://dogtrainersdirectory.com.au" style="color: var(--terracotta); text-decoration: none; font-weight: 600;">
+          dogtrainersdirectory.com.au
+        </a>
+      </div>
+    </header>
+
+    <div class="content-body">
+<section class="guide-section" id="guide-5">
+  <img src="../images/mod_05_cover.jpg" alt="The Sync Mechanics Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 5 OF 7</span>
+    <h2 class="guide-title">Guide 5 — The Sync Mechanics</h2>
+    <p class="guide-strapline">Reward Timing, Cues & Household Consistency</p>
+    <p class="guide-intro">Dogs learn through precise temporal association. This guide tightens marker timing, eliminates accidental rewards for bad behavior, and aligns the whole family on one clear cue set.</p>
+  </div>
+  <img src="../images/mod_05_puppy.jpg" alt="Guide 5 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.1</span>
+      <span>•</span>
+      <span>FOCUS: Marker Training</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The 1-Second Pay Window & Precision Markers</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog sits, the owner says 'good boy,' fumbles in their pocket for 8 seconds, and delivers a treat after the dog has already stood up.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Associative learning requires reinforcer delivery within a 0.5-1.5 second window. Late rewards reinforce the movement occurring at delivery.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Charge the Marker: Select a crisp, short syllable ('Yes!') or clicker. Pair: Click -> Treat immediately 20 times.</li>
+      <li>The 3-Step Sequence: Behavior Occurs -> Marker Fired -> Treat Delivered to mouth within 2 seconds.</li>
+      <li>Treat Accessibility: Wear a treat pouch or keep pea-sized rewards ready in hand, not buried in pockets.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Using the marker word as an attention-getter ('Yes! Yes! Look here!'). Markers are camera shutters capturing completed behaviors.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>The marker captures the exact millisecond; the hand delivers the reward.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If a dog shows zero food motivation in a calm home, assess diet, health, or overfeeding before training.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.2</span>
+      <span>•</span>
+      <span>FOCUS: Extinction & Habits</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Extinguishing Accidental Payoffs</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog jumps on guests, steals kitchen towels, or barks at the dinner table, and family members alternate between scolding and laughing.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Intermittent variable reinforcement schedules create the most durable, hard-to-extinguish habits in behavioral psychology.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Audit Accidental Payoffs: Jumping (guests pet dog) -> Counter-surfing (roast beef left on edge) -> Stealing items (chase game).</li>
+      <li>Management Fixes: Clean benches completely. Put dog on leash with guest arrival so jumping is physically prevented.</li>
+      <li>Extinction Burst Awareness: When reinforcement stops, the behavior temporarily spikes in intensity before dying out. Stay consistent.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Giving in 'just this once' after 10 minutes of barking. This directly trains the dog to bark longer next time.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Control the environment so unwanted behaviors never receive an accidental payoff.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If resource guarding accompanies stolen items (growling over socks), do not chase; begin professional trade protocols.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.3</span>
+      <span>•</span>
+      <span>FOCUS: Household Consistency</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Household Cue Constitution</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Mom says 'Down' (lie on floor), Dad says 'Down' (get off couch), and the kids yell 'Off', leaving the dog completely bewildered.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Canines discriminate specific auditory phonemes paired with body postures, not general semantic concepts.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Define the Vocabulary: 'Sit' (bottom down), 'Drop' (chest on floor), 'Off' (paws off furniture/humans), 'Wait' (pause at thresholds).</li>
+      <li>Release Cue: Establish an explicit release word ('Free' or 'Break') so the dog knows when a position ends.</li>
+      <li>The Single Cue Rule: Say the verbal cue once. If ignored, do not repeat it 5 times. Guide with a physical hand lure.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Chanting verbal commands like background noise until the dog learns to filter them out.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>One cue, one word, one criteria, agreed upon by every member of the household.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If multiple family members have conflicting training philosophies causing behavioral regression, book a family trainer consultation.</p>
+    </aside>
+  </article>
+  <div class="next-step-cta">
+    <h4>Completed Guide 5?</h4>
+    <p>Your foundation is active. Continue to <strong>Guide 6: The Urban Flow & The Shield</strong> (Public Life & Distraction Management)</p>
+    <a href="the-first-leash-guide-6.html" class="cta-button">Open Guide 6 →</a>
+  </div>
+</section>
+    </div>
+
+    <footer class="doc-footer">
+      <div>
+        <strong>The First Leash</strong> • Dog Trainers Directory
+      </div>
+      <div>
+        <a href="https://dogtrainersdirectory.com.au/match">Find a Verified Melbourne Trainer →</a>
+      </div>
+    </footer>
+  </main>
+
+</body>
+</html>

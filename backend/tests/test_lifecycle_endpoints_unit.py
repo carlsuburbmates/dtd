@@ -65,6 +65,17 @@ def _signed_trainer_action_token(*, trainer_id: str, submission_id: str = "", ex
     return f"{server._token_b64(payload_blob)}.{server._token_b64(sig)}"
 
 
+def _signed_follow_up_token(*, intro_id: str, exp_epoch: int, secret: str) -> str:
+    payload = {
+        "kind": "follow_up",
+        "intro_id": intro_id,
+        "exp": exp_epoch,
+    }
+    payload_blob = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    sig = hmac.new(secret.encode("utf-8"), payload_blob, hashlib.sha256).digest()
+    return f"{server._token_b64(payload_blob)}.{server._token_b64(sig)}"
+
+
 def test_get_follow_up_invalid_token_404(monkeypatch):
     fake_db = SimpleNamespace(
         intros=_Collection(find_one_result=None),
@@ -75,6 +86,79 @@ def test_get_follow_up_invalid_token_404(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(server.get_follow_up("invalid"))
     assert exc.value.status_code == 404
+
+
+def test_get_follow_up_expired_token_410(monkeypatch):
+    monkeypatch.setenv("FOLLOW_UP_TOKEN_SECRET", "follow-up-secret")
+    expired_token = _signed_follow_up_token(
+        intro_id="intro_old",
+        exp_epoch=int(datetime.now(timezone.utc).timestamp()) - 60,
+        secret="follow-up-secret",
+    )
+    fake_db = SimpleNamespace(
+        intros=_Collection(find_one_result={"id": "intro_old", "trainer_id": "t_1"}),
+        trainers=_Collection(find_one_result=None),
+        conversions=_Collection(find_one_result=None),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.get_follow_up(expired_token))
+    assert exc.value.status_code == 410
+
+
+def test_get_follow_up_accepts_signed_token(monkeypatch):
+    monkeypatch.setenv("FOLLOW_UP_TOKEN_SECRET", "follow-up-secret")
+    monkeypatch.setenv(
+        "FOLLOW_UP_LEGACY_INTRO_ID_SUPPORT_UNTIL",
+        (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+    )
+    valid_token = _signed_follow_up_token(
+        intro_id="intro_signed",
+        exp_epoch=int(datetime.now(timezone.utc).timestamp()) + 3600,
+        secret="follow-up-secret",
+    )
+    fake_db = SimpleNamespace(
+        intros=_Collection(find_one_result={"id": "intro_signed", "trainer_id": "t_1", "created_at": datetime.now(timezone.utc).isoformat()}),
+        trainers=_Collection(find_one_result={"id": "t_1", "name": "Trainer One", "suburb": "Carlton"}),
+        conversions=_Collection(find_one_result=None),
+        outreach_events=_Collection(find_one_result=None),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    out = asyncio.run(server.get_follow_up(valid_token))
+    assert out["intro_id"] == "intro_signed"
+    assert out["expires_at"]
+
+
+def test_get_follow_up_legacy_intro_id_rejected_after_support_cutoff(monkeypatch):
+    monkeypatch.setenv(
+        "FOLLOW_UP_LEGACY_INTRO_ID_SUPPORT_UNTIL",
+        (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+    )
+    fake_db = SimpleNamespace(
+        intros=_Collection(find_one_result={"id": "intro_legacy", "trainer_id": "t_1", "created_at": datetime.now(timezone.utc).isoformat()}),
+        trainers=_Collection(find_one_result=None),
+        conversions=_Collection(find_one_result=None),
+        outreach_events=_Collection(find_one_result=None),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.get_follow_up("intro_legacy"))
+    assert exc.value.status_code == 410
+
+
+def test_get_follow_up_uses_outreach_send_time_for_expiry(monkeypatch):
+    stale_created_at = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    recent_outreach_at = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    fake_db = SimpleNamespace(
+        intros=_Collection(find_one_result={"id": "intro_recent", "trainer_id": "t_1", "created_at": stale_created_at}),
+        trainers=_Collection(find_one_result={"id": "t_1", "name": "Trainer One", "suburb": "Carlton"}),
+        conversions=_Collection(find_one_result=None),
+        outreach_events=_Collection(find_one_result={"intro_id": "intro_recent", "kind": "t7_hire_check", "created_at": recent_outreach_at}),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    out = asyncio.run(server.get_follow_up("intro_recent"))
+    assert out["intro_id"] == "intro_recent"
+    assert out["expires_at"]
 
 
 def test_get_submission_status_exposes_blockers(monkeypatch):
@@ -140,8 +224,8 @@ def test_get_submission_status_activation_state_needs_billing_profile(monkeypatc
     )
     monkeypatch.setattr(server, "db", fake_db)
     out = asyncio.run(server.get_submission_status("sub_profile"))
-    assert out["activation_state"] == "needs_billing_profile"
-    assert {b["code"] for b in out["blockers"]} == {"billing_profile"}
+    assert out["activation_state"] == "intro_ready"
+    assert out["blockers"] == []
 
 
 def test_get_submission_status_prefers_live_trainer_billing_state(monkeypatch):
@@ -181,6 +265,9 @@ def test_get_trainer_billing_health_flags_issues(monkeypatch):
                 "name": "Trainer One",
                 "billing_profile_status": "missing_email",
                 "email": "trainer@example.com",
+                "subscription_tier": "pro",
+                "subscription_status": "past_due",
+                "subscription_billing_status": "payment_failed",
             }
         ),
         submissions=_Collection(find_one_result=None),
@@ -202,7 +289,11 @@ def test_get_trainer_billing_health_flags_issues(monkeypatch):
     )
     assert out["issues"]["profile_incomplete"] is True
     assert out["issues"]["payment_failed_or_disputed"] is True
+    assert out["subscription"]["tier"] == "pro"
+    assert out["subscription"]["status"] == "past_due"
     assert out["status_counts"]["payment_failed"] == 1
+    assert out["billed_total_cents"] == 1000
+    assert out["retry_state_counts"] == {}
 
 
 def test_get_trainer_reactivation_health_lists_reasons(monkeypatch):
@@ -344,11 +435,17 @@ def test_reconnect_trainer_billing_returns_updated_profile_status(monkeypatch):
 
 
 def test_submit_follow_up_outcome_rejects_unknown_action(monkeypatch):
+    monkeypatch.setenv("FOLLOW_UP_TOKEN_SECRET", "follow-up-secret")
+    valid_token = _signed_follow_up_token(
+        intro_id="intro_1",
+        exp_epoch=int(datetime.now(timezone.utc).timestamp()) + 3600,
+        secret="follow-up-secret",
+    )
     fake_db = SimpleNamespace(
         intros=_Collection(find_one_result={"id": "intro_1", "trainer_id": "t_1"}),
         outreach_events=_Collection(),
     )
     monkeypatch.setattr(server, "db", fake_db)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.submit_follow_up_outcome("intro_1", server.FollowUpOutcomeIn(action="oops")))
+        asyncio.run(server.submit_follow_up_outcome(valid_token, server.FollowUpOutcomeIn(action="oops")))
     assert exc.value.status_code == 400

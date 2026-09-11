@@ -26,6 +26,7 @@ At the start of each new task:
    - `AGENTS.md`
    - `.codex/skill-policy.toml` (if present)
    - `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
+   - `docs/standards/DTD_PROJECT_CONTEXT.md`
    - relevant workflow/process docs in `docs/` for the task domain
 3. Treat the current session's available skills/plugins/tools as the source of truth.
 4. Do not assume a globally installed skill is callable unless it is available in-session.
@@ -114,3 +115,12 @@ Before finishing a task:
 ## 8) Turn Summary Requirement
 
 Include `Active skills this turn:` in responses whenever any skill is active.
+
+## 9) Unacceptable Underimplementation & Strict Verification Mandate (Locked)
+
+Underimplementation and lack of verification are UNACCEPTABLE and SHALL NOT happen again.
+
+When executing any task, migration, or refactoring:
+1. **Zero Tolerance for Partial Work:** Do not stop execution simply because the compiler passes or the script runs without errors. You are responsible for the entire end-to-end functionality, including visual state, aesthetics, and edge cases.
+2. **Explicit Verification Mandate:** You MUST rigorously verify the final outcome of your changes. For frontend tasks, this means ensuring all styling dependencies (fonts, plugins, external CSS) are active and the UI maintains its premium feel. For backend tasks, this means verifying the entire request lifecycle.
+3. **Escalate Instead of Assuming:** If you cannot definitively verify the outcome due to environmental constraints, you must escalate and ask the user to manually verify before moving on or marking the task as complete.

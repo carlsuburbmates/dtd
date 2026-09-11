@@ -16,7 +16,18 @@ jest.mock("react-router-dom", () => ({
     useLocation: () => ({ pathname: mockPathname, search: mockSearch ? `?${mockSearch}` : "" }),
     useParams: () => mockParams,
     useNavigate: () => (to, options) => mockNavigateCalls.push({ to, options }),
-}));
+}), { virtual: true });
+
+jest.mock("framer-motion", () => {
+    const Component = ({ children, ...props }) => <div>{children}</div>;
+    return {
+        motion: new Proxy({}, { get: () => Component }),
+        AnimatePresence: ({ children }) => <>{children}</>,
+        useScroll: () => ({ scrollY: { get: () => 0, onChange: () => () => {} } }),
+        useTransform: () => 0,
+        useSpring: () => 0,
+    };
+});
 
 jest.mock("lucide-react", () => {
     const Icon = (props) => <svg {...props} />;
@@ -339,7 +350,7 @@ describe("education lane experience", () => {
         expect(view.container.textContent).toContain("Home Base First");
         expect(view.container.textContent).toContain("The dog paces at every movement.");
         expect(view.container.textContent).toContain("Safe Home Checklist");
-        expect(view.container.querySelector("a.btn-primary").getAttribute("href")).toContain("/education/sign-in?next=");
+        expect(view.container.querySelector("aside a.btn-primary").getAttribute("href")).toContain("/education/sign-in?next=");
         view.cleanup();
     });
 });

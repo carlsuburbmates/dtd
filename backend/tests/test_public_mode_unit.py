@@ -207,6 +207,8 @@ def _fake_oversight_db():
     intros = _Collection(
         rows=[
             {
+                "id": "intro_1",
+                "trainer_id": "t_1",
                 "billing_status": "billed",
                 "intro_fee_cents": 500,
                 "billing_collection_status": "paid",
@@ -247,6 +249,21 @@ def _fake_oversight_db():
                 "http_status": 202,
                 "provider": "resend",
                 "created_at": "2026-05-20T00:00:00+00:00",
+            }
+        ]
+    )
+    outreach_events = _Collection(
+        rows=[
+            {
+                "id": "out_1",
+                "intro_id": "intro_1",
+                "kind": "t7_hire_check",
+                "provider": "resend",
+                "provider_id": "re_out_1",
+                "status": "failed",
+                "email": "owner@example.com",
+                "created_at": "2026-05-19T12:00:00+00:00",
+                "http_status": 500,
             }
         ]
     )
@@ -303,6 +320,7 @@ def _fake_oversight_db():
         system_state=system_state,
         source_ingestion_state=empty,
         reactivation_candidates=empty,
+        outreach_events=outreach_events,
         notification_events=notification_events,
         owner_waitlist=owner_waitlist,
         owner_waitlist_events=owner_waitlist_events,
@@ -332,48 +350,81 @@ def _fake_startup_db():
         phase_transition_decisions=coll,
         owner_waitlist=coll,
         owner_waitlist_events=coll,
+        owner_education_magic_links=coll,
+        owner_education_owners=coll,
+        owner_education_sessions=coll,
+        owner_education_progress=coll,
+        owner_education_readiness=coll,
     )
 
 
-def test_config_exposes_public_matching_flag(monkeypatch):
+def test_config_exposes_public_matching_flag_enabled_by_default(monkeypatch):
     fake_db = SimpleNamespace(trainers=_Trainers())
     monkeypatch.setattr(server, "db", fake_db)
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", False)
 
     payload = asyncio.run(server.config())
 
-    assert payload["public_matching_enabled"] is False
-    assert payload["public_launch_phase"] == "supply_first"
-    assert payload["public_emphasis"] == "waitlist_first"
+    assert payload["public_matching_enabled"] is True
+    assert payload["public_launch_phase"] == "live_matching"
+    assert payload["public_emphasis"] == "live_matching"
     assert payload["trainer_onboarding_open"] is True
     assert payload["owner_waitlist_mode"] == "passive_only"
     assert "Carlton" in payload["suburbs"]
 
 
-def test_config_public_matching_flag_true(monkeypatch):
+def test_config_public_matching_unaffected_by_legacy_disabled_env(monkeypatch):
     fake_db = SimpleNamespace(trainers=_Trainers())
     monkeypatch.setattr(server, "db", fake_db)
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", True)
+    monkeypatch.setenv("PUBLIC_MATCHING_ENABLED", "0")
+    monkeypatch.setenv("PUBLIC_MODE", "waitlist_only")
 
     payload = asyncio.run(server.config())
 
     assert payload["public_matching_enabled"] is True
 
 
-def test_config_exposes_claim_and_monetization_safe_defaults(monkeypatch):
+def test_config_exposes_monetization_defaults_without_claim_state_dependency(monkeypatch):
     fake_db = SimpleNamespace(trainers=_Trainers())
     monkeypatch.setattr(server, "db", fake_db)
 
     payload = asyncio.run(server.config())
 
-    assert payload["public_monetization_copy_mode"] == "legacy_intro_fee"
-    assert payload["public_hide_legacy_intro_fee_copy"] is False
+    assert payload["public_monetization_copy_mode"] == "flat_subscription"
+    assert payload["public_hide_legacy_intro_fee_copy"] is True
     assert payload["public_show_founding_profile_copy"] is False
 
-    assert payload["claim_state_model_enabled"] is False
-    assert payload["claim_state_current"] == "STATE_0"
-    assert payload["claim_enforcement_mode"] == "report_only"
-    assert payload["claim_block_melbourne_wide_below_state_2"] is True
+    # No dependency on claim_state or legacy STATE_0-STATE_4 marketing fields
+    assert "claim_state_model_enabled" not in payload
+    assert "claim_state_current" not in payload
+    assert "claim_enforcement_mode" not in payload
+    assert "claim_block_melbourne_wide_below_state_2" not in payload
+
+
+def test_config_endpoint_is_strictly_read_only_and_does_not_mutate_db(monkeypatch):
+    class FakeSystemState:
+        def __init__(self):
+            self.writes = []
+
+        async def find_one(self, filt, projection=None):
+            return {"key": "launch_phase_state", "current_phase": "supply_first"}
+
+        async def insert_one(self, doc):
+            self.writes.append(("insert", doc))
+
+        async def update_one(self, filt, update, upsert=False):
+            self.writes.append(("update", filt, update))
+
+    system_state = FakeSystemState()
+    fake_db = SimpleNamespace(trainers=_Trainers(), system_state=system_state)
+    monkeypatch.setattr(server, "db", fake_db)
+
+    payload = asyncio.run(server.config())
+
+    assert len(system_state.writes) == 0
+    assert payload["public_launch_phase"] == "live_matching"
+    assert payload["public_matching_enabled"] is True
+    assert payload["public_emphasis"] == "live_matching"
+    assert payload["public_monetization_copy_mode"] == "flat_subscription"
 
 
 def test_startup_skips_seeds_by_default(monkeypatch):
@@ -448,21 +499,83 @@ def test_startup_seeds_only_from_api_when_enabled(monkeypatch):
     assert calls == {"trainers": 1, "discovery": 1}
 
 
-def test_match_gate_off_denies(monkeypatch):
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", False)
+def test_match_gate_default_and_legacy_env_allows(monkeypatch):
+    trainers = _Collection(
+        rows=[
+            {
+                "id": "t_1",
+                "name": "Trainer One",
+                "suburb": "Carlton",
+                "region": "Greater Melbourne",
+                "published": True,
+                "outcome_score": 0.6,
+                "billing_profile_status": "ready",
+            }
+        ]
+    )
+    fake_db = SimpleNamespace(
+        trainers=trainers,
+        match_events=_Collection(),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setenv("PUBLIC_MATCHING_ENABLED", "0")
+    monkeypatch.setenv("PUBLIC_MODE", "0")
+
+    async def _fake_match(_description, _pool):
+        return [{"trainer_id": "t_1", "score": 0.9, "reasoning": "best fit"}]
+
+    async def _fake_decorate(rows):
+        return rows
+
+    monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
+    monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
+
     payload = server.InstantMatchIn(
         description="leash reactivity",
         suburb="Carlton",
         consent_match_processing=True,
     )
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.instant_match(payload))
-    assert exc.value.status_code == 403
-    assert "education-first prelaunch" in str(exc.value.detail)
+    out = asyncio.run(server.instant_match(payload))
+    assert out["matches"][0]["id"] == "t_1"
 
 
-def test_intro_gate_off_denies(monkeypatch):
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", False)
+def test_intro_gate_default_and_legacy_env_allows(monkeypatch):
+    trainer = {
+        "id": "t_1",
+        "name": "Trainer One",
+        "suburb": "Carlton",
+        "region": "Greater Melbourne",
+        "published": True,
+        "website": "https://trainer.example.com",
+        "phone": "0400000000",
+        "email": "trainer@example.com",
+    }
+    fake_db = SimpleNamespace(
+        trainers=_Collection(rows=[trainer]),
+        intros=_Collection(rows=[]),
+        match_events=_Collection(rows=[]),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setenv("PUBLIC_MATCHING_ENABLED", "0")
+    monkeypatch.setenv("PUBLIC_MODE", "0")
+
+    async def _noop_audit(*_args, **_kwargs):
+        return None
+
+    async def _fake_fraud(_db, _ip, _trainer_id, _email):
+        return {"delivery_status": "delivered", "fraud_status": "clear", "reasons": []}
+
+    async def _unexpected_bill_intro(*_args, **_kwargs):
+        raise AssertionError("intros must not create Stripe invoices")
+
+    async def _fake_notify(_db, _trainer_doc, _intro):
+        return None
+
+    monkeypatch.setattr(server, "_audit", _noop_audit)
+    monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
+    monkeypatch.setattr(server.stripe_billing, "bill_intro", _unexpected_bill_intro)
+    monkeypatch.setattr(server.notifications_service, "notify_trainer_new_intro", _fake_notify)
+
     payload = server.IntroIn(
         trainer_id="t_1",
         description="help",
@@ -472,10 +585,11 @@ def test_intro_gate_off_denies(monkeypatch):
         consent_outcome_tracking=True,
     )
     req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.create_intro(payload, req))
-    assert exc.value.status_code == 403
-    assert "education-first prelaunch" in str(exc.value.detail)
+    out = asyncio.run(server.create_intro(payload, req, idempotency_key=""))
+    assert out["trainer_id"] == "t_1"
+    assert out["delivery_status"] == "delivered"
+    assert "intro_fee_cents" not in out
+    assert out["contact"]["email"] == "trainer@example.com"
 
 
 def test_match_gate_on_allows_existing_behavior(monkeypatch):
@@ -497,7 +611,7 @@ def test_match_gate_on_allows_existing_behavior(monkeypatch):
         match_events=_Collection(),
     )
     monkeypatch.setattr(server, "db", fake_db)
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", True)
+    monkeypatch.setenv("PUBLIC_MATCHING_ENABLED", "1")
 
     async def _fake_match(_description, _pool):
         return [{"trainer_id": "t_1", "score": 0.9, "reasoning": "best fit"}]
@@ -535,27 +649,23 @@ def test_intro_gate_on_allows_existing_success_behavior(monkeypatch):
         match_events=_Collection(rows=[]),
     )
     monkeypatch.setattr(server, "db", fake_db)
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", True)
+    monkeypatch.setenv("PUBLIC_MATCHING_ENABLED", "1")
 
     async def _noop_audit(*_args, **_kwargs):
         return None
 
-    async def _fake_intro_fee(_db, _suburb):
-        return 500
-
     async def _fake_fraud(_db, _ip, _trainer_id, _email):
-        return {"billing_status": "billed", "reasons": []}
+        return {"delivery_status": "delivered", "fraud_status": "clear", "reasons": []}
 
-    async def _fake_bill_intro(_db, _trainer_doc, _intro):
-        return {}
+    async def _unexpected_bill_intro(*_args, **_kwargs):
+        raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
         return None
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
-    monkeypatch.setattr(server.autonomy, "get_intro_fee", _fake_intro_fee)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
-    monkeypatch.setattr(server.stripe_billing, "bill_intro", _fake_bill_intro)
+    monkeypatch.setattr(server.stripe_billing, "bill_intro", _unexpected_bill_intro)
     monkeypatch.setattr(server.notifications_service, "notify_trainer_new_intro", _fake_notify)
 
     payload = server.IntroIn(
@@ -569,127 +679,160 @@ def test_intro_gate_on_allows_existing_success_behavior(monkeypatch):
     req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
     out = asyncio.run(server.create_intro(payload, req, idempotency_key=""))
     assert out["trainer_id"] == "t_1"
+    assert out["delivery_status"] == "delivered"
+    assert "intro_fee_cents" not in out
     assert out["contact"]["email"] == "trainer@example.com"
 
 
-def test_claim_validate_default_report_only_contract(monkeypatch):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "report_only")
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_0")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
+def test_public_trainer_payload_hides_contact_until_consented_intro():
+    public = server._public_trainer_payload({
+        "id": "t_1",
+        "name": "Trainer One",
+        "tier": "claimed",
+        "email": "trainer@example.com",
+        "phone": "0400000000",
+        "website": "https://trainer.example.com",
+        "booking_url": "https://booking.example.com",
+        "claim_status": "claimed",
+    })
 
-    out = asyncio.run(server.validate_claim(claim="We service Melbourne-wide", state=None))
+    assert public["id"] == "t_1"
+    assert public["claim_status"] == "claimed"
+    assert "email" not in public
+    assert "phone" not in public
+    assert "website" not in public
+    assert "booking_url" not in public
 
+
+def test_public_trainer_payload_rejects_unsafe_historical_urls():
+    public = server._public_trainer_payload({
+        "id": "t_1",
+        "name": "Trainer One",
+        "tier": "pro",
+        "website": "javascript:alert(document.domain)",
+        "booking_url": "data:text/html,unsafe",
+        "image_url": "javascript:alert(document.domain)",
+        "gallery_images": ["https://images.example.com/one.jpg", "javascript:alert(1)"],
+    })
+
+    assert "website" not in public
+    assert "booking_url" not in public
+    assert "image_url" not in public
+    assert public["gallery_images"] == ["https://images.example.com/one.jpg"]
+
+
+def test_released_contact_payload_rejects_unsafe_historical_website():
+    contact = server._released_contact_payload({
+        "name": "Trainer One",
+        "website": "javascript:alert(document.domain)",
+        "phone": "0400000000",
+        "email": "trainer@example.com",
+    })
+
+    assert contact["website"] is None
+    assert contact["phone"] == "0400000000"
+    assert contact["email"] == "trainer@example.com"
+
+
+@pytest.mark.parametrize("field", ["website", "booking_url", "image_url", "source_evidence_url"])
+def test_submission_rejects_unsafe_public_urls(field):
+    payload = {
+        "name": "Trainer One",
+        "suburb": "Carlton",
+        "consent_public_listing": True,
+        "consent_information_accuracy": True,
+        field: "javascript:alert(document.domain)",
+    }
+
+    with pytest.raises(ValidationError):
+        server.SubmissionIn(**payload)
+
+
+def test_directory_returns_public_safe_ranked_profiles(monkeypatch):
+    trainers = _Collection(rows=[
+        {"id": "basic", "name": "Basic", "region": "Greater Melbourne", "published": True, "tier": "basic", "email": "private@example.com"},
+        {"id": "pro", "name": "Pro", "region": "Greater Melbourne", "published": True, "tier": "pro", "verification_status": "verified", "website": "https://pro.example.com", "booking_url": "https://book.example.com"},
+    ])
+    monkeypatch.setattr(server, "db", SimpleNamespace(trainers=trainers))
+
+    out = asyncio.run(server.list_trainers(suburb=None, category=None, limit=60))
+
+    assert [row["id"] for row in out["trainers"]] == ["pro", "basic"]
+    assert out["trainers"][0]["website"] == "https://pro.example.com"
+    assert out["trainers"][0]["booking_url"] == "https://book.example.com"
+    assert "email" not in out["trainers"][1]
+
+
+def test_intro_requires_owner_identity_and_valid_contact():
+    with pytest.raises(ValidationError):
+        server.IntroIn(
+            trainer_id="t_1",
+            description="help with reactivity",
+            consent_contact_release=True,
+            consent_outcome_tracking=True,
+        )
+
+
+def test_intro_idempotency_key_cannot_release_different_trainer_contact(monkeypatch):
+    trainers = _Collection(rows=[
+        {"id": "t_2", "name": "Trainer Two", "region": "Greater Melbourne", "published": True, "email": "two@example.com"},
+    ])
+    intros = _Collection(rows=[{"id": "intro_1", "trainer_id": "t_1", "user_email": "owner@example.com", "idempotency_key": "same-key"}])
+    monkeypatch.setattr(server, "db", SimpleNamespace(trainers=trainers, intros=intros))
+    payload = server.IntroIn(
+        trainer_id="t_2",
+        description="help with reactivity",
+        user_email="owner@example.com",
+        user_name="Owner",
+        consent_contact_release=True,
+        consent_outcome_tracking=True,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.create_intro(payload, SimpleNamespace(client=None, headers={}), idempotency_key="same-key"))
+    assert exc.value.status_code == 409
+
+
+def test_claim_validate_non_blocking_compatibility_neutral_response():
+    out = asyncio.run(server.validate_claim(claim="We service Melbourne-wide"))
+
+    assert out["ok"] is True
     assert out["allowed"] is True
-    assert out["would_block"] is False
-    assert out["enforced"] is False
-    assert out["reason_codes"]
-    assert "CLAIM_POLICY_REPORT_ONLY" in out["reason_codes"]
-
-    for key in ("allowed", "would_block", "enforced", "reason_codes", "claim_policy", "ts"):
-        assert key in out
-    assert isinstance(out["claim_policy"], dict)
-    assert isinstance(out["reason_codes"], list)
-    assert isinstance(out["ts"], str)
-    assert "T" in out["ts"]
+    assert out["valid"] is True
+    assert out["status"] == "valid"
+    assert out["normalized_claim"] == "We service Melbourne-wide"
+    assert "ts" in out
+    # Removed legacy gating fields
+    assert "would_block" not in out
+    assert "enforced" not in out
+    assert "claim_policy" not in out
 
 
-@pytest.mark.parametrize("state", ["STATE_0", "STATE_1"])
-def test_claim_validate_block_invalid_blocks_melbourne_wide_below_state_2(monkeypatch, state):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "block_invalid")
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_0")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
-
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.validate_claim(claim="Available across Melbourne", state=state))
-
-    assert exc.value.status_code == 403
-    detail = exc.value.detail
-    assert detail["code"] == "claim_blocked"
-    assert detail["state"] == state
-    assert "MELBOURNE_WIDE_BELOW_STATE_2" in detail["reason_codes"]
-
-
-@pytest.mark.parametrize("state", ["STATE_2", "STATE_3", "STATE_4"])
-def test_claim_validate_block_invalid_allows_melbourne_wide_at_state_2_plus(monkeypatch, state):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "block_invalid")
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_0")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
-
-    out = asyncio.run(server.validate_claim(claim="all Melbourne", state=state))
-
-    assert out["state"] == state
+@pytest.mark.parametrize("state", ["STATE_0", "STATE_1", "STATE_2", "STATE_3", "STATE_4"])
+@pytest.mark.parametrize("claim_text", ["melbourne-wide", "available across melbourne", "all melbourne"])
+def test_claim_validate_never_blocks_under_any_state_or_claim(state, claim_text):
+    out = asyncio.run(server.validate_claim(claim=claim_text, state=state))
+    assert out["ok"] is True
     assert out["allowed"] is True
-    assert out["would_block"] is False
-    assert out["enforced"] is True
-    assert out["claim_policy"]["enforcement_mode"] == "block_invalid"
+    assert out["valid"] is True
 
 
-def test_claim_validate_unknown_state_normalizes_to_current(monkeypatch):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "report_only")
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_3")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
-
-    out = asyncio.run(server.validate_claim(claim="melbourne-wide", state="STATE_X"))
-
-    assert out["state"] == "STATE_3"
-    assert out["claim_policy"]["state"] == "STATE_3"
-    assert out["claim_policy"]["state_current"] == "STATE_3"
+def test_claim_validate_has_no_claim_state_dependency(monkeypatch):
+    out = asyncio.run(server.validate_claim(claim="Positive reinforcement trainer"))
+    assert out["ok"] is True
+    assert out["allowed"] is True
 
 
-@pytest.mark.parametrize("claim_text", ["melbourne-wide", "available across melbourne", "all melbourne"])
-def test_claim_validate_report_only_vs_block_invalid_deterministic(monkeypatch, claim_text):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_0")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
-
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "report_only")
-    report_out = asyncio.run(server.validate_claim(claim=claim_text, state="STATE_0"))
-    assert report_out["enforced"] is False
-    assert report_out["state"] == "STATE_0"
-    assert isinstance(report_out["reason_codes"], list)
-
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "block_invalid")
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.validate_claim(claim=claim_text, state="STATE_0"))
-    assert exc.value.status_code == 403
-    assert exc.value.detail["code"] == "claim_blocked"
-    assert exc.value.detail["state"] == "STATE_0"
+def test_guardrail_invariant_match_and_intro_routes_do_not_require_public_matching():
+    src_match = inspect.getsource(server.instant_match)
+    src_intro = inspect.getsource(server.create_intro)
+    assert "_require_public_matching" not in src_match
+    assert "_require_public_matching" not in src_intro
 
 
-@pytest.mark.parametrize("state", ["STATE_0", "STATE_1"])
-@pytest.mark.parametrize("claim_text", ["melbourne-wide", "available across melbourne", "all melbourne"])
-def test_claim_validate_block_invalid_never_silent_pass_below_state_2(monkeypatch, state, claim_text):
-    monkeypatch.setattr(server, "CLAIM_STATE_MODEL_ENABLED", True)
-    monkeypatch.setattr(server, "CLAIM_ENFORCEMENT_MODE", "block_invalid")
-    monkeypatch.setattr(server, "CLAIM_STATE_CURRENT", "STATE_0")
-    monkeypatch.setattr(server, "CLAIM_BLOCK_MELBOURNE_WIDE_BELOW_STATE_2", True)
-
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.validate_claim(claim=claim_text, state=state))
-    assert exc.value.status_code == 403
-    detail = exc.value.detail
-    assert detail["code"] == "claim_blocked"
-    assert detail["state"] == state
-    assert "MELBOURNE_WIDE_BELOW_STATE_2" in detail["reason_codes"]
-
-
-def test_guardrail_invariant_matching_gate_env_controlled(monkeypatch):
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", False)
-    with pytest.raises(HTTPException) as exc:
-        server._require_public_matching("Public matching")
-    assert exc.value.status_code == 403
-
-    monkeypatch.setattr(server, "PUBLIC_MATCHING_ENABLED", True)
-    server._require_public_matching("Public matching")
-
-
-def test_guardrail_invariant_intro_flow_uses_bill_intro_symbol():
+def test_guardrail_invariant_intro_flow_never_calls_bill_intro():
     src = inspect.getsource(server.create_intro)
-    assert "stripe_billing.bill_intro" in src
+    assert "stripe_billing.bill_intro" not in src
 
 
 def test_guardrail_invariant_oversight_route_requires_auth_dependency():
@@ -704,6 +847,130 @@ def test_guardrail_invariant_oversight_route_requires_auth_dependency():
     assert dependant is not None, "Expected FastAPI dependant metadata on oversight route"
     dep_calls = {getattr(dep, "call", None) for dep in (dependant.dependencies or [])}
     assert server.require_oversight in dep_calls
+
+
+def test_guardrail_invariant_server_has_no_public_matching_enabled_symbol_or_dependency():
+    """Verify PUBLIC_MATCHING_ENABLED is removed as a runtime symbol and has no dependency in server.py."""
+    assert not hasattr(server, "PUBLIC_MATCHING_ENABLED")
+    src = inspect.getsource(server)
+    assert "PUBLIC_MATCHING_ENABLED" not in src
+
+
+def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_block_matching(monkeypatch):
+    legacy_row = {
+        "key": "launch_phase_state",
+        "current_phase": "supply_first",
+        "matching_exposure_enabled": False,
+        "public_matching_enabled": False,
+        "public_emphasis": "waitlist_first",
+        "trainer_onboarding_open": True,
+        "owner_waitlist_mode": "active",
+        "evidence_window_mode": "30_day_prelaunch_evidence_window",
+        "requires_owner_review_for_phase_change": True,
+        "active_regions": ["Greater Melbourne"],
+    }
+    system_state_coll = _Collection(rows=[legacy_row.copy()])
+    trainers_coll = _Collection(
+        rows=[
+            {
+                "id": "t_1",
+                "name": "Trainer One",
+                "suburb": "Carlton",
+                "region": "Greater Melbourne",
+                "published": True,
+                "outcome_score": 0.9,
+                "billing_profile_status": "ready",
+                "website": "https://example.com",
+                "phone": "0400000000",
+                "email": "trainer@example.com",
+            }
+        ]
+    )
+    fake_db = SimpleNamespace(
+        system_state=system_state_coll,
+        trainers=trainers_coll,
+        match_events=_Collection(),
+        intros=_Collection(),
+        conversions=_Collection(),
+        engagements=_Collection(),
+        phase_readiness_snapshots=_Collection(),
+        phase_transition_decisions=_Collection(),
+        audit_log=_Collection(),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    # 1. State migration on retrieval
+    phase_state = asyncio.run(server._get_or_create_launch_phase_state())
+    assert phase_state["matching_exposure_enabled"] is True
+    assert phase_state["public_matching_enabled"] is True
+    assert phase_state["public_emphasis"] == "live_matching"
+
+    # Persisted row in system_state must be migrated
+    persisted = asyncio.run(system_state_coll.find_one({"key": "launch_phase_state"}))
+    assert persisted["matching_exposure_enabled"] is True
+    assert persisted["public_matching_enabled"] is True
+    assert persisted["public_emphasis"] == "live_matching"
+
+    # 2. Readiness snapshot derives open matching from target state, never env/constant
+    readiness = asyncio.run(server._build_phase_readiness_snapshot(phase_state))
+    assert readiness["matching_exposure_enabled"] is True
+    assert readiness["public_emphasis"] == "live_matching"
+
+    # 3. Transition baseline derives open matching from target state
+    decisions = asyncio.run(server._ensure_phase_transition_baseline(phase_state, readiness))
+    assert len(decisions) >= 1
+    assert decisions[0]["public_matching_enabled"] is True
+
+    # 4. Matching is not blocked by legacy row
+    async def _fake_match(_description, _pool):
+        return [{"trainer_id": "t_1", "score": 0.9, "reasoning": "best fit"}]
+
+    async def _fake_decorate(rows):
+        return rows
+
+    monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
+    monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
+
+    payload = server.InstantMatchIn(
+        description="leash reactivity",
+        suburb="Carlton",
+        consent_match_processing=True,
+    )
+    match_out = asyncio.run(server.instant_match(payload))
+    assert match_out["matches"][0]["id"] == "t_1"
+
+    # 5. Contact release / intro creation is not blocked by legacy row
+    async def _noop_audit(*_args, **_kwargs):
+        return None
+
+    async def _fake_fraud(_db, _ip, _trainer_id, _email):
+        return {"delivery_status": "delivered", "fraud_status": "clear", "reasons": []}
+
+    async def _unexpected_bill_intro(*_args, **_kwargs):
+        raise AssertionError("intros must not create Stripe invoices")
+
+    async def _fake_notify(_db, _trainer_doc, _intro):
+        return None
+
+    monkeypatch.setattr(server, "_audit", _noop_audit)
+    monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
+    monkeypatch.setattr(server.stripe_billing, "bill_intro", _unexpected_bill_intro)
+    monkeypatch.setattr(server.notifications_service, "notify_trainer_new_intro", _fake_notify)
+
+    intro_payload = server.IntroIn(
+        trainer_id="t_1",
+        description="help with my dog",
+        user_email="owner@example.com",
+        user_name="Owner",
+        consent_contact_release=True,
+        consent_outcome_tracking=True,
+    )
+    req = SimpleNamespace(client=SimpleNamespace(host="127.0.0.1"), headers={})
+    intro_out = asyncio.run(server.create_intro(intro_payload, req, idempotency_key=""))
+    assert intro_out["trainer_id"] == "t_1"
+    assert intro_out["delivery_status"] == "delivered"
+    assert "intro_fee_cents" not in intro_out
+    assert intro_out["contact"]["email"] == "trainer@example.com"
 
 
 def test_oversight_exposes_read_only_integrity_identity_contract(monkeypatch):
@@ -756,15 +1023,15 @@ def test_oversight_exposes_launch_phase_and_readiness_contract(monkeypatch):
     decisions = out.get("phase_transition_decisions")
 
     assert isinstance(phase_state, dict)
-    assert phase_state["current_phase"] == "supply_first"
-    assert phase_state["public_matching_enabled"] is False
-    assert phase_state["public_emphasis"] == "waitlist_first"
+    assert phase_state["current_phase"] == "live_matching"
+    assert phase_state["public_matching_enabled"] is True
+    assert phase_state["public_emphasis"] == "live_matching"
     assert phase_state["trainer_onboarding_open"] is True
 
     assert isinstance(readiness, dict)
-    assert readiness["phase"] == "supply_first"
-    assert readiness["matching_exposure_enabled"] is False
-    assert readiness["public_emphasis"] == "waitlist_first"
+    assert readiness["phase"] == "live_matching"
+    assert readiness["matching_exposure_enabled"] is True
+    assert readiness["public_emphasis"] == "live_matching"
     assert readiness["readiness_status"] in {"collecting_evidence", "attention_needed"}
     assert isinstance(readiness.get("recommendation"), str)
     assert isinstance(readiness.get("intro_ready_trainer_count"), int)
@@ -772,8 +1039,8 @@ def test_oversight_exposes_launch_phase_and_readiness_contract(monkeypatch):
     assert isinstance(readiness.get("blockers_to_next_phase"), list)
     assert isinstance(readiness.get("blocker_buckets"), dict)
 
-    assert out["launch_phase"] == "supply_first"
-    assert out["public_emphasis"] == "waitlist_first"
+    assert out["launch_phase"] == "live_matching"
+    assert out["public_emphasis"] == "live_matching"
     assert out["readiness_status"] == readiness["readiness_status"]
     assert out["readiness_recommendation"] == readiness["recommendation"]
     assert out["intro_ready_trainer_count"] == readiness["intro_ready_trainer_count"]
@@ -817,11 +1084,18 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert message_log
     assert message_log[0]["workflow"] == "trainer submission"
     assert message_log[0]["status"] == "sent"
+    assert any(row["workflow"] == "t+7 follow-up" for row in message_log)
+    follow_up_row = next(row for row in message_log if row["workflow"] == "t+7 follow-up")
+    assert follow_up_row["entity_label"] == "Trainer One"
+    assert follow_up_row["canonical_user_type"] == "Dog owner"
+    assert follow_up_row["source_kind"] == "outreach_event"
+    assert follow_up_row["status"] == "failed"
 
     assert isinstance(ops_cases, list)
     assert ops_cases
     assert any(case["case_type"] == "trainer_submission_case" for case in ops_cases)
     assert any(case["case_type"] == "trainer_communications_case" for case in ops_cases)
+    assert any(case["case_type"] == "owner_follow_up_case" for case in ops_cases)
 
 
 def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
@@ -982,11 +1256,12 @@ def test_oversight_exposes_ops_investigation_contract(monkeypatch):
 
     assert isinstance(ops, dict)
     assert isinstance(ops.get("loop_statuses"), dict)
-    assert isinstance(ops.get("billing_recovery_cases"), list)
+    assert isinstance(ops.get("intro_delivery_cases"), list)
+    assert isinstance(ops.get("conversion_quality_cases"), list)
     assert isinstance(ops.get("reactivation_cases"), list)
     assert isinstance(ops.get("source_ingestion_sources"), list)
     assert isinstance(ops.get("discovery_alerts"), list)
-    assert ops["billing_recovery_cases"][0]["billing_retry_state"] == "retry_exhausted"
+    assert ops["intro_delivery_cases"][0]["delivery_status"] == "delivered"
     assert ops["reactivation_cases"][0]["trainer_name"] == "Trainer One"
     assert ops["source_ingestion_sources"][0]["source_url"] == "https://source.example.com"
     assert ops["loop_statuses"]["ranking"]["status"] in {"ok", "investigate", "escalate", "warn"}
@@ -1021,7 +1296,7 @@ def test_oversight_scrubs_nested_objectids_from_live_like_payload(monkeypatch):
     json.dumps(out)
 
 
-def test_oversight_billing_summary_semantics_include_at_risk_and_collected(monkeypatch):
+def test_oversight_excludes_legacy_intro_billing_summary(monkeypatch):
     fake_db = _fake_oversight_db()
     fake_db.intros = _Collection(
         rows=[
@@ -1041,14 +1316,9 @@ def test_oversight_billing_summary_semantics_include_at_risk_and_collected(monke
 
     out = asyncio.run(server.oversight(None))
 
-    billing = out["billing_summary"]
-    revenue = out["revenue"]
-    assert billing["paid"] == 1
-    assert billing["payment_failed"] == 1
-    assert billing["disputed"] == 1
-    assert billing["trial_free"] == 1
-    assert revenue["collected_revenue_cents"] == 500
-    assert revenue["at_risk_revenue_cents"] == 1000
+    assert "billing_summary" not in out
+    assert "revenue" not in out
+    assert "pricing_state" not in out
 
 
 def _waitlist_post_path() -> str:

@@ -2,3 +2,15 @@
 .App {
     min-height: 100vh;
 }
+
+/* ----- The First Leash Education - Plyr Custom Theme ----- */
+.plyr-theme-override {
+  --plyr-color-main: hsl(var(--terracotta) / 1); /* Assumes terracotta is in Tailwind config, or fallback below */
+  --plyr-color-main: #9B4F31;
+}
+
+/* Rounded corners for the video player */
+.plyr-theme-override .plyr {
+  border-radius: 1rem;
+  overflow: hidden;
+}

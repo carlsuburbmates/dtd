@@ -24,7 +24,7 @@ It does not define:
 
 Use these authorities first:
 1. `docs/governance/CURRENT_TRUTH_INDEX.md`
-2. `docs/standards/SSOT.md`
+2. `docs/standards/DTD_PROJECT_CONTEXT.md`
 3. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
 4. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
 5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`

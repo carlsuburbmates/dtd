@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 420" fill="none" role="img" aria-labelledby="logo-title logo-description">
+  <title id="logo-title">Dog Trainers Directory Melbourne</title>
+  <desc id="logo-description">A geometric gold and terracotta paw beside the Dog Trainers Directory Melbourne wordmark.</desc>
+  <defs>
+    <linearGradient id="logo-gold" x1="0" y1="0" x2="0.78" y2="1"><stop stop-color="#FFE0A0"/><stop offset="0.45" stop-color="#F6C462"/><stop offset="1" stop-color="#D99B36"/></linearGradient>
+    <linearGradient id="logo-terracotta" x1="0" y1="0" x2="0.75" y2="1"><stop stop-color="#ED7953"/><stop offset="1" stop-color="#C94E30"/></linearGradient>
+    <filter id="logo-shadow" x="-18%" y="-16%" width="136%" height="142%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="12" stdDeviation="6" flood-color="#000000" flood-opacity="0.92"/></filter>
+  </defs>
+  <g transform="translate(45 18) scale(.48)" filter="url(#logo-shadow)" stroke="#050505" stroke-width="15" stroke-linejoin="round">
+    <ellipse cx="335" cy="335" rx="62" ry="92" transform="rotate(-12 335 335)" fill="url(#logo-terracotta)"/><ellipse cx="599" cy="335" rx="62" ry="92" transform="rotate(12 599 335)" fill="url(#logo-terracotta)"/>
+    <ellipse cx="231" cy="418" rx="55" ry="80" transform="rotate(-18 231 418)" fill="url(#logo-gold)"/><ellipse cx="703" cy="418" rx="55" ry="80" transform="rotate(18 703 418)" fill="url(#logo-gold)"/>
+    <path d="M467 393C442 427 398 447 367 482C329 525 321 585 350 625C366 648 388 665 414 676L489 752C501 764 520 764 532 752L607 676C633 665 655 648 671 625C700 585 692 525 654 482C623 447 579 427 554 393C536 370 526 344 510 322C494 344 484 370 467 393Z" fill="url(#logo-gold)"/>
+  </g>
+  <g font-family="Montserrat, Avenir Next, ui-sans-serif, system-ui, sans-serif" text-anchor="start">
+    <text x="468" y="190" textLength="880" lengthAdjust="spacingAndGlyphs" fill="#F3B64F" font-size="64" font-weight="700" letter-spacing="1">DOG TRAINERS DIRECTORY</text>
+    <text x="468" y="284" fill="#FFFFFF" font-size="72" font-weight="400" letter-spacing="-2">melbourne</text>
+  </g>
+</svg>

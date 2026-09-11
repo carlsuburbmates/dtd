@@ -22,7 +22,7 @@ It answers one question:
 This file is part of the canonical implementation pack.
 
 Role boundaries:
-1. `docs/standards/SSOT.md` defines user types, workflow families, and product
+1. `docs/standards/DTD_PROJECT_CONTEXT.md` defines user types, workflow families, and product
    model.
 2. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` defines E2E workflow completion
    rules.
@@ -71,7 +71,7 @@ document, the higher-authority document governs.
 | `W-OP-1 Passcode-Gated Oversight Authentication` | Oversight operator | ops entry | `/ops` auth gate | login idle, success, invalid passcode, lockout/throttle | not applicable inside `/ops`; this is the gate to console access | Yes |
 | `W-OP-2 Continuous Oversight Monitoring` | Oversight operator | authenticated console review | `/ops` overview and page sections | readable overview, stale snapshot handling, section continuity, empty-safe states | overview, work queue, trainer supply, messages, billing/reactivation, system activity, recent changes | Yes |
 | `W-OP-3 Monitor / Investigate / Escalate Review Flow` | Oversight operator | queue case review | `/ops` work queue and detail panel | grouped queue states, detail readability, review save, reload persistence, bounded history | `ops_cases`, review state, owner note, review history, responsibility layer | Yes |
-| `W-EX-1 Discovery Queue Contribution` | External contributor / ecosystem actor | discovery ingestion | autonomous ingestion surface, no public route required | accepted contribution, duplicate handling, malformed-source handling, silent-failure prevention | system activity, source-ingestion issues, queue visibility where abnormal | No |
+| `W-EX-1 Discovery Queue Contribution` | External contributor / ecosystem actor | approved licensed feed, trainer submission, or owner-authorised source | autonomous ingestion surface, no public route required | source/use approval, accepted contribution, duplicate and suppression handling, malformed/revoked-source handling, silent-failure prevention | system activity, source-ingestion issues, supplier/contract degradation, queue visibility where abnormal | No |
 | `W-AU-1 Runtime Loop Health And Freshness` | Autonomous system actor | continuous loop execution | `/ops` system activity | healthy, aging, stale, alerting, recovery visibility | loop status, freshness, thresholds, alerts, ingestion issues | Yes |
 | `W-AU-2 Outbound Message And Notification Logging` | Autonomous system actor | automated messaging path | `/ops` messages | sent, failed, delayed, missing-log prevention | message log with workflow, target, provider, status, detail | Yes |
 

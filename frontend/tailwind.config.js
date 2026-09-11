@@ -7,13 +7,28 @@ module.exports = {
   ],
   theme: {
   	extend: {
+      fontFamily: {
+          /* Override Tailwind's font-serif utility → Montserrat (geometric, no curves) */
+          serif: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          /* Override font-sans → Outfit for body copy */
+          sans: ['Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          /* Override font-mono → JetBrains Mono */
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+          /* Explicit display alias for headings */
+          display: ['Montserrat', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
-  		colors: {
-  			background: 'hsl(var(--background))',
+		colors: {
+			"dtd-heading": "#1A3A32",
+			"dtd-content": "#4A615A",
+			"dtd-border": "#E5DFD3",
+			"dtd-moss": "#5C6D59",
+			"dtd-terracotta": "#9B4F31",
+			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
   				DEFAULT: 'hsl(var(--card))',
@@ -78,5 +93,8 @@ module.exports = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    require("@tailwindcss/typography")
+  ],
 };

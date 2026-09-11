@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTD Feature Workflow Completion"
+  short_description: "Implement DTD features as complete workflows"
+  default_prompt: "Use $dtd-feature-workflow-completion to implement or validate a DTD feature end to end across user workflow branches, automation, and /ops visibility."

@@ -14,13 +14,18 @@ jest.mock("react-router-dom", () => ({
     useSearchParams: () => [new URLSearchParams(mockSearch)],
     useLocation: () => ({ pathname: mockPathname }),
     useParams: () => mockParams,
-}));
+}), { virtual: true });
 
-jest.mock("framer-motion", () => ({
-    motion: {
-        div: ({ children, ...props }) => <div {...props}>{children}</div>,
-    },
-}));
+jest.mock("framer-motion", () => {
+    const Component = ({ children, ...props }) => <div>{children}</div>;
+    return {
+        motion: new Proxy({}, { get: () => Component }),
+        AnimatePresence: ({ children }) => <>{children}</>,
+        useScroll: () => ({ scrollY: { get: () => 0, onChange: () => () => {} } }),
+        useTransform: () => 0,
+        useSpring: () => 0,
+    };
+});
 
 jest.mock("lucide-react", () => {
     const Icon = (props) => <svg {...props} />;
@@ -264,15 +269,15 @@ describe("owner education lane surfaces", () => {
         api.post.mockResolvedValue({ data: { ok: true } });
     });
 
-    it("keeps home as the public surface while signposting the separate owner guide", async () => {
+    it("keeps home as the public surface with open matching posture", async () => {
         api.get.mockResolvedValue({
             data: {
-                public_matching_enabled: false,
-                public_launch_phase: "supply_first",
-                public_emphasis: "waitlist_first",
+                public_matching_enabled: true,
+                public_launch_phase: "live_matching",
+                public_emphasis: "live_matching",
                 trainer_onboarding_open: true,
                 owner_waitlist_mode: "passive_only",
-                suburbs: [],
+                suburbs: ["Richmond", "Carlton"],
             },
         });
         mockSearch = "campaign=seo_richmond&source=seo";
@@ -281,37 +286,40 @@ describe("owner education lane surfaces", () => {
         const view = renderWithRouter(<Home />);
         await view.flush();
 
-        expect(view.container.textContent).toContain("Free starter guide");
-        expect(view.container.textContent).toContain("Quick waitlist");
-        const ownerEntry = view.container.querySelector("[data-testid='home-owner-entry']");
-        expect(ownerEntry.getAttribute("href")).toBe("/how-it-works?campaign=seo_richmond&source=seo&utm_medium=seo&utm_campaign=seo_richmond");
-        expect(view.container.querySelector("[data-testid='owner-waitlist-form']")).not.toBeNull();
-        expect(view.container.querySelector("[data-testid='home-owner-lane']")).not.toBeNull();
+        expect(view.container.textContent).toContain("Dog Trainers Directory");
+        expect(view.container.textContent).toContain("Local dog training, easier to trust.");
+        expect(view.container.querySelector("input#match-suburb")).not.toBeNull();
+        expect(view.container.querySelector("textarea#match-description")).not.toBeNull();
         view.cleanup();
     });
 
-    it("lets the owner guide own the waitlist step and prefill suburb context", async () => {
-        api.get.mockResolvedValue({ data: mockEducationCatalog });
+    it("renders how it works step-by-step owner guide", async () => {
         mockSearch = "campaign=seo_richmond&source=seo&suburb=Richmond";
         mockPathname = "/how-it-works";
 
         const view = renderWithRouter(<HowItWorks />);
         await view.flush();
 
-        expect(view.container.textContent).toContain("Seven simple guides for the early weeks at home");
-        expect(view.container.textContent).toContain("The First Leash");
-        expect(view.container.textContent).toContain("The Blueprint");
-        expect(view.container.textContent).toContain("The Transition Phase");
-        expect(view.container.textContent).toContain("The Empathy Engine");
-        expect(view.container.textContent).toContain("The Social Filter");
-        expect(view.container.textContent).toContain("The Sync Mechanics");
-        expect(view.container.textContent).toContain("The Urban Flow & The Shield");
-        expect(view.container.textContent).toContain("The Freedom Framework");
-        const suburbField = view.container.querySelector("[data-testid='owner-guide-waitlist-suburb']");
-        expect(suburbField.value).toBe("Richmond");
-        expect(view.container.querySelector("[data-testid='owner-guide-waitlist-form']")).not.toBeNull();
-        expect(view.container.querySelector("[data-testid='module-1']")).not.toBeNull();
-        expect(view.container.querySelector("[data-testid='module-7']")).not.toBeNull();
+        expect(view.container.textContent).toContain("Find the right trainer, faster.");
+        expect(view.container.textContent).toContain("Step 01");
+        expect(view.container.textContent).toContain("Search & Filter");
+        expect(view.container.textContent).toContain("Step 02");
+        expect(view.container.textContent).toContain("Review Profiles");
+        expect(view.container.textContent).toContain("Step 03");
+        expect(view.container.textContent).toContain("Contact Directly");
+        view.cleanup();
+    });
+
+    it("renders trust principles on how it works", async () => {
+        mockSearch = "source=seo";
+        mockPathname = "/how-it-works";
+
+        const view = renderWithRouter(<HowItWorks />);
+        await view.flush();
+
+        expect(view.container.textContent).toContain("Quality over quantity.");
+        expect(view.container.textContent).toContain("Start searching");
+        expect(view.container.textContent).toContain("Read our standards");
         view.cleanup();
     });
 
@@ -329,7 +337,7 @@ describe("owner education lane surfaces", () => {
         view.cleanup();
     });
 
-    it("routes suburb SEO traffic into the owner guide waitlist step", async () => {
+    it("routes suburb SEO traffic into the live local directory", async () => {
         api.get.mockResolvedValue({
             data: {
                 suburb: "Richmond",
@@ -349,8 +357,8 @@ describe("owner education lane surfaces", () => {
         await view.flush();
 
         const guideLink = view.container.querySelector("[data-testid='seo-cta-match']");
-        expect(guideLink.getAttribute("href")).toBe("/how-it-works?campaign=seo_richmond&source=seo&utm_medium=seo&utm_campaign=seo_richmond&suburb=Richmond#owner-guide-waitlist");
-        expect(view.container.textContent).toContain("The waitlist step sits inside The First Leash");
+        expect(guideLink.getAttribute("href")).toBe("/trainers?suburb=Richmond");
+        expect(view.container.textContent).toContain("Browse Richmond trainers");
         view.cleanup();
     });
 });

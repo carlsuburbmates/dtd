@@ -2,11 +2,15 @@
 
 Orientation only. This README is not implementation authority.
 
-Canonical truth starts at `docs/governance/CURRENT_TRUTH_INDEX.md`.
+Canonical truth starts at `docs/governance/CURRENT_TRUTH_INDEX.md`. Read
+`docs/standards/DTD_PROJECT_CONTEXT.md` for project orientation before loading
+the detailed authority for a task.
 
 ## What this project is
 
-DTD / Dog Trainers Directory is a Greater Melbourne dog-trainer match-and-intro product with automation-first operations and bounded human oversight.
+DTD / Dog Trainers Directory is a Greater Melbourne dog-training discovery and
+matching platform: real supply, rich trainer storefronts, guided owner matching,
+flat SaaS upgrades, and automation-first operations with bounded oversight.
 
 ## Quick start
 
@@ -66,7 +70,8 @@ cd frontend && yarn build
 
 Read in this order:
 1. `docs/governance/CURRENT_TRUTH_INDEX.md`
-2. canonical implementation docs listed there
+2. `docs/standards/DTD_PROJECT_CONTEXT.md`
+3. canonical implementation docs listed there
 3. `docs/governance/EXECUTION_STATUS.md` and `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` for current-state and audit-support context
 
 Process and design docs are non-authoritative.
@@ -74,6 +79,7 @@ Process and design docs are non-authoritative.
 ## Next docs to read
 
 - `docs/governance/CURRENT_TRUTH_INDEX.md`
+- `docs/standards/DTD_PROJECT_CONTEXT.md`
 - `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
 - `docs/governance/EXECUTION_STATUS.md`
 - `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`

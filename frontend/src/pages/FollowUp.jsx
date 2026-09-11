@@ -5,13 +5,34 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
+function describeFollowUpError(err) {
+    const status = Number(err?.response?.status || 0);
+    const detail = String(err?.response?.data?.detail || "").trim();
+    if (status === 410 || /expired/i.test(detail)) {
+        return {
+            title: "Link expired",
+            message: "This follow-up link has expired. If you still want to confirm the outcome, contact support for a fresh link.",
+        };
+    }
+    if (status === 404 || /invalid/i.test(detail)) {
+        return {
+            title: "Link invalid",
+            message: "This follow-up link is no longer valid. Check that you opened the latest email, or contact support if you still need help.",
+        };
+    }
+    return {
+        title: "Link unavailable",
+        message: detail || "This follow-up link is unavailable right now.",
+    };
+}
+
 export default function FollowUp() {
     const { token } = useParams();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [ctx, setCtx] = useState(null);
-    const [error, setError] = useState("");
+    const [errorState, setErrorState] = useState(null);
     const [done, setDone] = useState("");
 
     useEffect(() => {
@@ -21,12 +42,12 @@ export default function FollowUp() {
             .then((r) => {
                 if (!active) return;
                 setCtx(r.data);
-                setError("");
+                setErrorState(null);
             })
             .catch((err) => {
                 if (!active) return;
                 setCtx(null);
-                setError(err?.response?.data?.detail || "This follow-up link is invalid or expired.");
+                setErrorState(describeFollowUpError(err));
             })
             .finally(() => {
                 if (active) setLoading(false);
@@ -50,7 +71,12 @@ export default function FollowUp() {
                 navigate("/");
             }
         } catch (err) {
-            toast.error(err?.response?.data?.detail || "Could not save response.");
+            const mapped = describeFollowUpError(err);
+            if (err?.response?.status === 404 || err?.response?.status === 410) {
+                setCtx(null);
+                setErrorState(mapped);
+            }
+            toast.error(mapped.message || "Could not save response.");
         } finally {
             setBusy(false);
         }
@@ -67,13 +93,13 @@ export default function FollowUp() {
 
                 {loading ? (
                     <div className="card-public p-6 mt-8 text-[#4A615A]">Loading follow-up…</div>
-                ) : error ? (
+                ) : errorState ? (
                     <div className="card-public p-6 mt-8" data-testid="followup-invalid">
                         <div className="flex items-center gap-2 text-[#D06D4F]">
                             <AlertTriangle className="h-4 w-4" />
-                            <span className="font-mono text-xs uppercase tracking-wider">Link unavailable</span>
+                            <span className="font-mono text-xs uppercase tracking-wider">{errorState.title}</span>
                         </div>
-                        <p className="text-[#4A615A] mt-3">{error}</p>
+                        <p className="text-[#4A615A] mt-3">{errorState.message}</p>
                         <div className="mt-5">
                             <Link to="/" className="btn-primary inline-flex" data-testid="followup-home-cta">
                                 Back to home

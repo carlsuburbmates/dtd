@@ -6,6 +6,58 @@ import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 
+function formatStatusLabel(status) {
+    switch (String(status || "").toLowerCase()) {
+        case "published":
+            return "Live";
+        case "held":
+        case "held_for_review":
+            return "Needs review";
+        case "pending":
+        case "pending_review":
+        case "pending_autonomous_review":
+            return "In review";
+        default:
+            return "In progress";
+    }
+}
+
+function formatBillingLabel(status) {
+    switch (String(status || "").toLowerCase()) {
+        case "complete":
+        case "active":
+            return "Ready";
+        case "needs_email":
+        case "needs_billing_profile":
+            return "Needs billing email";
+        case "needs_billing_consent":
+            return "Needs consent";
+        case "billing_system_blocked":
+            return "Support review needed";
+        default:
+            return "In progress";
+    }
+}
+
+function formatReadinessLabel(status) {
+    switch (String(status || "").toLowerCase()) {
+        case "intro_ready":
+            return "Ready to receive introductions";
+        case "needs_billing_profile":
+            return "Billing details needed";
+        case "needs_billing_consent":
+            return "Consent needed";
+        case "billing_system_blocked":
+            return "Support review needed";
+        case "held_for_review":
+            return "More information needed";
+        case "pending_autonomous_review":
+            return "Under review";
+        default:
+            return "In progress";
+    }
+}
+
 export default function SubmitStatus() {
     const { submissionId } = useParams();
     const [loading, setLoading] = useState(true);
@@ -41,7 +93,7 @@ export default function SubmitStatus() {
         if (activation === "needs_billing_consent") return "Billing consent is still required before collection can activate.";
         if (activation === "billing_system_blocked") return "Billing is blocked by an integration issue and needs support review.";
         if (activation === "held_for_review") return "Submission is held. Stronger evidence or contact detail may be needed.";
-        if (activation === "pending_autonomous_review") return "Autonomous review is still in progress.";
+        if (activation === "pending_autonomous_review") return "Your profile is still being reviewed.";
         return "Review the current blockers and choose the closest remediation path below.";
     }, [data]);
 
@@ -52,24 +104,24 @@ export default function SubmitStatus() {
         <div className="App min-h-screen">
             <PublicHeader />
             <main className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
-                <div className="small-caps">Trainer onboarding</div>
-                <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Submission status</h1>
+                <div className="small-caps">Trainer submission</div>
+                <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Listing status</h1>
 
                 {loading ? (
                     <div className="card-public p-6 mt-8 text-[#4A615A]">Loading status…</div>
                 ) : error ? (
                     <div className="card-public p-6 mt-8" data-testid="submit-status-error">
                         <p className="text-[#4A615A]">{error}</p>
-                        <Link to="/submit" className="btn-primary mt-4 inline-flex">Submit listing</Link>
+                        <Link to="/submit" className="btn-primary mt-4 inline-flex">Apply as trainer</Link>
                     </div>
                 ) : (
                     <div className="space-y-4 mt-8">
                         <section className="card-public p-6" data-testid="submit-status-summary">
                             <div className="flex items-center gap-2">
                                 {data.status === "published" ? (
-                                    <span className="pill pill-verified"><CheckCircle2 className="h-3 w-3" /> published</span>
+                                    <span className="pill pill-verified"><CheckCircle2 className="h-3 w-3" /> {formatStatusLabel(data.status)}</span>
                                 ) : (
-                                    <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> {data.status}</span>
+                                    <span className="pill pill-unverified"><AlertCircle className="h-3 w-3" /> {formatStatusLabel(data.status)}</span>
                                 )}
                                 <span className="text-xs font-mono text-[#5C6D59]">
                                     confidence · {Math.round((data.confidence_score || 0) * 100)}%
@@ -79,10 +131,10 @@ export default function SubmitStatus() {
                                 {data?.trainer?.name || "Your listing"}
                             </h2>
                             <p className="text-sm text-[#4A615A] mt-2">
-                                Billing profile: <strong>{data.billing_profile_status || "unknown"}</strong>
+                                Billing setup: <strong>{formatBillingLabel(data.billing_profile_status)}</strong>
                             </p>
                             <p className="text-sm text-[#4A615A] mt-1">
-                                Activation state: <strong>{data.activation_state || "unknown"}</strong>
+                                Listing readiness: <strong>{formatReadinessLabel(data.activation_state)}</strong>
                             </p>
                             <p className="text-sm text-[#4A615A] mt-3">{nextStepCopy}</p>
                         </section>
@@ -104,7 +156,7 @@ export default function SubmitStatus() {
                             <div className="mt-5 rounded-2xl border border-[#E5DFD3] bg-[#F8F5EF] p-4">
                                 <div className="small-caps">Recommended next action</div>
                                 <p className="text-sm text-[#4A615A] mt-2">
-                                    Use the targeted path that matches your current activation state. Avoid creating a new submission unless you need to start over with materially different details.
+                                    Use the path that matches what your listing needs next. Avoid creating a new submission unless you need to start over with materially different details.
                                 </p>
                             </div>
                             <div className="mt-6 flex flex-wrap gap-3">

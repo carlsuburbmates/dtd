@@ -1,0 +1,153 @@
+{
+  "data_gap": {
+    "authentic_count": 20,
+    "initial_launch_count": 20,
+    "policy": "official_business_website_plus_active_abr_fail_closed",
+    "remaining_data_gap": 80,
+    "status": "initial_authorised_batch_verified",
+    "target_launch_count": 20,
+    "target_supply_count": 100
+  },
+  "generated_at": "2026-09-10T16:25:56.512174+00:00",
+  "manifest_version": 1,
+  "mode": "dry-run",
+  "run_id": "ingest-81a40246e111eb24",
+  "seed_file": "/Users/carlg/Documents/AI-Coding/dtd/backend/data/melbourne_trainers_seed.json",
+  "summary": {
+    "actions": [
+      {
+        "action": "updated_unclaimed",
+        "id": "kintala",
+        "name": "Kintala",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "dogs-and-bonds",
+        "name": "Dogs and Bonds",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "pet-pursuits",
+        "name": "Pet Pursuits",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "focus-on-dog-training",
+        "name": "Focus On Dog Training",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "northside-dog-training",
+        "name": "Northside Dog Training",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "pawsitive-bonds",
+        "name": "Pawsitive Bonds",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "9e688908-8c3b-48d0-9e93-97e96dd7fa28",
+        "name": "Melbourne Dog Trainers",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "from-a-dogs-view",
+        "name": "From A Dog's View",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "mind-my-lead",
+        "name": "Mind My Lead",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "thrive-canine",
+        "name": "Thrive Canine",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "command-dog-training-school",
+        "name": "Command Dog Training School",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "urban-dogs-hq",
+        "name": "Urban Dogs HQ",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "bayside-dog-behaviour",
+        "name": "Bayside Dog Behaviour",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "13a3eb2c-d0e2-4812-87a1-bdebfb641879",
+        "name": "Positive K9 Training",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "whyte-whispers",
+        "name": "Whyte Whispers",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "westside-paws",
+        "name": "Westside Paws",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "refine-your-canine",
+        "name": "Refine Your Canine",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "kip-melbourne-dog-training",
+        "name": "Kip Melbourne Dog Training",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "hellopuppy-dog-training",
+        "name": "HelloPuppy Dog Training",
+        "published": false
+      },
+      {
+        "action": "updated_unclaimed",
+        "id": "the-pawsitive-canine",
+        "name": "The Pawsitive Canine",
+        "published": false
+      }
+    ],
+    "created": 0,
+    "duplicates_skipped": 0,
+    "ingest_failures_detected": 0,
+    "ingest_failures_logged": 0,
+    "invalid_count": 0,
+    "mode": "dry-run",
+    "preserved_claimed": 0,
+    "quality_held": 0,
+    "quality_qualified": 20,
+    "scanned": 20,
+    "suppressed_delisted": 0,
+    "updated_unclaimed": 20,
+    "valid_count": 20
+  }
+}

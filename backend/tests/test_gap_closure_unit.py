@@ -244,7 +244,7 @@ def test_growth_nurture_builds_remarketing_candidates():
 
 
 def test_growth_attribution_summary_includes_totals(monkeypatch):
-    now_ts = datetime(2026, 5, 20, tzinfo=timezone.utc).isoformat()
+    now_ts = datetime.now(timezone.utc).isoformat()
     fake_db = SimpleNamespace(
         growth_attribution=_Collection(
             rows=[
@@ -273,7 +273,7 @@ def test_growth_attribution_summary_includes_totals(monkeypatch):
 
 
 def test_growth_attribution_summary_includes_waitlist_join_cohort(monkeypatch):
-    now_ts = datetime(2026, 5, 20, tzinfo=timezone.utc).isoformat()
+    now_ts = datetime.now(timezone.utc).isoformat()
     fake_db = SimpleNamespace(
         growth_attribution=_Collection(
             rows=[
@@ -325,53 +325,15 @@ def test_growth_nurture_rolls_up_seo_match_intro_conversion_path():
     assert row["converted"] == 1
 
 
-def test_run_billing_recovery_marks_retry_exhausted():
-    intro = {
-        "id": "intro_exhausted",
-        "trainer_id": "t_1",
-        "billing_status": "billed",
-        "billing_collection_status": "payment_failed",
-        "billing_retry_attempts": 3,
-    }
-    intros = _Collection(rows=[intro])
-    fake_db = SimpleNamespace(
-        intros=intros,
-        trainers=_Collection(rows=[{"id": "t_1", "name": "Trainer One"}]),
-        system_state=_Collection(),
-    )
-
-    out = asyncio.run(engine.run_billing_recovery(fake_db))
-
-    assert out["retry_exhausted"] == 1
-    assert intro["billing_retry_state"] == "retry_exhausted"
-
-
-def test_run_billing_recovery_respects_backoff_without_retry(monkeypatch):
-    now_ts = datetime.now(timezone.utc).isoformat()
-    intro = {
-        "id": "intro_waiting",
-        "trainer_id": "t_1",
-        "billing_status": "billed",
-        "billing_collection_status": "payment_failed",
-        "billing_retry_attempts": 0,
-        "billing_last_retry_at": now_ts,
-    }
-    intros = _Collection(rows=[intro])
-    fake_db = SimpleNamespace(
-        intros=intros,
-        trainers=_Collection(rows=[{"id": "t_1", "name": "Trainer One"}]),
-        system_state=_Collection(),
-    )
-
-    async def _unexpected_retry(*_args, **_kwargs):
-        raise AssertionError("bill_intro should not be called while backoff is active")
-
-    monkeypatch.setattr(engine.stripe_billing, "bill_intro", _unexpected_retry)
-
-    out = asyncio.run(engine.run_billing_recovery(fake_db))
-
-    assert out["waiting_backoff"] == 1
-    assert intro.get("billing_retry_state") != "retry_sent"
+def test_billing_recovery_and_pricing_decommissioned_from_engine():
+    assert not hasattr(engine, "run_billing_recovery"), "run_billing_recovery must be decommissioned from engine"
+    assert not hasattr(engine, "BILLING_RECOVERY_INTERVAL_S"), "BILLING_RECOVERY_INTERVAL_S must be decommissioned from engine"
+    assert not hasattr(engine, "recompute_pricing"), "recompute_pricing must be decommissioned from engine"
+    assert not hasattr(engine, "PRICING_INTERVAL_S"), "PRICING_INTERVAL_S must be decommissioned from engine"
+    assert not hasattr(engine, "BASE_INTRO_FEE"), "BASE_INTRO_FEE must be decommissioned from engine"
+    assert not hasattr(engine, "BASE_CONVERSION_FEE"), "BASE_CONVERSION_FEE must be decommissioned from engine"
+    assert not hasattr(engine, "CONVERSION_BILLING_MODE"), "CONVERSION_BILLING_MODE must be decommissioned from engine"
+    assert not hasattr(engine, "FIXED_INTRO_FEE_CENTS"), "FIXED_INTRO_FEE_CENTS must be decommissioned from engine"
 
 
 def test_process_discovery_queue_writes_discovery_heartbeat():
@@ -408,6 +370,25 @@ def test_process_discovery_queue_writes_discovery_heartbeat():
     assert heartbeat["promoted"] == 0
     assert heartbeat["duplicates"] == 0
     assert heartbeat.get("last_run")
+
+
+def test_high_confidence_discovery_is_held_until_statutory_evidence():
+    pending = {"id": "dq_safe", "url": "https://safe.example/dog-training", "hint_name": "Safe Dogs", "hint_suburb": "Kew", "status": "pending"}
+
+    class _Ai:
+        async def score_trainer(self, _payload):
+            return {"confidence": 0.95, "reasoning": "strong web signal", "signals": ["website"], "model": "heuristic"}
+
+    fake_db = SimpleNamespace(
+        discovery_queue=_Collection(rows=[pending]),
+        trainers=_Collection(rows=[]),
+        system_state=_Collection(rows=[]),
+    )
+    out = asyncio.run(engine.process_discovery_queue(fake_db, _Ai(), batch=1))
+    assert out["promoted"] == 1
+    assert fake_db.trainers.rows[0]["published"] is False
+    assert fake_db.trainers.rows[0]["verification_status"] == "unverified"
+    assert fake_db.trainers.rows[0]["ingestion_hold_reason"] == "statutory_and_source_evidence_required"
 
 
 def test_ingest_sources_writes_source_ingestion_heartbeat(monkeypatch):

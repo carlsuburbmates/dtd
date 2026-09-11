@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 from services import automation
+from services import follow_up_tokens
 from services import notifications
 
 
@@ -78,6 +80,25 @@ def test_submitter_notification_payload_sets_reply_to_and_header(monkeypatch):
     assert sent_payload["json"]["headers"]["Reply-To"] == "info@dogtrainersdirectory.com.au"
 
 
+def test_suppressed_intro_is_logged_without_notifying_trainer(monkeypatch):
+    def unexpected_post(*_args, **_kwargs):
+        raise AssertionError("suppressed enquiries must not call Resend")
+
+    events = _EventsCollection()
+    monkeypatch.setenv("RESEND_API_KEY", "rk_test")
+    monkeypatch.setattr(notifications.requests, "post", unexpected_post)
+
+    out = asyncio.run(notifications.notify_trainer_new_intro(
+        SimpleNamespace(notification_events=events),
+        {"id": "trainer_1", "email": "trainer@example.com"},
+        {"id": "intro_1", "delivery_status": "suppressed"},
+    ))
+
+    assert out["trainer_notification_status"] == "suppressed"
+    assert events.rows[0]["status"] == "suppressed"
+    assert events.rows[0]["error"] == "fraud_or_duplicate_suppression"
+
+
 def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
     sent_payload = {}
 
@@ -105,6 +126,7 @@ def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
     monkeypatch.setenv("RESEND_FROM", "no-reply@dogtrainersdirectory.com.au")
     monkeypatch.setenv("RESEND_REPLY_TO", "info@dogtrainersdirectory.com.au")
     monkeypatch.setenv("FRONTEND_BASE_URL", "https://dogtrainersdirectory.com.au")
+    monkeypatch.setenv("FOLLOW_UP_TOKEN_SECRET", "follow-up-secret")
     monkeypatch.setattr(automation.requests, "post", fake_post)
 
     out = asyncio.run(automation.send_t7_outreach(fake_db))
@@ -113,4 +135,8 @@ def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
     assert sent_payload["json"]["from"] == "no-reply@dogtrainersdirectory.com.au"
     assert sent_payload["json"]["reply_to"] == ["info@dogtrainersdirectory.com.au"]
     assert sent_payload["json"]["headers"]["Reply-To"] == "info@dogtrainersdirectory.com.au"
-    assert "https://dogtrainersdirectory.com.au/follow-up/intro_1" in sent_payload["json"]["html"]
+    follow_link = sent_payload["json"]["html"].split('href="', 1)[1].split('"', 1)[0]
+    assert "/follow-up/intro_1" not in follow_link
+    token = urlparse(follow_link).path.rsplit("/", 1)[-1]
+    payload = follow_up_tokens.verify_follow_up_token(token)
+    assert payload["intro_id"] == "intro_1"

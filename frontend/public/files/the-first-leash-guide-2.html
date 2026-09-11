@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The First Leash: Guide 2 — The Transition Phase • The First Leash</title>
+  <meta name="description" content="Early Friction & Biological De-Escalation" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+
+:root {
+  --ink: #1A3A32;
+  --ink-light: #4A615A;
+  --moss: #5C6D59;
+  --terracotta: #9B4F31;
+  --cream: #F5F2EB;
+  --surface: #FAFAF7;
+  --border: #E5DFD3;
+  --card-bg: #FFFFFF;
+  --warn-bg: #FBF5F0;
+  --decision-bg: #F0F4F2;
+  --text: #2B3330;
+  --font-serif: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--cream);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.document-container {
+  max-width: 860px;
+  margin: 40px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(26, 58, 50, 0.06);
+  overflow: hidden;
+}
+
+/* Header & Cover Banner */
+.cover-banner {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+  border-bottom: 3px solid var(--terracotta);
+}
+
+.cover-header {
+  padding: 40px 48px 24px;
+}
+
+.badge-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.badge-pill.terracotta {
+  background: var(--terracotta);
+}
+
+.badge-pill.moss {
+  background: var(--moss);
+}
+
+h1.doc-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+p.doc-subtitle {
+  font-size: 18px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* Meta Card */
+.meta-card {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--moss);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--ink-light);
+  margin-bottom: 32px;
+}
+
+.meta-card strong {
+  color: var(--ink);
+}
+
+/* Content Area */
+.content-body {
+  padding: 0 48px 48px;
+}
+
+.guide-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 48px 0;
+}
+
+/* Module Section */
+.guide-header {
+  margin-bottom: 32px;
+}
+
+.guide-hero-img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+
+h2.guide-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+p.guide-strapline {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--terracotta);
+  margin-bottom: 14px;
+}
+
+p.guide-intro {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Lesson Cards */
+.lesson-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(26, 58, 50, 0.03);
+}
+
+.lesson-meta-strip {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink-light);
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h3.lesson-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 18px;
+  line-height: 1.35;
+}
+
+.subheading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+p.lesson-text {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+/* Checklist Protocol */
+.protocol-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.protocol-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.protocol-list li::before {
+  content: "•";
+  position: absolute;
+  left: 10px;
+  color: var(--moss);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.checkbox-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.checkbox-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+}
+
+.checkbox-list input[type="checkbox"] {
+  margin-top: 4px;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+
+/* Callout Boxes */
+.callout-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-left: 4px solid;
+}
+
+.callout-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callout-caution {
+  background: var(--warn-bg);
+  border-left-color: var(--terracotta);
+}
+
+.callout-caution .callout-title {
+  color: var(--terracotta);
+}
+
+.callout-decision {
+  background: var(--decision-bg);
+  border-left-color: var(--ink);
+}
+
+.callout-decision .callout-title {
+  color: var(--ink);
+}
+
+.callout-escalation {
+  background: var(--cream);
+  border-left-color: var(--moss);
+}
+
+.callout-escalation .callout-title {
+  color: var(--moss);
+}
+
+/* Puppy Photo Break */
+.puppy-break-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+}
+
+/* Footer */
+.doc-footer {
+  padding: 32px 48px;
+  background: var(--cream);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.doc-footer a {
+  color: var(--terracotta);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.doc-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Next Step CTA Banner */
+.next-step-cta {
+  background: var(--ink);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 36px;
+  text-align: center;
+}
+
+.next-step-cta h4 {
+  font-size: 18px;
+  font-family: var(--font-serif);
+  margin-bottom: 8px;
+}
+
+.next-step-cta p {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 16px;
+}
+
+.cta-button {
+  display: inline-block;
+  background: var(--terracotta);
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.cta-button:hover {
+  opacity: 0.9;
+}
+
+/* Print Styles for 1-Click PDF Generation */
+@media print {
+  body {
+    background: #ffffff;
+    font-size: 13px;
+  }
+
+  .document-container {
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .cover-banner {
+    height: 240px;
+  }
+
+  .guide-divider {
+    break-after: page;
+    height: 0;
+    margin: 0;
+    border: none;
+  }
+
+  .lesson-card {
+    box-shadow: none;
+    border: 1px solid #cccccc;
+    break-inside: avoid;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .next-step-cta {
+    display: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+  </style>
+</head>
+<body>
+
+  <main class="document-container">
+    <!-- Cover Banner -->
+    <img src="../images/mod_02_cover.jpg" alt="The First Leash: Guide 2 — The Transition Phase Cover" class="cover-banner" />
+
+    <header class="cover-header">
+      <span class="badge-pill ">GUIDE 2 OF 7</span>
+      <h1 class="doc-title">The First Leash: Guide 2 — The Transition Phase</h1>
+      <p class="doc-subtitle">Early Friction & Biological De-Escalation</p>
+
+      <div class="meta-card">
+        <strong>Publisher:</strong> Dog Trainers Directory (Melbourne, Victoria)<br/>
+        <strong>Curriculum:</strong> Evidence-Based Positive Reinforcement &amp; Clinical De-Escalation<br/>
+        <strong>Access Level:</strong> 100% Free Public Guide • 
+        <a href="https://dogtrainersdirectory.com.au" style="color: var(--terracotta); text-decoration: none; font-weight: 600;">
+          dogtrainersdirectory.com.au
+        </a>
+      </div>
+    </header>
+
+    <div class="content-body">
+<section class="guide-section" id="guide-2">
+  <img src="../images/mod_02_cover.jpg" alt="The Transition Phase Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 2 OF 7</span>
+    <h2 class="guide-title">Guide 2 — The Transition Phase</h2>
+    <p class="guide-strapline">Early Friction & Biological De-Escalation</p>
+    <p class="guide-intro">The first 30 days are when routines harden. This guide replaces frustration with biological predictability, solving house-training delays, needle-sharp arousal biting, and puppy blues.</p>
+  </div>
+  <img src="../images/mod_02_puppy.jpg" alt="Guide 2 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.1</span>
+      <span>•</span>
+      <span>FOCUS: House Training</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The Biological Window: Potty Mastery</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your puppy eliminates outside, walks back in, and deposits a puddle on the living room rug 3 minutes later.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Puppies lack complete urinary sphincter muscle control before 16 weeks. Movement, waking, and eating trigger the gastrocolic reflex within 10-20 minutes.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Bladder Formula: Age in Months + 1 = Maximum Holding Time in Hours (e.g. 2 months = 3h max while asleep; active intervals are 30-45m).</li>
+      <li>The 3 Biological Triggers: Take the dog outside immediately upon waking, 10-15m post-meal, and after 10m of physical play.</li>
+      <li>The 2-Second Pay Window: Deliver high-value meat reward within 1 to 2 seconds of squat completion while still outdoors.</li>
+      <li>Enzymatic Cleanup: Clean accidents with enzymatic bio-cleaners to destroy uric acid crystals (never use ammonia).</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Rubbing the dog's nose in accidents or scolding. This teaches the dog that eliminating in human presence is dangerous, driving them to hide behind furniture to toilet.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Indoor accidents reflect human supervision and timing gaps, not canine defiance.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Frequent straining, blood in urine, or acute regression in a previously clean dog requires immediate veterinary urinalysis for UTIs.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.2</span>
+      <span>•</span>
+      <span>FOCUS: Play & Biting</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Reverse Timeout: Arousal Biting</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">During evening playtime, the puppy clamps down on hands, jeans, or ankles, biting harder when pushed away.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Pushing, squealing, and wrestling stimulate predatory play drive. Human reaction functions as an active reinforcer.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 3-Second Disengagement: The instant teeth touch skin, say a neutral marker ('Too bad') in a flat voice.</li>
+      <li>The Reverse Timeout (RTO): Stand up, cross arms, step over the baby gate or leave the room for exactly 15 seconds.</li>
+      <li>Calm Re-entry: Return without speaking. Offer a tactile replacement (frozen KONG, yak chew, or rope toy).</li>
+      <li>Rule: Teeth on human = social attention instantly terminates.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Physical scolding or muzzle-pinning ('alpha roll'). This triggers defensive fear and escalates arousal biting.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Remove the human reward (attention) the exact millisecond teeth touch human skin.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Biting accompanied by frozen posture, hard staring, snarling, or resource guarding is clinical aggression requiring trainer intervention.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.3</span>
+      <span>•</span>
+      <span>FOCUS: Mindset & Routine</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">Decompressing Owner Overwhelm & 3-3-3 Rule</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">At day 5, the owner feels profound exhaustion, crying spells, and deep anxiety over having made a mistake.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Sleep deprivation and vigilance elevate human cortisol, while the canine cortisol reset curve requires 72+ hours post-rehoming.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 3-3-3 Milestone Filter: Day 3 (Overwhelmed/Shut-down) -> Week 3 (Learning routine) -> Month 3 (Attachment & true personality).</li>
+      <li>Enforced Nap Cadence: 1 hour awake -> 2 hours quiet rest in the Base Zone. Puppies require 18-20 hours of daily sleep.</li>
+      <li>Radical Simplification: Drop complex obedience tricks. Focus solely on sleep, potty timing, and calm supervision.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Treating normal puppy overstimulation as a permanent behavioral defect.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>A well-rested puppy and a calm owner solve 80% of early friction before formal training begins.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If severe owner anxiety persists after routine stabilization, consult a professional trainer to establish an in-home structure plan.</p>
+    </aside>
+  </article>
+  <div class="next-step-cta">
+    <h4>Completed Guide 2?</h4>
+    <p>Your foundation is active. Continue to <strong>Guide 3: The Empathy Engine</strong> (Canine Body Language & Clinical Observation)</p>
+    <a href="the-first-leash-guide-3.html" class="cta-button">Open Guide 3 →</a>
+  </div>
+</section>
+    </div>
+
+    <footer class="doc-footer">
+      <div>
+        <strong>The First Leash</strong> • Dog Trainers Directory
+      </div>
+      <div>
+        <a href="https://dogtrainersdirectory.com.au/match">Find a Verified Melbourne Trainer →</a>
+      </div>
+    </footer>
+  </main>
+
+</body>
+</html>

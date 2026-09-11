@@ -140,7 +140,7 @@ def test_catalog_exposes_locked_curriculum_shape():
     ]
     preview = server.education_catalog.get_public_lesson_preview("the-blueprint", "home-base-first")
     assert preview is not None
-    assert preview["lesson"]["title"] == "Home Base First"
+    assert preview["lesson"]["title"] == "Build the Home Base"
     assert preview["tool_refs"][0]["slug"] == "safe-home-checklist"
     transition_module = server.education_catalog.get_module("the-transition-phase")
     assert transition_module is not None
@@ -242,7 +242,7 @@ def test_magic_link_request_verify_and_progress_flow(monkeypatch):
         assert dashboard["next_step"]["module_slug"] == "the-blueprint"
         assert dashboard["capability_tracker"][0]["key"] == "safe_home_setup"
         assert dashboard["trainer_readiness_prompt"]
-        assert dashboard["launch_posture"]["phase"] == "supply_first"
+        assert dashboard["launch_posture"]["phase"] == "live_matching"
         assert dashboard["course_overview"]["total_lessons"] == 26
         assert dashboard["roadmap"][0]["modules"][0]["dashboard_path"] == "/education/modules/the-blueprint/guide"
 

@@ -11,7 +11,7 @@ export default function Privacy() {
                     Privacy policy (launch baseline).
                 </h1>
                 <div className="card-public p-6 mt-8 text-[#4A615A] space-y-3">
-                    <p>We process waitlist submissions, trainer profile data, and support requests to operate the prelaunch service.</p>
+                    <p>We process waitlist submissions, trainer profile data, and support requests to operate the service while it opens in stages.</p>
                     <p>If you share contact details, we may send service updates and follow-up messages related to your request.</p>
                     <p>Data is retained according to legal and operational requirements.</p>
                 </div>

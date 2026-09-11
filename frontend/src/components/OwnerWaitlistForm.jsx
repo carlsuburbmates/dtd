@@ -12,7 +12,7 @@ export default function OwnerWaitlistForm({
     consentTestId = "owner-waitlist-consent",
     statusTestId = "owner-waitlist-status",
     submitTestId = "owner-waitlist-submit",
-    consentLabel = "I agree to receive prelaunch waitlist updates.",
+    consentLabel = "I agree to receive waitlist updates as the network expands.",
     submitLabel = "Join waitlist",
     analyticsContext = {},
 }) {
@@ -128,12 +128,12 @@ export default function OwnerWaitlistForm({
                 <div
                     className={`text-sm ${
                         waitlistState === "success"
-                            ? "text-emerald-700"
+                            ? "status-success"
                             : waitlistState === "duplicate"
-                                ? "text-amber-700"
+                                ? "status-warn"
                                 : waitlistState === "submitting"
-                                    ? "text-[#4A615A]"
-                                    : "text-rose-700"
+                                    ? "status-info"
+                                    : "status-error"
                     }`}
                     data-testid={statusTestId}
                 >

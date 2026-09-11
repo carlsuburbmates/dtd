@@ -29,7 +29,7 @@ It does not define:
 This manual is part of the canonical implementation pack for operating use.
 
 Role boundaries:
-1. `docs/standards/SSOT.md` defines the product model and actor types.
+1. `docs/standards/DTD_PROJECT_CONTEXT.md` defines the product model and actor types.
 2. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` defines what workflows must do end to end.
 3. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` defines route and page behavior.
 4. `docs/governance/WORKFLOW_SURFACE_MATRIX.md` maps workflows to surfaces and `/ops` evidence.

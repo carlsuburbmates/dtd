@@ -7,6 +7,33 @@ import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 
 const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 
+function describeTrainerReactivationError(err) {
+    const status = Number(err?.response?.status || 0);
+    const detail = String(err?.response?.data?.detail || "").trim();
+    if (status === 401 || /expired/i.test(detail)) {
+        return {
+            title: "Link expired",
+            message: "This reactivation link has expired. Request a fresh reactivation message or contact support if the listing still needs help.",
+        };
+    }
+    if (status === 403 || /invalid trainer action token|does not match/i.test(detail)) {
+        return {
+            title: "Link invalid",
+            message: "This reactivation link no longer matches the trainer or submission it was created for.",
+        };
+    }
+    if (status === 404) {
+        return {
+            title: "Trainer not found",
+            message: "We could not find the trainer record for this reactivation request.",
+        };
+    }
+    return {
+        title: "Reactivation unavailable",
+        message: detail || "Reactivation context is unavailable right now.",
+    };
+}
+
 export default function TrainerReactivate() {
     const [search] = useSearchParams();
     const trainerId = search.get("trainerId") || "";
@@ -15,7 +42,7 @@ export default function TrainerReactivate() {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [data, setData] = useState(null);
-    const [error, setError] = useState("");
+    const [errorState, setErrorState] = useState(null);
 
     const load = () => {
         setLoading(true);
@@ -28,11 +55,11 @@ export default function TrainerReactivate() {
         })
             .then((r) => {
                 setData(r.data);
-                setError("");
+                setErrorState(null);
             })
             .catch((err) => {
                 setData(null);
-                setError(err?.response?.data?.detail || "Reactivation context unavailable.");
+                setErrorState(describeTrainerReactivationError(err));
             })
             .finally(() => setLoading(false));
     };
@@ -63,14 +90,15 @@ export default function TrainerReactivate() {
         <div className="App min-h-screen">
             <PublicHeader />
             <main className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
-                <div className="small-caps">Trainer lifecycle</div>
-                <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Reactivation checklist</h1>
+                <div className="small-caps">Trainer listing</div>
+                <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Get your listing ready again</h1>
 
                 {loading ? (
                     <div className="card-public p-6 mt-8 text-[#4A615A]">Loading trainer status…</div>
-                ) : error ? (
+                ) : errorState ? (
                     <div className="card-public p-6 mt-8" data-testid="trainer-reactivate-error">
-                        <p className="text-[#4A615A]">{error}</p>
+                        <div className="small-caps text-[#D06D4F]">{errorState.title}</div>
+                        <p className="text-[#4A615A] mt-3">{errorState.message}</p>
                         <Link to="/trainers" className="btn-primary mt-4 inline-flex">Back to trainer info</Link>
                     </div>
                 ) : (
@@ -78,7 +106,7 @@ export default function TrainerReactivate() {
                         <section className="card-public p-6" data-testid="trainer-reactivate-summary">
                             <h2 className="font-serif text-3xl text-[#1A3A32]">{data?.trainer?.name || "Trainer"}</h2>
                             <p className="text-sm text-[#4A615A] mt-2">
-                                Published: <strong>{data?.trainer?.published ? "yes" : "no"}</strong> · confidence {Math.round((data?.trainer?.confidence_score || 0) * 100)}%
+                                Currently live: <strong>{data?.trainer?.published ? "yes" : "no"}</strong> · confidence {Math.round((data?.trainer?.confidence_score || 0) * 100)}%
                             </p>
                             <p className="text-sm text-[#4A615A] mt-1">
                                 Intros 30d {data?.trainer?.intros_30d || 0} · conversions 30d {data?.trainer?.conversions_30d || 0}
@@ -86,7 +114,7 @@ export default function TrainerReactivate() {
                         </section>
 
                         <section className="card-public p-6" data-testid="trainer-reactivate-reasons">
-                            <div className="small-caps">Why inactive</div>
+                            <div className="small-caps">What still needs attention</div>
                             <ul className="mt-3 space-y-2 text-sm text-[#4A615A]">
                                 {(data?.reasons || []).map((reason) => (
                                     <li key={reason.code} className="flex items-start gap-2">

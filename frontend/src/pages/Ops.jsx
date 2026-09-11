@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight } from "lucide-react";
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
 const VIEW_ORDER = [
     "overview",
+    "pipeline_flow",
     "work_queue",
     "trainer_supply",
     "messages",
@@ -16,6 +17,7 @@ const VIEW_ORDER = [
 
 const VIEW_LABELS = {
     overview: "Overview",
+    pipeline_flow: "Pipeline Flow",
     work_queue: "Work Queue",
     trainer_supply: "Trainer Supply",
     messages: "Messages",
@@ -26,6 +28,7 @@ const VIEW_LABELS = {
 
 const PAGE_INTROS = {
     overview: "Start here to decide whether the website is ready, blocked, or needs review before anything moves forward.",
+    pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
     messages: "Check exactly what the system sent, to which workflow, and whether delivery succeeded or failed.",
@@ -71,6 +74,39 @@ function humanizeToken(value) {
     return String(value || "unknown")
         .replace(/_/g, " ")
         .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function recentChangeEventLabel(row) {
+    const action = String(row?.action || "");
+    if (action === "result_connect_click") return "Owner opened trainer contact from match results";
+    if (action === "inferred_conversion") return "System inferred a conversion from owner engagement";
+    if (action === "follow_up_outcome") return "Owner submitted a follow-up outcome";
+    if (action === "conversion") return "Conversion recorded";
+    if (action === "trainer_billing_reconnect") return "Trainer billing profile refresh requested";
+    if (action === "trainer_reactivated") return "Trainer reactivation attempted";
+    return humanizeToken(action || "change_recorded");
+}
+
+function recentChangeEntityLabel(row) {
+    const action = String(row?.action || "");
+    const after = row?.after && typeof row.after === "object" ? row.after : {};
+    if (action === "result_connect_click" && row?.target) return `Trainer ${row.target}`;
+    if ((action === "follow_up_outcome" || action === "inferred_conversion" || action === "conversion") && after.intro_id) {
+        return `Intro ${after.intro_id}`;
+    }
+    if (row?.target) return `Trainer ${row.target}`;
+    if (row?.entity_id) return String(row.entity_id);
+    return row?.id || "—";
+}
+
+function recentChangeActorLabel(row) {
+    const action = String(row?.action || "");
+    if (action === "result_connect_click" || action === "follow_up_outcome" || action === "conversion") return "Dog owner";
+    if (action === "inferred_conversion") return "Automated system";
+    const actor = String(row?.actor || "");
+    if (actor === "system") return "Automated system";
+    if (actor === "user") return "User";
+    return humanizeToken(actor || "system");
 }
 
 function formatDateTime(value) {
@@ -176,9 +212,9 @@ function quickReviewChoices(selectedCase) {
 }
 
 export default function Ops() {
-    const [authed, setAuthed] = useState(Boolean(getAdminPass()));
+    const [authed, setAuthed] = useState(() => Boolean(getAdminPass()));
     const [snap, setSnap] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const mountedRef = useRef(true);
     const failureCountRef = useRef(0);
@@ -193,32 +229,29 @@ export default function Ops() {
     }, []);
 
     const fetchSnap = useCallback(async () => {
+        if (!mountedRef.current) return;
         setLoading(true);
         setError("");
         try {
-            const r = await opsApi.get("/oversight");
-            const snapshot = normalizeOversightSnapshot(r.data);
+            const response = await opsApi.get("/oversight");
+            const nextSnapshot = normalizeOversightSnapshot(response?.data);
             if (!mountedRef.current) return;
-            setSnap(snapshot);
             failureCountRef.current = 0;
-            return true;
-        } catch (err) {
+            setSnap(nextSnapshot);
+        } catch (requestError) {
             if (!mountedRef.current) return;
-            if (err?.response?.status === 401) {
+            if (requestError?.response?.status === 401) {
                 setAdminPass("");
+                setAuthed(false);
                 setSnap(null);
                 setError("");
-                setAuthed(false);
-                toast.error("Session expired");
-                return false;
+                return;
             }
             failureCountRef.current += 1;
             setSnap(null);
-            setError("Unable to load oversight snapshot. Auto-retry continues.");
-            return false;
+            setError("Unable to load oversight snapshot. Check the backend and try again.");
         } finally {
-            if (!mountedRef.current) return;
-            setLoading(false);
+            if (mountedRef.current) setLoading(false);
         }
     }, []);
 
@@ -362,6 +395,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const loops = snap.ops_investigation?.loop_statuses || {};
     const messages = asArray(snap.message_log);
     const trainerInventory = asArray(snap.trainer_inventory);
+    const sponsorInventory = snap.sponsor_inventory || {};
     const recentChanges = asArray(snap.audit_recent);
     const billingCases = asArray(snap.ops_investigation?.billing_recovery_cases);
     const reactivationCases = asArray(snap.ops_investigation?.reactivation_cases);
@@ -374,7 +408,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
         return status === "failed" || status === "error" || Number(row?.http_status || 0) >= 400;
     }).length;
     const sentMessages = messages.filter((row) => String(row?.status || "").toLowerCase() === "sent").length;
-    const lifecycleIssues = billingCases.length + reactivationCases.length;
+    const lifecycleIssues = billingCases.length + reactivationCases.length + asArray(sponsorInventory.exceptions).length;
     const demandGapCount = asArray(supplyGeography.demand_gaps).length;
     const latestChange = recentChanges[0];
     const sectionSummaries = {
@@ -382,6 +416,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             eyebrow: "Readiness",
             value: humanizeToken(readiness.readiness_status || "unknown"),
             note: humanizeToken(readiness.recommendation || "review needed"),
+        },
+        pipeline_flow: {
+            eyebrow: "Pipeline",
+            value: `${formatShortNumber(snap.throughput?.intros_7d || 0)} Intros (7d)`,
+            note: `${formatShortNumber(snap.throughput?.stalled_intros || 0)} stalled intros.`,
         },
         work_queue: {
             eyebrow: "Needs review",
@@ -519,6 +558,8 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                             />
                         ) : null}
 
+                        {activeView === "pipeline_flow" ? <PipelineFlowView snap={snap} /> : null}
+
                         {activeView === "work_queue" ? (
                             <WorkQueueView
                                 queueBuckets={queueBuckets}
@@ -540,7 +581,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "billing_reactivation" ? (
-                            <BillingReactivationView billingCases={billingCases} reactivationCases={reactivationCases} />
+                            <BillingReactivationView billingCases={billingCases} reactivationCases={reactivationCases} sponsorInventory={sponsorInventory} />
                         ) : null}
 
                         {activeView === "system_activity" ? (
@@ -554,6 +595,102 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                 </div>
             </div>
         </Frame>
+    );
+}
+
+function PipelineFlowView({ snap }) {
+    const throughput = snap.throughput || {};
+    const waitlist = snap.waitlist_summary || {};
+    const introReady = snap.ops_supply_trends?.intro_ready_now || 0;
+
+    return (
+        <div className="space-y-6">
+            <h2 className="text-xl font-medium tracking-tight text-white mb-6">Pipeline Flow</h2>
+            <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
+
+                    {/* Demand */}
+                    <div className="flex-1 w-full flex flex-col items-center p-4 bg-white/5 rounded-lg border border-white/10 relative">
+                        <span className="text-white/50 text-xs font-semibold tracking-wider uppercase mb-2">Demand</span>
+                        <div className="text-4xl font-light text-white mb-1">
+                            {formatShortNumber(waitlist.unassigned_count || 0)}
+                        </div>
+                        <span className="text-white/40 text-sm">Waiting</span>
+                        <div className="absolute -right-5 top-1/2 -translate-y-1/2 z-10 hidden lg:block text-white/20">
+                            <ArrowRight size={24} />
+                        </div>
+                    </div>
+
+                    {/* Supply */}
+                    <div className="flex-1 w-full flex flex-col items-center p-4 bg-white/5 rounded-lg border border-white/10 relative">
+                        <span className="text-white/50 text-xs font-semibold tracking-wider uppercase mb-2">Supply</span>
+                        <div className="text-4xl font-light text-white mb-1">
+                            {formatShortNumber(introReady)}
+                        </div>
+                        <span className="text-white/40 text-sm">Intro-Ready</span>
+                        <div className="absolute -right-5 top-1/2 -translate-y-1/2 z-10 hidden lg:block text-white/20">
+                            <ArrowRight size={24} />
+                        </div>
+                    </div>
+
+                    {/* Intros */}
+                    <div className="flex-1 w-full flex flex-col items-center p-4 bg-white/5 rounded-lg border border-white/10 relative">
+                        <span className="text-white/50 text-xs font-semibold tracking-wider uppercase mb-2">Introductions</span>
+                        <div className="text-4xl font-light text-white mb-1">
+                            {formatShortNumber(throughput.intros_7d || 0)}
+                        </div>
+                        <span className="text-white/40 text-sm">Last 7 Days</span>
+                        <div className="absolute -right-5 top-1/2 -translate-y-1/2 z-10 hidden lg:block text-white/20">
+                            <ArrowRight size={24} />
+                        </div>
+                    </div>
+
+                    {/* Outcomes */}
+                    <div className="flex-1 w-full flex flex-col items-center p-4 bg-white/5 rounded-lg border border-white/10">
+                        <span className="text-white/50 text-xs font-semibold tracking-wider uppercase mb-2">Outcomes</span>
+                        <div className="text-4xl font-light text-white mb-1">
+                            {formatShortNumber(throughput.conversions_7d || 0)}
+                        </div>
+                        <span className="text-white/40 text-sm">Last 7 Days</span>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                    <h3 className="text-sm font-medium text-white mb-4">Pipeline Metrics</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-white/60">Conversion Rate</span>
+                            <span className="text-white font-medium">
+                                {throughput.intro_to_conversion_rate ? `${(throughput.intro_to_conversion_rate * 100).toFixed(1)}%` : "N/A"}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-white/60">Total Engagements</span>
+                            <span className="text-white font-medium">{formatShortNumber(throughput.engagements_total || 0)}</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white/5 border border-red-500/20 rounded-xl p-6 relative overflow-hidden">
+                    <div className="absolute -right-4 -top-4 text-red-500/10 pointer-events-none">
+                        <AlertTriangle size={96} />
+                    </div>
+                    <h3 className="text-sm font-medium text-white mb-4 flex items-center gap-2 relative z-10">
+                        <AlertTriangle size={16} className="text-red-400" />
+                        Stalled Introductions
+                    </h3>
+                    <div className="relative z-10">
+                        <div className="text-3xl font-light text-white mb-1">
+                            {formatShortNumber(throughput.stalled_intros || 0)}
+                        </div>
+                        <p className="text-white/50 text-sm">
+                            Introductions older than 7 days without a logged outcome (billed, tracked, or suspicious). Needs manual follow-up or review.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 }
 
@@ -992,6 +1129,7 @@ function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) 
                             <th className="pb-3 pr-3">Suburb</th>
                             <th className="pb-3 pr-3">Public</th>
                             <th className="pb-3 pr-3">Verified</th>
+                            <th className="pb-3 pr-3">Claim state</th>
                             <th className="pb-3 pr-3">Intro-ready</th>
                             <th className="pb-3 pr-3">Billing</th>
                             <th className="pb-3 pr-3">Source</th>
@@ -1012,6 +1150,7 @@ function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) 
                                 <td className="py-3 pr-3">{row.suburb || "—"}</td>
                                 <td className="py-3 pr-3"><Badge label={row.published ? "Yes" : "No"} kind="state" /></td>
                                 <td className="py-3 pr-3">{humanizeToken(row.verification_status)}</td>
+                                <td className="py-3 pr-3"><Badge label={humanizeToken(row.claim_status)} kind="state" /></td>
                                 <td className="py-3 pr-3">{row.intro_ready ? "Yes" : "No"}</td>
                                 <td className="py-3 pr-3">{humanizeToken(row.billing_profile_status)}</td>
                                 <td className="py-3 pr-3">{humanizeToken(row.source_kind)}</td>
@@ -1026,7 +1165,7 @@ function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) 
                             </tr>
                         )) : (
                             <tr>
-                                <td colSpan="10" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
+                                <td colSpan="11" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
                             </tr>
                         )}
                     </tbody>
@@ -1078,6 +1217,7 @@ function MessagesView({ messages }) {
                                 <td className="py-3 pr-3">
                                     <div className="font-medium">{row.entity_label}</div>
                                     <div className="text-xs text-[#8B9E98] mt-1">{row.canonical_user_type}</div>
+                                    {row.to_email ? <div className="text-xs text-[#8B9E98] mt-1">{row.to_email}</div> : null}
                                 </td>
                                 <td className="py-3 pr-3">{humanizeToken(row.kind)}</td>
                                 <td className="py-3 pr-3"><Badge label={humanizeToken(row.status)} kind="state" /></td>
@@ -1085,6 +1225,7 @@ function MessagesView({ messages }) {
                                 <td className="py-3">
                                     <div>Attempt {row.attempt || 0}</div>
                                     <div className="text-xs text-[#8B9E98] mt-1">HTTP {row.http_status || 0}</div>
+                                    {row.error ? <div className="text-xs text-[#F8D9D3] mt-1">{humanizeToken(row.error)}</div> : null}
                                 </td>
                             </tr>
                         )) : (
@@ -1099,40 +1240,61 @@ function MessagesView({ messages }) {
     );
 }
 
-function BillingReactivationView({ billingCases, reactivationCases }) {
+function BillingReactivationView({ billingCases, reactivationCases, sponsorInventory }) {
     const safeRecoveryLinks = billingCases.filter((row) => row.trainer_id && row.trainer_action_token).length
         + reactivationCases.filter((row) => row.trainer_id && row.trainer_action_token).length;
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="Billing & Reactivation" description={PAGE_INTROS.billing_reactivation} />
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
                 <SummaryCard title="Billing cases" value={billingCases.length} note="Exceptions in trainer billing recovery." />
                 <SummaryCard title="Reactivation cases" value={reactivationCases.length} note="Trainer reactivation cases needing review or monitoring." />
+                <SummaryCard title="Sponsor positions" value={(sponsorInventory?.summary?.active || 0) + (sponsorInventory?.summary?.reserved || 0)} note={(sponsorInventory?.summary?.reserved || 0) + " checkout reservations awaiting activation"} />
                 <SummaryCard title="Safe recovery links" value={safeRecoveryLinks} note="Existing lifecycle paths that can be reviewed safely." />
             </div>
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5" data-testid="ops-sponsor-inventory">
+                <div className="small-caps !text-[#8B9E98]">Sponsor inventory</div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <SummaryCard title="Active" value={sponsorInventory?.summary?.active || 0} note="Paid sponsor positions currently entitled to placement." />
+                    <SummaryCard title="Reserved" value={sponsorInventory?.summary?.reserved || 0} note="Time-limited checkout holds." />
+                    <SummaryCard title="Exceptions" value={asArray(sponsorInventory?.exceptions).length} note="Reservation or release cases needing review." />
+                </div>
+                <div className="mt-4 grid gap-2">
+                    {asArray(sponsorInventory?.rows).filter((row) => ["active", "reserved"].includes(row.status)).slice(0, 20).map((row) => (
+                        <div key={row.id} className="rounded-2xl border border-[#22302C] bg-[#0D1412] p-3 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span>{row.suburb || "Greater Melbourne"} · position {row.slot}</span>
+                                <Badge label={humanizeToken(row.status)} kind="state" />
+                            </div>
+                            <div className="mt-2 text-xs text-[#8B9E98]">Trainer {row.trainer_id || "unassigned"}{row.expires_at ? " · hold expires " + formatDateTime(row.expires_at) : ""}</div>
+                        </div>
+                    ))}
+                    {!asArray(sponsorInventory?.rows).some((row) => ["active", "reserved"].includes(row.status)) ? <EmptyCard message="No sponsor positions are active or reserved." /> : null}
+                </div>
+            </section>
             <div className="mt-4 grid gap-4 xl:grid-cols-2">
                 <section className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
                     <div className="small-caps !text-[#8B9E98]">Billing problems</div>
                     <div className="mt-4 grid gap-3">
                         {billingCases.length ? billingCases.map((row) => (
-                            <div key={row.intro_id} className="rounded-3xl border border-[#22302C] bg-[#0D1412] p-4">
+                            <div key={row.intro_id || row.trainer_id} className="rounded-3xl border border-[#22302C] bg-[#0D1412] p-4">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <div className="font-medium">{row.trainer_name}</div>
-                                    <Badge label={humanizeToken(row.billing_retry_state)} kind="state" />
+                                    <Badge label={humanizeToken(row.subscription_status || row.billing_retry_state)} kind="state" />
                                 </div>
                                 <div className="mt-2 text-sm text-[#C9C2B1]">
-                                    {humanizeToken(row.billing_collection_status)} · {humanizeToken(row.billing_profile_status)} · {audCents(row.intro_fee_cents || 0)}
+                                    Tier: {humanizeToken(row.subscription_tier || row.tier || "Core")} · Profile: {humanizeToken(row.billing_profile_status)}
                                 </div>
                                 <div className="mt-2 text-xs text-[#8B9E98]">
-                                    Attempts {row.billing_retry_attempts || 0} · Last update {formatDateTime(row.billing_last_retry_at || row.created_at)}
+                                    Status: {humanizeToken(row.subscription_billing_status || row.billing_collection_status)} · Last update {formatDateTime(row.created_at)}
                                 </div>
                                 {row.trainer_id && row.trainer_action_token ? (
                                     <div className="mt-3">
                                         <Link
                                             className="underline underline-offset-2"
-                                            to={`/trainer/billing?trainer_id=${encodeURIComponent(row.trainer_id)}&trainer_action_token=${encodeURIComponent(row.trainer_action_token)}`}
+                                            to={`/trainer/billing?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
                                         >
-                                            Review billing recovery path
+                                            Review trainer billing
                                         </Link>
                                     </div>
                                 ) : null}
@@ -1277,9 +1439,9 @@ function RecentChangesView({ recentChanges }) {
                         {recentChanges.length ? recentChanges.map((row, idx) => (
                             <tr key={`${row.ts || idx}-${row.action || "change"}`} className="border-t border-[#1E2A27]">
                                 <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.ts)}</td>
-                                <td className="py-3 pr-3">{row.action || "Change recorded"}</td>
-                                <td className="py-3 pr-3">{row.entity_id || row.id || "—"}</td>
-                                <td className="py-3">{row.actor || "system"}</td>
+                                <td className="py-3 pr-3">{recentChangeEventLabel(row)}</td>
+                                <td className="py-3 pr-3">{recentChangeEntityLabel(row)}</td>
+                                <td className="py-3">{recentChangeActorLabel(row)}</td>
                             </tr>
                         )) : (
                             <tr>

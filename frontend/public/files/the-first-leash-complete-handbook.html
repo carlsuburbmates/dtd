@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The First Leash: Complete Dog Owner Handbook • The First Leash</title>
+  <meta name="description" content="A 7-Guide Practical System for Foundations, Stress Reading, and Urban Resilience" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+
+:root {
+  --ink: #1A3A32;
+  --ink-light: #4A615A;
+  --moss: #5C6D59;
+  --terracotta: #9B4F31;
+  --cream: #F5F2EB;
+  --surface: #FAFAF7;
+  --border: #E5DFD3;
+  --card-bg: #FFFFFF;
+  --warn-bg: #FBF5F0;
+  --decision-bg: #F0F4F2;
+  --text: #2B3330;
+  --font-serif: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--cream);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.document-container {
+  max-width: 860px;
+  margin: 40px auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 35px rgba(26, 58, 50, 0.06);
+  overflow: hidden;
+}
+
+/* Header & Cover Banner */
+.cover-banner {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  display: block;
+  border-bottom: 3px solid var(--terracotta);
+}
+
+.cover-header {
+  padding: 40px 48px 24px;
+}
+
+.badge-pill {
+  display: inline-block;
+  padding: 5px 14px;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+
+.badge-pill.terracotta {
+  background: var(--terracotta);
+}
+
+.badge-pill.moss {
+  background: var(--moss);
+}
+
+h1.doc-title {
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+
+p.doc-subtitle {
+  font-size: 18px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+/* Meta Card */
+.meta-card {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--moss);
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--ink-light);
+  margin-bottom: 32px;
+}
+
+.meta-card strong {
+  color: var(--ink);
+}
+
+/* Content Area */
+.content-body {
+  padding: 0 48px 48px;
+}
+
+.guide-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 48px 0;
+}
+
+/* Module Section */
+.guide-header {
+  margin-bottom: 32px;
+}
+
+.guide-hero-img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid var(--border);
+}
+
+h2.guide-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+p.guide-strapline {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--terracotta);
+  margin-bottom: 14px;
+}
+
+p.guide-intro {
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* Lesson Cards */
+.lesson-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 12px rgba(26, 58, 50, 0.03);
+}
+
+.lesson-meta-strip {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ink-light);
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+h3.lesson-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 18px;
+  line-height: 1.35;
+}
+
+.subheading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-light);
+  margin-top: 18px;
+  margin-bottom: 6px;
+}
+
+p.lesson-text {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+
+/* Checklist Protocol */
+.protocol-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.protocol-list li {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.protocol-list li::before {
+  content: "•";
+  position: absolute;
+  left: 10px;
+  color: var(--moss);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.checkbox-list {
+  list-style: none;
+  margin: 12px 0 20px;
+}
+
+.checkbox-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 14.5px;
+}
+
+.checkbox-list input[type="checkbox"] {
+  margin-top: 4px;
+  accent-color: var(--terracotta);
+  cursor: pointer;
+}
+
+/* Callout Boxes */
+.callout-box {
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 18px 0;
+  border-left: 4px solid;
+}
+
+.callout-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.callout-caution {
+  background: var(--warn-bg);
+  border-left-color: var(--terracotta);
+}
+
+.callout-caution .callout-title {
+  color: var(--terracotta);
+}
+
+.callout-decision {
+  background: var(--decision-bg);
+  border-left-color: var(--ink);
+}
+
+.callout-decision .callout-title {
+  color: var(--ink);
+}
+
+.callout-escalation {
+  background: var(--cream);
+  border-left-color: var(--moss);
+}
+
+.callout-escalation .callout-title {
+  color: var(--moss);
+}
+
+/* Puppy Photo Break */
+.puppy-break-img {
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin: 24px 0;
+  border: 1px solid var(--border);
+}
+
+/* Footer */
+.doc-footer {
+  padding: 32px 48px;
+  background: var(--cream);
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-light);
+}
+
+.doc-footer a {
+  color: var(--terracotta);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.doc-footer a:hover {
+  text-decoration: underline;
+}
+
+/* Next Step CTA Banner */
+.next-step-cta {
+  background: var(--ink);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-top: 36px;
+  text-align: center;
+}
+
+.next-step-cta h4 {
+  font-size: 18px;
+  font-family: var(--font-serif);
+  margin-bottom: 8px;
+}
+
+.next-step-cta p {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-bottom: 16px;
+}
+
+.cta-button {
+  display: inline-block;
+  background: var(--terracotta);
+  color: #ffffff;
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.cta-button:hover {
+  opacity: 0.9;
+}
+
+/* Print Styles for 1-Click PDF Generation */
+@media print {
+  body {
+    background: #ffffff;
+    font-size: 13px;
+  }
+
+  .document-container {
+    max-width: 100%;
+    margin: 0;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .cover-banner {
+    height: 240px;
+  }
+
+  .guide-divider {
+    break-after: page;
+    height: 0;
+    margin: 0;
+    border: none;
+  }
+
+  .lesson-card {
+    box-shadow: none;
+    border: 1px solid #cccccc;
+    break-inside: avoid;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+
+  .next-step-cta {
+    display: none;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+  </style>
+</head>
+<body>
+
+  <main class="document-container">
+    <!-- Cover Banner -->
+    <img src="../images/first-leash.jpg" alt="The First Leash: Complete Dog Owner Handbook Cover" class="cover-banner" />
+
+    <header class="cover-header">
+      <span class="badge-pill ">COMPLETE 7-GUIDE MASTER EDITION</span>
+      <h1 class="doc-title">The First Leash: Complete Dog Owner Handbook</h1>
+      <p class="doc-subtitle">A 7-Guide Practical System for Foundations, Stress Reading, and Urban Resilience</p>
+
+      <div class="meta-card">
+        <strong>Publisher:</strong> Dog Trainers Directory (Melbourne, Victoria)<br/>
+        <strong>Curriculum:</strong> Evidence-Based Positive Reinforcement &amp; Clinical De-Escalation<br/>
+        <strong>Access Level:</strong> 100% Free Public Guide • 
+        <a href="https://dogtrainersdirectory.com.au" style="color: var(--terracotta); text-decoration: none; font-weight: 600;">
+          dogtrainersdirectory.com.au
+        </a>
+      </div>
+    </header>
+
+    <div class="content-body">
+<section class="guide-section" id="guide-1">
+  <img src="../images/mod_01_cover.jpg" alt="The Blueprint Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 1 OF 7</span>
+    <h2 class="guide-title">Guide 1 — The Blueprint</h2>
+    <p class="guide-strapline">Home Architecture & Environmental Safety</p>
+    <p class="guide-intro">Before obedience training begins, the home environment must be configured so unwanted behaviors are physically impossible to rehearse. This guide establishes the safe base zone, audits toxic household risks, and builds a realistic healthcare baseline.</p>
+  </div>
+  <img src="../images/mod_01_puppy.jpg" alt="Guide 1 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 1.1</span>
+      <span>•</span>
+      <span>FOCUS: Environment & Rest</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The 2-Door Buffer Zone & Base Setup</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">A newly arrived puppy or rescue dog explores frantically, paces continuously, and chews baseboards out of sensory overwhelm.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Canine nervous systems require bounded, low-stimulus territory to down-regulate sympathetic arousal. Open floor plans overstimulate vigilance circuits.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Construct a 2-Door Buffer: Exercise pen attached to an open crate in a low-traffic corner (never in entryways or busy hallways).</li>
+      <li>Substrate layering: Waterproof rubber mat -> washable absorbent pad -> high-density orthopedic bed -> 1 safe natural chew.</li>
+      <li>The Open Den Rule: Crate doors stay open during waking hours. The pen provides 4-6 square meters of safe containment.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Using confinement solely as punishment after a mistake occurs. Confinement must always be a proactive sanctuary.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Until house reliability is proven, freedom is earned room by room, never granted by default.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Persistent panic, self-harm bar-biting, or distress vocalization lasting >20 minutes indicates separation or confinement anxiety requiring professional care.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 1.2</span>
+      <span>•</span>
+      <span>FOCUS: Safety & Vet Prep</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Toxic Sweep & Poison Triage</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your dog grabs a dropped pill, chews an unfamiliar indoor plant, or raids the laundry detergent shelf.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Xylitol (birch sugar), human NSAIDs, dark chocolate, lilies, and snail bait exhibit variable absorption windows (15m to 12h). Symptoms often appear long after organ damage begins.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Immediate extraction: Remove remaining material safely without engaging in a chase game.</li>
+      <li>Evidence capture: Retain packaging, label, plant clipping, or photograph immediately.</li>
+      <li>Direct Emergency Contact: Call the Australian Animal Poisons Helpline (1300 869 738) or emergency vet with dog's weight (kg), product name, and time elapsed.</li>
+      <li>NEVER induce vomiting with salt (fatal hypernatremia risk).</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Waiting for vomiting or lethargy before seeking clinical advice. Absorption happens rapidly.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Toxin ingestion is a medical triage emergency, never a behavioral wait-and-see situation.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Suspected ingestion of human pharmaceuticals, rat bait, batteries, or lilies requires immediate physical clinic presentation.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 1.3</span>
+      <span>•</span>
+      <span>FOCUS: Healthcare & Budget</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">First-Year Healthcare & Financial Baseline</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">New owners are caught off-guard by preventative care, council registrations, and surprise emergency vet bills.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Routine core vaccines (C3/C5), heartworm macrocyclic lactones, and isoxazoline tick control prevent catastrophic clinical crises.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Initial Consultation: Book health check within 72 hours of arrival. Verify microchip on Central Animal Records / Petsafe.</li>
+      <li>Council Registration: Mandatory in Victoria by 3 months of age under the Domestic Animals Act 1994.</li>
+      <li>Financial Architecture: Maintain $100-$150 AUD/mo routine budget plus a dedicated $2,000 AUD liquidity buffer or >=80% insurance policy.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Skipping tick prevention due to perceived low suburban risk. Paralysis ticks exist across Victorian coastal and bushland corridors.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Emergency healthcare financial buffers must be established before bringing the dog home.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If sudden behavioral shifts accompany physical signs (stiffness, whimpering, appetite loss), rule out medical causes with a vet first.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-2">
+  <img src="../images/mod_02_cover.jpg" alt="The Transition Phase Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 2 OF 7</span>
+    <h2 class="guide-title">Guide 2 — The Transition Phase</h2>
+    <p class="guide-strapline">Early Friction & Biological De-Escalation</p>
+    <p class="guide-intro">The first 30 days are when routines harden. This guide replaces frustration with biological predictability, solving house-training delays, needle-sharp arousal biting, and puppy blues.</p>
+  </div>
+  <img src="../images/mod_02_puppy.jpg" alt="Guide 2 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.1</span>
+      <span>•</span>
+      <span>FOCUS: House Training</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The Biological Window: Potty Mastery</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your puppy eliminates outside, walks back in, and deposits a puddle on the living room rug 3 minutes later.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Puppies lack complete urinary sphincter muscle control before 16 weeks. Movement, waking, and eating trigger the gastrocolic reflex within 10-20 minutes.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Bladder Formula: Age in Months + 1 = Maximum Holding Time in Hours (e.g. 2 months = 3h max while asleep; active intervals are 30-45m).</li>
+      <li>The 3 Biological Triggers: Take the dog outside immediately upon waking, 10-15m post-meal, and after 10m of physical play.</li>
+      <li>The 2-Second Pay Window: Deliver high-value meat reward within 1 to 2 seconds of squat completion while still outdoors.</li>
+      <li>Enzymatic Cleanup: Clean accidents with enzymatic bio-cleaners to destroy uric acid crystals (never use ammonia).</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Rubbing the dog's nose in accidents or scolding. This teaches the dog that eliminating in human presence is dangerous, driving them to hide behind furniture to toilet.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Indoor accidents reflect human supervision and timing gaps, not canine defiance.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Frequent straining, blood in urine, or acute regression in a previously clean dog requires immediate veterinary urinalysis for UTIs.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.2</span>
+      <span>•</span>
+      <span>FOCUS: Play & Biting</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Reverse Timeout: Arousal Biting</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">During evening playtime, the puppy clamps down on hands, jeans, or ankles, biting harder when pushed away.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Pushing, squealing, and wrestling stimulate predatory play drive. Human reaction functions as an active reinforcer.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 3-Second Disengagement: The instant teeth touch skin, say a neutral marker ('Too bad') in a flat voice.</li>
+      <li>The Reverse Timeout (RTO): Stand up, cross arms, step over the baby gate or leave the room for exactly 15 seconds.</li>
+      <li>Calm Re-entry: Return without speaking. Offer a tactile replacement (frozen KONG, yak chew, or rope toy).</li>
+      <li>Rule: Teeth on human = social attention instantly terminates.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Physical scolding or muzzle-pinning ('alpha roll'). This triggers defensive fear and escalates arousal biting.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Remove the human reward (attention) the exact millisecond teeth touch human skin.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Biting accompanied by frozen posture, hard staring, snarling, or resource guarding is clinical aggression requiring trainer intervention.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 2.3</span>
+      <span>•</span>
+      <span>FOCUS: Mindset & Routine</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">Decompressing Owner Overwhelm & 3-3-3 Rule</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">At day 5, the owner feels profound exhaustion, crying spells, and deep anxiety over having made a mistake.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Sleep deprivation and vigilance elevate human cortisol, while the canine cortisol reset curve requires 72+ hours post-rehoming.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 3-3-3 Milestone Filter: Day 3 (Overwhelmed/Shut-down) -> Week 3 (Learning routine) -> Month 3 (Attachment & true personality).</li>
+      <li>Enforced Nap Cadence: 1 hour awake -> 2 hours quiet rest in the Base Zone. Puppies require 18-20 hours of daily sleep.</li>
+      <li>Radical Simplification: Drop complex obedience tricks. Focus solely on sleep, potty timing, and calm supervision.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Treating normal puppy overstimulation as a permanent behavioral defect.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>A well-rested puppy and a calm owner solve 80% of early friction before formal training begins.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If severe owner anxiety persists after routine stabilization, consult a professional trainer to establish an in-home structure plan.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-3">
+  <img src="../images/mod_03_cover.jpg" alt="The Empathy Engine Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 3 OF 7</span>
+    <h2 class="guide-title">Guide 3 — The Empathy Engine</h2>
+    <p class="guide-strapline">Canine Body Language & Clinical Observation</p>
+    <p class="guide-intro">Dogs communicate through subtle physiological micro-signals long before they growl or bark. This guide teaches owners how to read the whole dog and never punish vital communication signals.</p>
+  </div>
+  <img src="../images/mod_03_puppy.jpg" alt="Guide 3 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 3.1</span>
+      <span>•</span>
+      <span>FOCUS: Body Language</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Canine Micro-Signals & Distance Seeking</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">A dog turns its head away, licks its nose, or yawns when approached by a stranger, but the owner thinks it is just tired or cute.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Canine stress cascades through subtle displacement behaviors before escalating to active flight or fight responses.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Level 1 Signals (Early Worry): Nose licks (in absence of food), yawning (when not tired), blinking, head turns away from trigger.</li>
+      <li>Level 2 Signals (Active Stress): Whale eye (sclera visible), furrowed brow, ears pinned back, panting with tight commissures.</li>
+      <li>Level 3 Signals (Imminent Freeze): Body stiffness, tail rigid/vibrating, mouth clamped shut, complete stillness.</li>
+      <li>The 3-Foot Buffer: The instant Level 1-2 signals cluster, create 1 meter of space from the trigger.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Forcing a dog to endure handling or greetings when displaying displacement signals.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Listen to the whisper (head turn) so your dog never has to scream (bite).</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Inability to settle or persistent whale eye in everyday household settings requires professional behavioral assessment.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 3.2</span>
+      <span>•</span>
+      <span>FOCUS: De-escalation</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The Warning Ladder: Never Punish the Growl</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your dog growls when someone approaches their food bowl or sofa spot, and the owner scolds the dog to show 'dominance'.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Growling is a vital communication alarm on the Ladder of Aggression. Suppressing the growl produces a dog that bites without warning.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Escalation Ladder: Calming signals -> Stiffening -> Low Growl -> Snarl -> Air Snap -> Contact Bite.</li>
+      <li>De-escalation Procedure: Freeze immediately. Avoid direct eye contact. Slowly step back 2 paces to relieve spatial pressure.</li>
+      <li>Never Scold: Treat the growl as vital data about discomfort. Identify and manage the environmental trigger.</li>
+      <li>Manage the Trigger: If food-related, feed in an isolated, secure room without human traffic.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Punishing warning vocalizations removes the smoke alarm while the fire continues to burn.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Thank your dog for growling; it is the boundary signal that prevents a bite.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Any growling, snapping, or stiffening over food, toys, or sleeping locations is clinical Resource Guarding requiring certified trainer triage.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 3.3</span>
+      <span>•</span>
+      <span>FOCUS: Clinical Health</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Medical Baseline Filter</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">A previously friendly dog suddenly begins snapping when touched near the hips, refusing stairs, or barking at night.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Over 30% of acute behavioral changes are directly linked to underlying medical discomfort (osteoarthritis, otitis, dental pain, gut distress).</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 48-Hour Somatic Check: Audit gait stiffness, hesitation on stairs, ear-touch sensitivity, and appetite changes.</li>
+      <li>Veterinary Rule: Before hiring a behaviorist for sudden fear or aggression, obtain a thorough veterinary pain examination.</li>
+      <li>Trial Therapy: Discuss diagnostic pain relief trials with your veterinarian if physical examination is inconclusive.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Attempting behavioral modification on a dog suffering from untreated physical pain.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Rule out medical and physiological discomfort before classifying any sudden shift as a behavioral problem.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Acute behavioral changes paired with lethargy, limping, or yelping require veterinary diagnostics before training.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-4">
+  <img src="../images/mod_04_cover.jpg" alt="The Social Filter Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 4 OF 7</span>
+    <h2 class="guide-title">Guide 4 — The Social Filter</h2>
+    <p class="guide-strapline">Safe Exposure & Urban Resilience</p>
+    <p class="guide-intro">Real socialization is not about forcing your dog to greet every dog and human. This guide builds environmental neutrality, distance management, and cooperative handling confidence.</p>
+  </div>
+  <img src="../images/mod_04_puppy.jpg" alt="Guide 4 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.1</span>
+      <span>•</span>
+      <span>FOCUS: Socialisation</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Quality Over Quantity: Socialisation ≠ Contact</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">An owner takes a 12-week puppy to a crowded off-leash dog park, allowing chaotic dogs to overwhelm the puppy.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">The primary developmental window closes between 12-16 weeks. Traumatic single-event learning during fear periods can cause permanent reactivity.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Neutrality Protocol: Sit on a quiet park bench 30m away from paths. Reward calm observation of cyclists, prams, and dogs.</li>
+      <li>The 3-Second Greeting Rule: If greeting on-leash, allow max 3 seconds (sniff, sniff, call away with praise) before arousal turns into tension.</li>
+      <li>Avoid Chaotic Dog Parks: Off-leash dog parks encourage bullying, defensive aggression, and uncontrolled greetings.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Believing your dog needs to physically interact with every person and dog it encounters.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>We train our dogs to be neutral to the world, not desperate to engage with it.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If your puppy panics, hides, or screams during mild exposure at distance, halt sessions and consult a trainer.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.2</span>
+      <span>•</span>
+      <span>FOCUS: Reactivity</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The 3-Zone Threshold Bubble</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your dog spots another dog across the street, freezes, whines, and lunges at the end of the lead.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">When a dog crosses their threshold distance, amygdala activation suppresses cognitive learning and appetite.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Green Zone (Sub-Threshold): Loose body, glances at trigger, takes treats easily. (This is where counter-conditioning works).</li>
+      <li>Yellow Zone (Threshold Edge): Stiffens, fixes gaze, slow treat taking. (Action: Increase distance by 5-10m immediately).</li>
+      <li>Red Zone (Over-Threshold): Lunging, barking, spinning, refusing food. (Action: Turn around, jog away, evacuate without scolding).</li>
+      <li>Arcing Maneuver: Never approach head-on. Step into driveways or arc widely across the road.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Standing in the Red Zone repeatedly commanding the dog to 'Sit' while they are in a physiological panic state.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Distance is your primary safety tool. When in doubt, add 10 meters of space.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Inability to maintain a Green Zone at >30m distance indicates moderate-to-severe reactivity requiring structured desensitization.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 4.3</span>
+      <span>•</span>
+      <span>FOCUS: Husbandry & Grooming</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">Cooperative Care & Low-Stress Handling</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Nail trimming or ear cleaning requires three adults pinning the dog down while the dog thrashes in terror.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Restraint-based force generates learned helplessness or active defensive biting. Cooperative care gives the dog a predictable consent mechanism.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Chin Rest Consent Cue: Train the dog to rest their chin on your open hand for high-value rewards.</li>
+      <li>The Consent Contract: As long as the chin stays down, gentle handling proceeds. If chin lifts, handling stops immediately.</li>
+      <li>Desensitization Ladder: Day 1-3 (touch paw with clipper handle) -> Day 4-7 (tap nail) -> Day 8+ (trim 1 nail tip -> jackpot treat).</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Forcing grooming procedures through restraint, which intensifies fear and escalates to defensive snapping.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Consent and predictable agency eliminate terror in healthcare and grooming.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Extreme fear, growling, or snapping during routine veterinary touch requires an accredited fear-free trainer.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-5">
+  <img src="../images/mod_05_cover.jpg" alt="The Sync Mechanics Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 5 OF 7</span>
+    <h2 class="guide-title">Guide 5 — The Sync Mechanics</h2>
+    <p class="guide-strapline">Reward Timing, Cues & Household Consistency</p>
+    <p class="guide-intro">Dogs learn through precise temporal association. This guide tightens marker timing, eliminates accidental rewards for bad behavior, and aligns the whole family on one clear cue set.</p>
+  </div>
+  <img src="../images/mod_05_puppy.jpg" alt="Guide 5 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.1</span>
+      <span>•</span>
+      <span>FOCUS: Marker Training</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The 1-Second Pay Window & Precision Markers</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog sits, the owner says 'good boy,' fumbles in their pocket for 8 seconds, and delivers a treat after the dog has already stood up.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Associative learning requires reinforcer delivery within a 0.5-1.5 second window. Late rewards reinforce the movement occurring at delivery.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Charge the Marker: Select a crisp, short syllable ('Yes!') or clicker. Pair: Click -> Treat immediately 20 times.</li>
+      <li>The 3-Step Sequence: Behavior Occurs -> Marker Fired -> Treat Delivered to mouth within 2 seconds.</li>
+      <li>Treat Accessibility: Wear a treat pouch or keep pea-sized rewards ready in hand, not buried in pockets.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Using the marker word as an attention-getter ('Yes! Yes! Look here!'). Markers are camera shutters capturing completed behaviors.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>The marker captures the exact millisecond; the hand delivers the reward.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If a dog shows zero food motivation in a calm home, assess diet, health, or overfeeding before training.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.2</span>
+      <span>•</span>
+      <span>FOCUS: Extinction & Habits</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Extinguishing Accidental Payoffs</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog jumps on guests, steals kitchen towels, or barks at the dinner table, and family members alternate between scolding and laughing.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Intermittent variable reinforcement schedules create the most durable, hard-to-extinguish habits in behavioral psychology.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Audit Accidental Payoffs: Jumping (guests pet dog) -> Counter-surfing (roast beef left on edge) -> Stealing items (chase game).</li>
+      <li>Management Fixes: Clean benches completely. Put dog on leash with guest arrival so jumping is physically prevented.</li>
+      <li>Extinction Burst Awareness: When reinforcement stops, the behavior temporarily spikes in intensity before dying out. Stay consistent.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Giving in 'just this once' after 10 minutes of barking. This directly trains the dog to bark longer next time.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Control the environment so unwanted behaviors never receive an accidental payoff.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If resource guarding accompanies stolen items (growling over socks), do not chase; begin professional trade protocols.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 5.3</span>
+      <span>•</span>
+      <span>FOCUS: Household Consistency</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Household Cue Constitution</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Mom says 'Down' (lie on floor), Dad says 'Down' (get off couch), and the kids yell 'Off', leaving the dog completely bewildered.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Canines discriminate specific auditory phonemes paired with body postures, not general semantic concepts.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Define the Vocabulary: 'Sit' (bottom down), 'Drop' (chest on floor), 'Off' (paws off furniture/humans), 'Wait' (pause at thresholds).</li>
+      <li>Release Cue: Establish an explicit release word ('Free' or 'Break') so the dog knows when a position ends.</li>
+      <li>The Single Cue Rule: Say the verbal cue once. If ignored, do not repeat it 5 times. Guide with a physical hand lure.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Chanting verbal commands like background noise until the dog learns to filter them out.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>One cue, one word, one criteria, agreed upon by every member of the household.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>If multiple family members have conflicting training philosophies causing behavioral regression, book a family trainer consultation.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-6">
+  <img src="../images/mod_06_cover.jpg" alt="The Urban Flow & The Shield Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 6 OF 7</span>
+    <h2 class="guide-title">Guide 6 — The Urban Flow & The Shield</h2>
+    <p class="guide-strapline">Public Life & Distraction Management</p>
+    <p class="guide-intro">Urban streets are sensory obstacle courses. This guide establishes structured walking games, eliminates window barking triggers, and builds sub-panic independence.</p>
+  </div>
+  <img src="../images/mod_06_puppy.jpg" alt="Guide 6 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 6.1</span>
+      <span>•</span>
+      <span>FOCUS: Leash Manners</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">The 1-2-3 Engagement Walk</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Your dog pulls forcefully on the leash, zig-zagging erratically between smells and dragging you down the footpath.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Rhythmic, predictable verbal count patterns engage the parasympathetic nervous system and restore handler focus.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Split the Walk: 70% slow sniffing on a 2-3m fixed lead (sniffing lowers heart rate), 30% structured focus walking.</li>
+      <li>The 1-2-3 Pattern Game: Count out loud '1, 2, 3'. On '3', deliver a treat at your trouser seam. Practice 20 times in driveway.</li>
+      <li>Deploy on Street: When approaching a distracting dog, start counting '1, 2, 3'. On '1', the dog turns toward you in anticipation.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Using retractable flexi-leashes. They maintain continuous pressure, actively conditioning the dog to pull against tension.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Sniffing is decompression; counting is connection. Balance both on every street walk.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Dogs that lunge forcefully and cannot disengage with pattern games need an in-person leash manners specialist.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 6.2</span>
+      <span>•</span>
+      <span>FOCUS: Territorial Barking</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Environmental Shield: Window Barking</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog perches on the back of the sofa, barking frantically at mail carriers and pedestrians through the front window.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">When a dog barks at a pedestrian who walks away, the dog believes their barking chased the threat off, cementing a self-reinforcing loop.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The Physical Shield: Apply static frosted window film to the lower 60cm of front windows. Blocks visual stimuli without losing light.</li>
+      <li>Acoustic Masking: Position a brown noise machine or radio near front hallways to mask sudden street sounds.</li>
+      <li>Spatial Setup: Move couches and chairs away from window sills to eliminate elevated watchtower perches.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Yelling 'Quiet!' from across the room. The dog interprets human shouting as vocal participation in their barking.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>You cannot out-train a visual trigger that is rehearsed 30 times a day while you are at work.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Compulsive fence-running or barrier frustration causing fence-biting requires environmental containment triage.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 6.3</span>
+      <span>•</span>
+      <span>FOCUS: Separation Confidence</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Independence Micro-Dosing: Alone Time</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">The dog whines, scratches doors, drools, or paces frantically whenever you pick up keys or step out of sight.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Separation distress is a neurological panic state. Desensitization must occur entirely below the threshold of anxiety.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>De-Weaponize Departure Cues: Pick up keys -> sit on couch. Put on coat -> make tea. Repeat 10 times daily until cues evoke zero arousal.</li>
+      <li>Micro-Dosing Alone Time: Step outside front door for 5 seconds -> return calmly before whining begins.</li>
+      <li>Gradual Progression: Advance to 15s -> 30s -> 1m -> 2m -> 5m. If vocalization occurs, cut duration in half on the next trial.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Leaving a panicked dog with a frozen peanut butter KONG thinking food cures panic (distressed dogs refuse food).</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Build independence second by second, never allowing the panic circuit to activate.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Destructive clawing at doorframes, vocalization lasting >15 minutes, or puddles of drool indicates clinical Separation Anxiety requiring a certified specialist.</p>
+    </aside>
+  </article>
+</section>
+      <div class="guide-divider"></div>
+<section class="guide-section" id="guide-7">
+  <img src="../images/mod_07_cover.jpg" alt="The Freedom Framework Cover" class="guide-hero-img" />
+  <div class="guide-header">
+    <span class="badge-pill">GUIDE 7 OF 7</span>
+    <h2 class="guide-title">Guide 7 — The Freedom Framework</h2>
+    <p class="guide-strapline">Expanding Independence & Professional Escalation</p>
+    <p class="guide-intro">Freedom is earned through proven reliability. This guide structures room-by-room expansion, manages adolescent brain remodeling, and prepares a clinical intake brief when professional help is needed.</p>
+  </div>
+  <img src="../images/mod_07_puppy.jpg" alt="Guide 7 Illustration" class="puppy-break-img" />
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 7.1</span>
+      <span>•</span>
+      <span>FOCUS: House Freedom</span>
+      <span>•</span>
+      <span>4 min read</span>
+    </div>
+    <h3 class="lesson-title">The Single-Room Expansion Trial</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">After two good weeks in the kitchen, the owner opens the whole house, and the dog immediately pees in the spare bedroom and chews a rug.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Canine behavioral reliability is spatially bounded and does not automatically generalize to unmapped rooms.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>The 3 Milestones: 14 consecutive days zero accidents + 5s chew redirection + 30m independent rest in Base Zone.</li>
+      <li>The Room Trial: Open 1 adjacent room (living room). Supervise for 30-45m while humans are actively present.</li>
+      <li>Unsupervised Access: Only after 7 consecutive accident-free days under supervision do you allow short unsupervised access.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Granting full-house freedom before spatial mapping is established.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Freedom is a privilege awarded for proven reliability, not a biological default.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Persistent house soiling despite strict management requires an in-home assessment.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 7.2</span>
+      <span>•</span>
+      <span>FOCUS: Adolescence (6-14 Mo)</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Adolescent Regression Triage</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">At 8 months of age, your previously obedient puppy suddenly forgets recalls, tests boundaries, and barks at fire hydrants.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Adolescence brings massive hormonal surges (testosterone/estrogen) and synaptic pruning in the prefrontal cortex, reducing impulse control.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Temporarily Lower Criteria: Treat the adolescent dog like an older puppy. Re-attach a 10m long line for outdoor recalls.</li>
+      <li>Secondary Fear Period Care: If the dog is terrified of a novel object, do not force confrontation. Arc away, feed treats at distance, move on.</li>
+      <li>Scent Enrichment: Replace physical fetch with nose-work search games to exhaust cognitive energy without spiking adrenaline.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Becoming punitive, believing the adolescent dog is deliberately trying to 'dominate' or 'defy' you.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Adolescence is brain remodeling; manage the environment and tighten criteria until the brain matures.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Sudden resource guarding or dog-directed aggression during adolescence requires professional behavior modification.</p>
+    </aside>
+  </article>
+  <article class="lesson-card">
+    <div class="lesson-meta-strip">
+      <span>SECTION 7.3</span>
+      <span>•</span>
+      <span>FOCUS: Professional Handoff</span>
+      <span>•</span>
+      <span>5 min read</span>
+    </div>
+    <h3 class="lesson-title">Clinical Escalation & Trainer Intake Prep</h3>
+    <div class="subheading">The Situation</div>
+    <p class="lesson-text">Despite consistent management, your dog exhibits persistent resource guarding, stranger fear, or severe reactivity.</p>
+    <div class="subheading">The Science & Mechanics</div>
+    <p class="lesson-text">Complex behavioral pathologies require clinical functional assessments, systematic desensitization plans, and expert trainer oversight.</p>
+    <div class="subheading">Action Protocol</div>
+    <ul class="protocol-list">
+      <li>Synthesize the 6-Point Dossier: (1) Primary Concern, (2) Antecedent trigger, (3) Frequency, (4) Threshold distance, (5) What has been tried, (6) Dunbar Bite Scale level (1-6).</li>
+      <li>Directory Matching: Match with verified, accredited trainers on DTD who hold transparent method credentials and local suburb reviews.</li>
+      <li>Handoff Readiness: Bring your 48-hour behavior logs and video footage to your initial trainer consultation.</li>
+    </ul>
+    <aside class="callout-box callout-caution">
+      <div class="callout-title">⚠️ Common Caution Trap</div>
+      <p>Waiting until a bite occurs before seeking professional intervention.</p>
+    </aside>
+    <aside class="callout-box callout-decision">
+      <div class="callout-title">⚖️ Immutable Decision Rule</div>
+      <p><strong>Knowing when to engage a qualified professional is the ultimate hallmark of responsible dog ownership.</strong></p>
+    </aside>
+    <aside class="callout-box callout-escalation">
+      <div class="callout-title">🚩 Clinical Escalation Criteria</div>
+      <p>Connect with verified local Melbourne specialists via the DTD Directory at dogtrainersdirectory.com.au/match.</p>
+    </aside>
+  </article>
+</section>
+    </div>
+
+    <footer class="doc-footer">
+      <div>
+        <strong>The First Leash</strong> • Dog Trainers Directory
+      </div>
+      <div>
+        <a href="https://dogtrainersdirectory.com.au/match">Find a Verified Melbourne Trainer →</a>
+      </div>
+    </footer>
+  </main>
+
+</body>
+</html>
