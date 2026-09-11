@@ -395,7 +395,22 @@ Launch authority:
   - test trainer `76ae68ed-4784-4805-924f-c02cfb42c36c` persisted as `published: false` and strictly excluded from public directory
   - `/ops` oversight verified: `integrity.live_total: 43`, `integrity.hidden: 3`, `submissions_summary.auto_held: 5`
 - visual Playwright verification re-executed with live Atlas data: captured screenshots for homepage, directory (39 trainers), acquired trainer detail (`/t/:id`), submit form, and `/ops` with 0 console errors
-- single remaining launch requirement: update Vercel DNS A record `@` to `199.36.158.100`, CNAME `www` to `gen-lang-client-0028123502.web.app.`, and add ACME challenge TXT records while preserving Zoho MX/SPF records
+31. `2026-09-11`
+- Gemini API key populated from GCP project `gen-lang-client-0028123502` and verified live with `google-genai` 2.22.0 (`gemini-3.6-flash` responding `pong`); `GEMINI_MODEL=gemini-3.6-flash` set in environment
+- In-zone Vercel DNS cutover executed cleanly via Vercel CLI:
+  - `@` A record pointed to `199.36.158.100` (`rec_39ed1e8ea32cc0a0570b1d5f`)
+  - `www` CNAME record pointed to `gen-lang-client-0028123502.web.app.` (`rec_d1ff586e9e948c42ee34038a`)
+  - `@` TXT record added for Firebase hosting verification (`rec_61debb879abfe84d44a786a3`)
+  - `_acme-challenge` TXT records added (`rec_f695c665c30be24998501101`, `rec_220ccfa8cc8eda5b88744880`)
+  - DNS propagation verified via `dig`: `199.36.158.100` and ACME challenge tokens resolving live; zero impact on Zoho Mail or Resend
+- Profile enrichment script `scripts/enrich_profiles_gemini.py` updated to modern `google-genai` SDK and executed across 31 candidate profiles:
+  - 18 profiles enriched with public phone numbers, contact emails, and bios
+  - 9 aggregator URLs held without fabrication
+  - 4 stale/dead domains logged
+  - Full provenance evidence saved to `backend/data/enrichment_run_log.json`
+- Synchronized all updated profiles and collections to MongoDB Atlas via `scripts/sync_to_atlas.py`; restarted Cloud Run and confirmed healthy `/api/health` returning `database: available`
+- All changes committed and pushed to `https://github.com/carlsuburbmates/dtd.git` (`dbb3217`)
+
 
 
 
