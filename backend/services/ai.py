@@ -579,6 +579,20 @@ def status_for_score(conf: float) -> str:
     return "hold"
 
 
+def route_extraction_confidence(conf: float) -> str:
+    """Dual-threshold routing contract from Acquisition & Ingestion Pipeline Spec:
+    - Tier 1 (>= 0.85): qualified / eligible for auto-publication if ABN is active
+    - Tier 2 (0.50 <= conf < 0.85): review_queue for /ops human review
+    - Quarantine (< 0.50): quarantined to ingestion state
+    """
+    if conf >= 0.85:
+        return "qualified"
+    elif conf >= 0.50:
+        return "review_queue"
+    return "quarantine"
+
+
+
 def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Deterministic keyword overlap matching (paid tier is NEVER used)."""
     q = (query or "").lower()

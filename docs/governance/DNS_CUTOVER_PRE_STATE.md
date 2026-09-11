@@ -5,47 +5,26 @@
 
 ---
 
-## Current Nameservers (MUST CHANGE LAST)
+## Current Vercel DNS Records (Captured via vercel dns ls)
+```text
+RECORD ID                     NAME               TYPE    VALUE
+(default)                                        ALIAS   cname.vercel-dns-017.com.
+(default)                     *                  ALIAS   cname.vercel-dns-017.com.
+rec_a5ede93c2b3e0c1c421ca214  _dmarc             TXT     v=DMARC1; p=quarantine; rua=mailto:info@dogtrainersdirectory.com.au; adkim=s; aspf=s
+rec_431436e0af67f89cd6c8ad2e  resend._domainkey  TXT     p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC1vm/PCqJb8gcbXiaFYQ8Y28G1ss3mPIpkJD22R7Dtjp6Faozn4d5nn6dikqPU9dKSy15SEnAJq+Qageo32k9K0USQiKTnCU/Te4UkwffVfc1yLmWFC+NAD4XS3OB/5Pcfr9u9IZaGz69lD7/753kghIXd5V4OPzP8AOlQC1JpqwIDAQAB
+rec_9d8bf9289f428faa06b8b443  send               TXT     v=spf1 include:amazonses.com ~all
+rec_0dc122ff316e93972c3fe010  send               MX      10 feedback-smtp.ap-northeast-1.amazonses.com.
+rec_8d939b40a04c9073e70517b2  zmail._domainkey   TXT     v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCXI88TzvyZWUg3WiQoqYDE8rgHRQOWwrop+PzrXhfkZRX7w8x/jAz0Iss6+TEZKKeLwyooLiukA2St7bgH/WsiCoRlAbmjsLNDlDATWiGL2svy2NG3IbPd6tFcvglQHIMVKWIPP7a+4v4Y8JClFHz4f4tSrCgnh2gxsfoARSE27QIDAQAB
+rec_ad3b34aeb8493b6a2a915118  @                  TXT     v=spf1 include:one.zoho.com ~all
+rec_112a38f724ecfaeaf5a6455b  @                  TXT     zoho-verification=zb85165549.zmverify.zoho.com
+rec_0b0938a8e43960191144bab7  @                  MX      50 mx3.zoho.com.
+rec_45048e0a79c4cfb01feffd8a  @                  MX      20 mx2.zoho.com.
+rec_aaf2ee5939a62c6baad17b08  @                  MX      10 mx.zoho.com.
 ```
-dogtrainersdirectory.com.au.  21600 IN  NS  ns1.vercel-dns.com.
-dogtrainersdirectory.com.au.  21600 IN  NS  ns2.vercel-dns.com.
-```
-**Registrar:** Nameservers are set at the domain registrar (not Vercel DNS). The Vercel DNS zone currently holds all other records below.
 
----
+## MX & Email Integrity (CRITICAL)
+Zoho Mail and Resend DKIM/SPF records are active and verified. Under NO circumstances should any `rec_*` related to `_domainkey`, `send`, `zoho`, or MX records be touched.
 
-## A Records (Root domain — currently pointing to Vercel)
-```
-dogtrainersdirectory.com.au.  1800 IN  A  64.29.17.1
-dogtrainersdirectory.com.au.  1800 IN  A  216.198.79.1
-```
-> These are Vercel's IPs. After cutover these become Firebase's IP: `199.36.158.100`
-
----
-
-## CNAME (www — currently NO record)
-```
-(none — www CNAME is absent from current DNS)
-```
-> After cutover: `www CNAME gen-lang-client-0028123502.web.app.`
-
----
-
-## MX Records — Zoho Mail (MUST BE PRESERVED EXACTLY)
-```
-dogtrainersdirectory.com.au.  3600 IN  MX  10  mx.zoho.com.
-dogtrainersdirectory.com.au.  3600 IN  MX  20  mx2.zoho.com.
-dogtrainersdirectory.com.au.  3600 IN  MX  50  mx3.zoho.com.
-```
-> ⚠️ These must be carried over unchanged to any new DNS zone. Loss of these = email outage.
-
----
-
-## TXT Records — Zoho Verification + SPF (MUST BE PRESERVED EXACTLY)
-```
-dogtrainersdirectory.com.au.  60  IN  TXT  "zoho-verification=zb85165549.zmverify.zoho.com"
-dogtrainersdirectory.com.au.  60  IN  TXT  "v=spf1 include:one.zoho.com ~all"
-```
 
 ---
 
@@ -87,13 +66,29 @@ If the site fails to resolve on `dogtrainersdirectory.com.au` after DNS cutover:
 
 **Recommended approach — no nameserver change required:**
 
-Since Vercel DNS is the authoritative zone, we can make all changes *within the existing Vercel DNS zone* by updating records via the Vercel CLI or dashboard:
+Since Vercel DNS is the authoritative zone, all changes are made *within the existing Vercel DNS zone* without touching registrar nameservers or Zoho Mail records.
 
-1. Delete the two Vercel A records (`64.29.17.1`, `216.198.79.1`)
-2. Add Firebase A record (`199.36.158.100`)
-3. Add `www` CNAME
-4. Add Firebase hosting TXT
-5. Add 2× ACME challenge TXT records
-6. Keep all Zoho MX + TXT records untouched
+### Executable Cutover Commands (Run via Vercel CLI):
+```bash
+# 1. Add Firebase A Record for Root
+vercel dns add dogtrainersdirectory.com.au "" A 199.36.158.100
 
-This requires zero nameserver change and no registrar involvement. TTL-based propagation only (~30 min for A records at TTL=1800).
+# 2. Add www CNAME Record
+vercel dns add dogtrainersdirectory.com.au www CNAME gen-lang-client-0028123502.web.app.
+
+# 3. Add Firebase Site Verification TXT
+vercel dns add dogtrainersdirectory.com.au "" TXT "hosting-site=gen-lang-client-0028123502"
+
+# 4. Add Firebase SSL Certificate ACME Challenges
+vercel dns add dogtrainersdirectory.com.au _acme-challenge TXT "exCJ2FwW2cwKT8ZYFrAzLwiKGyjOeWb1KluIzq7vGLY"
+vercel dns add dogtrainersdirectory.com.au _acme-challenge TXT "vjwCoVei22N1VKFtNU80A0Oqkxz0SbkSzx7iB_KgveI"
+```
+
+### Instant Rollback Command:
+If Firebase fails to serve traffic or certificate generation fails:
+```bash
+# Simply remove the newly added records to restore Vercel's default ALIAS:
+vercel dns rm <RECORD_ID_OF_A_RECORD>
+```
+Zoho Mail and Resend DKIM records are completely isolated and will remain 100% operational throughout.
+
