@@ -411,6 +411,19 @@ Launch authority:
 - Synchronized all updated profiles and collections to MongoDB Atlas via `scripts/sync_to_atlas.py`; restarted Cloud Run and confirmed healthy `/api/health` returning `database: available`
 - All changes committed and pushed to `https://github.com/carlsuburbmates/dtd.git` (`dbb3217`)
 
-
-
-
+32. `2026-09-12`
+- Conducted comprehensive audit of `https://dogtrainersdirectory.com.au/trainers` across desktop and mobile viewports using native browser subagent, DOM inspection, and network profiling.
+- Identified and remediated critical production data issues:
+  - Purged 10 integration test listings (`Activation Test Trainer`, `Test Trainer Verify`) by setting `published: false`, `status: 'suppressed_test'` via `scripts/clean_and_slugify_trainers.py`.
+  - Repaired 3 mangled IDs ending in `:t` (`Urban Paws Melbourne`, `Dog Force 1`, `Melbourne K9 Force`).
+  - Populated unique, human-readable SEO slugs across all 34 authentic Melbourne dog training businesses (e.g. `/t/urban-paws-melbourne`, `/t/northside-recall-school`).
+  - Streamed cleaned collection to MongoDB Atlas cluster `DTD` via `scripts/sync_to_atlas.py`.
+- Fixed search, filtering, and taxonomy defects:
+  - Updated category filter in `backend/server.py` to match behavioural synonyms and bio descriptions (`category=reactivity` now surfaces 17 qualified trainers instead of 0).
+  - Re-deployed Cloud Run revision `dtd-api-00008-9wc` serving 100% of traffic.
+  - Renamed misleading primary navigation item in `PublicChrome.jsx` from "For trainers" to "Find a trainer".
+  - Added reactive document title (`Find a Dog Trainer in Melbourne | Dog Trainers Directory`) and an instant "✕ Reset filters" control in `Trainers.jsx`.
+  - Updated `public/index.html` meta description removing stale "prelaunch" wording.
+  - Corrected business name truncation bug in `TrainerDetail.jsx` (`trainer.name` instead of first-name `.split(" ")[0]`).
+  - Hardened `frontend/src/lib/api.js` with `frontend/.env.production` fallback preventing compile-time `localhost:8000` leaks in production builds.
+  - Built and deployed updated frontend bundle to Firebase Hosting; live end-to-end browser verification passed with 0 test listings, active reactivity filtering (17 trainers), clean slug storefront navigation, and 0 console errors.

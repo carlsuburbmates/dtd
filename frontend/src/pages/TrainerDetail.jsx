@@ -319,7 +319,7 @@ export default function TrainerDetail() {
                     <form onSubmit={connect} className="card-public p-7 mt-10" data-testid="connect-form">
                         <div className="small-caps">Connect</div>
                         <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">
-                            Get in touch with {trainer.name?.split(" ")[0] || "this trainer"}.
+                            Get in touch with {trainer.name || "this trainer"}.
                         </h2>
                         <div className="grid sm:grid-cols-2 gap-3 mt-5">
                             <label htmlFor="connect-name" className="sr-only">Your name</label>

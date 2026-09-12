@@ -44,6 +44,10 @@ export default function Trainers() {
     const category = search.get("category") || "";
 
     useEffect(() => {
+        document.title = "Find a Dog Trainer in Melbourne | Dog Trainers Directory";
+    }, []);
+
+    useEffect(() => {
         let active = true;
         api.get("/config").then((response) => { if (active) setSuburbs(Array.isArray(response?.data?.suburbs) ? response.data.suburbs : []); }).catch(() => {});
         return () => { active = false; };
@@ -77,7 +81,25 @@ export default function Trainers() {
                     <Link to="/submit" className="mt-5 inline-flex text-sm font-medium text-[#9B4F31] underline underline-offset-4" data-testid="trainers-cta-submit">Are you a trainer? Add or claim your profile</Link>
                 </section>
                 <section className="card-public bg-white p-5 mt-10" aria-label="Directory filters">
-                    <label className="grid gap-2 text-sm font-medium text-[#1A3A32] max-w-sm">Suburb<select className="input-public" value={suburb} onChange={(event) => updateFilter("suburb", event.target.value)} data-testid="directory-suburb-filter"><option value="">All Melbourne suburbs</option>{suburbs.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+                    <div className="flex flex-wrap items-end justify-between gap-4">
+                        <label className="grid gap-2 text-sm font-medium text-[#1A3A32] max-w-sm flex-1">
+                            Suburb
+                            <select className="input-public" value={suburb} onChange={(event) => updateFilter("suburb", event.target.value)} data-testid="directory-suburb-filter">
+                                <option value="">All Melbourne suburbs</option>
+                                {suburbs.map((name) => <option key={name} value={name}>{name}</option>)}
+                            </select>
+                        </label>
+                        {(suburb || category) ? (
+                            <button
+                                type="button"
+                                onClick={() => setSearch(new URLSearchParams())}
+                                className="text-xs font-semibold text-[#9B4F31] hover:underline pb-2 cursor-pointer transition-colors"
+                                data-testid="directory-reset-filters"
+                            >
+                                ✕ Reset filters
+                            </button>
+                        ) : null}
+                    </div>
                     <div className="mt-5 flex flex-wrap gap-2" aria-label="Specialty filters">{CATEGORIES.map(([value, label]) => <button key={label} type="button" onClick={() => updateFilter("category", value)} className={category === value ? "btn-primary" : "btn-ghost"} aria-pressed={category === value}>{label}</button>)}</div>
                 </section>
                 {loading ? <div className="mt-10 text-[#5C6D59]" data-testid="directory-loading">Loading trainers…</div> : null}

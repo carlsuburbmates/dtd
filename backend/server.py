@@ -3180,8 +3180,14 @@ async def list_trainers(
         exact_suburb = {"$regex": f"^{re.escape(suburb.strip())}$", "$options": "i"}
         filters.append({"$or": [{"suburb": exact_suburb}, {"serviced_suburbs": exact_suburb}]})
     if category and category.strip():
-        category_token = {"$regex": re.escape(category.strip()), "$options": "i"}
-        filters.append({"$or": [{"specialties": category_token}, {"services": category_token}, {"categories": category_token}]})
+        cat_clean = category.strip().lower()
+        if cat_clean == "reactivity":
+            category_token = {"$regex": r"(reactivity|behaviou?r)", "$options": "i"}
+        elif cat_clean in {"in home", "in-home"}:
+            category_token = {"$regex": r"(in[- ]home|in[- ]house)", "$options": "i"}
+        else:
+            category_token = {"$regex": re.escape(cat_clean), "$options": "i"}
+        filters.append({"$or": [{"specialties": category_token}, {"services": category_token}, {"categories": category_token}, {"bio": category_token}]})
 
     query: Dict[str, Any] = {"published": True, "region": {"$in": ACTIVE_REGIONS}}
     if filters:

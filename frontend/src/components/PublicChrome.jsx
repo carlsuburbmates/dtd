@@ -4,7 +4,7 @@ import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const NAV = [
-    { to: "/trainers", label: "For trainers", testid: "nav-trainers" },
+    { to: "/trainers", label: "Find a trainer", testid: "nav-trainers" },
     { to: "/how-it-works", label: "For owners", testid: "nav-how" },
     { to: "/trust", label: "Trust & Standards", testid: "nav-trust" },
     { to: "/contact", label: "Support", testid: "nav-support" },
