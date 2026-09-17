@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 
 const NAV = [
     { to: "/trainers", label: "Find a trainer", testid: "nav-trainers" },
@@ -12,7 +13,7 @@ const NAV = [
 
 function isActive(item, pathname) {
     if (item.to === "/trainers") return pathname === "/trainers" || pathname === "/submit";
-    if (item.to === "/how-it-works") return pathname === "/how-it-works" || pathname.startsWith("/education/");
+    if (item.to === "/how-it-works") return pathname === "/how-it-works";
     return pathname === item.to;
 }
 
@@ -147,7 +148,7 @@ export function PublicFooter() {
                         <div className="small-caps">Owners</div>
                         <div className="mt-3 grid gap-2 text-sm text-[#4A615A]">
                             <Link to="/how-it-works#owner-guide-waitlist" data-testid="footer-waitlist" className="footer-link">Waitlist</Link>
-                            <Link to="/how-it-works" data-testid="footer-first-leash" className="footer-link">The First Leash</Link>
+                            <a href={FIRST_LEASH_URL} data-testid="footer-first-leash" className="footer-link">The First Leash</a>
                             <Link to="/faq" data-testid="footer-faq" className="footer-link">FAQ</Link>
                         </div>
                     </div>

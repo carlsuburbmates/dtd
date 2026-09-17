@@ -350,11 +350,6 @@ def _fake_startup_db():
         phase_transition_decisions=coll,
         owner_waitlist=coll,
         owner_waitlist_events=coll,
-        owner_education_magic_links=coll,
-        owner_education_owners=coll,
-        owner_education_sessions=coll,
-        owner_education_progress=coll,
-        owner_education_readiness=coll,
     )
 
 

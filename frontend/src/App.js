@@ -18,24 +18,13 @@ import SuburbSEO from "@/pages/SuburbSEO";
 import Ops from "@/pages/Ops";
 import About from "@/pages/About";
 import HowItWorks from "@/pages/HowItWorks";
-import EducationModuleTeaser from "@/pages/EducationModuleTeaser";
-import EducationModuleGuide from "@/pages/EducationModuleGuide";
-import EducationDashboard from "@/pages/EducationDashboard";
-import EducationLessonPreview from "@/pages/EducationLessonPreview";
-import EducationLesson from "@/pages/EducationLesson";
-import EducationTool from "@/pages/EducationTool";
-import EducationSignIn from "@/pages/EducationSignIn";
-import EducationAuthCallback from "@/pages/EducationAuthCallback";
-import CommandPalette from "@/components/education/CommandPalette";
+import FirstLeashRedirect from "@/components/FirstLeashRedirect";
 import Pricing from "@/pages/Pricing";
 import Trust from "@/pages/Trust";
 import FAQ from "@/pages/FAQ";
 import Contact from "@/pages/Contact";
 import Privacy from "@/pages/Privacy";
 import Terms from "@/pages/Terms";
-import TheFirstLeash from "@/pages/TheFirstLeash";
-import CourseDashboard from "@/pages/CourseDashboard";
-import LessonViewer from "@/pages/LessonViewer";
 function AnimatedRoutes() {
     const location = useLocation();
     return (
@@ -55,17 +44,9 @@ function AnimatedRoutes() {
                 <Route path="/about" element={<PageTransition><About /></PageTransition>} />
                 <Route path="/how-it-works" element={<PageTransition><HowItWorks /></PageTransition>} />
                 <Route path="/terms" element={<PageTransition><Terms /></PageTransition>} />
-                <Route path="/the-first-leash" element={<PageTransition><TheFirstLeash /></PageTransition>} />
-                <Route path="/the-first-leash/dashboard" element={<PageTransition><CourseDashboard /></PageTransition>} />
-                <Route path="/the-first-leash/modules/:moduleId/lessons/:lessonId" element={<PageTransition><LessonViewer /></PageTransition>} />
-                <Route path="/education/sign-in" element={<PageTransition><EducationSignIn /></PageTransition>} />
-                <Route path="/education/auth/callback" element={<PageTransition><EducationAuthCallback /></PageTransition>} />
-                <Route path="/education/dashboard" element={<PageTransition><EducationDashboard /></PageTransition>} />
-                <Route path="/education/modules/:moduleSlug/guide" element={<PageTransition><EducationModuleGuide /></PageTransition>} />
-                <Route path="/education/modules/:moduleSlug" element={<PageTransition><EducationModuleTeaser /></PageTransition>} />
-                <Route path="/education/modules/:moduleSlug/lessons/:lessonSlug/preview" element={<PageTransition><EducationLessonPreview /></PageTransition>} />
-                <Route path="/education/modules/:moduleSlug/lessons/:lessonSlug" element={<PageTransition><EducationLesson /></PageTransition>} />
-                <Route path="/education/tools/:toolSlug" element={<PageTransition><EducationTool /></PageTransition>} />
+                {/* The First Leash is a separate deployment — bridge legacy routes to it */}
+                <Route path="/the-first-leash/*" element={<FirstLeashRedirect />} />
+                <Route path="/education/*" element={<FirstLeashRedirect />} />
                 <Route path="/pricing" element={<PageTransition><Pricing /></PageTransition>} />
                 <Route path="/trust" element={<PageTransition><Trust /></PageTransition>} />
                 <Route path="/faq" element={<PageTransition><FAQ /></PageTransition>} />
@@ -89,7 +70,6 @@ function App() {
             <BrowserRouter>
                 <AnimatedRoutes />
                 <Toaster position="top-center" richColors />
-                <CommandPalette />
             </BrowserRouter>
         </div>
     );

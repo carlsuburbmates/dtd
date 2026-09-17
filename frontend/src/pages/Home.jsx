@@ -13,6 +13,7 @@ const staggerChild = {
 };
 import { api, audCents, buildAttributionSearch } from "@/lib/api";
 import { captureEducationEvent, captureEducationPageView } from "@/lib/educationAnalytics";
+import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import OwnerWaitlistForm from "@/components/OwnerWaitlistForm";
 
@@ -437,14 +438,14 @@ export default function Home() {
                                 The First Leash is a free starter guide for the early weeks. Learn the basics of settling in, establishing routine, and starting off on the right paw.
                             </p>
                             <div className="mt-auto">
-                                <Link
-                                    to="/the-first-leash"
+                                <a
+                                    href={FIRST_LEASH_URL}
                                     className="btn-primary inline-flex items-center gap-2 self-start"
                                     onClick={() => captureEducationEvent("home_footer_leash_clicked")}
                                 >
                                     Open The First Leash
                                     <ArrowRight className="w-4 h-4" />
-                                </Link>
+                                </a>
                             </div>
                         </div>
                     </motion.div>

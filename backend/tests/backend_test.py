@@ -52,7 +52,7 @@ def _public_matching_enabled(session) -> bool:
 
 def _require_public_matching_or_skip(session) -> None:
     if not _public_matching_enabled(session):
-        pytest.skip("Public matching is disabled in education-first prelaunch mode.")
+        pytest.skip("Public matching is disabled in supply-first prelaunch mode.")
 
 
 def assert_no_id(obj):
