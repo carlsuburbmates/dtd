@@ -2412,7 +2412,9 @@ async def config() -> Dict[str, Any]:
         logger.warning("Database unavailable reading phase state for /config: %s", exc)
         phase_state = {}
     return {
-        "trainer_free_intro_days": stripe_billing.trainer_free_intro_days(),
+        "pro_trial_days": stripe_billing.pro_trial_days(),
+        "pro_trial_expiry_warning_day": stripe_billing.pro_trial_expiry_warning_day(),
+        "pro_trial_cohort_active": stripe_billing.trial_cohort_active(),
         "active_regions": ACTIVE_REGIONS,
         "active_region_default": ACTIVE_REGION,
         "stripe_webhook_enabled": stripe_billing.webhook_enabled(),

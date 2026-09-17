@@ -59,8 +59,8 @@ def _days_until_due() -> int:
     return max(1, min(value, 60))
 
 
-def _free_intro_days() -> int:
-    raw = (os.environ.get("TRAINER_FREE_INTRO_DAYS") or "30").strip()
+def pro_trial_days() -> int:
+    raw = (os.environ.get("PRO_TRIAL_DAYS") or "30").strip()
     try:
         value = int(raw)
     except ValueError:
@@ -68,8 +68,35 @@ def _free_intro_days() -> int:
     return max(0, min(value, 365))
 
 
-def trainer_free_intro_days() -> int:
-    return _free_intro_days()
+def pro_trial_expiry_warning_day() -> int:
+    raw = (os.environ.get("PRO_TRIAL_EXPIRY_WARNING_DAY") or "23").strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 23
+    return max(0, min(value, 365))
+
+
+def stripe_live_mode() -> bool:
+    """Stripe live mode is detected from the secret key prefix (sk_live_ vs sk_test_)."""
+    return _secret_key().startswith("sk_live_")
+
+
+def stripe_live_anchor_at() -> Optional[datetime]:
+    """The cohort anchor: the moment Stripe went live.
+
+    Pro-trial cohort membership begins at this timestamp. This replaces the retired
+    always-on free-intro window; a trainer is only in the cohort when Stripe is live,
+    the anchor is set, and the trainer registered at or after the anchor.
+    """
+    raw = (os.environ.get("STRIPE_LIVE_ANCHOR_AT") or "").strip()
+    if not raw:
+        return None
+    return _parse_iso(raw)
+
+
+def trial_cohort_active() -> bool:
+    return bool(stripe_live_mode() and stripe_live_anchor_at() is not None)
 
 
 def _registration_started_at(trainer: Dict[str, Any]) -> Optional[datetime]:
@@ -85,15 +112,45 @@ def _registration_started_at(trainer: Dict[str, Any]) -> Optional[datetime]:
 
 
 def trial_status(trainer: Dict[str, Any]) -> Dict[str, Any]:
-    days = _free_intro_days()
+    """Pro trial status, anchored to the Stripe-live cohort.
+
+    The 30-day trial runs from the trainer's own registration; the expiry warning
+    fires on day 23. Trainers registered before the live anchor are not in the cohort.
+    """
+    days = pro_trial_days()
+    warning_day = pro_trial_expiry_warning_day()
+    anchor = stripe_live_anchor_at()
+    cohort_active = bool(stripe_live_mode() and anchor is not None)
     start = _registration_started_at(trainer)
-    if days <= 0 or start is None:
-        return {"active": False, "days": days, "started_at": "", "ends_at": ""}
-    ends = start + timedelta(days=days)
-    active = _now() < ends
-    return {
-        "active": active,
+
+    base = {
+        "active": False,
         "days": days,
+        "warning_day": warning_day,
+        "cohort_active": cohort_active,
+        "cohort_anchor_at": anchor.isoformat() if anchor else "",
+        "in_cohort": False,
+        "days_remaining": 0,
+        "expiry_warning": False,
+        "started_at": "",
+        "ends_at": "",
+    }
+
+    if not cohort_active or days <= 0 or start is None:
+        return base
+    if anchor is not None and start < anchor:
+        return base
+
+    ends = start + timedelta(days=days)
+    now = _now()
+    active = now < ends
+    days_remaining = max(0, (ends - now).days)
+    return {
+        **base,
+        "active": active,
+        "in_cohort": True,
+        "days_remaining": days_remaining,
+        "expiry_warning": active and days_remaining <= max(0, days - warning_day),
         "started_at": start.isoformat(),
         "ends_at": ends.isoformat(),
     }

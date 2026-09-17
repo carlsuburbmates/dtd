@@ -86,7 +86,7 @@ class TestConfig:
         d = r.json()
         assert d["base_intro_fee_cents"] == 500
         assert d.get("fixed_intro_fee_cents", d["base_intro_fee_cents"]) == d["base_intro_fee_cents"]
-        assert d.get("trainer_free_intro_days", 30) == 30
+        assert d.get("pro_trial_days", 30) == 30
         assert d["base_conversion_fee_cents"] == 6500
         assert isinstance(d["suburbs"], list)
         assert all(isinstance(x, str) for x in d["suburbs"])
