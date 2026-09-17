@@ -4,6 +4,9 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
+
+import server
 from services import notifications, pro_trials, stripe_billing
 
 
@@ -94,3 +97,15 @@ def test_existing_sent_event_prevents_duplicate(monkeypatch):
     assert result["sent"] == 0
     assert result["skipped"] == 1
     assert not db.trainers.updates
+
+
+def test_scheduler_secret_fails_closed(monkeypatch):
+    monkeypatch.delenv("CLOUD_SCHEDULER_SECRET", raising=False)
+    with pytest.raises(server.HTTPException) as missing:
+        server._require_cloud_scheduler_secret("")
+    assert missing.value.status_code == 401
+
+    monkeypatch.setenv("CLOUD_SCHEDULER_SECRET", "expected")
+    with pytest.raises(server.HTTPException):
+        server._require_cloud_scheduler_secret("wrong")
+    server._require_cloud_scheduler_secret("expected")

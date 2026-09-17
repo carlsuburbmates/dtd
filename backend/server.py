@@ -47,6 +47,7 @@ from services import event_contract
 from services import follow_up_tokens
 from services import fraud as fraud_service
 from services import notifications as notifications_service
+from services import pro_trials
 from services import runtime_control
 from services import stripe_billing
 from services import suburb_catalogue
@@ -591,6 +592,13 @@ def _trainer_action_secret() -> str:
     if admin_fallback:
         return admin_fallback
     raise RuntimeError("TRAINER_ACTION_TOKEN_SECRET or ADMIN_PASS is required for trainer action tokens.")
+
+
+def _require_cloud_scheduler_secret(value: str) -> None:
+    expected = (os.environ.get("CLOUD_SCHEDULER_SECRET") or "").strip()
+    supplied = str(value or "").strip()
+    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
 
 
 def _token_b64(data: bytes) -> str:
@@ -2396,6 +2404,22 @@ async def app_root() -> Dict[str, Any]:
 @app.get("/health")
 async def app_health() -> JSONResponse:
     return await health()
+
+
+@api.post("/internal/jobs/pro-trial-warnings")
+async def run_pro_trial_warning_job(
+    x_cloud_scheduler_secret: str = Header(default="", alias="X-Cloud-Scheduler-Secret"),
+) -> Dict[str, Any]:
+    """Authenticated, once-daily execution boundary for day-23 warnings."""
+    _require_cloud_scheduler_secret(x_cloud_scheduler_secret)
+
+    def billing_url(trainer: Dict[str, Any]) -> str:
+        trainer_id = str(trainer.get("id") or "")
+        token = _issue_trainer_action_token(trainer_id=trainer_id)
+        base = (os.environ.get("FRONTEND_BASE_URL") or "https://dogtrainersdirectory.com.au").strip().rstrip("/")
+        return f"{base}/trainer/billing?{urlencode({'trainerId': trainer_id, 'token': token})}"
+
+    return await pro_trials.process_expiry_warnings(db, billing_url_factory=billing_url)
 
 
 @api.get("/config")
