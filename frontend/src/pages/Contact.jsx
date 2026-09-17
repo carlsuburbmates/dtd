@@ -31,7 +31,7 @@ export default function Contact() {
                             </div>
                             <h2 className="font-serif text-2xl text-dtd-heading mb-3">General Support</h2>
                             <p className="text-dtd-content mb-6 leading-relaxed">
-                                For onboarding, technical support, billing inquiries, or general questions about Dog Trainers Directory.
+                                For onboarding, technical support, billing enquiries, or general questions about Dog Trainers Directory.
                             </p>
                             <a href="mailto:info@dogtrainersdirectory.com.au" data-testid="contact-email" className="btn-primary inline-flex w-full justify-center">
                                 info@dogtrainersdirectory.com.au

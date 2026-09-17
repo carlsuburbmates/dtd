@@ -33,7 +33,7 @@ export default function HowItWorks() {
                             <div className="small-caps text-dtd-content/70 mb-2">Step 01</div>
                             <h2 className="font-serif text-2xl text-dtd-heading mb-3">Search & Filter</h2>
                             <p className="text-dtd-content leading-relaxed">
-                                Use our detailed filters to find trainers in Melbourne who specialise in your specific behavioral challenges or goals.
+                                Use our detailed filters to find trainers in Melbourne who specialise in your specific behavioural challenges or goals.
                             </p>
                         </article>
 

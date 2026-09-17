@@ -16,7 +16,7 @@ export default function About() {
                                 Building a trusted local trainer network
                             </h1>
                             <p className="mt-5 text-lg text-[#4A615A] max-w-3xl leading-relaxed">
-                                DTD connects dog owners across Greater Melbourne with verified, independent dog trainers. Browse verified local profiles, run diagnostic matching tailored to your dog's behavioral needs, or claim your trainer listing.
+                                DTD connects dog owners across Greater Melbourne with verified, independent dog trainers. Browse verified local profiles, run diagnostic matching tailored to your dog's behavioural needs, or claim your trainer listing.
                             </p>
                         </div>
                         <PublicArt variant="network" />

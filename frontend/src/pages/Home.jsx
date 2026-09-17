@@ -101,7 +101,21 @@ export default function Home() {
                 campaign: attribution.campaign,
                 source: attribution.source,
             });
-            setMatches(Array.isArray(r?.data?.matches) ? r.data.matches : []);
+            const rawMatches = Array.isArray(r?.data?.matches) ? r.data.matches : [];
+            const safeMatches = rawMatches.map((item) => ({
+                ...item,
+                id: String(item?.id || ""),
+                name: typeof item?.name === "string" ? item.name : String(item?.name || "Verified Trainer"),
+                suburb: typeof item?.suburb === "string" ? item.suburb : String(item?.suburb || ""),
+                match_reasoning: typeof item?.match_reasoning === "string"
+                    ? item.match_reasoning
+                    : (typeof item?.match_reasoning?.reasoning === "string"
+                        ? item.match_reasoning.reasoning
+                        : (typeof item?.match_reasoning?.summary === "string"
+                            ? item.match_reasoning.summary
+                            : "")),
+            }));
+            setMatches(safeMatches);
             setMatchId(String(r?.data?.match_id || ""));
             setMatchAttempted(true);
         } catch (err) {
@@ -318,11 +332,13 @@ export default function Home() {
                     <section className="mt-12 max-w-5xl mx-auto px-6">
                         <div className="grid md:grid-cols-3 gap-6">
                             {matches.map((m, idx) => (
-                                <article key={m.id} className="card-public p-6 bg-white">
+                                <article key={m.id || `match-${idx}`} className="card-public p-6 bg-white">
                                     <div className="small-caps text-[#5C6D59]">Rank {idx + 1}</div>
                                     <h3 className="font-serif text-2xl text-[#1A3A32] mt-2">{m.name}</h3>
                                     <p className="text-sm text-[#4A615A] mt-1">{m.suburb}</p>
-                                    <p className="text-sm text-[#4A615A] mt-4 line-clamp-4 leading-relaxed">{m.match_reasoning}</p>
+                                    <p className="text-sm text-[#4A615A] mt-4 line-clamp-4 leading-relaxed">
+                                        {typeof m.match_reasoning === "string" ? m.match_reasoning : ""}
+                                    </p>
                                     <div className="mt-6 pt-4 border-t border-[#E5DFD3]">
                                         <p className="text-xs font-sans text-[#5C6D59] mb-3 font-medium">Free enquiry • Direct contact</p>
                                         <Link

@@ -187,7 +187,7 @@ export default function Pricing() {
                             We charge predictable, flat subscription rates for advertising placement. We never sit between trainers and clients, clip tickets on sessions, or charge per lead.
                         </p>
                         <div className="mt-6 p-4 rounded-xl bg-[#FAF8F5] border border-[#E5DFD3] text-xs text-[#5C6D59] leading-relaxed">
-                            <strong className="text-[#1A3A32] font-semibold">No guaranteed outcomes:</strong> We connect owners with independent trainers. Dog Trainers Directory does not guarantee specific behavioral outcomes or bookings.
+                            <strong className="text-[#1A3A32] font-semibold">No guaranteed outcomes:</strong> We connect owners with independent trainers. Dog Trainers Directory does not guarantee specific behavioural outcomes or bookings.
                         </div>
                     </article>
                 </section>

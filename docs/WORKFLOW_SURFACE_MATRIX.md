@@ -17,25 +17,6 @@ It answers one question:
 > For each canonical workflow, what surface path serves it and what `/ops`
 > evidence must exist so failure does not stay invisible?
 
-## Authority
-
-This file is part of the canonical implementation pack.
-
-Role boundaries:
-1. `docs/standards/DTD_PROJECT_CONTEXT.md` defines user types, workflow families, and product
-   model.
-2. `docs/governance/WORKFLOW_COMPLETION_SPEC.md` defines E2E workflow completion
-   rules.
-3. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` defines route purpose and page-level
-   behavior.
-4. this file maps workflows to routes, screen states, and `/ops` evidence.
-5. `docs/governance/OPERATIONS_CONSOLE_SPEC.md` defines the owner-facing `/ops`
-   console surface and section semantics.
-6. `docs/design/WIREFRAME_STATE_MAP.md` defines the canonical screen-state
-   inventory for the workflow-serving routes.
-
-If this file conflicts with a higher-authority workflow, page, or `/ops`
-document, the higher-authority document governs.
 
 ## Mapping Rules
 

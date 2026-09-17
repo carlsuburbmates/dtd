@@ -427,3 +427,18 @@ Launch authority:
   - Corrected business name truncation bug in `TrainerDetail.jsx` (`trainer.name` instead of first-name `.split(" ")[0]`).
   - Hardened `frontend/src/lib/api.js` with `frontend/.env.production` fallback preventing compile-time `localhost:8000` leaks in production builds.
   - Built and deployed updated frontend bundle to Firebase Hosting; live end-to-end browser verification passed with 0 test listings, active reactivity filtering (17 trainers), clean slug storefront navigation, and 0 console errors.
+
+33. `2026-09-12`
+- Executed comprehensive multi-route frontend audit across desktop and mobile on `https://dogtrainersdirectory.com.au` (`/`, `/submit`, `/how-it-works`, `/pricing`, `/trust`, `/faq`, `/contact`, `/melbourne/richmond`, `/about`, `/privacy`, `/terms`).
+- Hardened Homepage matching diagnostic intake against Minified React Error #31:
+  - Sanitized `matches` payload in `Home.jsx` on receipt, coercing `id`, `name`, `suburb`, and `match_reasoning` to pure strings.
+  - Guarded match rendering with `{typeof m.match_reasoning === "string" ? m.match_reasoning : ""}` and defensive fallback keys `<article key={m.id || ...}>`.
+  - Created dedicated unit test suite `frontend/src/pages/Home.test.jsx`.
+- Polished `/submit` onboarding and validation user experience in `Submit.jsx`:
+  - Added high-visibility validation error banner at top of form (`data-testid="submit-validation-summary"`).
+  - Implemented field-level inline error messages and red border highlights (`border-rose-400 focus:border-rose-500 bg-rose-50/20`) on empty required fields.
+  - Added styled highlight treatment and guidance messages for unaccepted statutory consent checkboxes.
+  - Added dynamic error clearing as user enters data or toggles consents.
+  - Created dedicated unit test suite `frontend/src/pages/Submit.test.jsx`.
+- Corrected American vs Australian English copy inconsistencies across `About.jsx`, `Contact.jsx`, `HowItWorks.jsx`, `Pricing.jsx`, and `Terms.jsx` ("behavioral" -> "behavioural", "billing inquiries" -> "billing enquiries").
+- Verified complete test suite: all 10 frontend test suites (38 unit tests) passed; production build compiled cleanly (`npm run build`).

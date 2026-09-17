@@ -370,6 +370,9 @@ def test_config_exposes_public_matching_flag_enabled_by_default(monkeypatch):
     assert payload["trainer_onboarding_open"] is True
     assert payload["owner_waitlist_mode"] == "passive_only"
     assert "Carlton" in payload["suburbs"]
+    assert payload["suburb_count"] == 539
+    assert payload["suburb_catalogue_version"] == "v1"
+    assert payload["suburb_catalogue_source"] == "static_catalogue_fallback"
 
 
 def test_config_public_matching_unaffected_by_legacy_disabled_env(monkeypatch):
@@ -537,6 +540,29 @@ def test_match_gate_default_and_legacy_env_allows(monkeypatch):
     )
     out = asyncio.run(server.instant_match(payload))
     assert out["matches"][0]["id"] == "t_1"
+
+
+def test_diagnostic_paid_tier_breaks_only_comparable_fit_band():
+    rows = [
+        {"id": "free_top", "name": "Free Top", "tier": "claimed", "match_score": 0.90, "outcome_score": 0.50},
+        {"id": "pro_close", "name": "Pro Close", "tier": "pro", "match_score": 0.86, "outcome_score": 0.50},
+        {"id": "citywide_far", "name": "Citywide Far", "tier": "citywide", "match_score": 0.80, "outcome_score": 0.50},
+    ]
+
+    ranked = server._sort_diagnostic_matches(rows)
+
+    assert [row["id"] for row in ranked] == ["pro_close", "free_top", "citywide_far"]
+
+
+def test_diagnostic_paid_tier_has_no_influence_outside_tie_band():
+    rows = [
+        {"id": "free_best", "name": "Free Best", "tier": "claimed", "match_score": 0.92, "outcome_score": 0.50},
+        {"id": "citywide_lower", "name": "Citywide Lower", "tier": "citywide", "match_score": 0.80, "outcome_score": 0.50},
+    ]
+
+    ranked = server._sort_diagnostic_matches(rows)
+
+    assert [row["id"] for row in ranked] == ["free_best", "citywide_lower"]
 
 
 def test_intro_gate_default_and_legacy_env_allows(monkeypatch):

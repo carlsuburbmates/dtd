@@ -17,7 +17,7 @@ export default function Terms() {
                     <p>Dog Trainers Directory is an independent discovery and matching platform for dog trainers across Greater Melbourne.</p>
                     <p>Dog owners can freely browse verified trainer listings, use diagnostic matching, and contact trainers directly with zero fees.</p>
                     <p>{monetizationCopy.termsTrainerPricing}</p>
-                    <p>Dog Trainers Directory does not guarantee behavioral outcomes, bookings, or revenue, and does not act as an employer or agent of any listed trainer.</p>
+                    <p>Dog Trainers Directory does not guarantee behavioural outcomes, bookings, or revenue, and does not act as an employer or agent of any listed trainer.</p>
                     <p>Trainers and directory users are responsible for providing lawful, accurate information and conducting all interactions professionally.</p>
                 </div>
             </main>

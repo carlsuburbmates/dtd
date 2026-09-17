@@ -1,0 +1,5955 @@
+{
+  "meta": {
+    "generated_at": "2026-09-15T00:47:56.659187+00:00",
+    "source": "Matthew Proctor Australian Postcodes database (community maintained)",
+    "source_url": "https://www.matthewproctor.com/australian_postcodes",
+    "geographic_definition": "ABS Greater Melbourne SA4 regions (official)",
+    "total_suburbs": 539,
+    "region_cluster_counts": {
+      "Melbourne - Inner": 65,
+      "Melbourne - North West": 48,
+      "Melbourne - West": 75,
+      "Mornington Peninsula": 41,
+      "Melbourne - South East": 72,
+      "Melbourne - Inner South": 72,
+      "Melbourne - Inner East": 42,
+      "Melbourne - North East": 59,
+      "Melbourne - Outer East": 65
+    },
+    "schema_version": 1
+  },
+  "suburbs": [
+    {
+      "slug": "abbotsford",
+      "suburb_name": "Abbotsford",
+      "postcodes": [
+        "3067"
+      ],
+      "lat": -37.803515,
+      "lng": 144.998203,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "aberfeldie",
+      "suburb_name": "Aberfeldie",
+      "postcodes": [
+        "3040"
+      ],
+      "lat": -37.751845,
+      "lng": 144.902556,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "airport-west",
+      "suburb_name": "Airport West",
+      "postcodes": [
+        "3042"
+      ],
+      "lat": -37.727529,
+      "lng": 144.866305,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "albanvale",
+      "suburb_name": "Albanvale",
+      "postcodes": [
+        "3021"
+      ],
+      "lat": -37.743361,
+      "lng": 144.796693,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "albert-park",
+      "suburb_name": "Albert Park",
+      "postcodes": [
+        "3206"
+      ],
+      "lat": -37.846534,
+      "lng": 144.95086,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "albion",
+      "suburb_name": "Albion",
+      "postcodes": [
+        "3020"
+      ],
+      "lat": -37.777204,
+      "lng": 144.829945,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "alphington",
+      "suburb_name": "Alphington",
+      "postcodes": [
+        "3078"
+      ],
+      "lat": -37.778298,
+      "lng": 145.025853,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "altona",
+      "suburb_name": "Altona",
+      "postcodes": [
+        "3018"
+      ],
+      "lat": -37.86172,
+      "lng": 144.812736,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "altona-east",
+      "suburb_name": "Altona East",
+      "postcodes": [
+        "3025"
+      ],
+      "lat": -37.835562,
+      "lng": 144.839704,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "altona-gate",
+      "suburb_name": "Altona Gate",
+      "postcodes": [
+        "3025"
+      ],
+      "lat": -37.835562,
+      "lng": 144.839704,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "altona-meadows",
+      "suburb_name": "Altona Meadows",
+      "postcodes": [
+        "3028"
+      ],
+      "lat": -37.875066,
+      "lng": 144.777165,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "altona-north",
+      "suburb_name": "Altona North",
+      "postcodes": [
+        "3025"
+      ],
+      "lat": -37.835562,
+      "lng": 144.839704,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "ardeer",
+      "suburb_name": "Ardeer",
+      "postcodes": [
+        "3022"
+      ],
+      "lat": -37.795937,
+      "lng": 144.793961,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "armadale",
+      "suburb_name": "Armadale",
+      "postcodes": [
+        "3143"
+      ],
+      "lat": -37.858918,
+      "lng": 145.019393,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "armadale-north",
+      "suburb_name": "Armadale North",
+      "postcodes": [
+        "3143"
+      ],
+      "lat": -37.858918,
+      "lng": 145.019393,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "arthurs-seat",
+      "suburb_name": "Arthurs Seat",
+      "postcodes": [
+        "3936"
+      ],
+      "lat": -38.326447,
+      "lng": 145.007626,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "ascot-vale",
+      "suburb_name": "Ascot Vale",
+      "postcodes": [
+        "3032"
+      ],
+      "lat": -37.774486,
+      "lng": 144.897221,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "ashburton",
+      "suburb_name": "Ashburton",
+      "postcodes": [
+        "3147"
+      ],
+      "lat": -37.867864,
+      "lng": 145.092946,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "ashwood",
+      "suburb_name": "Ashwood",
+      "postcodes": [
+        "3147"
+      ],
+      "lat": -37.867864,
+      "lng": 145.092946,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "aspendale",
+      "suburb_name": "Aspendale",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "aspendale-gardens",
+      "suburb_name": "Aspendale Gardens",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "attwood",
+      "suburb_name": "Attwood",
+      "postcodes": [
+        "3049"
+      ],
+      "lat": -37.673182,
+      "lng": 144.888492,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "auburn",
+      "suburb_name": "Auburn",
+      "postcodes": [
+        "3123"
+      ],
+      "lat": -37.829752,
+      "lng": 145.049415,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "auburn-south",
+      "suburb_name": "Auburn South",
+      "postcodes": [
+        "3122"
+      ],
+      "lat": -37.822725,
+      "lng": 145.030602,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "avondale-heights",
+      "suburb_name": "Avondale Heights",
+      "postcodes": [
+        "3034"
+      ],
+      "lat": -37.761235,
+      "lng": 144.86194,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "avonsleigh",
+      "suburb_name": "Avonsleigh",
+      "postcodes": [
+        "3782"
+      ],
+      "lat": -37.938068,
+      "lng": 145.433024,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "balaclava",
+      "suburb_name": "Balaclava",
+      "postcodes": [
+        "3183"
+      ],
+      "lat": -37.869072,
+      "lng": 144.999026,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "balwyn",
+      "suburb_name": "Balwyn",
+      "postcodes": [
+        "3103"
+      ],
+      "lat": -37.811738,
+      "lng": 145.074116,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "balwyn-east",
+      "suburb_name": "Balwyn East",
+      "postcodes": [
+        "3103"
+      ],
+      "lat": -37.811738,
+      "lng": 145.074116,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "balwyn-north",
+      "suburb_name": "Balwyn North",
+      "postcodes": [
+        "3104"
+      ],
+      "lat": -37.793695,
+      "lng": 145.081714,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "bangholme",
+      "suburb_name": "Bangholme",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "banyule",
+      "suburb_name": "Banyule",
+      "postcodes": [
+        "3084"
+      ],
+      "lat": -37.744406,
+      "lng": 145.082685,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "batman",
+      "suburb_name": "Batman",
+      "postcodes": [
+        "3058"
+      ],
+      "lat": -37.739901,
+      "lng": 144.964524,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "baxter",
+      "suburb_name": "Baxter",
+      "postcodes": [
+        "3911"
+      ],
+      "lat": -38.196908,
+      "lng": 145.169556,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "bayswater",
+      "suburb_name": "Bayswater",
+      "postcodes": [
+        "3153"
+      ],
+      "lat": -37.845116,
+      "lng": 145.270141,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "bayswater-north",
+      "suburb_name": "Bayswater North",
+      "postcodes": [
+        "3153"
+      ],
+      "lat": -37.845116,
+      "lng": 145.270141,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "beaconsfield",
+      "suburb_name": "Beaconsfield",
+      "postcodes": [
+        "3807"
+      ],
+      "lat": -38.048316,
+      "lng": 145.371635,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "beaconsfield-upper",
+      "suburb_name": "Beaconsfield Upper",
+      "postcodes": [
+        "3808"
+      ],
+      "lat": -38.002518,
+      "lng": 145.42327,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "beaumaris",
+      "suburb_name": "Beaumaris",
+      "postcodes": [
+        "3193"
+      ],
+      "lat": -37.978698,
+      "lng": 145.031561,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "bedford-road",
+      "suburb_name": "Bedford Road",
+      "postcodes": [
+        "3135"
+      ],
+      "lat": -37.819594,
+      "lng": 145.248209,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "belgrave",
+      "suburb_name": "Belgrave",
+      "postcodes": [
+        "3160"
+      ],
+      "lat": -37.935097,
+      "lng": 145.350821,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "belgrave-heights",
+      "suburb_name": "Belgrave Heights",
+      "postcodes": [
+        "3160"
+      ],
+      "lat": -37.935097,
+      "lng": 145.350821,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "belgrave-south",
+      "suburb_name": "Belgrave South",
+      "postcodes": [
+        "3160"
+      ],
+      "lat": -37.935097,
+      "lng": 145.350821,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "bellfield",
+      "suburb_name": "Bellfield",
+      "postcodes": [
+        "3081"
+      ],
+      "lat": -37.743008,
+      "lng": 145.046401,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "belvedere-park",
+      "suburb_name": "Belvedere Park",
+      "postcodes": [
+        "3198"
+      ],
+      "lat": -38.103194,
+      "lng": 145.137811,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "bennettswood",
+      "suburb_name": "Bennettswood",
+      "postcodes": [
+        "3125"
+      ],
+      "lat": -37.851305,
+      "lng": 145.101,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "bentleigh",
+      "suburb_name": "Bentleigh",
+      "postcodes": [
+        "3204"
+      ],
+      "lat": -37.916956,
+      "lng": 145.036783,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "bentleigh-east",
+      "suburb_name": "Bentleigh East",
+      "postcodes": [
+        "3165"
+      ],
+      "lat": -37.922369,
+      "lng": 145.059426,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "berwick",
+      "suburb_name": "Berwick",
+      "postcodes": [
+        "3806"
+      ],
+      "lat": -38.025018,
+      "lng": 145.349488,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "bittern",
+      "suburb_name": "Bittern",
+      "postcodes": [
+        "3918"
+      ],
+      "lat": -38.339871,
+      "lng": 145.155546,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "black-rock",
+      "suburb_name": "Black Rock",
+      "postcodes": [
+        "3193"
+      ],
+      "lat": -37.978698,
+      "lng": 145.031561,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "black-rock-north",
+      "suburb_name": "Black Rock North",
+      "postcodes": [
+        "3193"
+      ],
+      "lat": -37.978698,
+      "lng": 145.031561,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "blackburn",
+      "suburb_name": "Blackburn",
+      "postcodes": [
+        "3130"
+      ],
+      "lat": -37.81805,
+      "lng": 145.149653,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "blackburn-north",
+      "suburb_name": "Blackburn North",
+      "postcodes": [
+        "3130"
+      ],
+      "lat": -37.81805,
+      "lng": 145.149653,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "blackburn-south",
+      "suburb_name": "Blackburn South",
+      "postcodes": [
+        "3130"
+      ],
+      "lat": -37.81805,
+      "lng": 145.149653,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "blairgowrie",
+      "suburb_name": "Blairgowrie",
+      "postcodes": [
+        "3942"
+      ],
+      "lat": -38.367874,
+      "lng": 144.768301,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "bonbeach",
+      "suburb_name": "Bonbeach",
+      "postcodes": [
+        "3196"
+      ],
+      "lat": -38.046479,
+      "lng": 145.122762,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "bonnie-brook",
+      "suburb_name": "Bonnie Brook",
+      "postcodes": [
+        "3335"
+      ],
+      "lat": -37.69608887,
+      "lng": 144.6698898,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "booran-road-po",
+      "suburb_name": "Booran Road Po",
+      "postcodes": [
+        "3163"
+      ],
+      "lat": -37.896497,
+      "lng": 145.057237,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "boronia",
+      "suburb_name": "Boronia",
+      "postcodes": [
+        "3155"
+      ],
+      "lat": -37.861799,
+      "lng": 145.284418,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "box-hill",
+      "suburb_name": "Box Hill",
+      "postcodes": [
+        "3128"
+      ],
+      "lat": -37.828866,
+      "lng": 145.122393,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "box-hill-central",
+      "suburb_name": "Box Hill Central",
+      "postcodes": [
+        "3128"
+      ],
+      "lat": -37.828866,
+      "lng": 145.122393,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "box-hill-north",
+      "suburb_name": "Box Hill North",
+      "postcodes": [
+        "3129"
+      ],
+      "lat": -37.806965,
+      "lng": 145.125084,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "box-hill-south",
+      "suburb_name": "Box Hill South",
+      "postcodes": [
+        "3128"
+      ],
+      "lat": -37.828866,
+      "lng": 145.122393,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "braeside",
+      "suburb_name": "Braeside",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "brandon-park",
+      "suburb_name": "Brandon Park",
+      "postcodes": [
+        "3150"
+      ],
+      "lat": -37.914383,
+      "lng": 145.168834,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "braybrook",
+      "suburb_name": "Braybrook",
+      "postcodes": [
+        "3019"
+      ],
+      "lat": -37.784683,
+      "lng": 144.854014,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "braybrook-north",
+      "suburb_name": "Braybrook North",
+      "postcodes": [
+        "3019"
+      ],
+      "lat": -37.784683,
+      "lng": 144.854014,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "brentford-square",
+      "suburb_name": "Brentford Square",
+      "postcodes": [
+        "3131"
+      ],
+      "lat": -37.817798,
+      "lng": 145.174489,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "briar-hill",
+      "suburb_name": "Briar Hill",
+      "postcodes": [
+        "3088"
+      ],
+      "lat": -37.700175,
+      "lng": 145.108339,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "brighton",
+      "suburb_name": "Brighton",
+      "postcodes": [
+        "3186"
+      ],
+      "lat": -37.915066,
+      "lng": 144.996329,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "brighton-east",
+      "suburb_name": "Brighton East",
+      "postcodes": [
+        "3187"
+      ],
+      "lat": -37.925371,
+      "lng": 145.013593,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "brighton-north",
+      "suburb_name": "Brighton North",
+      "postcodes": [
+        "3186"
+      ],
+      "lat": -37.915066,
+      "lng": 144.996329,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "brighton-road",
+      "suburb_name": "Brighton Road",
+      "postcodes": [
+        "3184"
+      ],
+      "lat": -37.881414,
+      "lng": 144.984034,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "broadmeadows",
+      "suburb_name": "Broadmeadows",
+      "postcodes": [
+        "3047"
+      ],
+      "lat": -37.681105,
+      "lng": 144.930247,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "brooklyn",
+      "suburb_name": "Brooklyn",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "brunswick",
+      "suburb_name": "Brunswick",
+      "postcodes": [
+        "3056"
+      ],
+      "lat": -37.766292,
+      "lng": 144.960108,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "brunswick-east",
+      "suburb_name": "Brunswick East",
+      "postcodes": [
+        "3057"
+      ],
+      "lat": -37.770012,
+      "lng": 144.97728,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "brunswick-lower",
+      "suburb_name": "Brunswick Lower",
+      "postcodes": [
+        "3056"
+      ],
+      "lat": -37.766292,
+      "lng": 144.960108,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "brunswick-north",
+      "suburb_name": "Brunswick North",
+      "postcodes": [
+        "3056"
+      ],
+      "lat": -37.766292,
+      "lng": 144.960108,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "brunswick-south",
+      "suburb_name": "Brunswick South",
+      "postcodes": [
+        "3055"
+      ],
+      "lat": -37.763584,
+      "lng": 144.942222,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "brunswick-west",
+      "suburb_name": "Brunswick West",
+      "postcodes": [
+        "3055"
+      ],
+      "lat": -37.763584,
+      "lng": 144.942222,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "bulla",
+      "suburb_name": "Bulla",
+      "postcodes": [
+        "3428"
+      ],
+      "lat": -37.591069,
+      "lng": 144.811494,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "bulleen",
+      "suburb_name": "Bulleen",
+      "postcodes": [
+        "3105"
+      ],
+      "lat": -37.772477,
+      "lng": 145.084806,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "bulleen-south",
+      "suburb_name": "Bulleen South",
+      "postcodes": [
+        "3105"
+      ],
+      "lat": -37.772477,
+      "lng": 145.084806,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "bundoora",
+      "suburb_name": "Bundoora",
+      "postcodes": [
+        "3083"
+      ],
+      "lat": -37.701346,
+      "lng": 145.056223,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "burnley",
+      "suburb_name": "Burnley",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "burnley-north",
+      "suburb_name": "Burnley North",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.826869,
+      "lng": 145.007098,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "burnside",
+      "suburb_name": "Burnside",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "burnside-heights",
+      "suburb_name": "Burnside Heights",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.73218752,
+      "lng": 144.755657,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "burwood",
+      "suburb_name": "Burwood",
+      "postcodes": [
+        "3125"
+      ],
+      "lat": -37.851305,
+      "lng": 145.101,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "burwood-east",
+      "suburb_name": "Burwood East",
+      "postcodes": [
+        "3151"
+      ],
+      "lat": -37.85523,
+      "lng": 145.151119,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "burwood-heights",
+      "suburb_name": "Burwood Heights",
+      "postcodes": [
+        "3151"
+      ],
+      "lat": -37.85523,
+      "lng": 145.151119,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "cairnlea",
+      "suburb_name": "Cairnlea",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "calder-park",
+      "suburb_name": "Calder Park",
+      "postcodes": [
+        "3037"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "camberwell",
+      "suburb_name": "Camberwell",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "camberwell-east",
+      "suburb_name": "Camberwell East",
+      "postcodes": [
+        "3126"
+      ],
+      "lat": -37.827203,
+      "lng": 145.075748,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "camberwell-north",
+      "suburb_name": "Camberwell North",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "camberwell-south",
+      "suburb_name": "Camberwell South",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "camberwell-west",
+      "suburb_name": "Camberwell West",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "campbellfield",
+      "suburb_name": "Campbellfield",
+      "postcodes": [
+        "3061"
+      ],
+      "lat": -37.666265,
+      "lng": 144.956763,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "canterbury",
+      "suburb_name": "Canterbury",
+      "postcodes": [
+        "3126"
+      ],
+      "lat": -37.827203,
+      "lng": 145.075748,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "capel-sound",
+      "suburb_name": "Capel Sound",
+      "postcodes": [
+        "3940"
+      ],
+      "lat": -38.37363083,
+      "lng": 144.8754149,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "cardinia",
+      "suburb_name": "Cardinia",
+      "postcodes": [
+        "3978"
+      ],
+      "lat": -38.135009,
+      "lng": 145.384606,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "carlton",
+      "suburb_name": "Carlton",
+      "postcodes": [
+        "3053"
+      ],
+      "lat": -37.803569,
+      "lng": 144.966112,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "carlton-north",
+      "suburb_name": "Carlton North",
+      "postcodes": [
+        "3054"
+      ],
+      "lat": -37.786971,
+      "lng": 144.96724,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "carlton-south",
+      "suburb_name": "Carlton South",
+      "postcodes": [
+        "3053"
+      ],
+      "lat": -37.803569,
+      "lng": 144.966112,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "carnegie",
+      "suburb_name": "Carnegie",
+      "postcodes": [
+        "3163"
+      ],
+      "lat": -37.896497,
+      "lng": 145.057237,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "caroline-springs",
+      "suburb_name": "Caroline Springs",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "carrum",
+      "suburb_name": "Carrum",
+      "postcodes": [
+        "3197"
+      ],
+      "lat": -38.072748,
+      "lng": 145.134111,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "carrum-downs",
+      "suburb_name": "Carrum Downs",
+      "postcodes": [
+        "3201"
+      ],
+      "lat": -38.092874,
+      "lng": 145.177905,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "caulfield",
+      "suburb_name": "Caulfield",
+      "postcodes": [
+        "3162"
+      ],
+      "lat": -37.892139,
+      "lng": 145.023394,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "caulfield-east",
+      "suburb_name": "Caulfield East",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "caulfield-junction",
+      "suburb_name": "Caulfield Junction",
+      "postcodes": [
+        "3161"
+      ],
+      "lat": -37.873733,
+      "lng": 145.019929,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "caulfield-north",
+      "suburb_name": "Caulfield North",
+      "postcodes": [
+        "3161"
+      ],
+      "lat": -37.873733,
+      "lng": 145.019929,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "caulfield-south",
+      "suburb_name": "Caulfield South",
+      "postcodes": [
+        "3162"
+      ],
+      "lat": -37.892139,
+      "lng": 145.023394,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "central-park",
+      "suburb_name": "Central Park",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "chadstone",
+      "suburb_name": "Chadstone",
+      "postcodes": [
+        "3148"
+      ],
+      "lat": -37.882562,
+      "lng": 145.090149,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "chadstone-centre",
+      "suburb_name": "Chadstone Centre",
+      "postcodes": [
+        "3148"
+      ],
+      "lat": -37.882562,
+      "lng": 145.090149,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "chapel-street-north",
+      "suburb_name": "Chapel Street North",
+      "postcodes": [
+        "3141"
+      ],
+      "lat": -37.840679,
+      "lng": 144.991264,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "chelsea",
+      "suburb_name": "Chelsea",
+      "postcodes": [
+        "3196"
+      ],
+      "lat": -38.046479,
+      "lng": 145.122762,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "chelsea-heights",
+      "suburb_name": "Chelsea Heights",
+      "postcodes": [
+        "3196"
+      ],
+      "lat": -38.046479,
+      "lng": 145.122762,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "cheltenham",
+      "suburb_name": "Cheltenham",
+      "postcodes": [
+        "3192"
+      ],
+      "lat": -37.965655,
+      "lng": 145.0623,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "cheltenham-east",
+      "suburb_name": "Cheltenham East",
+      "postcodes": [
+        "3192"
+      ],
+      "lat": -37.965655,
+      "lng": 145.0623,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "cheltenham-north",
+      "suburb_name": "Cheltenham North",
+      "postcodes": [
+        "3192"
+      ],
+      "lat": -37.965655,
+      "lng": 145.0623,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "chirnside-park",
+      "suburb_name": "Chirnside Park",
+      "postcodes": [
+        "3116"
+      ],
+      "lat": -37.737629,
+      "lng": 145.313086,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "clarinda",
+      "suburb_name": "Clarinda",
+      "postcodes": [
+        "3169"
+      ],
+      "lat": -37.945149,
+      "lng": 145.115271,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "clayton",
+      "suburb_name": "Clayton",
+      "postcodes": [
+        "3168"
+      ],
+      "lat": -37.91342,
+      "lng": 145.12665,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "clayton-south",
+      "suburb_name": "Clayton South",
+      "postcodes": [
+        "3169"
+      ],
+      "lat": -37.945149,
+      "lng": 145.115271,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "clematis",
+      "suburb_name": "Clematis",
+      "postcodes": [
+        "3782"
+      ],
+      "lat": -37.938068,
+      "lng": 145.433024,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "clifton-hill",
+      "suburb_name": "Clifton Hill",
+      "postcodes": [
+        "3068"
+      ],
+      "lat": -37.790974,
+      "lng": 144.98622,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "clyde",
+      "suburb_name": "Clyde",
+      "postcodes": [
+        "3978"
+      ],
+      "lat": -38.135009,
+      "lng": 145.384606,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "clyde-north",
+      "suburb_name": "Clyde North",
+      "postcodes": [
+        "3978"
+      ],
+      "lat": -38.135009,
+      "lng": 145.384606,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "coatesville",
+      "suburb_name": "Coatesville",
+      "postcodes": [
+        "3165"
+      ],
+      "lat": -37.922369,
+      "lng": 145.059426,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "coburg",
+      "suburb_name": "Coburg",
+      "postcodes": [
+        "3058"
+      ],
+      "lat": -37.739901,
+      "lng": 144.964524,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "coburg-north",
+      "suburb_name": "Coburg North",
+      "postcodes": [
+        "3058"
+      ],
+      "lat": -37.739901,
+      "lng": 144.964524,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "collingwood",
+      "suburb_name": "Collingwood",
+      "postcodes": [
+        "3066"
+      ],
+      "lat": -37.804846,
+      "lng": 144.986906,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "collingwood-north",
+      "suburb_name": "Collingwood North",
+      "postcodes": [
+        "3066"
+      ],
+      "lat": -37.804846,
+      "lng": 144.986906,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "coolaroo",
+      "suburb_name": "Coolaroo",
+      "postcodes": [
+        "3048"
+      ],
+      "lat": -37.653917,
+      "lng": 144.923609,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "cotham",
+      "suburb_name": "Cotham",
+      "postcodes": [
+        "3101"
+      ],
+      "lat": -37.807397,
+      "lng": 145.036575,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "craigieburn",
+      "suburb_name": "Craigieburn",
+      "postcodes": [
+        "3064"
+      ],
+      "lat": -37.546522,
+      "lng": 144.942199,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "cremorne",
+      "suburb_name": "Cremorne",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "crib-point",
+      "suburb_name": "Crib Point",
+      "postcodes": [
+        "3919"
+      ],
+      "lat": -38.352327,
+      "lng": 145.199777,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "cromer",
+      "suburb_name": "Cromer",
+      "postcodes": [
+        "3193"
+      ],
+      "lat": -37.978698,
+      "lng": 145.031561,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "cross-keys",
+      "suburb_name": "Cross Keys",
+      "postcodes": [
+        "3041"
+      ],
+      "lat": -37.731464,
+      "lng": 144.904815,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "croydon",
+      "suburb_name": "Croydon",
+      "postcodes": [
+        "3136"
+      ],
+      "lat": -37.779876,
+      "lng": 145.282396,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "croydon-hills",
+      "suburb_name": "Croydon Hills",
+      "postcodes": [
+        "3136"
+      ],
+      "lat": -37.779876,
+      "lng": 145.282396,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "croydon-north",
+      "suburb_name": "Croydon North",
+      "postcodes": [
+        "3136"
+      ],
+      "lat": -37.779876,
+      "lng": 145.282396,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "croydon-south",
+      "suburb_name": "Croydon South",
+      "postcodes": [
+        "3136"
+      ],
+      "lat": -37.779876,
+      "lng": 145.282396,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "dallas",
+      "suburb_name": "Dallas",
+      "postcodes": [
+        "3047"
+      ],
+      "lat": -37.681105,
+      "lng": 144.930247,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "dandenong",
+      "suburb_name": "Dandenong",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "dandenong-east",
+      "suburb_name": "Dandenong East",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "dandenong-north",
+      "suburb_name": "Dandenong North",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "dandenong-south",
+      "suburb_name": "Dandenong South",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "darling",
+      "suburb_name": "Darling",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "darling-south",
+      "suburb_name": "Darling South",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "deepdene",
+      "suburb_name": "Deepdene",
+      "postcodes": [
+        "3103"
+      ],
+      "lat": -37.81141396,
+      "lng": 145.0658595,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "deepdene-dc",
+      "suburb_name": "Deepdene Dc",
+      "postcodes": [
+        "3103"
+      ],
+      "lat": -37.811738,
+      "lng": 145.074116,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "deer-park",
+      "suburb_name": "Deer Park",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "deer-park-east",
+      "suburb_name": "Deer Park East",
+      "postcodes": [
+        "3022"
+      ],
+      "lat": -37.795937,
+      "lng": 144.793961,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "deer-park-north",
+      "suburb_name": "Deer Park North",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "delahey",
+      "suburb_name": "Delahey",
+      "postcodes": [
+        "3037"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "dendy",
+      "suburb_name": "Dendy",
+      "postcodes": [
+        "3186"
+      ],
+      "lat": -37.915066,
+      "lng": 144.996329,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "derrimut",
+      "suburb_name": "Derrimut",
+      "postcodes": [
+        "3026"
+      ],
+      "lat": -37.91624,
+      "lng": 144.64209,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "dewhurst",
+      "suburb_name": "Dewhurst",
+      "postcodes": [
+        "3808"
+      ],
+      "lat": -38.002518,
+      "lng": 145.42327,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "diamond-creek",
+      "suburb_name": "Diamond Creek",
+      "postcodes": [
+        "3089"
+      ],
+      "lat": -37.667713,
+      "lng": 145.150369,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "diggers-rest",
+      "suburb_name": "Diggers Rest",
+      "postcodes": [
+        "3427"
+      ],
+      "lat": -37.643461,
+      "lng": 144.707974,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "dingley-village",
+      "suburb_name": "Dingley Village",
+      "postcodes": [
+        "3172"
+      ],
+      "lat": -37.975981,
+      "lng": 145.13465,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "docklands",
+      "suburb_name": "Docklands",
+      "postcodes": [
+        "3008"
+      ],
+      "lat": -37.814719,
+      "lng": 144.948039,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "domain-road-po",
+      "suburb_name": "Domain Road Po",
+      "postcodes": [
+        "3141"
+      ],
+      "lat": -37.840679,
+      "lng": 144.991264,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "doncaster",
+      "suburb_name": "Doncaster",
+      "postcodes": [
+        "3108"
+      ],
+      "lat": -37.786429,
+      "lng": 145.125797,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "doncaster-east",
+      "suburb_name": "Doncaster East",
+      "postcodes": [
+        "3109"
+      ],
+      "lat": -37.784786,
+      "lng": 145.161649,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "doncaster-heights",
+      "suburb_name": "Doncaster Heights",
+      "postcodes": [
+        "3109"
+      ],
+      "lat": -37.784786,
+      "lng": 145.161649,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "donnybrook",
+      "suburb_name": "Donnybrook",
+      "postcodes": [
+        "3064"
+      ],
+      "lat": -37.546522,
+      "lng": 144.942199,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "donvale",
+      "suburb_name": "Donvale",
+      "postcodes": [
+        "3111"
+      ],
+      "lat": -37.794054,
+      "lng": 145.186334,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "doreen",
+      "suburb_name": "Doreen",
+      "postcodes": [
+        "3754"
+      ],
+      "lat": -37.593554,
+      "lng": 145.112985,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "doveton",
+      "suburb_name": "Doveton",
+      "postcodes": [
+        "3177"
+      ],
+      "lat": -37.990985,
+      "lng": 145.237462,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "dromana",
+      "suburb_name": "Dromana",
+      "postcodes": [
+        "3936"
+      ],
+      "lat": -38.326447,
+      "lng": 145.007626,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "dunearn",
+      "suburb_name": "Dunearn",
+      "postcodes": [
+        "3175"
+      ],
+      "lat": -38.016114,
+      "lng": 145.208504,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "eaglemont",
+      "suburb_name": "Eaglemont",
+      "postcodes": [
+        "3084"
+      ],
+      "lat": -37.744406,
+      "lng": 145.082685,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "east-melbourne",
+      "suburb_name": "East Melbourne",
+      "postcodes": [
+        "3002"
+      ],
+      "lat": -37.81443733,
+      "lng": 144.9825846,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "edithvale",
+      "suburb_name": "Edithvale",
+      "postcodes": [
+        "3196"
+      ],
+      "lat": -38.046479,
+      "lng": 145.122762,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "elsternwick",
+      "suburb_name": "Elsternwick",
+      "postcodes": [
+        "3185"
+      ],
+      "lat": -37.891841,
+      "lng": 145.002571,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "eltham",
+      "suburb_name": "Eltham",
+      "postcodes": [
+        "3095"
+      ],
+      "lat": -37.713299,
+      "lng": 145.158579,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "eltham-north",
+      "suburb_name": "Eltham North",
+      "postcodes": [
+        "3095"
+      ],
+      "lat": -37.713299,
+      "lng": 145.158579,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "elwood",
+      "suburb_name": "Elwood",
+      "postcodes": [
+        "3184"
+      ],
+      "lat": -37.881414,
+      "lng": 144.984034,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "emerald",
+      "suburb_name": "Emerald",
+      "postcodes": [
+        "3782"
+      ],
+      "lat": -37.938068,
+      "lng": 145.433024,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "endeavour-hills",
+      "suburb_name": "Endeavour Hills",
+      "postcodes": [
+        "3802"
+      ],
+      "lat": -37.971763,
+      "lng": 145.255599,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "epping",
+      "suburb_name": "Epping",
+      "postcodes": [
+        "3076"
+      ],
+      "lat": -37.643598,
+      "lng": 145.022137,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "epping-dc",
+      "suburb_name": "Epping Dc",
+      "postcodes": [
+        "3076"
+      ],
+      "lat": -37.643598,
+      "lng": 145.022137,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "essendon",
+      "suburb_name": "Essendon",
+      "postcodes": [
+        "3040"
+      ],
+      "lat": -37.751845,
+      "lng": 144.902556,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "essendon-fields",
+      "suburb_name": "Essendon Fields",
+      "postcodes": [
+        "3041"
+      ],
+      "lat": -37.731464,
+      "lng": 144.904815,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "essendon-north",
+      "suburb_name": "Essendon North",
+      "postcodes": [
+        "3041"
+      ],
+      "lat": -37.731464,
+      "lng": 144.904815,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "essendon-west",
+      "suburb_name": "Essendon West",
+      "postcodes": [
+        "3040"
+      ],
+      "lat": -37.751845,
+      "lng": 144.902556,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "eumemmerring",
+      "suburb_name": "Eumemmerring",
+      "postcodes": [
+        "3177"
+      ],
+      "lat": -37.990985,
+      "lng": 145.237462,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "fairfield",
+      "suburb_name": "Fairfield",
+      "postcodes": [
+        "3078"
+      ],
+      "lat": -37.778298,
+      "lng": 145.025853,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "fawkner",
+      "suburb_name": "Fawkner",
+      "postcodes": [
+        "3060"
+      ],
+      "lat": -37.707326,
+      "lng": 144.967874,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "fawkner-east",
+      "suburb_name": "Fawkner East",
+      "postcodes": [
+        "3060"
+      ],
+      "lat": -37.707326,
+      "lng": 144.967874,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "fawkner-north",
+      "suburb_name": "Fawkner North",
+      "postcodes": [
+        "3060"
+      ],
+      "lat": -37.707326,
+      "lng": 144.967874,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "ferntree-gully",
+      "suburb_name": "Ferntree Gully",
+      "postcodes": [
+        "3156"
+      ],
+      "lat": -37.917932,
+      "lng": 145.292895,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "ferny-creek",
+      "suburb_name": "Ferny Creek",
+      "postcodes": [
+        "3786"
+      ],
+      "lat": -37.878188,
+      "lng": 145.332431,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "fitzroy",
+      "suburb_name": "Fitzroy",
+      "postcodes": [
+        "3065"
+      ],
+      "lat": -37.802608,
+      "lng": 144.977795,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "fitzroy-north",
+      "suburb_name": "Fitzroy North",
+      "postcodes": [
+        "3068"
+      ],
+      "lat": -37.790974,
+      "lng": 144.98622,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "flemington",
+      "suburb_name": "Flemington",
+      "postcodes": [
+        "3031"
+      ],
+      "lat": -37.79119,
+      "lng": 144.923403,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "footscray",
+      "suburb_name": "Footscray",
+      "postcodes": [
+        "3011"
+      ],
+      "lat": -37.807101,
+      "lng": 144.907953,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "forest-hill",
+      "suburb_name": "Forest Hill",
+      "postcodes": [
+        "3131"
+      ],
+      "lat": -37.817798,
+      "lng": 145.174489,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "fountain-gate",
+      "suburb_name": "Fountain Gate",
+      "postcodes": [
+        "3805"
+      ],
+      "lat": -38.037026,
+      "lng": 145.304198,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "frankston",
+      "suburb_name": "Frankston",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "frankston-east",
+      "suburb_name": "Frankston East",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "frankston-heights",
+      "suburb_name": "Frankston Heights",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "frankston-north",
+      "suburb_name": "Frankston North",
+      "postcodes": [
+        "3200"
+      ],
+      "lat": -38.126458,
+      "lng": 145.157574,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "frankston-south",
+      "suburb_name": "Frankston South",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "garden-city",
+      "suburb_name": "Garden City",
+      "postcodes": [
+        "3207"
+      ],
+      "lat": -37.832179,
+      "lng": 144.918044,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "gardenvale",
+      "suburb_name": "Gardenvale",
+      "postcodes": [
+        "3185"
+      ],
+      "lat": -37.891841,
+      "lng": 145.002571,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "gilberton",
+      "suburb_name": "Gilberton",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "gladstone-park",
+      "suburb_name": "Gladstone Park",
+      "postcodes": [
+        "3043"
+      ],
+      "lat": -37.691916,
+      "lng": 144.888368,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "glen-huntly",
+      "suburb_name": "Glen Huntly",
+      "postcodes": [
+        "3163"
+      ],
+      "lat": -37.896497,
+      "lng": 145.057237,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "glen-iris",
+      "suburb_name": "Glen Iris",
+      "postcodes": [
+        "3146"
+      ],
+      "lat": -37.857116,
+      "lng": 145.057833,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "glen-waverley",
+      "suburb_name": "Glen Waverley",
+      "postcodes": [
+        "3150"
+      ],
+      "lat": -37.876968,
+      "lng": 145.170841,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "glenferrie-south",
+      "suburb_name": "Glenferrie South",
+      "postcodes": [
+        "3122"
+      ],
+      "lat": -37.822725,
+      "lng": 145.030602,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "glengala",
+      "suburb_name": "Glengala",
+      "postcodes": [
+        "3020"
+      ],
+      "lat": -37.777204,
+      "lng": 144.829945,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "glenroy",
+      "suburb_name": "Glenroy",
+      "postcodes": [
+        "3046"
+      ],
+      "lat": -37.706578,
+      "lng": 144.927968,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "gowanbrae",
+      "suburb_name": "Gowanbrae",
+      "postcodes": [
+        "3043"
+      ],
+      "lat": -37.691916,
+      "lng": 144.888368,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "grangefields",
+      "suburb_name": "Grangefields",
+      "postcodes": [
+        "3335"
+      ],
+      "lat": -37.7069003,
+      "lng": 144.6393305,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "greensborough",
+      "suburb_name": "Greensborough",
+      "postcodes": [
+        "3088"
+      ],
+      "lat": -37.700175,
+      "lng": 145.108339,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "greenvale",
+      "suburb_name": "Greenvale",
+      "postcodes": [
+        "3059"
+      ],
+      "lat": -37.639887,
+      "lng": 144.879626,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "greythorn",
+      "suburb_name": "Greythorn",
+      "postcodes": [
+        "3104"
+      ],
+      "lat": -37.793695,
+      "lng": 145.081714,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "guys-hill",
+      "suburb_name": "Guys Hill",
+      "postcodes": [
+        "3807"
+      ],
+      "lat": -38.048316,
+      "lng": 145.371635,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "hadfield",
+      "suburb_name": "Hadfield",
+      "postcodes": [
+        "3046"
+      ],
+      "lat": -37.706578,
+      "lng": 144.927968,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "hallam",
+      "suburb_name": "Hallam",
+      "postcodes": [
+        "3803"
+      ],
+      "lat": -38.009435,
+      "lng": 145.265524,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "hampton",
+      "suburb_name": "Hampton",
+      "postcodes": [
+        "3188"
+      ],
+      "lat": -37.938889,
+      "lng": 145.007238,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "hampton-east",
+      "suburb_name": "Hampton East",
+      "postcodes": [
+        "3188"
+      ],
+      "lat": -37.938889,
+      "lng": 145.007238,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "hampton-north",
+      "suburb_name": "Hampton North",
+      "postcodes": [
+        "3188"
+      ],
+      "lat": -37.938889,
+      "lng": 145.007238,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "hampton-park",
+      "suburb_name": "Hampton Park",
+      "postcodes": [
+        "3976"
+      ],
+      "lat": -38.043995,
+      "lng": 145.264296,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "harkaway",
+      "suburb_name": "Harkaway",
+      "postcodes": [
+        "3806"
+      ],
+      "lat": -38.025018,
+      "lng": 145.349488,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "hartwell",
+      "suburb_name": "Hartwell",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "hastings",
+      "suburb_name": "Hastings",
+      "postcodes": [
+        "3915"
+      ],
+      "lat": -38.305806,
+      "lng": 145.136622,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "hawksburn",
+      "suburb_name": "Hawksburn",
+      "postcodes": [
+        "3142"
+      ],
+      "lat": -37.84411,
+      "lng": 145.017732,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "hawthorn",
+      "suburb_name": "Hawthorn",
+      "postcodes": [
+        "3122"
+      ],
+      "lat": -37.822725,
+      "lng": 145.030602,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "hawthorn-east",
+      "suburb_name": "Hawthorn East",
+      "postcodes": [
+        "3123"
+      ],
+      "lat": -37.829752,
+      "lng": 145.049415,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "hawthorn-north",
+      "suburb_name": "Hawthorn North",
+      "postcodes": [
+        "3122"
+      ],
+      "lat": -37.822725,
+      "lng": 145.030602,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "hawthorn-west",
+      "suburb_name": "Hawthorn West",
+      "postcodes": [
+        "3122"
+      ],
+      "lat": -37.822725,
+      "lng": 145.030602,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "heatherton",
+      "suburb_name": "Heatherton",
+      "postcodes": [
+        "3202"
+      ],
+      "lat": -37.960555,
+      "lng": 145.092698,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "heathmont",
+      "suburb_name": "Heathmont",
+      "postcodes": [
+        "3135"
+      ],
+      "lat": -37.819594,
+      "lng": 145.248209,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "heathwood",
+      "suburb_name": "Heathwood",
+      "postcodes": [
+        "3134"
+      ],
+      "lat": -37.823058,
+      "lng": 145.257929,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "heidelberg",
+      "suburb_name": "Heidelberg",
+      "postcodes": [
+        "3084"
+      ],
+      "lat": -37.744406,
+      "lng": 145.082685,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "heidelberg-heights",
+      "suburb_name": "Heidelberg Heights",
+      "postcodes": [
+        "3081"
+      ],
+      "lat": -37.743008,
+      "lng": 145.046401,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "heidelberg-rgh",
+      "suburb_name": "Heidelberg Rgh",
+      "postcodes": [
+        "3081"
+      ],
+      "lat": -37.743008,
+      "lng": 145.046401,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "heidelberg-west",
+      "suburb_name": "Heidelberg West",
+      "postcodes": [
+        "3081"
+      ],
+      "lat": -37.743008,
+      "lng": 145.046401,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "highett",
+      "suburb_name": "Highett",
+      "postcodes": [
+        "3190"
+      ],
+      "lat": -37.951394,
+      "lng": 145.038147,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "highpoint-city",
+      "suburb_name": "Highpoint City",
+      "postcodes": [
+        "3032"
+      ],
+      "lat": -37.774486,
+      "lng": 144.897221,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "hillside",
+      "suburb_name": "Hillside",
+      "postcodes": [
+        "3037"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "holmesglen",
+      "suburb_name": "Holmesglen",
+      "postcodes": [
+        "3148"
+      ],
+      "lat": -37.882562,
+      "lng": 145.090149,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "hopetoun-gardens",
+      "suburb_name": "Hopetoun Gardens",
+      "postcodes": [
+        "3162"
+      ],
+      "lat": -37.892139,
+      "lng": 145.023394,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "hoppers-crossing",
+      "suburb_name": "Hoppers Crossing",
+      "postcodes": [
+        "3029"
+      ],
+      "lat": -37.837165,
+      "lng": 144.705831,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "hotham-hill",
+      "suburb_name": "Hotham Hill",
+      "postcodes": [
+        "3051"
+      ],
+      "lat": -37.8006,
+      "lng": 144.943559,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "houston",
+      "suburb_name": "Houston",
+      "postcodes": [
+        "3128"
+      ],
+      "lat": -37.828866,
+      "lng": 145.122393,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "hughesdale",
+      "suburb_name": "Hughesdale",
+      "postcodes": [
+        "3166"
+      ],
+      "lat": -37.902805,
+      "lng": 145.089719,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "huntingdale",
+      "suburb_name": "Huntingdale",
+      "postcodes": [
+        "3166"
+      ],
+      "lat": -37.902805,
+      "lng": 145.089719,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "ivanhoe",
+      "suburb_name": "Ivanhoe",
+      "postcodes": [
+        "3079"
+      ],
+      "lat": -37.772675,
+      "lng": 145.048573,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "ivanhoe-east",
+      "suburb_name": "Ivanhoe East",
+      "postcodes": [
+        "3079"
+      ],
+      "lat": -37.772675,
+      "lng": 145.048573,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "ivanhoe-north",
+      "suburb_name": "Ivanhoe North",
+      "postcodes": [
+        "3079"
+      ],
+      "lat": -37.772675,
+      "lng": 145.048573,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "jacana",
+      "suburb_name": "Jacana",
+      "postcodes": [
+        "3047"
+      ],
+      "lat": -37.681105,
+      "lng": 144.930247,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "jordanville",
+      "suburb_name": "Jordanville",
+      "postcodes": [
+        "3148"
+      ],
+      "lat": -37.8736,
+      "lng": 145.112084,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "kalkallo",
+      "suburb_name": "Kalkallo",
+      "postcodes": [
+        "3064"
+      ],
+      "lat": -37.546522,
+      "lng": 144.942199,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "kallista",
+      "suburb_name": "Kallista",
+      "postcodes": [
+        "3791"
+      ],
+      "lat": -37.896917,
+      "lng": 145.379622,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "kalorama",
+      "suburb_name": "Kalorama",
+      "postcodes": [
+        "3766"
+      ],
+      "lat": -37.817818,
+      "lng": 145.384955,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "karingal",
+      "suburb_name": "Karingal",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "karingal-centre",
+      "suburb_name": "Karingal Centre",
+      "postcodes": [
+        "3199"
+      ],
+      "lat": -38.162578,
+      "lng": 145.135961,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "kealba",
+      "suburb_name": "Kealba",
+      "postcodes": [
+        "3021"
+      ],
+      "lat": -37.743361,
+      "lng": 144.796693,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "keilor",
+      "suburb_name": "Keilor",
+      "postcodes": [
+        "3036"
+      ],
+      "lat": -37.705324,
+      "lng": 144.82246,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "keilor-downs",
+      "suburb_name": "Keilor Downs",
+      "postcodes": [
+        "3038"
+      ],
+      "lat": -37.700454,
+      "lng": 144.766873,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "keilor-east",
+      "suburb_name": "Keilor East",
+      "postcodes": [
+        "3033"
+      ],
+      "lat": -37.74107,
+      "lng": 144.857638,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "keilor-lodge",
+      "suburb_name": "Keilor Lodge",
+      "postcodes": [
+        "3038"
+      ],
+      "lat": -37.700454,
+      "lng": 144.766873,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "keilor-north",
+      "suburb_name": "Keilor North",
+      "postcodes": [
+        "3036"
+      ],
+      "lat": -37.705324,
+      "lng": 144.82246,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "keilor-park",
+      "suburb_name": "Keilor Park",
+      "postcodes": [
+        "3042"
+      ],
+      "lat": -37.727529,
+      "lng": 144.866305,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "kensington",
+      "suburb_name": "Kensington",
+      "postcodes": [
+        "3031"
+      ],
+      "lat": -37.79119,
+      "lng": 144.923403,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "keon-park",
+      "suburb_name": "Keon Park",
+      "postcodes": [
+        "3073"
+      ],
+      "lat": -37.712474,
+      "lng": 145.005955,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "kerrimuir",
+      "suburb_name": "Kerrimuir",
+      "postcodes": [
+        "3129"
+      ],
+      "lat": -37.806965,
+      "lng": 145.125084,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "kew",
+      "suburb_name": "Kew",
+      "postcodes": [
+        "3101"
+      ],
+      "lat": -37.807397,
+      "lng": 145.036575,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "kew-east",
+      "suburb_name": "Kew East",
+      "postcodes": [
+        "3102"
+      ],
+      "lat": -37.793805,
+      "lng": 145.05219,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "keysborough",
+      "suburb_name": "Keysborough",
+      "postcodes": [
+        "3173"
+      ],
+      "lat": -38.006771,
+      "lng": 145.164863,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "kilsyth",
+      "suburb_name": "Kilsyth",
+      "postcodes": [
+        "3137"
+      ],
+      "lat": -37.819364,
+      "lng": 145.313346,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "kilsyth-south",
+      "suburb_name": "Kilsyth South",
+      "postcodes": [
+        "3137"
+      ],
+      "lat": -37.819364,
+      "lng": 145.313346,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "kings-park",
+      "suburb_name": "Kings Park",
+      "postcodes": [
+        "3021"
+      ],
+      "lat": -37.743361,
+      "lng": 144.796693,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "kingsbury",
+      "suburb_name": "Kingsbury",
+      "postcodes": [
+        "3083"
+      ],
+      "lat": -37.701346,
+      "lng": 145.056223,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "kingsville",
+      "suburb_name": "Kingsville",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "kingsville-west",
+      "suburb_name": "Kingsville West",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "knox-city-centre",
+      "suburb_name": "Knox City Centre",
+      "postcodes": [
+        "3152"
+      ],
+      "lat": -37.864951,
+      "lng": 145.221695,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "knoxfield",
+      "suburb_name": "Knoxfield",
+      "postcodes": [
+        "3180"
+      ],
+      "lat": -37.893263,
+      "lng": 145.246731,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "kooyong",
+      "suburb_name": "Kooyong",
+      "postcodes": [
+        "3144"
+      ],
+      "lat": -37.857443,
+      "lng": 145.034127,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "kunyung",
+      "suburb_name": "Kunyung",
+      "postcodes": [
+        "3930"
+      ],
+      "lat": -38.195017,
+      "lng": 145.093743,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "la-trobe-university",
+      "suburb_name": "La Trobe University",
+      "postcodes": [
+        "3083"
+      ],
+      "lat": -37.701346,
+      "lng": 145.056223,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "laburnum",
+      "suburb_name": "Laburnum",
+      "postcodes": [
+        "3130"
+      ],
+      "lat": -37.81805,
+      "lng": 145.149653,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "lalor",
+      "suburb_name": "Lalor",
+      "postcodes": [
+        "3075"
+      ],
+      "lat": -37.66607,
+      "lng": 145.002679,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "lalor-plaza",
+      "suburb_name": "Lalor Plaza",
+      "postcodes": [
+        "3075"
+      ],
+      "lat": -37.66607,
+      "lng": 145.002679,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "langwarrin",
+      "suburb_name": "Langwarrin",
+      "postcodes": [
+        "3910"
+      ],
+      "lat": -38.156369,
+      "lng": 145.198328,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "langwarrin-south",
+      "suburb_name": "Langwarrin South",
+      "postcodes": [
+        "3911"
+      ],
+      "lat": -38.196908,
+      "lng": 145.169556,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "laverton",
+      "suburb_name": "Laverton",
+      "postcodes": [
+        "3028"
+      ],
+      "lat": -37.875066,
+      "lng": 144.777165,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "laverton-north",
+      "suburb_name": "Laverton North",
+      "postcodes": [
+        "3026"
+      ],
+      "lat": -37.829923,
+      "lng": 144.774986,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "lilydale",
+      "suburb_name": "Lilydale",
+      "postcodes": [
+        "3140"
+      ],
+      "lat": -37.759154,
+      "lng": 145.363185,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "lower-plenty",
+      "suburb_name": "Lower Plenty",
+      "postcodes": [
+        "3093"
+      ],
+      "lat": -37.73919,
+      "lng": 145.115208,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "lygon-street-north",
+      "suburb_name": "Lygon Street North",
+      "postcodes": [
+        "3057"
+      ],
+      "lat": -37.770012,
+      "lng": 144.97728,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "lynbrook",
+      "suburb_name": "Lynbrook",
+      "postcodes": [
+        "3975"
+      ],
+      "lat": -38.05354,
+      "lng": 145.231114,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "lyndhurst",
+      "suburb_name": "Lyndhurst",
+      "postcodes": [
+        "3975"
+      ],
+      "lat": -38.05354,
+      "lng": 145.231114,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "lysterfield",
+      "suburb_name": "Lysterfield",
+      "postcodes": [
+        "3156"
+      ],
+      "lat": -37.917932,
+      "lng": 145.292895,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "lysterfield-south",
+      "suburb_name": "Lysterfield South",
+      "postcodes": [
+        "3156"
+      ],
+      "lat": -37.917932,
+      "lng": 145.292895,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "macclesfield",
+      "suburb_name": "Macclesfield",
+      "postcodes": [
+        "3782"
+      ],
+      "lat": -37.938068,
+      "lng": 145.433024,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "macleod",
+      "suburb_name": "Macleod",
+      "postcodes": [
+        "3085"
+      ],
+      "lat": -37.724398,
+      "lng": 145.06988,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "macleod-west",
+      "suburb_name": "Macleod West",
+      "postcodes": [
+        "3085"
+      ],
+      "lat": -37.724398,
+      "lng": 145.06988,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "maidstone",
+      "suburb_name": "Maidstone",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "malvern",
+      "suburb_name": "Malvern",
+      "postcodes": [
+        "3144"
+      ],
+      "lat": -37.857443,
+      "lng": 145.034127,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "malvern-east",
+      "suburb_name": "Malvern East",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "malvern-north",
+      "suburb_name": "Malvern North",
+      "postcodes": [
+        "3144"
+      ],
+      "lat": -37.857443,
+      "lng": 145.034127,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "maribyrnong",
+      "suburb_name": "Maribyrnong",
+      "postcodes": [
+        "3032"
+      ],
+      "lat": -37.774486,
+      "lng": 144.897221,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "mccrae",
+      "suburb_name": "Mccrae",
+      "postcodes": [
+        "3938"
+      ],
+      "lat": -38.354321,
+      "lng": 144.931834,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "mckinnon",
+      "suburb_name": "Mckinnon",
+      "postcodes": [
+        "3204"
+      ],
+      "lat": -37.916956,
+      "lng": 145.036783,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "meadow-heights",
+      "suburb_name": "Meadow Heights",
+      "postcodes": [
+        "3048"
+      ],
+      "lat": -37.653917,
+      "lng": 144.923609,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "melbourne",
+      "suburb_name": "Melbourne",
+      "postcodes": [
+        "3000",
+        "3004"
+      ],
+      "lat": -37.81443733,
+      "lng": 144.9825846,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "melbourne-university",
+      "suburb_name": "Melbourne University",
+      "postcodes": [
+        "3052"
+      ],
+      "lat": -37.788996,
+      "lng": 144.948903,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "mentone",
+      "suburb_name": "Mentone",
+      "postcodes": [
+        "3194"
+      ],
+      "lat": -37.985059,
+      "lng": 145.067356,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "mentone-east",
+      "suburb_name": "Mentone East",
+      "postcodes": [
+        "3194"
+      ],
+      "lat": -37.985059,
+      "lng": 145.067356,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "menzies-creek",
+      "suburb_name": "Menzies Creek",
+      "postcodes": [
+        "3159"
+      ],
+      "lat": -37.921894,
+      "lng": 145.3892,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "merlynston",
+      "suburb_name": "Merlynston",
+      "postcodes": [
+        "3058"
+      ],
+      "lat": -37.739901,
+      "lng": 144.964524,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "mernda",
+      "suburb_name": "Mernda",
+      "postcodes": [
+        "3754"
+      ],
+      "lat": -37.593554,
+      "lng": 145.112985,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "mickleham",
+      "suburb_name": "Mickleham",
+      "postcodes": [
+        "3064"
+      ],
+      "lat": -37.546522,
+      "lng": 144.942199,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "middle-camberwell",
+      "suburb_name": "Middle Camberwell",
+      "postcodes": [
+        "3124"
+      ],
+      "lat": -37.840867,
+      "lng": 145.068191,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "middle-park",
+      "suburb_name": "Middle Park",
+      "postcodes": [
+        "3206"
+      ],
+      "lat": -37.846534,
+      "lng": 144.95086,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "mill-park",
+      "suburb_name": "Mill Park",
+      "postcodes": [
+        "3082"
+      ],
+      "lat": -37.664858,
+      "lng": 145.065658,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "mitcham",
+      "suburb_name": "Mitcham",
+      "postcodes": [
+        "3132"
+      ],
+      "lat": -37.819222,
+      "lng": 145.196686,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "mitcham-north",
+      "suburb_name": "Mitcham North",
+      "postcodes": [
+        "3132"
+      ],
+      "lat": -37.819222,
+      "lng": 145.196686,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "monbulk",
+      "suburb_name": "Monbulk",
+      "postcodes": [
+        "3793"
+      ],
+      "lat": -37.874533,
+      "lng": 145.429715,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "mont-albert",
+      "suburb_name": "Mont Albert",
+      "postcodes": [
+        "3127"
+      ],
+      "lat": -37.825173,
+      "lng": 145.097236,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "mont-albert-north",
+      "suburb_name": "Mont Albert North",
+      "postcodes": [
+        "3129"
+      ],
+      "lat": -37.806965,
+      "lng": 145.125084,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "montmorency",
+      "suburb_name": "Montmorency",
+      "postcodes": [
+        "3094"
+      ],
+      "lat": -37.719759,
+      "lng": 145.124727,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "montrose",
+      "suburb_name": "Montrose",
+      "postcodes": [
+        "3765"
+      ],
+      "lat": -37.814771,
+      "lng": 145.346621,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "moonee-ponds",
+      "suburb_name": "Moonee Ponds",
+      "postcodes": [
+        "3039"
+      ],
+      "lat": -37.766184,
+      "lng": 144.922995,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "moonee-vale",
+      "suburb_name": "Moonee Vale",
+      "postcodes": [
+        "3055"
+      ],
+      "lat": -37.763584,
+      "lng": 144.942222,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "moorabbin",
+      "suburb_name": "Moorabbin",
+      "postcodes": [
+        "3189"
+      ],
+      "lat": -37.942021,
+      "lng": 145.047802,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "moorabbin-east",
+      "suburb_name": "Moorabbin East",
+      "postcodes": [
+        "3189"
+      ],
+      "lat": -37.942021,
+      "lng": 145.047802,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "moorooduc",
+      "suburb_name": "Moorooduc",
+      "postcodes": [
+        "3933"
+      ],
+      "lat": -38.261168,
+      "lng": 145.096992,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "mooroolbark",
+      "suburb_name": "Mooroolbark",
+      "postcodes": [
+        "3138"
+      ],
+      "lat": -37.78391,
+      "lng": 145.322794,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "morang-south",
+      "suburb_name": "Morang South",
+      "postcodes": [
+        "3752"
+      ],
+      "lat": -37.619102,
+      "lng": 145.074353,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "mordialloc",
+      "suburb_name": "Mordialloc",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "mordialloc-north",
+      "suburb_name": "Mordialloc North",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "moreland",
+      "suburb_name": "Moreland",
+      "postcodes": [
+        "3058"
+      ],
+      "lat": -37.739901,
+      "lng": 144.964524,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "moreland-west",
+      "suburb_name": "Moreland West",
+      "postcodes": [
+        "3055"
+      ],
+      "lat": -37.763584,
+      "lng": 144.942222,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "mornington",
+      "suburb_name": "Mornington",
+      "postcodes": [
+        "3931"
+      ],
+      "lat": -38.230038,
+      "lng": 145.049503,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "mount-dandenong",
+      "suburb_name": "Mount Dandenong",
+      "postcodes": [
+        "3767"
+      ],
+      "lat": -37.839387,
+      "lng": 145.347505,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "mount-eliza",
+      "suburb_name": "Mount Eliza",
+      "postcodes": [
+        "3930"
+      ],
+      "lat": -38.195017,
+      "lng": 145.093743,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "mount-evelyn",
+      "suburb_name": "Mount Evelyn",
+      "postcodes": [
+        "3796"
+      ],
+      "lat": -37.786977,
+      "lng": 145.384922,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "mount-martha",
+      "suburb_name": "Mount Martha",
+      "postcodes": [
+        "3934"
+      ],
+      "lat": -38.2783,
+      "lng": 145.031598,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "mount-waverley",
+      "suburb_name": "Mount Waverley",
+      "postcodes": [
+        "3149"
+      ],
+      "lat": -37.880748,
+      "lng": 145.128118,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "mountain-gate",
+      "suburb_name": "Mountain Gate",
+      "postcodes": [
+        "3156"
+      ],
+      "lat": -37.917932,
+      "lng": 145.292895,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "mulgrave",
+      "suburb_name": "Mulgrave",
+      "postcodes": [
+        "3170"
+      ],
+      "lat": -37.920945,
+      "lng": 145.167859,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "murrumbeena",
+      "suburb_name": "Murrumbeena",
+      "postcodes": [
+        "3163"
+      ],
+      "lat": -37.896497,
+      "lng": 145.057237,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "narre-warren",
+      "suburb_name": "Narre Warren",
+      "postcodes": [
+        "3805"
+      ],
+      "lat": -38.037026,
+      "lng": 145.304198,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "narre-warren-east",
+      "suburb_name": "Narre Warren East",
+      "postcodes": [
+        "3804"
+      ],
+      "lat": -37.980059,
+      "lng": 145.325994,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "narre-warren-north",
+      "suburb_name": "Narre Warren North",
+      "postcodes": [
+        "3804"
+      ],
+      "lat": -37.980059,
+      "lng": 145.325994,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "narre-warren-south",
+      "suburb_name": "Narre Warren South",
+      "postcodes": [
+        "3805"
+      ],
+      "lat": -38.037026,
+      "lng": 145.304198,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "newport",
+      "suburb_name": "Newport",
+      "postcodes": [
+        "3015"
+      ],
+      "lat": -37.838242,
+      "lng": 144.880556,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "niddrie",
+      "suburb_name": "Niddrie",
+      "postcodes": [
+        "3042"
+      ],
+      "lat": -37.727529,
+      "lng": 144.866305,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "niddrie-north",
+      "suburb_name": "Niddrie North",
+      "postcodes": [
+        "3042"
+      ],
+      "lat": -37.7393,
+      "lng": 144.886,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "noble-park",
+      "suburb_name": "Noble Park",
+      "postcodes": [
+        "3174"
+      ],
+      "lat": -37.966218,
+      "lng": 145.17877,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "noble-park-east",
+      "suburb_name": "Noble Park East",
+      "postcodes": [
+        "3174"
+      ],
+      "lat": -37.966218,
+      "lng": 145.17877,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "noble-park-north",
+      "suburb_name": "Noble Park North",
+      "postcodes": [
+        "3174"
+      ],
+      "lat": -37.966218,
+      "lng": 145.17877,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "north-melbourne",
+      "suburb_name": "North Melbourne",
+      "postcodes": [
+        "3051"
+      ],
+      "lat": -37.8006,
+      "lng": 144.943559,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "north-road",
+      "suburb_name": "North Road",
+      "postcodes": [
+        "3187"
+      ],
+      "lat": -37.925371,
+      "lng": 145.013593,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "north-warrandyte",
+      "suburb_name": "North Warrandyte",
+      "postcodes": [
+        "3113"
+      ],
+      "lat": -37.752123,
+      "lng": 145.204689,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "northcote",
+      "suburb_name": "Northcote",
+      "postcodes": [
+        "3070"
+      ],
+      "lat": -37.774064,
+      "lng": 144.999745,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "northcote-south",
+      "suburb_name": "Northcote South",
+      "postcodes": [
+        "3070"
+      ],
+      "lat": -37.774064,
+      "lng": 144.999745,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "northland-centre",
+      "suburb_name": "Northland Centre",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "notting-hill",
+      "suburb_name": "Notting Hill",
+      "postcodes": [
+        "3168"
+      ],
+      "lat": -37.91342,
+      "lng": 145.12665,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "nunawading",
+      "suburb_name": "Nunawading",
+      "postcodes": [
+        "3131"
+      ],
+      "lat": -37.817798,
+      "lng": 145.174489,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "oak-park",
+      "suburb_name": "Oak Park",
+      "postcodes": [
+        "3046"
+      ],
+      "lat": -37.706578,
+      "lng": 144.927968,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "oaklands-junction",
+      "suburb_name": "Oaklands Junction",
+      "postcodes": [
+        "3063"
+      ],
+      "lat": -37.595015,
+      "lng": 144.856082,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "oakleigh",
+      "suburb_name": "Oakleigh",
+      "postcodes": [
+        "3166"
+      ],
+      "lat": -37.902805,
+      "lng": 145.089719,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "oakleigh-east",
+      "suburb_name": "Oakleigh East",
+      "postcodes": [
+        "3166"
+      ],
+      "lat": -37.902805,
+      "lng": 145.089719,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "oakleigh-south",
+      "suburb_name": "Oakleigh South",
+      "postcodes": [
+        "3167"
+      ],
+      "lat": -37.923345,
+      "lng": 145.087614,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "officer",
+      "suburb_name": "Officer",
+      "postcodes": [
+        "3809"
+      ],
+      "lat": -38.069094,
+      "lng": 145.406887,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "officer-south",
+      "suburb_name": "Officer South",
+      "postcodes": [
+        "3809"
+      ],
+      "lat": -38.069094,
+      "lng": 145.406887,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "olinda",
+      "suburb_name": "Olinda",
+      "postcodes": [
+        "3788"
+      ],
+      "lat": -37.848036,
+      "lng": 145.377128,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "ormond",
+      "suburb_name": "Ormond",
+      "postcodes": [
+        "3204"
+      ],
+      "lat": -37.916956,
+      "lng": 145.036783,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "park-orchards",
+      "suburb_name": "Park Orchards",
+      "postcodes": [
+        "3114"
+      ],
+      "lat": -37.778595,
+      "lng": 145.212599,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "parkdale",
+      "suburb_name": "Parkdale",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "parkville",
+      "suburb_name": "Parkville",
+      "postcodes": [
+        "3052"
+      ],
+      "lat": -37.788996,
+      "lng": 144.948903,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "pascoe-vale",
+      "suburb_name": "Pascoe Vale",
+      "postcodes": [
+        "3044"
+      ],
+      "lat": -37.731138,
+      "lng": 144.936356,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "pascoe-vale-south",
+      "suburb_name": "Pascoe Vale South",
+      "postcodes": [
+        "3044"
+      ],
+      "lat": -37.731138,
+      "lng": 144.936356,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "patterson",
+      "suburb_name": "Patterson",
+      "postcodes": [
+        "3204"
+      ],
+      "lat": -37.916956,
+      "lng": 145.036783,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "patterson-lakes",
+      "suburb_name": "Patterson Lakes",
+      "postcodes": [
+        "3197"
+      ],
+      "lat": -38.072748,
+      "lng": 145.134111,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "pearcedale",
+      "suburb_name": "Pearcedale",
+      "postcodes": [
+        "3912"
+      ],
+      "lat": -38.217991,
+      "lng": 145.227373,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Casey"
+    },
+    {
+      "slug": "pines-forest",
+      "suburb_name": "Pines Forest",
+      "postcodes": [
+        "3200"
+      ],
+      "lat": -38.126458,
+      "lng": 145.157574,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "pinewood",
+      "suburb_name": "Pinewood",
+      "postcodes": [
+        "3149"
+      ],
+      "lat": -37.880748,
+      "lng": 145.128118,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "plenty",
+      "suburb_name": "Plenty",
+      "postcodes": [
+        "3090"
+      ],
+      "lat": -37.668408,
+      "lng": 145.107802,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "plumpton",
+      "suburb_name": "Plumpton",
+      "postcodes": [
+        "3037",
+        "3335",
+        "3427"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "port-melbourne",
+      "suburb_name": "Port Melbourne",
+      "postcodes": [
+        "3207"
+      ],
+      "lat": -37.832179,
+      "lng": 144.918044,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "portsea",
+      "suburb_name": "Portsea",
+      "postcodes": [
+        "3944"
+      ],
+      "lat": -38.321871,
+      "lng": 144.692708,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "prahran",
+      "suburb_name": "Prahran",
+      "postcodes": [
+        "3181"
+      ],
+      "lat": -37.854683,
+      "lng": 144.995504,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "prahran-east",
+      "suburb_name": "Prahran East",
+      "postcodes": [
+        "3181"
+      ],
+      "lat": -37.854683,
+      "lng": 144.995504,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "preston",
+      "suburb_name": "Preston",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "preston-lower",
+      "suburb_name": "Preston Lower",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "preston-south",
+      "suburb_name": "Preston South",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "preston-west",
+      "suburb_name": "Preston West",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "princes-hill",
+      "suburb_name": "Princes Hill",
+      "postcodes": [
+        "3054"
+      ],
+      "lat": -37.786971,
+      "lng": 144.96724,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "rangeview",
+      "suburb_name": "Rangeview",
+      "postcodes": [
+        "3132"
+      ],
+      "lat": -37.819222,
+      "lng": 145.196686,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "ravenhall",
+      "suburb_name": "Ravenhall",
+      "postcodes": [
+        "3023"
+      ],
+      "lat": -37.78272,
+      "lng": 144.770641,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "regent-west",
+      "suburb_name": "Regent West",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "research",
+      "suburb_name": "Research",
+      "postcodes": [
+        "3095"
+      ],
+      "lat": -37.713299,
+      "lng": 145.158579,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "reservoir",
+      "suburb_name": "Reservoir",
+      "postcodes": [
+        "3073"
+      ],
+      "lat": -37.712474,
+      "lng": 145.005955,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "reservoir-east",
+      "suburb_name": "Reservoir East",
+      "postcodes": [
+        "3073"
+      ],
+      "lat": -37.712474,
+      "lng": 145.005955,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "reservoir-north",
+      "suburb_name": "Reservoir North",
+      "postcodes": [
+        "3073"
+      ],
+      "lat": -37.712474,
+      "lng": 145.005955,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "reservoir-south",
+      "suburb_name": "Reservoir South",
+      "postcodes": [
+        "3073"
+      ],
+      "lat": -37.712474,
+      "lng": 145.005955,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "richmond",
+      "suburb_name": "Richmond",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "richmond-east",
+      "suburb_name": "Richmond East",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "richmond-north",
+      "suburb_name": "Richmond North",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "richmond-south",
+      "suburb_name": "Richmond South",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "ringwood",
+      "suburb_name": "Ringwood",
+      "postcodes": [
+        "3134"
+      ],
+      "lat": -37.796091,
+      "lng": 145.232557,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "ringwood-east",
+      "suburb_name": "Ringwood East",
+      "postcodes": [
+        "3135"
+      ],
+      "lat": -37.819594,
+      "lng": 145.248209,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "ringwood-north",
+      "suburb_name": "Ringwood North",
+      "postcodes": [
+        "3134"
+      ],
+      "lat": -37.796091,
+      "lng": 145.232557,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "ripponlea",
+      "suburb_name": "Ripponlea",
+      "postcodes": [
+        "3185"
+      ],
+      "lat": -37.891841,
+      "lng": 145.002571,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "robinson",
+      "suburb_name": "Robinson",
+      "postcodes": [
+        "3019"
+      ],
+      "lat": -37.784683,
+      "lng": 144.854014,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "rockbank",
+      "suburb_name": "Rockbank",
+      "postcodes": [
+        "3335"
+      ],
+      "lat": -37.724141,
+      "lng": 144.699671,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "rosanna",
+      "suburb_name": "Rosanna",
+      "postcodes": [
+        "3084"
+      ],
+      "lat": -37.744406,
+      "lng": 145.082685,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "rosebud-west",
+      "suburb_name": "Rosebud West",
+      "postcodes": [
+        "3940"
+      ],
+      "lat": -38.383367,
+      "lng": 144.873115,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "rowville",
+      "suburb_name": "Rowville",
+      "postcodes": [
+        "3178"
+      ],
+      "lat": -37.924431,
+      "lng": 145.241589,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "roxburgh-park",
+      "suburb_name": "Roxburgh Park",
+      "postcodes": [
+        "3064"
+      ],
+      "lat": -37.546522,
+      "lng": 144.942199,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "rye",
+      "suburb_name": "Rye",
+      "postcodes": [
+        "3941"
+      ],
+      "lat": -38.396077,
+      "lng": 144.827203,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "safety-beach",
+      "suburb_name": "Safety Beach",
+      "postcodes": [
+        "3936"
+      ],
+      "lat": -38.326447,
+      "lng": 145.007626,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "saint-helena",
+      "suburb_name": "Saint Helena",
+      "postcodes": [
+        "3088"
+      ],
+      "lat": -37.700175,
+      "lng": 145.108339,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "sandown-village",
+      "suburb_name": "Sandown Village",
+      "postcodes": [
+        "3171"
+      ],
+      "lat": -37.944608,
+      "lng": 145.156783,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "sandringham",
+      "suburb_name": "Sandringham",
+      "postcodes": [
+        "3191"
+      ],
+      "lat": -37.956585,
+      "lng": 145.013472,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "sassafras",
+      "suburb_name": "Sassafras",
+      "postcodes": [
+        "3787"
+      ],
+      "lat": -37.866786,
+      "lng": 145.350888,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "sassafras-gully",
+      "suburb_name": "Sassafras Gully",
+      "postcodes": [
+        "3787"
+      ],
+      "lat": -37.866786,
+      "lng": 145.350888,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "scoresby",
+      "suburb_name": "Scoresby",
+      "postcodes": [
+        "3179"
+      ],
+      "lat": -37.897137,
+      "lng": 145.222634,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "seabrook",
+      "suburb_name": "Seabrook",
+      "postcodes": [
+        "3028"
+      ],
+      "lat": -37.875066,
+      "lng": 144.777165,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "seaford",
+      "suburb_name": "Seaford",
+      "postcodes": [
+        "3198"
+      ],
+      "lat": -38.103194,
+      "lng": 145.137811,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Frankston"
+    },
+    {
+      "slug": "seaholme",
+      "suburb_name": "Seaholme",
+      "postcodes": [
+        "3018"
+      ],
+      "lat": -37.86172,
+      "lng": 144.812736,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "seddon",
+      "suburb_name": "Seddon",
+      "postcodes": [
+        "3011"
+      ],
+      "lat": -37.807101,
+      "lng": 144.907953,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "seddon-west",
+      "suburb_name": "Seddon West",
+      "postcodes": [
+        "3011"
+      ],
+      "lat": -37.807101,
+      "lng": 144.907953,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "selby",
+      "suburb_name": "Selby",
+      "postcodes": [
+        "3159"
+      ],
+      "lat": -37.921894,
+      "lng": 145.3892,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Cardinia"
+    },
+    {
+      "slug": "sherbrooke",
+      "suburb_name": "Sherbrooke",
+      "postcodes": [
+        "3789"
+      ],
+      "lat": -37.889767,
+      "lng": 145.357336,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "silvan",
+      "suburb_name": "Silvan",
+      "postcodes": [
+        "3795"
+      ],
+      "lat": -37.836663,
+      "lng": 145.430311,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "somers",
+      "suburb_name": "Somers",
+      "postcodes": [
+        "3927"
+      ],
+      "lat": -38.383368,
+      "lng": 145.153269,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "somerton",
+      "suburb_name": "Somerton",
+      "postcodes": [
+        "3062"
+      ],
+      "lat": -37.632986,
+      "lng": 144.932557,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "somerville",
+      "suburb_name": "Somerville",
+      "postcodes": [
+        "3912"
+      ],
+      "lat": -38.217991,
+      "lng": 145.227373,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Casey"
+    },
+    {
+      "slug": "sorrento",
+      "suburb_name": "Sorrento",
+      "postcodes": [
+        "3943"
+      ],
+      "lat": -38.345527,
+      "lng": 144.739101,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "south-kingsville",
+      "suburb_name": "South Kingsville",
+      "postcodes": [
+        "3015"
+      ],
+      "lat": -37.838242,
+      "lng": 144.880556,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "south-melbourne",
+      "suburb_name": "South Melbourne",
+      "postcodes": [
+        "3205"
+      ],
+      "lat": -37.831693,
+      "lng": 144.958176,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "south-melbourne-dc",
+      "suburb_name": "South Melbourne Dc",
+      "postcodes": [
+        "3205"
+      ],
+      "lat": -37.831693,
+      "lng": 144.958176,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "south-morang",
+      "suburb_name": "South Morang",
+      "postcodes": [
+        "3752"
+      ],
+      "lat": -37.619102,
+      "lng": 145.074353,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "south-wharf",
+      "suburb_name": "South Wharf",
+      "postcodes": [
+        "3006"
+      ],
+      "lat": -37.82528675,
+      "lng": 144.9520744,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "south-yarra",
+      "suburb_name": "South Yarra",
+      "postcodes": [
+        "3141"
+      ],
+      "lat": -37.840679,
+      "lng": 144.991264,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "southbank",
+      "suburb_name": "Southbank",
+      "postcodes": [
+        "3006"
+      ],
+      "lat": -37.823258,
+      "lng": 144.965926,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "southland-centre",
+      "suburb_name": "Southland Centre",
+      "postcodes": [
+        "3192"
+      ],
+      "lat": -37.965655,
+      "lng": 145.0623,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "spotswood",
+      "suburb_name": "Spotswood",
+      "postcodes": [
+        "3015"
+      ],
+      "lat": -37.838242,
+      "lng": 144.880556,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "springvale",
+      "suburb_name": "Springvale",
+      "postcodes": [
+        "3171"
+      ],
+      "lat": -37.944608,
+      "lng": 145.156783,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Greater Dandenong"
+    },
+    {
+      "slug": "springvale-south",
+      "suburb_name": "Springvale South",
+      "postcodes": [
+        "3172"
+      ],
+      "lat": -37.975981,
+      "lng": 145.13465,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "st-albans",
+      "suburb_name": "St Albans",
+      "postcodes": [
+        "3021"
+      ],
+      "lat": -37.743361,
+      "lng": 144.796693,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "st-andrews-beach",
+      "suburb_name": "St Andrews Beach",
+      "postcodes": [
+        "3941"
+      ],
+      "lat": -38.396077,
+      "lng": 144.827203,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "st-helena",
+      "suburb_name": "St Helena",
+      "postcodes": [
+        "3088"
+      ],
+      "lat": -37.68949912,
+      "lng": 145.1294801,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "st-kilda",
+      "suburb_name": "St Kilda",
+      "postcodes": [
+        "3182"
+      ],
+      "lat": -37.865322,
+      "lng": 144.979478,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "st-kilda-east",
+      "suburb_name": "St Kilda East",
+      "postcodes": [
+        "3183"
+      ],
+      "lat": -37.869072,
+      "lng": 144.999026,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "st-kilda-road-central",
+      "suburb_name": "St Kilda Road Central",
+      "postcodes": [
+        "3004"
+      ],
+      "lat": -37.844246,
+      "lng": 144.970161,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "st-kilda-road-melbourne",
+      "suburb_name": "St Kilda Road Melbourne",
+      "postcodes": [
+        "3004"
+      ],
+      "lat": -37.8368,
+      "lng": 144.976,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "st-kilda-south",
+      "suburb_name": "St Kilda South",
+      "postcodes": [
+        "3182"
+      ],
+      "lat": -37.865322,
+      "lng": 144.979478,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "st-kilda-west",
+      "suburb_name": "St Kilda West",
+      "postcodes": [
+        "3182"
+      ],
+      "lat": -37.865322,
+      "lng": 144.979478,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "stradbroke-park",
+      "suburb_name": "Stradbroke Park",
+      "postcodes": [
+        "3103"
+      ],
+      "lat": -37.8007,
+      "lng": 145.062,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "strathmore",
+      "suburb_name": "Strathmore",
+      "postcodes": [
+        "3041"
+      ],
+      "lat": -37.731464,
+      "lng": 144.904815,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "strathmore-heights",
+      "suburb_name": "Strathmore Heights",
+      "postcodes": [
+        "3041"
+      ],
+      "lat": -37.731464,
+      "lng": 144.904815,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Moonee Valley"
+    },
+    {
+      "slug": "studfield",
+      "suburb_name": "Studfield",
+      "postcodes": [
+        "3152"
+      ],
+      "lat": -37.864951,
+      "lng": 145.221695,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "sumner",
+      "suburb_name": "Sumner",
+      "postcodes": [
+        "3057"
+      ],
+      "lat": -37.772232,
+      "lng": 144.98034,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Moreland"
+    },
+    {
+      "slug": "sunshine",
+      "suburb_name": "Sunshine",
+      "postcodes": [
+        "3020"
+      ],
+      "lat": -37.777204,
+      "lng": 144.829945,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "sunshine-north",
+      "suburb_name": "Sunshine North",
+      "postcodes": [
+        "3020"
+      ],
+      "lat": -37.777204,
+      "lng": 144.829945,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "sunshine-west",
+      "suburb_name": "Sunshine West",
+      "postcodes": [
+        "3020"
+      ],
+      "lat": -37.79809941,
+      "lng": 144.8110787,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "surrey-hills",
+      "suburb_name": "Surrey Hills",
+      "postcodes": [
+        "3127"
+      ],
+      "lat": -37.825173,
+      "lng": 145.097236,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "surrey-hills-north",
+      "suburb_name": "Surrey Hills North",
+      "postcodes": [
+        "3127"
+      ],
+      "lat": -37.825173,
+      "lng": 145.097236,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Boroondara"
+    },
+    {
+      "slug": "surrey-hills-south",
+      "suburb_name": "Surrey Hills South",
+      "postcodes": [
+        "3125"
+      ],
+      "lat": -37.851305,
+      "lng": 145.101,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "sydenham",
+      "suburb_name": "Sydenham",
+      "postcodes": [
+        "3037"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "sylvester",
+      "suburb_name": "Sylvester",
+      "postcodes": [
+        "3072"
+      ],
+      "lat": -37.74247,
+      "lng": 145.005702,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "syndal",
+      "suburb_name": "Syndal",
+      "postcodes": [
+        "3149"
+      ],
+      "lat": -37.880748,
+      "lng": 145.128118,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "tarneit",
+      "suburb_name": "Tarneit",
+      "postcodes": [
+        "3029"
+      ],
+      "lat": -37.837165,
+      "lng": 144.705831,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "taylors-hill",
+      "suburb_name": "Taylors Hill",
+      "postcodes": [
+        "3037"
+      ],
+      "lat": -37.715579,
+      "lng": 144.780474,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "taylors-lakes",
+      "suburb_name": "Taylors Lakes",
+      "postcodes": [
+        "3038"
+      ],
+      "lat": -37.700454,
+      "lng": 144.766873,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "tecoma",
+      "suburb_name": "Tecoma",
+      "postcodes": [
+        "3160"
+      ],
+      "lat": -37.935097,
+      "lng": 145.350821,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "templestowe",
+      "suburb_name": "Templestowe",
+      "postcodes": [
+        "3106"
+      ],
+      "lat": -37.758335,
+      "lng": 145.142675,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "templestowe-lower",
+      "suburb_name": "Templestowe Lower",
+      "postcodes": [
+        "3107"
+      ],
+      "lat": -37.765225,
+      "lng": 145.110677,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "the-basin",
+      "suburb_name": "The Basin",
+      "postcodes": [
+        "3154"
+      ],
+      "lat": -37.856009,
+      "lng": 145.31784,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "the-patch",
+      "suburb_name": "The Patch",
+      "postcodes": [
+        "3792"
+      ],
+      "lat": -37.89424,
+      "lng": 145.405388,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "the-pines",
+      "suburb_name": "The Pines",
+      "postcodes": [
+        "3109"
+      ],
+      "lat": -37.784786,
+      "lng": 145.161649,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "thomastown",
+      "suburb_name": "Thomastown",
+      "postcodes": [
+        "3074"
+      ],
+      "lat": -37.684684,
+      "lng": 145.006644,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "thornbury",
+      "suburb_name": "Thornbury",
+      "postcodes": [
+        "3071"
+      ],
+      "lat": -37.759426,
+      "lng": 145.007006,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "thornhill-park",
+      "suburb_name": "Thornhill Park",
+      "postcodes": [
+        "3335"
+      ],
+      "lat": -37.73029166,
+      "lng": 144.624896,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "toorak",
+      "suburb_name": "Toorak",
+      "postcodes": [
+        "3142"
+      ],
+      "lat": -37.84411,
+      "lng": 145.017732,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "tooronga",
+      "suburb_name": "Tooronga",
+      "postcodes": [
+        "3146"
+      ],
+      "lat": -37.857116,
+      "lng": 145.057833,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Stonnington"
+    },
+    {
+      "slug": "tootgarook",
+      "suburb_name": "Tootgarook",
+      "postcodes": [
+        "3941"
+      ],
+      "lat": -38.396077,
+      "lng": 144.827203,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "tottenham",
+      "suburb_name": "Tottenham",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "travancore",
+      "suburb_name": "Travancore",
+      "postcodes": [
+        "3032"
+      ],
+      "lat": -37.774486,
+      "lng": 144.897221,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "tremont",
+      "suburb_name": "Tremont",
+      "postcodes": [
+        "3785"
+      ],
+      "lat": -37.885138,
+      "lng": 145.316734,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "truganina",
+      "suburb_name": "Truganina",
+      "postcodes": [
+        "3029"
+      ],
+      "lat": -37.837165,
+      "lng": 144.705831,
+      "region_cluster": "Melbourne - West",
+      "lga": "Melton"
+    },
+    {
+      "slug": "tuerong",
+      "suburb_name": "Tuerong",
+      "postcodes": [
+        "3915"
+      ],
+      "lat": -38.305806,
+      "lng": 145.136622,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "tullamarine",
+      "suburb_name": "Tullamarine",
+      "postcodes": [
+        "3043"
+      ],
+      "lat": -37.691916,
+      "lng": 144.888368,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "tunstall-square-po",
+      "suburb_name": "Tunstall Square Po",
+      "postcodes": [
+        "3109"
+      ],
+      "lat": -37.784786,
+      "lng": 145.161649,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "tyabb",
+      "suburb_name": "Tyabb",
+      "postcodes": [
+        "3913"
+      ],
+      "lat": -38.262273,
+      "lng": 145.166426,
+      "region_cluster": "Mornington Peninsula",
+      "lga": "Mornington Peninsula"
+    },
+    {
+      "slug": "upper-ferntree-gully",
+      "suburb_name": "Upper Ferntree Gully",
+      "postcodes": [
+        "3156"
+      ],
+      "lat": -37.917932,
+      "lng": 145.292895,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Casey"
+    },
+    {
+      "slug": "upwey",
+      "suburb_name": "Upwey",
+      "postcodes": [
+        "3158"
+      ],
+      "lat": -37.910077,
+      "lng": 145.324468,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Yarra Ranges"
+    },
+    {
+      "slug": "vermont",
+      "suburb_name": "Vermont",
+      "postcodes": [
+        "3133"
+      ],
+      "lat": -37.848786,
+      "lng": 145.192303,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "vermont-south",
+      "suburb_name": "Vermont South",
+      "postcodes": [
+        "3133"
+      ],
+      "lat": -37.848786,
+      "lng": 145.192303,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Maroondah"
+    },
+    {
+      "slug": "victoria-gardens",
+      "suburb_name": "Victoria Gardens",
+      "postcodes": [
+        "3121"
+      ],
+      "lat": -37.823303,
+      "lng": 145.001788,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Yarra"
+    },
+    {
+      "slug": "viewbank",
+      "suburb_name": "Viewbank",
+      "postcodes": [
+        "3084"
+      ],
+      "lat": -37.744406,
+      "lng": 145.082685,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "wantirna",
+      "suburb_name": "Wantirna",
+      "postcodes": [
+        "3152"
+      ],
+      "lat": -37.864951,
+      "lng": 145.221695,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "wantirna-south",
+      "suburb_name": "Wantirna South",
+      "postcodes": [
+        "3152"
+      ],
+      "lat": -37.864951,
+      "lng": 145.221695,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Knox"
+    },
+    {
+      "slug": "warrandyte",
+      "suburb_name": "Warrandyte",
+      "postcodes": [
+        "3113"
+      ],
+      "lat": -37.752123,
+      "lng": 145.204689,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "warrandyte-south",
+      "suburb_name": "Warrandyte South",
+      "postcodes": [
+        "3134"
+      ],
+      "lat": -37.796091,
+      "lng": 145.232557,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "warranwood",
+      "suburb_name": "Warranwood",
+      "postcodes": [
+        "3134"
+      ],
+      "lat": -37.796091,
+      "lng": 145.232557,
+      "region_cluster": "Melbourne - Outer East",
+      "lga": "Manningham"
+    },
+    {
+      "slug": "watergardens",
+      "suburb_name": "Watergardens",
+      "postcodes": [
+        "3038"
+      ],
+      "lat": -37.700454,
+      "lng": 144.766873,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "waterways",
+      "suburb_name": "Waterways",
+      "postcodes": [
+        "3195"
+      ],
+      "lat": -38.007024,
+      "lng": 145.104105,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "watsonia",
+      "suburb_name": "Watsonia",
+      "postcodes": [
+        "3087"
+      ],
+      "lat": -37.711787,
+      "lng": 145.082426,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "watsonia-north",
+      "suburb_name": "Watsonia North",
+      "postcodes": [
+        "3087"
+      ],
+      "lat": -37.711787,
+      "lng": 145.082426,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Banyule"
+    },
+    {
+      "slug": "wattle-glen",
+      "suburb_name": "Wattle Glen",
+      "postcodes": [
+        "3096"
+      ],
+      "lat": -37.670851,
+      "lng": 145.185826,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "wattle-park",
+      "suburb_name": "Wattle Park",
+      "postcodes": [
+        "3128"
+      ],
+      "lat": -37.828866,
+      "lng": 145.122393,
+      "region_cluster": "Melbourne - Inner East",
+      "lga": "Whitehorse"
+    },
+    {
+      "slug": "wattletree-road-po",
+      "suburb_name": "Wattletree Road Po",
+      "postcodes": [
+        "3145"
+      ],
+      "lat": -37.873557,
+      "lng": 145.049328,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Glen Eira"
+    },
+    {
+      "slug": "waverley-gardens",
+      "suburb_name": "Waverley Gardens",
+      "postcodes": [
+        "3170"
+      ],
+      "lat": -37.920945,
+      "lng": 145.167859,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "were-street-po",
+      "suburb_name": "Were Street Po",
+      "postcodes": [
+        "3186"
+      ],
+      "lat": -37.915066,
+      "lng": 144.996329,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Bayside (Vic.)"
+    },
+    {
+      "slug": "west-footscray",
+      "suburb_name": "West Footscray",
+      "postcodes": [
+        "3012"
+      ],
+      "lat": -37.807135,
+      "lng": 144.861162,
+      "region_cluster": "Melbourne - West",
+      "lga": "Brimbank"
+    },
+    {
+      "slug": "west-melbourne",
+      "suburb_name": "West Melbourne",
+      "postcodes": [
+        "3003"
+      ],
+      "lat": -37.810871,
+      "lng": 144.949592,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Melbourne"
+    },
+    {
+      "slug": "westmeadows",
+      "suburb_name": "Westmeadows",
+      "postcodes": [
+        "3049"
+      ],
+      "lat": -37.673182,
+      "lng": 144.888492,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    },
+    {
+      "slug": "wheelers-hill",
+      "suburb_name": "Wheelers Hill",
+      "postcodes": [
+        "3150"
+      ],
+      "lat": -37.876968,
+      "lng": 145.170841,
+      "region_cluster": "Melbourne - South East",
+      "lga": "Monash"
+    },
+    {
+      "slug": "williams-landing",
+      "suburb_name": "Williams Landing",
+      "postcodes": [
+        "3027"
+      ],
+      "lat": -37.86199812,
+      "lng": 144.7430155,
+      "region_cluster": "Melbourne - West",
+      "lga": "Wyndham"
+    },
+    {
+      "slug": "williamstown",
+      "suburb_name": "Williamstown",
+      "postcodes": [
+        "3016"
+      ],
+      "lat": -37.863743,
+      "lng": 144.888461,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "williamstown-north",
+      "suburb_name": "Williamstown North",
+      "postcodes": [
+        "3016"
+      ],
+      "lat": -37.863743,
+      "lng": 144.888461,
+      "region_cluster": "Melbourne - West",
+      "lga": "Hobsons Bay"
+    },
+    {
+      "slug": "windsor",
+      "suburb_name": "Windsor",
+      "postcodes": [
+        "3181"
+      ],
+      "lat": -37.854683,
+      "lng": 144.995504,
+      "region_cluster": "Melbourne - Inner",
+      "lga": "Port Phillip"
+    },
+    {
+      "slug": "wishart",
+      "suburb_name": "Wishart",
+      "postcodes": [
+        "3189"
+      ],
+      "lat": -37.942021,
+      "lng": 145.047802,
+      "region_cluster": "Melbourne - Inner South",
+      "lga": "Kingston (Vic.)"
+    },
+    {
+      "slug": "wollert",
+      "suburb_name": "Wollert",
+      "postcodes": [
+        "3750"
+      ],
+      "lat": -37.596078,
+      "lng": 145.005578,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "woodstock",
+      "suburb_name": "Woodstock",
+      "postcodes": [
+        "3751"
+      ],
+      "lat": -37.554655,
+      "lng": 145.052904,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Whittlesea"
+    },
+    {
+      "slug": "yallambie",
+      "suburb_name": "Yallambie",
+      "postcodes": [
+        "3085"
+      ],
+      "lat": -37.724398,
+      "lng": 145.06988,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Darebin"
+    },
+    {
+      "slug": "yarrambat",
+      "suburb_name": "Yarrambat",
+      "postcodes": [
+        "3091"
+      ],
+      "lat": -37.637478,
+      "lng": 145.136688,
+      "region_cluster": "Melbourne - North East",
+      "lga": "Nillumbik"
+    },
+    {
+      "slug": "yarraville",
+      "suburb_name": "Yarraville",
+      "postcodes": [
+        "3013"
+      ],
+      "lat": -37.814183,
+      "lng": 144.888686,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "yarraville-west",
+      "suburb_name": "Yarraville West",
+      "postcodes": [
+        "3013"
+      ],
+      "lat": -37.814183,
+      "lng": 144.888686,
+      "region_cluster": "Melbourne - West",
+      "lga": "Maribyrnong"
+    },
+    {
+      "slug": "yuroke",
+      "suburb_name": "Yuroke",
+      "postcodes": [
+        "3063"
+      ],
+      "lat": -37.595015,
+      "lng": 144.856082,
+      "region_cluster": "Melbourne - North West",
+      "lga": "Hume"
+    }
+  ]
+}

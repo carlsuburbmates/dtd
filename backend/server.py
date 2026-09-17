@@ -50,6 +50,7 @@ from services import fraud as fraud_service
 from services import notifications as notifications_service
 from services import runtime_control
 from services import stripe_billing
+from services import suburb_catalogue
 from services import suburb_inventory
 from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
@@ -135,6 +136,13 @@ OPS_CASE_ALLOWED_STATES = {
     "escalated_to_technical_owner",
 }
 OPS_CASE_HISTORY_LIMIT = 20
+MATCH_TIE_BAND = 0.05
+MATCH_TIEBREAK_TIER_WEIGHTS = {
+    "citywide": 4,
+    "suburb_sponsor": 3,
+    "pro": 2,
+    "claimed": 1,
+}
 
 
 def _env_flag(name: str, *, default: bool = False) -> bool:
@@ -2598,6 +2606,41 @@ def _directory_sort_key(trainer: Dict[str, Any], suburb: Optional[str]) -> tuple
     )
 
 
+def _diagnostic_fit_score(trainer: Dict[str, Any]) -> float:
+    return (
+        (float(trainer.get("match_score") or 0) * 0.7)
+        + (float(trainer.get("outcome_score") or 0.05) * 0.3)
+        - float(trainer.get("_policy_penalty") or 0)
+    )
+
+
+def _diagnostic_tier_weight(trainer: Dict[str, Any]) -> int:
+    tier = str(trainer.get("subscription_tier") or trainer.get("tier") or "").strip().lower()
+    return MATCH_TIEBREAK_TIER_WEIGHTS.get(tier, 0)
+
+
+def _sort_diagnostic_matches(trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Apply commercial priority only inside the named comparable-fit band."""
+
+    if not trainers:
+        return trainers
+    top_score = max(_diagnostic_fit_score(trainer) for trainer in trainers)
+
+    def sort_key(trainer: Dict[str, Any]) -> tuple:
+        fit_score = _diagnostic_fit_score(trainer)
+        inside_tie_band = (top_score - fit_score) <= MATCH_TIE_BAND
+        if inside_tie_band:
+            return (
+                0,
+                -_diagnostic_tier_weight(trainer),
+                -fit_score,
+                str(trainer.get("name") or "").lower(),
+            )
+        return (1, 0, -fit_score, str(trainer.get("name") or "").lower())
+
+    return sorted(trainers, key=sort_key)
+
+
 async def _resolve_submission(submission_id: Optional[str]) -> Optional[Dict[str, Any]]:
     if not submission_id:
         return None
@@ -2655,10 +2698,11 @@ async def app_health() -> JSONResponse:
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
     try:
-        suburbs = sorted([s for s in await db.trainers.distinct("suburb", {"published": True, "region": {"$in": ACTIVE_REGIONS}}) if s])
+        suburbs, suburb_catalogue_source = await suburb_catalogue.config_suburb_names(db)
     except Exception as exc:
-        logger.warning("Database unavailable reading suburbs for /config: %s", exc)
-        suburbs = []
+        logger.warning("Canonical suburb catalogue unavailable for /config: %s", exc)
+        suburbs = suburb_catalogue.canonical_suburb_names()
+        suburb_catalogue_source = "static_catalogue_fallback"
     try:
         phase_state = await _read_launch_phase_state()
     except Exception as exc:
@@ -2678,6 +2722,9 @@ async def config() -> Dict[str, Any]:
         "public_hide_legacy_intro_fee_copy": PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY,
         "public_show_founding_profile_copy": PUBLIC_SHOW_FOUNDING_PROFILE_COPY,
         "suburbs": suburbs,
+        "suburb_count": len(suburbs),
+        "suburb_catalogue_version": suburb_catalogue.CATALOGUE_VERSION,
+        "suburb_catalogue_source": suburb_catalogue_source,
     }
 
 
@@ -3113,12 +3160,9 @@ async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
             }
         )
 
-    # Final sort = AI relevance × outcome score. AI relevance is the primary
-    # signal; outcome is the tiebreaker / cold-start dampener.
-    selected.sort(
-        key=lambda t: ((t.get("match_score", 0) * 0.7) + (t.get("outcome_score", 0.05) * 0.3) - t.get("_policy_penalty", 0.0)),
-        reverse=True,
-    )
+    # Fit remains the primary score. Commercial tier is consulted only for
+    # trainers inside the five-percentage-point comparable-fit band.
+    selected = _sort_diagnostic_matches(selected)
     for t in selected:
         t.pop("_policy_penalty", None)
     selected = await _decorate_with_pricing(selected[:3])
@@ -5560,6 +5604,10 @@ def _cancel_bg_tasks() -> None:
 async def _ensure_indexes() -> None:
     try:
         await db.trainers.create_index("id", unique=True, sparse=True)
+        await db.suburbs.create_index("slug", unique=True)
+        await db.suburbs.create_index("id", unique=True)
+        await db.suburbs.create_index("suburb_name")
+        await db.suburbs.create_index("region_cluster")
         await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
         await db.intros.create_index("ip")
         await db.intros.create_index("idempotency_key", unique=True, sparse=True)
