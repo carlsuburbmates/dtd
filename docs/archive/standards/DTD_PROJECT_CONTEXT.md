@@ -97,7 +97,7 @@ The detailed actor branches and exception cases live in
 | `/melbourne/:suburb` | Local landing hub with organic results, mobile specialists, and scarcity-aware sponsor placement. |
 | `/t/:slug` and `/t/:id` | Rich trainer storefront, trust evidence, booking path, enquiry, and claiming. |
 | `/how-it-works`, `/about`, `/trust`, `/pricing` | Explain the platform, standards, and flat commercial model without internal operational language. |
-| `/the-first-leash` and `/learn/*` | Open education that helps owners and escalates contextually to relevant local help; it supports rather than displaces directory discovery. |
+| `/the-first-leash/*` and `/education/*` | Legacy bridge routes redirect to the separately deployed First Leash application at `learn.dogtrainersdirectory.com.au`; no curriculum is maintained in this repository. |
 | `/ops` | Protected, evidence-led exception cockpit. It is not unrestricted admin CRUD. |
 
 Route-level content and state detail belongs in

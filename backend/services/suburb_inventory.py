@@ -40,9 +40,9 @@ def citywide_slot_cap() -> int:
 
 def trainer_suburb_cap() -> int:
     try:
-        value = int((os.environ.get("SPONSOR_MAX_SUBURBS_PER_TRAINER") or "5").strip())
+        value = int((os.environ.get("SPONSOR_MAX_SUBURBS_PER_TRAINER") or "4").strip())
     except ValueError:
-        value = 5
+        value = 4
     return max(3, min(value, 5))
 
 

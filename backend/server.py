@@ -1858,6 +1858,7 @@ def _loop_interval_seconds() -> Dict[str, int]:
         "outreach": autonomy.OUTREACH_INTERVAL_S,
         "nurture": autonomy.NURTURE_INTERVAL_S,
         "reactivation_route": autonomy.REACTIVATION_ROUTE_INTERVAL_S,
+        "pro_trial_warnings": 86400,
     }
 
 
@@ -4074,6 +4075,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     billing_recovery = await db.system_state.find_one({"key": "billing_recovery"}, {"_id": 0}) or {}
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
+    pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
@@ -4166,6 +4168,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
             "billing_recovery": billing_recovery,
             "nurture": nurture,
             "reactivation_route": reactivation_route,
+            "pro_trial_warnings": pro_trial_warnings,
         }.items()
     }
     message_log = await _message_log_rows()
@@ -4331,6 +4334,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     outreach = await db.system_state.find_one({"key": "outreach"}, {"_id": 0}) or {}
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
+    pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
 
     top_trainers = await db.trainers.find(
         {"published": True},
@@ -4555,6 +4559,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "health": health,
             "nurture": nurture,
             "reactivation_route": reactivation_route,
+            "pro_trial_warnings": pro_trial_warnings,
         }.items()
     }
     trainer_inventory = await _trainer_inventory_rows()
@@ -4608,6 +4613,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "health": health,
             "nurture": nurture,
             "reactivation_route": reactivation_route,
+            "pro_trial_warnings": pro_trial_warnings,
         },
         "alerts": health.get("alerts", []),
         "rollback_recent": rollback_recent,

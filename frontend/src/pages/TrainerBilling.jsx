@@ -56,6 +56,12 @@ function humanizeToken(val) {
     return String(val).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatDate(value) {
+    if (!value) return "";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+}
+
 function describeTrainerBillingError(err) {
     const status = Number(err?.response?.status || 0);
     const detail = String(err?.response?.data?.detail || "").trim();
@@ -162,6 +168,7 @@ export default function TrainerBilling() {
 
     const issues = data?.issues || {};
     const inventory = data?.sponsor_inventory || {};
+    const trial = data?.subscription?.trial || {};
     const selectedInventory = (inventory.suburbs || []).find((row) => row.suburb === selectedSuburb);
 
     const startCheckout = async (tier, interval = "month") => {
@@ -269,6 +276,31 @@ export default function TrainerBilling() {
                             ) : null}
                         </section>
 
+                        {(trial.active || trial.eligible) ? (
+                            <section
+                                className={`card-public p-6 ${trial.expiry_warning ? "border-[#D06D4F] bg-[#FFF4EF]" : "border-[#8FAFA0] bg-[#F0F6F2]"}`}
+                                data-testid="pro-trial-status"
+                            >
+                                <div className="small-caps">DTD Pro trial</div>
+                                {trial.active ? (
+                                    <>
+                                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">
+                                            {trial.expiry_warning ? "Your trial is ending soon." : "Your Pro trial is active."}
+                                        </h2>
+                                        <p className="text-sm text-[#4A615A] mt-2">
+                                            {trial.days_remaining} day{trial.days_remaining === 1 ? "" : "s"} remaining
+                                            {trial.ends_at ? ` · ends ${formatDate(trial.ends_at)}` : ""}.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Your 30-day Pro trial is available.</h2>
+                                        <p className="text-sm text-[#4A615A] mt-2">It begins when Stripe creates your Pro subscription. You can cancel before the trial ends.</p>
+                                    </>
+                                )}
+                            </section>
+                        ) : null}
+
                         <section className="card-public p-6" data-testid="trainer-subscription-plans">
                             <div className="small-caps">Optional upgrades</div>
                             <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Choose the storefront value you need.</h2>
@@ -278,7 +310,7 @@ export default function TrainerBilling() {
                                     <div className="font-semibold text-[#1A3A32]">Pro Storefront</div>
                                     <div className="font-serif text-3xl text-[#1A3A32] mt-2">A$19<span className="text-sm font-sans">/mo</span></div>
                                     <p className="text-sm text-[#4A615A] mt-3">Booking embed, public website link, gallery and directory boost.</p>
-                                    <button type="button" disabled={busy} onClick={() => startCheckout("pro")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-pro">Choose Pro</button>
+                                    <button type="button" disabled={busy} onClick={() => startCheckout("pro")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-pro">{trial.eligible ? "Start 30-day trial" : "Choose Pro"}</button>
                                     <button type="button" disabled={busy} onClick={() => startCheckout("pro", "year")} className="mt-3 w-full text-sm text-[#1A3A32] underline underline-offset-4" data-testid="checkout-pro-annual">A$149/year</button>
                                 </div>
                                 <div className="rounded-2xl border border-[#D9B36C] bg-[#FFF9ED] p-5">

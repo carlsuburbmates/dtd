@@ -27,7 +27,12 @@ const billingData = {
         subscription_status: "free",
         billing_profile_status: "ready",
     },
-    subscription: { tier: "claimed", status: "free", stripe_customer_id: "cus_1" },
+    subscription: {
+        tier: "claimed",
+        status: "free",
+        stripe_customer_id: "cus_1",
+        trial: { eligible: true, active: false, days: 30, expiry_warning: false },
+    },
     eligible_suburbs: ["Richmond", "Cremorne"],
     sponsor_inventory: {
         citywide: { capacity: 5, occupied: 1, available: 4, status: "available" },
@@ -71,6 +76,8 @@ describe("P4 trainer subscription workflow", () => {
         expect(view.container.textContent).toContain("A$199");
         expect(view.container.textContent).toContain("1 of 2 positions available");
         expect(view.container.textContent).toContain("GST-inclusive");
+        expect(view.container.textContent).toContain("Your 30-day Pro trial is available");
+        expect(view.container.querySelector("[data-testid='checkout-pro']").textContent).toContain("Start 30-day trial");
         expect(view.container.querySelector("[data-testid='subscription-portal']")).not.toBeNull();
         expect(JSON.parse(sessionStorage.getItem("dtd-trainer-billing-auth:trainer_1"))).toEqual({
             trainerActionToken: "action-token",

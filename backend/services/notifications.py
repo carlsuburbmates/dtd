@@ -344,3 +344,37 @@ async def notify_trainer_reactivation_candidate(
         "attempts": int(outcome.get("attempts") or 0),
         "error": str(outcome.get("error") or "")[:240],
     }
+
+
+async def notify_pro_trial_expiry_warning(
+    db,
+    trainer: Dict[str, Any],
+    *,
+    billing_url: str,
+    ends_at: str,
+    days_remaining: int,
+) -> Dict[str, Any]:
+    """Send the one-time day-23 Pro trial warning through the normal audit log."""
+    trainer_id = str(trainer.get("id") or "")
+    email = _safe_text(trainer.get("billing_email")) or _safe_text(trainer.get("email"))
+    if not email:
+        return {"status": "skipped", "attempts": 0, "reason": "missing_email"}
+
+    remaining = max(0, int(days_remaining))
+    html = (
+        f"<p>Hi {_safe_text(trainer.get('name')) or 'there'},</p>"
+        f"<p>Your Dog Trainers Directory Pro trial ends in <strong>{remaining} day{'s' if remaining != 1 else ''}</strong>.</p>"
+        f"<p>Trial end: {_safe_text(ends_at)}</p>"
+        "<p>Unless you cancel before the trial ends, Stripe will begin the Pro subscription selected at checkout.</p>"
+        f'<p><a href="{_safe_text(billing_url)}">Review or manage your subscription</a></p>'
+        "<p>You can reply to this email if you need help.</p>"
+    )
+    return await _send_with_retry(
+        db,
+        target_kind="trainer",
+        target_id=trainer_id,
+        kind="pro_trial_expiry_warning",
+        to_email=email,
+        subject=f"Your DTD Pro trial ends in {remaining} days",
+        html=html,
+    )

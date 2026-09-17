@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -20,7 +21,8 @@ def _now() -> datetime:
 
 def _parse_iso(value: str) -> Optional[datetime]:
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except Exception:
         return None
 
@@ -100,11 +102,12 @@ def trial_cohort_active() -> bool:
 
 
 def _registration_started_at(trainer: Dict[str, Any]) -> Optional[datetime]:
-    reg = (trainer.get("registered_at") or "").strip() if isinstance(trainer.get("registered_at"), str) else ""
-    if reg:
-        dt = _parse_iso(reg)
-        if dt:
-            return dt
+    for field in ("claimed_at", "registered_at"):
+        value = (trainer.get(field) or "").strip() if isinstance(trainer.get(field), str) else ""
+        if value:
+            dt = _parse_iso(value)
+            if dt:
+                return dt
     created = (trainer.get("created_at") or "").strip() if isinstance(trainer.get("created_at"), str) else ""
     if (trainer.get("via_submission_id") or "").strip():
         return _parse_iso(created) if created else None
@@ -114,17 +117,24 @@ def _registration_started_at(trainer: Dict[str, Any]) -> Optional[datetime]:
 def trial_status(trainer: Dict[str, Any]) -> Dict[str, Any]:
     """Pro trial status, anchored to the Stripe-live cohort.
 
-    The 30-day trial runs from the trainer's own registration; the expiry warning
-    fires on day 23. Trainers registered before the live anchor are not in the cohort.
+    Cohort eligibility starts when Stripe live mode is explicitly anchored. The
+    actual 30-day period starts when Stripe creates the Pro subscription; the
+    expiry warning becomes due on day 23 of that provider-backed period.
     """
     days = pro_trial_days()
     warning_day = pro_trial_expiry_warning_day()
     anchor = stripe_live_anchor_at()
     cohort_active = bool(stripe_live_mode() and anchor is not None)
-    start = _registration_started_at(trainer)
+    cohort_start = _registration_started_at(trainer)
+    trial_start = _parse_iso(str(trainer.get("pro_trial_started_at") or ""))
+    trial_end = _parse_iso(str(trainer.get("pro_trial_ends_at") or ""))
+    consumed = bool(trainer.get("pro_trial_consumed_at"))
+    subscription_status = str(trainer.get("subscription_status") or "").strip().lower()
 
     base = {
         "active": False,
+        "eligible": False,
+        "consumed": consumed,
         "days": days,
         "warning_day": warning_day,
         "cohort_active": cohort_active,
@@ -136,24 +146,32 @@ def trial_status(trainer: Dict[str, Any]) -> Dict[str, Any]:
         "ends_at": "",
     }
 
-    if not cohort_active or days <= 0 or start is None:
+    if not cohort_active or days <= 0 or cohort_start is None:
         return base
-    if anchor is not None and start < anchor:
+    if anchor is not None and cohort_start < anchor:
         return base
 
-    ends = start + timedelta(days=days)
     now = _now()
-    active = now < ends
-    days_remaining = max(0, (ends - now).days)
+    active = bool(subscription_status == "trialing" and trial_start and trial_end and now < trial_end)
+    days_remaining = max(0, math.ceil((trial_end - now).total_seconds() / 86400)) if active and trial_end else 0
+    warning_due_at = trial_start + timedelta(days=warning_day) if trial_start else None
     return {
         **base,
         "active": active,
         "in_cohort": True,
+        "eligible": not consumed and not active,
         "days_remaining": days_remaining,
-        "expiry_warning": active and days_remaining <= max(0, days - warning_day),
-        "started_at": start.isoformat(),
-        "ends_at": ends.isoformat(),
+        "expiry_warning": bool(active and warning_due_at and now >= warning_due_at),
+        "started_at": trial_start.isoformat() if trial_start else "",
+        "ends_at": trial_end.isoformat() if trial_end else "",
     }
+
+
+def _stripe_timestamp_iso(value: Any) -> str:
+    try:
+        return datetime.fromtimestamp(int(value), tz=timezone.utc).isoformat() if value is not None else ""
+    except (TypeError, ValueError, OSError):
+        return ""
 
 
 def billing_enabled() -> bool:
@@ -330,6 +348,11 @@ async def create_checkout_session(
         return {"ok": False, "code": str(profile.get("billing_profile_status") or "billing_profile_unavailable"), "plan": plan}
 
     metadata = _subscription_metadata(trainer_id=trainer_id, plan=plan, reservation_id=reservation_id)
+    trial = trial_status(trainer)
+    subscription_data: Dict[str, Any] = {"metadata": metadata}
+    if plan["tier"] == "pro" and bool(trial.get("eligible")):
+        subscription_data["trial_period_days"] = pro_trial_days()
+        metadata["pro_trial_cohort_anchor_at"] = str(trial.get("cohort_anchor_at") or "")
     base_url = (os.environ.get("FRONTEND_BASE_URL") or "http://127.0.0.1:3001").strip().rstrip("/")
     return_url = str(billing_return_url or "").strip() or f"{base_url}/trainer/billing"
     return_separator = "&" if "?" in return_url else "?"
@@ -351,7 +374,7 @@ async def create_checkout_session(
                 }
             ],
             metadata=metadata,
-            subscription_data={"metadata": metadata},
+            subscription_data=subscription_data,
             success_url=f"{return_url}{return_separator}checkout=success&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{return_url}{return_separator}checkout=cancelled",
             idempotency_key=idempotency_key or f"dtd-checkout:{trainer_id}:{plan['tier']}:{plan['suburb'] or 'all'}",
@@ -363,7 +386,14 @@ async def create_checkout_session(
     session_url = str(_stripe_value(session, "url") or "")
     if not session_id or not session_url:
         return {"ok": False, "code": "stripe_checkout_response_invalid", "plan": plan}
-    return {"ok": True, "session_id": session_id, "url": session_url, "plan": plan, "customer_id": str(profile["stripe_customer_id"])}
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "url": session_url,
+        "plan": plan,
+        "customer_id": str(profile["stripe_customer_id"]),
+        "pro_trial_offered": "trial_period_days" in subscription_data,
+    }
 
 
 async def create_customer_portal_session(trainer: Dict[str, Any], *, return_url: str = "") -> Dict[str, Any]:
@@ -430,6 +460,17 @@ def subscription_update_for_event(event_type: str, obj: Dict[str, Any]) -> Dict[
         if status in ACTIVE_SUBSCRIPTION_STATUSES:
             updates["tier"] = tier
             updates["subscription_active_at"] = now
+            if tier == "pro" and status == "trialing":
+                trial_start = _stripe_timestamp_iso(obj.get("trial_start"))
+                trial_end = _stripe_timestamp_iso(obj.get("trial_end"))
+                if trial_start and trial_end:
+                    updates.update(
+                        {
+                            "pro_trial_started_at": trial_start,
+                            "pro_trial_ends_at": trial_end,
+                            "pro_trial_consumed_at": now,
+                        }
+                    )
         elif status == "incomplete_expired":
             updates["tier"] = "claimed"
             updates["subscription_ended_at"] = now

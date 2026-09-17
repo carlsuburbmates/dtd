@@ -134,10 +134,15 @@ mandatory for both launch seeding and post-launch maintenance.
 
 ---
 
-## 4. Modern OpenAI-Inspired Modular Education Architecture
+## 4. The First Leash — Separate Education Application
 
-### 4.1 The 3-Pane Unified Learning Hub (`/learn`)
-Inspired by OpenAI's modular learning tracks and developer documentation, DTD's education lane is unified into an **open, distraction-free 3-pane interactive learning interface**:
+### 4.1 Separate 3-Pane Learning Application (`learn.dogtrainersdirectory.com.au`)
+The First Leash is deployed from the separate `DTD-education-extended`
+repository and presented as one DTD-branded experience. It owns its curriculum,
+reader state, tools, PWA assets, tests and deployment. The main directory owns
+trainer discovery, claims, matching, enquiries and billing. The education
+application uses an **open, distraction-free 3-pane interactive learning
+interface**:
 
 ```
                          OPENAI-STYLE 3-PANE LEARNING HUB
@@ -186,14 +191,17 @@ Inspired by OpenAI's modular learning tracks and developer documentation, DTD's 
    - Download the printable PDF Cheatsheet & Checklist Pack.
    - Receive automated developmental milestone check-ins matched to their dog's age.
 
-### 4.3 Direct Escalation Bridge to Local Trainers
-Every lesson concludes with an explicit **Clinical Escalation Note** and **Trainer Readiness Checklist** that connects the owner's self-learning directly to the DTD directory:
-* Lesson on Leash Pulling $\rightarrow$ Contextual link to *Reactivity & Loose-Leash Specialists in [User Suburb]*.
-* Lesson on Home Separation $\rightarrow$ Contextual link to *In-Home Behavioural Consultants in [User Suburb]*.
+### 4.3 Privacy-Safe Two-Way Bridge
+The directory links to `https://learn.dogtrainersdirectory.com.au`; legacy
+main-app `/education/*` and `/the-first-leash/*` routes redirect to that
+canonical host. The First Leash links back to the directory root at
+`https://dogtrainersdirectory.com.au`. Behavioural intake data remains local
+and is never placed in cross-site query parameters.
 
 ### 4.4 Consolidation & Decommissioning of POCs
-* **Single Canonical Route (`/learn` and `/learn/:guideSlug/:lessonSlug`)**: All educational content is rendered natively in the React application using Tailwind and Framer Motion.
-* **Decommission External POCs**: The standalone Docusaurus site (`education-course-poc/`) and GitBook export (`education-gitbook-export-poc/`) are superseded by the integrated React `/learn` hub, ensuring zero tech drift.
+* **Single canonical education deployment:** `DTD-education-extended` on `learn.dogtrainersdirectory.com.au`.
+* **No duplicated curriculum in the directory repository:** stale native education pages, APIs, content, POCs and education-only assets are deleted, not archived.
+* **Boundary contract:** the two applications share brand and deliberate links, not storage, sessions, sensitive query strings or coupled release pipelines.
 
 ---
 

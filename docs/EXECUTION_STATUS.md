@@ -22,6 +22,27 @@ It does not define:
 4. `/ops` product behavior
 5. standards or launch gates
 
+## Superseding implementation status — 18 September 2026
+
+The owner has approved the education separation and Stripe-live Pro-trial
+anchor. This status supersedes older execution-log statements that prohibited
+education-workspace changes or left either decision unresolved.
+
+- The First Leash is owned and deployed from `DTD-education-extended`; main DTD
+  retains only branded links and redirects for `/education/*` and
+  `/the-first-leash/*`.
+- Duplicated education pages, APIs, content, POCs, generated course assets and
+  education-only brand files have been deleted from main DTD, not archived.
+- The cross-site return link is static and query-free, so behavioural intake
+  details never cross the application boundary in a URL.
+- Pro-trial eligibility is gated by a live Stripe key plus
+  `STRIPE_LIVE_ANCHOR_AT`. Stripe creates the 30-day trial; webhooks persist the
+  provider dates and consume eligibility; a daily idempotent job sends the
+  day-23 warning and records its result in notification and system state.
+- Stripe remains in test mode. The trial cohort therefore remains safely
+  inactive until the live key and anchor timestamp are set together.
+- The canonical per-business suburb-sponsorship cap is 4.
+
 ## Current Objective
 
 Launch the DTD main website with its accepted attributable trainer supply and

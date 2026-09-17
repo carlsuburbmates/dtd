@@ -1,9 +1,8 @@
 # DTD Reconciled Project State
 
 **Purpose:** this document reconciles the accumulated planning conversation
-against the verified current-state audit (Codex, 16 September 2026). It is
-for documentation consolidation and decision tracking. Implementation authority
-must come from an explicit work package. The named
+against the verified current-state audit and owner decisions through
+18 September 2026. The named
 `DTD_CANONICAL_TARGET_STATE_SPECIFICATION.md` does not exist in this repository
 or its Git history and must not be treated as an authority source.
 
@@ -14,7 +13,7 @@ collapsed into one roadmap.
 
 ## PART 1 — CURRENT STATE (verified, descriptive only)
 
-As of the 16 September 2026 audit:
+As of the 18 September 2026 implementation:
 
 - **Deployed and publicly live**, but commercially unlaunched. Main site
   and API are healthy in production; Stripe is in test mode; zero active
@@ -44,17 +43,20 @@ As of the 16 September 2026 audit:
   which already covers Melbourne-Wide monthly automatically — but
   execution is disabled (`ENABLE_OPS_STRIPE_REFUNDS` unset → 503), and
   `/ops` has no refund/cancel action in the UI.
-- **Suburb sponsor caps:** 2 per suburb (matches target). Per-business cap
-  is configurable 3–5 via `SPONSOR_MAX_SUBURBS_PER_TRAINER`; unset in
-  production, so it defaults to 5.
-- **No genuine Pro-subscription trial exists.** A legacy, non-cohort-gated
-  30-day "free-intro" window remains from an older per-intro billing
-  model, currently hidden behind the active `flat_subscription` policy.
-- **Education exists as two incomplete implementations.** Main DTD has
-  in-app `/education` and `/the-first-leash` routes (no `/learn` route
-  exists anywhere). A separate app (`DTD-education-extended` / First
-  Leash) is live only at its Firebase default URL —
-  `learn.dogtrainersdirectory.com.au` resolves to Vercel and 404s.
+- **Suburb sponsor caps:** 2 per suburb and 4 sponsored suburbs per business.
+  `SPONSOR_MAX_SUBURBS_PER_TRAINER` remains configurable only within the
+  existing 3–5 safety bounds; the canonical default is 4.
+- **Pro trial:** a genuine 30-day Stripe Pro-subscription trial is implemented.
+  Eligibility begins only when Stripe is in live mode and
+  `STRIPE_LIVE_ANCHOR_AT` is set. Trainers claimed/registered before that
+  timestamp are outside the cohort. Stripe owns the trial dates, webhook state
+  is persisted, repeat trials are prevented, and the day-23 warning is an
+  idempotent scheduled workflow visible through notification and system state.
+- **Education:** The First Leash is the sole education implementation in the
+  separate `DTD-education-extended` repository. Main DTD contains only the
+  branded outbound bridge and legacy-route redirects; all duplicated education
+  pages, APIs, curriculum, POCs and education-only assets were deleted rather
+  than archived. The return bridge is static and query-free.
 - **Ops tooling:** a bespoke, passcode-gated `/ops` React app already
   exists (overview, pipeline, work queue, supply, messages, billing/
   reactivation, recent changes, system activity, sponsor inventory) — but
@@ -65,17 +67,7 @@ As of the 16 September 2026 audit:
   word count, computed robots state, or Search Console sync. `/sitemap.xml`
   and `/robots.txt` both incorrectly return the SPA's `index.html`. Only 2
   `seo_pages` records exist.
-- **Known critical issues:**
-  - The First Leash intake dossier sends sensitive behavioural data
-    (suburb, concern, trigger, frequency, threshold, bite-scale level,
-    interventions) as `/match` URL query parameters — violating its own
-    documented privacy boundary, and functionally pointless since main
-    DTD routes `/match` to `/`.
-  - First Leash's CI auto-deploys to production on every push to `main`,
-    contradicting its own `DEVELOPMENT_WORKFLOW.md`, which requires
-    explicit approval before production deploys.
-  - First Leash PWA icon references don't match actual asset filenames
-    (`dtd-` vs `tfl-` prefix).
+- **Known critical issues outside this completed work package:**
   - Main DTD's CI does not run the frontend test suite or production
     build, only package metadata checks.
   - Some existing docs are self-contradictory against their own repo
@@ -121,25 +113,15 @@ built.
 - Refund *logic* (interval-based, already covers Melbourne-Wide).
 - Per-suburb sponsor cap (2).
 
-**Locked corrections:**
+**Implemented locked corrections:**
 1. **Per-business suburb cap:** set `SPONSOR_MAX_SUBURBS_PER_TRAINER=4`
-   explicitly. Keep the existing 3–5 clamp mechanism as-is — this is a
-   configuration value, not a code change.
-
-**Owner resolution required before implementation:**
-2. **Pro trial cohort anchor:** the automation and architecture documents
-   specify a 30-day Pro trial and day-23 expiry warning, but no repository
-   authority defines a "Stage 3 / weeks 3–4" cohort. The alternative proposal
-   anchors the cohort to Stripe live mode. Do not implement either anchor until
-   the owner chooses it explicitly; then retire `TRAINER_FREE_INTRO_DAYS` and
-   the legacy commercial copy as one replacement workflow.
-3. **Education route retirement:** current code contains native `/education`
-   and `/the-first-leash` routes; the master architecture specifies an
-   integrated `/learn` hub, while current execution material treats First
-   Leash as a separate workspace. A prior conversation selected a separate but
-   seamless branded deployment, but it did not explicitly authorise retiring
-   the existing native routes. Domain repair and route retirement therefore
-   remain separate decisions.
+   explicitly. The existing 3–5 safety clamp remains; the default is now 4.
+2. **Pro trial cohort anchor:** Stripe live mode plus the explicit
+   `STRIPE_LIVE_ANCHOR_AT` timestamp is the approved cohort boundary. The
+   genuine Pro trial and day-23 warning workflow are implemented; the cohort
+   remains intentionally inactive while Stripe uses a test key.
+3. **Education route retirement:** approved and implemented. Education is
+   separately deployed; main-app legacy routes are redirects only.
 
 **Other targeted-state work (unchanged from earlier planning, now
 grounded against real gaps):**
@@ -160,18 +142,13 @@ grounded against real gaps):**
    bespoke action layer already exists). Add MongoDB Atlas Charts
    (still genuinely absent). Fix Sentry so it initialises in the actual
    deployed API process, not only the undeployed worker.
-7. **Priority fixes surfaced by the audit** (corrections against each
-   product's *own* existing documented intent, not new decisions):
-   - Revert the First Leash dossier handoff to the static, query-free
-     link its own docs already specify.
-   - Add an explicit approval gate to First Leash's production deploy
-     workflow, matching its own governance doc.
-   - Fix the PWA icon filename mismatch.
+7. **Priority fixes surfaced by the audit:** the First Leash dossier now uses
+   a static query-free handoff. Education deployment, domain and PWA verification
+   are tracked in the implementation record rather than left as design ambiguity.
    - Clean up legacy/test-like trainer records (`.example.com` stub,
      unstructured-provenance rows) before commercial launch.
-8. **Commercial launch itself:** flip Stripe to live mode and enable refund
-   execution only after the above are addressed. Whether this event anchors the
-   Pro-trial cohort remains the unresolved owner decision in item 2.
+8. **Commercial launch itself:** flip Stripe to live mode, set the live anchor
+   at the same moment, and enable refund execution only after launch gates pass.
 
 ---
 
@@ -199,9 +176,7 @@ is revised in light of the audit.
 
 ## Open items
 
-- Trial cohort anchor: choose Stage/cohort wording only if a real authority is
-  supplied, otherwise choose or reject the Stripe-live proposal explicitly.
-- Education-route retirement: decide separately from the already-required
-  `learn.` domain repair.
-- `DTD_BUILD_INSTRUCTIONS_FOR_AGENTS.md` is absent and the earlier governing
-  prompt said to disregard it; do not describe it as being held.
+- Stripe remains in test mode. The approved trial cohort must not activate
+  until the live key and `STRIPE_LIVE_ANCHOR_AT` are changed together.
+- `DTD_BUILD_INSTRUCTIONS_FOR_AGENTS.md` is absent and must not be described as
+  an authority source.

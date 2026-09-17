@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -15,94 +17,105 @@ def _iso(dt: datetime) -> str:
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for key in (
-        "STRIPE_SECRET_KEY",
-        "STRIPE_LIVE_ANCHOR_AT",
-        "PRO_TRIAL_DAYS",
-        "PRO_TRIAL_EXPIRY_WARNING_DAY",
-    ):
+    for key in ("STRIPE_SECRET_KEY", "STRIPE_LIVE_ANCHOR_AT", "PRO_TRIAL_DAYS", "PRO_TRIAL_EXPIRY_WARNING_DAY"):
         monkeypatch.delenv(key, raising=False)
 
 
-def test_cohort_inactive_in_stripe_test_mode(monkeypatch):
+def _activate_cohort(monkeypatch, now: datetime) -> None:
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
+    monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", _iso(now - timedelta(days=40)))
+    monkeypatch.setattr(stripe_billing, "_now", lambda: now)
+
+
+def test_cohort_requires_live_key_and_anchor(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", ANCHOR)
+    assert stripe_billing.trial_status({"registered_at": "2026-09-10T00:00:00+00:00"})["in_cohort"] is False
 
-    assert stripe_billing.stripe_live_mode() is False
-    assert stripe_billing.trial_cohort_active() is False
-
-    status = stripe_billing.trial_status({"registered_at": "2026-09-10T00:00:00+00:00"})
-    assert status["active"] is False
-    assert status["in_cohort"] is False
-
-
-def test_cohort_inactive_without_live_anchor(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
-
-    assert stripe_billing.stripe_live_mode() is True
-    assert stripe_billing.trial_cohort_active() is False
-
-    status = stripe_billing.trial_status({"registered_at": "2026-09-10T00:00:00+00:00"})
-    assert status["in_cohort"] is False
+    monkeypatch.delenv("STRIPE_LIVE_ANCHOR_AT")
+    assert stripe_billing.trial_status({"registered_at": "2026-09-10T00:00:00+00:00"})["in_cohort"] is False
 
 
-def test_trainer_registered_before_anchor_is_not_in_cohort(monkeypatch):
+def test_pre_anchor_trainer_is_not_eligible(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
     monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", ANCHOR)
-
-    status = stripe_billing.trial_status({"registered_at": "2026-08-15T00:00:00+00:00"})
+    status = stripe_billing.trial_status({"claimed_at": "2026-08-15T00:00:00+00:00"})
     assert status["cohort_active"] is True
     assert status["in_cohort"] is False
+    assert status["eligible"] is False
+
+
+def test_post_anchor_claim_is_eligible_until_consumed(monkeypatch):
+    now = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    _activate_cohort(monkeypatch, now)
+    status = stripe_billing.trial_status({"claimed_at": _iso(now - timedelta(days=2))})
+    assert status["in_cohort"] is True
+    assert status["eligible"] is True
     assert status["active"] is False
 
+    consumed = stripe_billing.trial_status({"claimed_at": _iso(now - timedelta(days=2)), "pro_trial_consumed_at": _iso(now)})
+    assert consumed["eligible"] is False
+    assert consumed["consumed"] is True
 
-def test_trainer_after_anchor_is_in_cohort_and_active(monkeypatch):
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
-    now = datetime.now(timezone.utc)
-    anchor = now - timedelta(days=40)
-    registered = now - timedelta(days=5)
-    monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", _iso(anchor))
 
-    status = stripe_billing.trial_status({"registered_at": _iso(registered)})
-    assert status["in_cohort"] is True
+def test_provider_backed_trial_and_day_23_warning(monkeypatch):
+    now = datetime(2026, 10, 18, tzinfo=timezone.utc)
+    _activate_cohort(monkeypatch, now)
+    start = now - timedelta(days=23)
+    trainer = {
+        "claimed_at": _iso(now - timedelta(days=30)),
+        "subscription_status": "trialing",
+        "pro_trial_started_at": _iso(start),
+        "pro_trial_ends_at": _iso(start + timedelta(days=30)),
+        "pro_trial_consumed_at": _iso(start),
+    }
+    status = stripe_billing.trial_status(trainer)
     assert status["active"] is True
-    assert status["days"] == 30
-    ends = datetime.fromisoformat(status["ends_at"])
-    assert abs((ends - (registered + timedelta(days=30))).total_seconds()) < 2
-
-
-def test_expiry_warning_fires_from_day_23(monkeypatch):
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
-    now = datetime.now(timezone.utc)
-    anchor = now - timedelta(days=60)
-    registered = now - timedelta(days=25)
-    monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", _iso(anchor))
-
-    status = stripe_billing.trial_status({"registered_at": _iso(registered)})
-    assert status["active"] is True
+    assert status["eligible"] is False
     assert status["expiry_warning"] is True
-    assert status["days_remaining"] <= 7
+    assert status["days_remaining"] == 7
 
 
-def test_no_warning_early_in_trial(monkeypatch):
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
-    now = datetime.now(timezone.utc)
-    anchor = now - timedelta(days=60)
-    registered = now - timedelta(days=3)
-    monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", _iso(anchor))
+def test_only_eligible_pro_checkout_receives_full_stripe_trial(monkeypatch):
+    now = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    _activate_cohort(monkeypatch, now)
+    calls = []
 
-    status = stripe_billing.trial_status({"registered_at": _iso(registered)})
-    assert status["active"] is True
-    assert status["expiry_warning"] is False
+    class FakeStripe:
+        class checkout:
+            class Session:
+                @staticmethod
+                def create(**kwargs):
+                    calls.append(kwargs)
+                    return SimpleNamespace(id="cs_trial", url="https://checkout.stripe.test/cs_trial")
+
+    monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
+    monkeypatch.setattr(
+        stripe_billing,
+        "provision_trainer_billing_profile",
+        lambda *_args, **_kwargs: asyncio.sleep(0, result={"billing_profile_status": "ready", "stripe_customer_id": "cus_1"}),
+    )
+    trainer = {"id": "trainer_1", "claimed_at": _iso(now - timedelta(days=1))}
+    out = asyncio.run(stripe_billing.create_checkout_session(SimpleNamespace(), trainer, tier="pro"))
+    assert out["pro_trial_offered"] is True
+    assert calls[0]["subscription_data"]["trial_period_days"] == 30
+    assert calls[0]["subscription_data"]["metadata"]["pro_trial_cohort_anchor_at"]
 
 
-def test_expired_trial_is_in_cohort_but_not_active(monkeypatch):
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_123")
-    now = datetime.now(timezone.utc)
-    anchor = now - timedelta(days=120)
-    registered = now - timedelta(days=45)
-    monkeypatch.setenv("STRIPE_LIVE_ANCHOR_AT", _iso(anchor))
-
-    status = stripe_billing.trial_status({"registered_at": _iso(registered)})
-    assert status["in_cohort"] is True
-    assert status["active"] is False
+def test_webhook_persists_provider_trial_period_and_consumption():
+    start = datetime(2026, 9, 18, tzinfo=timezone.utc)
+    updates = stripe_billing.subscription_update_for_event(
+        "customer.subscription.created",
+        {
+            "id": "sub_1",
+            "customer": "cus_1",
+            "status": "trialing",
+            "trial_start": int(start.timestamp()),
+            "trial_end": int((start + timedelta(days=30)).timestamp()),
+            "metadata": {"trainer_id": "trainer_1", "tier": "pro", "interval": "month"},
+        },
+    )
+    assert updates["pro_trial_started_at"] == _iso(start)
+    assert updates["pro_trial_ends_at"] == _iso(start + timedelta(days=30))
+    assert updates["pro_trial_consumed_at"]
