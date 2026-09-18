@@ -36,6 +36,9 @@ education-workspace changes or left either decision unresolved.
   ownership and certificate state, and the public HTTPS response is `200`.
 - Duplicated education pages, APIs, content, POCs, generated course assets and
   education-only brand files have been deleted from main DTD, not archived.
+- Superseded intro-fee and founding-tier public copy modes have also been
+  removed; the client and API are fixed to the canonical flat-subscription
+  model, so those old offers cannot be revived through environment flags.
 - The cross-site return link is static and query-free, so behavioural intake
   details never cross the application boundary in a URL.
 - Pro-trial eligibility is gated by a live Stripe key plus

@@ -93,12 +93,11 @@ ACTIVE_REGION_SET = {x.lower() for x in ACTIVE_REGIONS}
 BILLABILITY_POLICY = (os.environ.get("BILLABILITY_POLICY") or "allow").strip().lower()
 CONTACT_READY_POLICY = (os.environ.get("CONTACT_READY_POLICY") or "allow").strip().lower()
 
-PUBLIC_MONETIZATION_COPY_MODE = (os.environ.get("PUBLIC_MONETIZATION_COPY_MODE") or "flat_subscription").strip()
-if PUBLIC_MONETIZATION_COPY_MODE not in {"flat_subscription", "founding_profile_prelaunch", "legacy_intro_fee"}:
-    PUBLIC_MONETIZATION_COPY_MODE = "flat_subscription"
-
-PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = (os.environ.get("PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY") or "1").strip().lower() in TRUTHY_ENV_VALUES
-PUBLIC_SHOW_FOUNDING_PROFILE_COPY = (os.environ.get("PUBLIC_SHOW_FOUNDING_PROFILE_COPY") or "0").strip().lower() in TRUTHY_ENV_VALUES
+# Canonical target state. Keep the response keys for older clients, but do not
+# allow environment flags to revive superseded intro-fee or founding-tier copy.
+PUBLIC_MONETIZATION_COPY_MODE = "flat_subscription"
+PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY = True
+PUBLIC_SHOW_FOUNDING_PROFILE_COPY = False
 
 # Decommissioned marketing-claim gates (Task P1-A)
 CLAIM_STATE_MODEL_ENABLED = False
