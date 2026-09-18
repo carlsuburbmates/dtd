@@ -22,7 +22,7 @@ It does not define:
 4. `/ops` product behavior
 5. standards or launch gates
 
-## Superseding implementation status — 18 September 2026
+## Superseding implementation status — 19 September 2026
 
 The owner has approved the education separation and Stripe-live Pro-trial
 anchor. This status supersedes older execution-log statements that prohibited
@@ -31,6 +31,9 @@ education-workspace changes or left either decision unresolved.
 - The First Leash is owned and deployed from `DTD-education-extended`; main DTD
   retains only branded links and redirects for `/education/*` and
   `/the-first-leash/*`.
+- The separate application is live at
+  `https://learn.dogtrainersdirectory.com.au`; Firebase reports active host,
+  ownership and certificate state, and the public HTTPS response is `200`.
 - Duplicated education pages, APIs, content, POCs, generated course assets and
   education-only brand files have been deleted from main DTD, not archived.
 - The cross-site return link is static and query-free, so behavioural intake
@@ -39,8 +42,12 @@ education-workspace changes or left either decision unresolved.
   `STRIPE_LIVE_ANCHOR_AT`. Stripe creates the 30-day trial; webhooks persist the
   provider dates and consume eligibility; a daily idempotent job sends the
   day-23 warning and records its result in notification and system state.
-- Stripe remains in test mode. The trial cohort therefore remains safely
-  inactive until the live key and anchor timestamp are set together.
+- Production does not yet expose a Stripe live-mode key and anchor together.
+  The trial cohort therefore remains safely inactive until both are set.
+- Cloud Scheduler job `dtd-pro-trial-warnings` is enabled for `09:00`
+  Australia/Melbourne daily. A production invocation returned HTTP `200` on
+  Cloud Run revision `dtd-api-00014-fg4`; `/ops` recorded status `ok` with no
+  eligible candidates.
 - The canonical per-business suburb-sponsorship cap is 4.
 
 ## Current Objective
@@ -52,18 +59,19 @@ licensed-feed acquisition integration defined in
 
 ## Current Blocker
 
-MongoDB Atlas cluster `DTD` was resumed by the owner and fully synchronised with all 45 trainer profiles and system collections; Cloud Run `dtd-api` is healthy (`/api/health` returns `200` with `database: available`).
-The single remaining launch blocker is the Vercel DNS cutover for `dogtrainersdirectory.com.au`:
-- Point A record `@` to `199.36.158.100`
-- Point CNAME `www` to `gen-lang-client-0028123502.web.app.`
-- Add TXT `@` to `hosting-site=gen-lang-client-0028123502`
-- Add ACME challenge TXT records (`exCJ2FwW2cwKT8ZYFrAzLwiKGyjOeWb1KluIzq7vGLY` and `vjwCoVei22N1VKFtNU80A0Oqkxz0SbkSzx7iB_KgveI`)
-- Preserve all existing Zoho MX and SPF TXT records.
-The post-launch acquisition blocker is separate: Sensis/Thryv has not yet confirmed a suitable SAPI/successor feed or supplied written data-use rights, pricing, schema, credentials, or a contract. No adapter can be truthfully built against an unknown interface.
+There is no remaining implementation or deployment blocker in the approved
+education-separation and Pro-trial work package. Live cohort activation is an
+explicit operational gate: production must receive a Stripe live-mode key and
+`STRIPE_LIVE_ANCHOR_AT` together. The post-launch acquisition blocker is
+separate: Sensis/Thryv has not yet confirmed a suitable SAPI/successor feed or
+supplied written data-use rights, pricing, schema, credentials, or a contract.
+No adapter can be truthfully built against an unknown interface.
 
 ## Current Priority Order
 
-1. R1/M4/M3-Main: fix Cloud Run startup, deploy the API and DTD-only Firebase Hosting site, attach the main domain, and verify the acquired listing plus trainer-submission journey. Do not touch `dtd-first-leash` or the education workspace.
+1. R1/M4/M3-Main/M3-Learn: preserve the verified Cloud Run, main Firebase
+   Hosting and independently deployed First Leash surfaces; keep the bridge
+   static and query-free.
 2. M2-Claim: add and verify Firebase Phone Auth for Australian numbers while preserving token validation, expiry/invalid states, email fallback, and `/ops` delivery evidence.
 3. P4-D expansion: evaluate the Sensis/Thryv response, record written rights, then implement and dry-run the exact licensed adapter. MacroMatch/TotalCheck are not assumed to be discovery products.
 4. Post-launch activation: enable authenticated scheduled acquisition and maintenance only after source contract, adapter, dry-run, suppression, quality, and `/ops` evidence pass with explicit owner authority.
@@ -86,7 +94,7 @@ independent local work. Every implementation packet uses the workflow contract.
 | M4-Runtime | Correct Cloud Run local runtime preparation: port `8080`, deep health endpoint, container test, cron endpoint authentication, outbox/Task adapter, and health degradation evidence. | Antigravity, Codex review | M1-AI and P4-D preparation | P1-R or P4-C if they own `backend/server.py`. | Local container health probe, authenticated cron tests, idempotent task handling, and `/ops` degradation cases pass. |
 | M2-Claim | Replace or bridge the current claim OTP client with Firebase Phone Auth while preserving existing claim records, fallback, and dispute behaviour. | Antigravity, Codex review | M3-Main preparation | P2-A; Firebase project and test-number setup for live verification. | Australian-number validation, token verification exchange, invalid/expired states, fallback, and `/ops` delivery evidence pass. |
 | M3-Main | Configure Firebase Hosting for the main React directory only, including SPA rewrites and deployment verification. | Antigravity, Codex review | M2-Claim | P3-A build stability; Firebase project configuration. | Production build and Hosting preview pass; direct-route refresh works; main-site browser checks pass. |
-| M3-Learn | Define the hosting interface for `learn.dogtrainersdirectory.com.au` without editing or interacting with the separate education workspace. | Codex with education owner | None | Education owner supplies its deployable artifact and approval. | A separate, approved hosting handoff exists; no DTD-directory task writes to the education workspace. |
+| M3-Learn | Maintain the separately deployed First Leash application and its static, query-free bridge with DTD. | Codex with education owner | M3-Main | Explicit owner approval for education changes. | `learn.dogtrainersdirectory.com.au` returns the standalone app over valid TLS; legacy DTD routes redirect to it; both repositories retain independent builds and deploy gates. |
 | E1 | Expand the accepted initial supply toward 100+ authentic Greater Melbourne profiles from the approved licensed feed and approved first-party sources. | Owner authorises; Antigravity executes; Codex validates | None | Licensed P4-D adapter, required provider access, written source rights, and data-quality evidence. | 100+ attributable records, dedupe and suppression proof, ABN/quality state, `/ops` review data, and no fabricated listing. |
 | R1 | Launch the main DTD site first using accepted supply and the trainer-submission path; then complete remaining provider cutovers and production observation. | Owner approved; Codex coordinates; Antigravity executes bounded commands | None | Healthy Cloud Run/Firebase paths and public-domain evidence; E1 expansion is not a launch prerequisite. | Live acquired profile, accepted submission path, deep-health checks, domain/TLS proof, and explicit limitations for any provider path not yet verified. |
 
