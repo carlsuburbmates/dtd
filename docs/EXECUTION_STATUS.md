@@ -49,7 +49,7 @@ education-workspace changes or left either decision unresolved.
   The trial cohort therefore remains safely inactive until both are set.
 - Cloud Scheduler job `dtd-pro-trial-warnings` is enabled for `09:00`
   Australia/Melbourne daily. A production invocation returned HTTP `200` on
-  Cloud Run revision `dtd-api-00014-fg4`; `/ops` recorded status `ok` with no
+  Cloud Run revision `dtd-api-00015-58d`; `/ops` recorded status `ok` with no
   eligible candidates.
 - The canonical per-business suburb-sponsorship cap is 4.
 
