@@ -2,6 +2,7 @@
 
 **Evidence date:** 19 September 2026
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target.
+**Audit scope:** these are task-level observations, not a complete reconciliation of implementation against every product specification.
 
 ## Evidence boundaries
 
@@ -68,3 +69,23 @@
 - The main API's education-capture removal passed 266 local backend unit tests (excluding integration tests requiring a local API server). A no-traffic Cloud Run revision was smoke-tested before receiving 100% traffic; live OpenAPI, health, config and trainer reads then passed. The earlier all-tests command was not green because 32 failures and nine errors depended on an absent `localhost:8000` API server.
 - Main DTD: 25 trial/refund tests passed; 87 public-mode/matching tests passed; 9 focused frontend billing/ops tests passed.
 - These checks establish the named contracts only. They do not replace end-to-end production acceptance, provider delivery proof or operator review of authenticated state.
+
+## Open findings discovered during implementation
+
+These entries are verified observations requiring follow-up, not approved product decisions or proof of a comprehensive code audit. Security details are deliberately sanitised because this repository is public.
+
+### DF-001 — Historical Cloud Run source artifact
+
+- **Observed/status:** 19 September 2026 — open.
+- **Evidence:** API revision `dtd-api-00015-58d` had a build-source archive containing a local `.env` file, and that historical artifact still exists. The replacement revision `dtd-api-00016-jid` source archive was checked and does not include `.env`; `backend/.gcloudignore` now excludes it from future source uploads.
+- **Risk/uncertainty:** the older artifact may retain sensitive configuration. Its contents and access history have not been assessed; this observation does not establish public exposure or that the file entered the container image.
+- **Why deferred:** deleting a historical build artifact or rotating credentials without an inventory may affect rollback and other consumers.
+- **Next action:** privately review the artifact's access and relevant credential inventory, then decide on retention/removal and any required rotation; close only after that review is evidenced.
+
+### DF-002 — Direct-value secret setting
+
+- **Observed/status:** 19 September 2026 — open.
+- **Evidence:** a read-only check of the current `dtd-api` Cloud Run service configuration found one secret-named setting held as a literal environment value rather than a managed secret reference. No value is recorded here.
+- **Risk/uncertainty:** IAM principals able to read service configuration may see that value; no unauthorised access has been established.
+- **Why deferred:** changing the setting requires checking its scheduler/runtime consumers and coordinating a tested release and rotation.
+- **Next action:** privately map the consumers, migrate to a managed secret if appropriate, rotate the value, and verify scheduled calls before closing.

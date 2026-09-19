@@ -113,6 +113,12 @@ Before finishing a task:
 5. If available capabilities were not used, explain why.
 6. Prefer response structure from `.codex/templates/FINAL_EVIDENCE_TEMPLATE.md`.
 
+## Deferred finding record
+
+When an authorised task uncovers a material code, configuration, security, data, or workflow gap that is not fixed in that task, record it before closing the turn. Use `docs/DTD_CURRENT_STATE.md` for verified open findings; use `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` only for actual owner decisions. Each entry needs an ID, observation date, evidence and uncertainty, impact, why it was deferred, and the next action or decision gate. Close an entry only with verification evidence, then remove it from the live open-findings section; git history preserves the audit trail without a growing resolved backlog. This is incremental discovery, not a claim that the codebase has been fully reconciled or audited.
+
+This repository is public. Never put a credential, personal data, private artifact URL, or exploit instructions in the record. Keep the entry actionable but sanitised; report sensitive particulars to the owner separately. Escalate an urgent exposure instead of treating documentation as remediation.
+
 ## 8) Turn Summary Requirement
 
 Include `Active skills this turn:` in responses whenever any skill is active.
