@@ -85,6 +85,12 @@ pydantic_networks.version = _patched_version
 import server
 
 
+def test_first_leash_capture_is_not_a_main_api_route():
+    paths = {route.path for route in server.app.routes}
+    assert "/api/first-leash" not in paths
+    assert "/api/owner-waitlist" in paths
+
+
 class _Trainers:
     async def distinct(self, _field, _query):
         return ["Carlton", "Richmond"]

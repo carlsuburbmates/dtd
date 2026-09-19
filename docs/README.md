@@ -9,7 +9,7 @@ This folder is both the map of DTD's authoritative documentation and a readable 
 
 DTD is a free-to-dog-owners directory and guided matching service for Greater Melbourne. Trainers can hold free listings or buy flat-price visibility products; DTD never charges owners and never takes commissions or per-lead fees. The directory is publicly deployed and its core owner, trainer, matching, billing, suburb-catalogue, and operator surfaces exist, but commercial launch gates and several operational gaps remain. "Current" therefore means evidenced implementation state, not owner acceptance of the final product.
 
-The immediate target is to make that existing system safe and dependable for a solo operator: finish the production suburb seed, remove the last main-repository education residue, correct SEO resources and indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
+The immediate target is to make that existing system safe and dependable for a solo operator: finish the production suburb seed, correct SEO resources and indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
 
 The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL.
 
@@ -34,7 +34,7 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 ```text
 CURRENT STATE
 publicly deployed; core workflows implemented; commercial launch gated;
-known data, SEO, education-residue, messaging and operations gaps remain
+known data, SEO, messaging and operations gaps remain
         |
         v
 TARGETED POST-LAUNCH STATE

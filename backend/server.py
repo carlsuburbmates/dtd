@@ -443,16 +443,6 @@ class OwnerWaitlistJoinIn(BaseModel):
     utm_campaign: Optional[str] = ""
 
 
-class FirstLeashLeadIn(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    email: EmailStr
-    user_type: str = Field(min_length=1)
-    campaign: Optional[str] = ""
-    source: Optional[str] = ""
-    utm_medium: Optional[str] = ""
-    utm_campaign: Optional[str] = ""
-
-
 class AttributionEntryIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     kind: str = "generic_entry"  # seo_landing | campaign_landing | home_entry | generic_entry
@@ -3345,43 +3335,6 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
     session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
     await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
     return _scrub({"ok": True, "trainer_id": trainer_id, "claim_status": "claimed", "tier": "claimed", "session": session})
-
-
-@api.post("/first-leash")
-async def capture_first_leash_lead(payload: FirstLeashLeadIn) -> Dict[str, Any]:
-    email_norm = _normalize_email_key(str(payload.email))
-    user_type = payload.user_type.strip().lower()
-    campaign = (payload.campaign or "").strip()
-    source = (payload.source or "").strip()
-    utm_medium = (payload.utm_medium or "").strip()
-    utm_campaign = (payload.utm_campaign or "").strip()
-
-    if user_type not in ["owner", "trainer"]:
-        raise HTTPException(status_code=400, detail="Invalid user type")
-
-    leads_coll = getattr(db, "first_leash_leads", None)
-    if leads_coll is None:
-        raise HTTPException(status_code=503, detail="Database unready")
-
-    now = datetime.now(timezone.utc)
-
-    existing = await leads_coll.find_one({"email_norm": email_norm})
-    if existing:
-        return {"status": "exists", "id": str(existing["_id"])}
-
-    doc = {
-        "email_norm": email_norm,
-        "email_raw": str(payload.email),
-        "user_type": user_type,
-        "created_at": now,
-        "campaign": campaign,
-        "source": source,
-        "utm_medium": utm_medium,
-        "utm_campaign": utm_campaign,
-    }
-
-    res = await leads_coll.insert_one(doc)
-    return {"status": "success", "id": str(res.inserted_id)}
 
 
 @api.post("/owner-waitlist")

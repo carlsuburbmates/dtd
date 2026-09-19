@@ -1,0 +1,15 @@
+# Cloud Run source uploads must never include local secrets or test artifacts.
+.env
+.env.*
+.git/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.log
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/

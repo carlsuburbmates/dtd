@@ -22,7 +22,7 @@
 - Directory browsing, filters, trainer profiles and direct protected enquiries are implemented.
 - Guided matching calculates trainer fit independently of paid status. A paid-tier preference can reorder only trainers within the five-point comparable-fit band.
 - Outcome follow-up, waitlist and notification paths exist, but recent operator evidence includes failed messages and stale loops; unattended operation is not yet accepted.
-- Legacy education routes redirect to the separate First Leash site. Desktop/mobile primary navigation, the homepage hero/card/footer, and the campaign's education action link directly to First Leash's static root. The main repository still contains an unused `POST /api/first-leash` model/endpoint, so code separation is incomplete.
+- Legacy education routes redirect to the separate First Leash site. Desktop/mobile primary navigation, the homepage hero/card/footer, and the campaign's education action link directly to First Leash's static root. The unused `POST /api/first-leash` capture model and route have been removed from the main API; the live OpenAPI contract no longer advertises that route.
 
 ## Trainer and billing workflows
 
@@ -62,8 +62,9 @@
 
 ## Verification record
 
-- First Leash: TypeScript check passed; 17 tests passed (including reciprocal navigation); production Vite/PWA build passed. Local browser checks at 320, 390, 768 and 1440px found no horizontal overflow or page errors; physical-device, audio and print checks remain separate.
+- First Leash: TypeScript check and production Vite/PWA build passed; 18 unit tests passed, including print HTML escaping. Local browser checks at 320, 390, 768 and 1440px found no horizontal overflow or page errors. Physical-device print and audio acceptance remains separate.
 - Main DTD: 27 frontend tests passed, and its production frontend build passed after the cross-site navigation change.
-- Live custom domains served the exact freshly built frontend asset hashes on 19 September 2026 (`main.867ee572.js` for DTD; `index-DWGvYkJB.js` for First Leash). Browser journeys at 390 and 1440px completed DTD navigation → First Leash life-stage and lesson → same-tab, query-free DTD root, without page errors. The DTD hero, campaign education link and legacy redirect also resolved to First Leash. This is not a physical-device, print or audio acceptance test.
+- Live custom domains served the exact freshly built frontend asset hashes on 19 September 2026 (`main.867ee572.js` for DTD; `index-DWGvYkJB.js` for First Leash before the print-escaping release). Repeatable Chrome and WebKit browser journeys at 390 and 1440px completed DTD navigation → First Leash life-stage and lesson → same-tab, query-free DTD root, without page errors. Both visitor-facing A4 poster PDFs returned HTTP 200 with PDF content type; acoustic play/stop controls and isolated dossier print layout passed in both engines. These checks do not prove physical-device sound output, native print-dialogue appearance, or touch behaviour.
+- The main API's education-capture removal passed 266 local backend unit tests (excluding integration tests requiring a local API server). A no-traffic Cloud Run revision was smoke-tested before receiving 100% traffic; live OpenAPI, health, config and trainer reads then passed. The earlier all-tests command was not green because 32 failures and nine errors depended on an absent `localhost:8000` API server.
 - Main DTD: 25 trial/refund tests passed; 87 public-mode/matching tests passed; 9 focused frontend billing/ops tests passed.
 - These checks establish the named contracts only. They do not replace end-to-end production acceptance, provider delivery proof or operator review of authenticated state.
