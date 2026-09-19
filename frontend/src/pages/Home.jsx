@@ -11,7 +11,7 @@ const staggerChild = {
     hidden: { opacity: 0, y: 16 },
     show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.2, 0.8, 0.2, 1] } },
 };
-import { api, audCents, buildAttributionSearch } from "@/lib/api";
+import { api, audCents } from "@/lib/api";
 import { captureEducationEvent, captureEducationPageView } from "@/lib/educationAnalytics";
 import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
@@ -41,17 +41,6 @@ export default function Home() {
             utm_campaign: (search.get("utm_campaign") || search.get("campaign") || "").trim(),
         }),
         [search]
-    );
-
-    const ownerGuideSearch = useMemo(
-        () =>
-            buildAttributionSearch({
-                campaign: attribution.campaign,
-                source: attribution.source,
-                utmMedium: attribution.utm_medium,
-                utmCampaign: attribution.utm_campaign,
-            }),
-        [attribution]
     );
 
     useEffect(() => {
@@ -208,13 +197,13 @@ export default function Home() {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.9, delay: 0.45 }}
                         >
-                            <Link
-                                to={`/how-it-works${ownerGuideSearch}`}
+                            <a
+                                href={FIRST_LEASH_URL}
                                 className="text-sm text-white/60 hover:text-white/90 transition-colors inline-flex items-center gap-1.5 pb-0.5 border-b border-white/20 hover:border-white/50"
                                 onClick={() => captureEducationEvent("home_hero_leash_clicked")}
                             >
                                 New dog at home? Open The First Leash.
-                            </Link>
+                            </a>
                         </motion.div>
                     </div>
                 </section>

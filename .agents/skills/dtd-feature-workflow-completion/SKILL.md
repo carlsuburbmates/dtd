@@ -15,22 +15,13 @@ Treat the initiating user step, stored records, downstream automations, fallback
 Read these in order before editing workflow-affecting features:
 1. `AGENTS.md`
 2. `.codex/skill-policy.toml`
-3. `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
-4. `docs/governance/CURRENT_TRUTH_INDEX.md`
-5. `docs/standards/DTD_PROJECT_CONTEXT.md`
-6. `docs/strategy/DTD_MASTER_ARCHITECTURE_AND_MONETIZATION_MATRIX.md`
-7. `docs/strategy/DTD_AUTOMATION_AND_INTEGRATION_SPEC.md`
-8. `docs/governance/WORKFLOW_COMPLETION_SPEC.md`
-9. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
-10. `docs/governance/WORKFLOW_SURFACE_MATRIX.md`
-11. `docs/design/WIREFRAME_STATE_MAP.md`
-12. `docs/governance/OPERATIONS_CONSOLE_SPEC.md`
-13. `docs/governance/OPS_COCKPIT_RESPONSIBILITY_MODEL.md`
-14. `docs/process/FEATURE_WORKFLOW_IMPLEMENTATION_CONTRACT.md`
+3. `docs/README.md` (active documentation map)
+4. `docs/DTD_CURRENT_STATE.md` and `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`
+5. `docs/DTD_TARGETED_POST_LAUNCH_STATE.md` for next-build targets
+6. The relevant active topic file under `docs/specs/`
+7. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` if a prior decision is disputed
 
-Read `docs/process/FEATURE_WORKFLOW_FIX_BACKLOG.md` only when the task overlaps known open gaps.
-
-Use lower-authority support docs only after the canonical pack is clear.
+`archive/` is historical, outside the active documentation tree. Do not read or search it during ordinary work, even if a stale reference points there. Only inspect it on explicit user request for archival research.
 
 ## When To Use
 
@@ -105,7 +96,7 @@ A feature is complete only when:
 
 ## Required Feature Contract
 
-Before editing, write or reason through these fields from `docs/process/FEATURE_WORKFLOW_IMPLEMENTATION_CONTRACT.md`:
+Before editing, write or reason through these fields against the relevant active spec in `docs/specs/`:
 1. feature goal
 2. canonical workflow(s) affected
 3. migration baseline and target-state relevance

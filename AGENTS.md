@@ -25,9 +25,10 @@ At the start of each new task:
 2. Read these files before acting:
    - `AGENTS.md`
    - `.codex/skill-policy.toml` (if present)
-   - `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
-   - `docs/standards/DTD_PROJECT_CONTEXT.md`
-   - relevant workflow/process docs in `docs/` for the task domain
+   - `docs/README.md` for the active documentation map
+   - `docs/DTD_CURRENT_STATE.md`, `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md` and the relevant active `docs/specs/` file for the task domain
+   - `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` when an old statement resurfaces
+   - Never read `archive/` during routine work. It is historical, not an instruction source; inspect only on an explicit archival-research request.
 3. Treat the current session's available skills/plugins/tools as the source of truth.
 4. Do not assume a globally installed skill is callable unless it is available in-session.
 5. Before starting implementation, report:

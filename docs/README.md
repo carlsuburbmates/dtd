@@ -49,4 +49,4 @@ distribution surfaces only after evidence and explicit approval
 
 ## Maintenance rule
 
-Update the authoritative source first, then update this synthesis. README must never create a new fact, number or decision. Before merging documentation changes, check README against every source it summarises and check the authoritative documents against one another. Historical and process material belongs under `archive/`, not beside the active set.
+Update the authoritative source first, then update this synthesis. README must never create a new fact, number or decision. Before merging documentation changes, check README against every source it summarises and check the authoritative documents against one another. Historical and process material belongs under the repository-root `archive/`, entirely outside the active `docs/` tree. Routine searches exclude that archive; inspect it only on explicit archival-research request.

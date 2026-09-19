@@ -2,6 +2,8 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+
 jest.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
     useSearchParams: () => [new URLSearchParams(), jest.fn()],
@@ -72,6 +74,16 @@ describe("Home page matching test", () => {
         act(() => root.unmount());
         container.remove();
         jest.clearAllMocks();
+    });
+
+    it("routes both First Leash homepage calls to the separate education root without user data", async () => {
+        await act(async () => { root.render(<Home />); });
+        const links = [...container.querySelectorAll('a[href="https://learn.dogtrainersdirectory.com.au"]')];
+        expect(links.map((link) => link.textContent.trim())).toEqual(expect.arrayContaining([
+            "New dog at home? Open The First Leash.", "Open The First Leash",
+        ]));
+        expect(links).toHaveLength(2);
+        expect(links.every((link) => !link.hasAttribute("target"))).toBe(true);
     });
 
     it("renders match results when post /match succeeds", async () => {

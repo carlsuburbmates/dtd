@@ -1,0 +1,3 @@
+# Historical documentation is excluded from routine searches.
+# Use rg --no-ignore archive/ only when archival research is explicitly requested.
+/archive/

@@ -2,9 +2,9 @@
 
 Orientation only. This README is not implementation authority.
 
-Canonical truth starts at `docs/governance/CURRENT_TRUTH_INDEX.md`. Read
-`docs/standards/DTD_PROJECT_CONTEXT.md` for project orientation before loading
-the detailed authority for a task.
+Canonical truth starts at `docs/README.md`. Read its active authority map before
+loading the state, invariants, decision register and relevant topic specification.
+The repository-root `archive/` is historical and excluded from ordinary tasks.
 
 ## What this project is
 
@@ -61,25 +61,19 @@ cd frontend && yarn build
 
 - `backend/` FastAPI app, runtime services, tests
 - `frontend/` React app and public/operator pages
-- `docs/standards/` canonical standards
-- `docs/governance/` canonical governance and audit-support docs
-- `docs/process/` runbooks, execution playbooks, handoff/process material
-- `docs/design/` design continuity material
+- `docs/` current, target and vision state, invariant rules, decisions and focused specs
+- `archive/` historical documents, separate from active docs and excluded from routine searches
 
 ## Where truth lives
 
-Read in this order:
-1. `docs/governance/CURRENT_TRUTH_INDEX.md`
-2. `docs/standards/DTD_PROJECT_CONTEXT.md`
-3. canonical implementation docs listed there
-3. `docs/governance/EXECUTION_STATUS.md` and `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md` for current-state and audit-support context
-
-Process and design docs are non-authoritative.
+Read `docs/README.md`, then `docs/DTD_CURRENT_STATE.md` and
+`docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`. Use the relevant file in `docs/specs/`
+and `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` for disputed decisions.
+Do not consult `archive/` unless the user explicitly requests historical research.
 
 ## Next docs to read
 
-- `docs/governance/CURRENT_TRUTH_INDEX.md`
-- `docs/standards/DTD_PROJECT_CONTEXT.md`
-- `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
-- `docs/governance/EXECUTION_STATUS.md`
-- `docs/governance/RUNTIME_EVIDENCE_ALIGNMENT_MATRIX.md`
+- `docs/README.md`
+- `docs/DTD_CURRENT_STATE.md`
+- `docs/DTD_TARGETED_POST_LAUNCH_STATE.md`
+- `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`

@@ -22,7 +22,7 @@
 - Directory browsing, filters, trainer profiles and direct protected enquiries are implemented.
 - Guided matching calculates trainer fit independently of paid status. A paid-tier preference can reorder only trainers within the five-point comparable-fit band.
 - Outcome follow-up, waitlist and notification paths exist, but recent operator evidence includes failed messages and stale loops; unattended operation is not yet accepted.
-- Legacy education routes redirect to the separate First Leash site. The main repository still contains an unused `POST /api/first-leash` model/endpoint and stale campaign education copy, so code separation is incomplete.
+- Legacy education routes redirect to the separate First Leash site. Desktop/mobile primary navigation, the homepage hero/card/footer, and the campaign's education action link directly to First Leash's static root. The main repository still contains an unused `POST /api/first-leash` model/endpoint, so code separation is incomplete.
 
 ## Trainer and billing workflows
 
@@ -62,6 +62,7 @@
 
 ## Verification record
 
-- First Leash: TypeScript check passed; 15 tests passed; production Vite/PWA build passed.
+- First Leash: TypeScript check passed; 17 tests passed (including reciprocal navigation); production Vite/PWA build passed. Local browser checks at 320, 390, 768 and 1440px found no horizontal overflow or page errors; physical-device, audio and print checks remain separate.
+- Main DTD: 27 frontend tests passed, and its production frontend build passed after the cross-site navigation change.
 - Main DTD: 25 trial/refund tests passed; 87 public-mode/matching tests passed; 9 focused frontend billing/ops tests passed.
 - These checks establish the named contracts only. They do not replace end-to-end production acceptance, provider delivery proof or operator review of authenticated state.

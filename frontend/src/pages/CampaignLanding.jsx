@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { api, buildAttributionSearch } from "@/lib/api";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
+import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 
 function prettyCampaign(raw) {
     return (raw || "campaign")
@@ -58,8 +59,9 @@ export default function CampaignLanding() {
                         <li>• Trust-first trainer verification before introductions</li>
                     </ul>
                     <div className="mt-6 flex flex-wrap gap-3">
+                        <a href={FIRST_LEASH_URL} className="btn-accent" data-testid="lp-first-leash">Open The First Leash</a>
                         <Link to={`/how-it-works${ownerGuideSearch}`} className="btn-accent" data-testid="lp-find-trainers">
-                            Start the guide
+                            See how DTD works
                             <ArrowRight className="h-4 w-4" />
                         </Link>
                         <Link to={`/how-it-works${ownerGuideSearch}#owner-guide-waitlist`} className="btn-ghost" data-testid="lp-how-it-works">
