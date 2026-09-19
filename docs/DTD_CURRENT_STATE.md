@@ -64,5 +64,6 @@
 
 - First Leash: TypeScript check passed; 17 tests passed (including reciprocal navigation); production Vite/PWA build passed. Local browser checks at 320, 390, 768 and 1440px found no horizontal overflow or page errors; physical-device, audio and print checks remain separate.
 - Main DTD: 27 frontend tests passed, and its production frontend build passed after the cross-site navigation change.
+- Live custom domains served the exact freshly built frontend asset hashes on 19 September 2026 (`main.867ee572.js` for DTD; `index-DWGvYkJB.js` for First Leash). Browser journeys at 390 and 1440px completed DTD navigation → First Leash life-stage and lesson → same-tab, query-free DTD root, without page errors. The DTD hero, campaign education link and legacy redirect also resolved to First Leash. This is not a physical-device, print or audio acceptance test.
 - Main DTD: 25 trial/refund tests passed; 87 public-mode/matching tests passed; 9 focused frontend billing/ops tests passed.
 - These checks establish the named contracts only. They do not replace end-to-end production acceptance, provider delivery proof or operator review of authenticated state.
