@@ -93,3 +93,4 @@ skills-lock.json
 # Local review/test artifacts
 frontend/test-results/
 playwright-report/
+.firebase/
