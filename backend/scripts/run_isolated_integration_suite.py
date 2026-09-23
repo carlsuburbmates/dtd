@@ -109,7 +109,6 @@ def _server_environment(mongo_url: str, db_name: str, base_url: str) -> Dict[str
             "REMOTE_BACKEND_URL": base_url,
             "ADMIN_PASS": "dtd-isolated-suite-pass",
             "TRAINER_ACTION_TOKEN_SECRET": "dtd-isolated-suite-token",
-            "CLOUD_SCHEDULER_SECRET": "dtd-isolated-suite-scheduler",
             "ENABLE_STARTUP_SEEDS": "0",
             "DISABLE_AUTONOMY": "1",
             # Keep the legacy and explicit ownership settings consistent; the

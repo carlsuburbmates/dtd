@@ -35,6 +35,9 @@ from urllib.parse import urlencode, urlparse
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request, Query
 from fastapi.responses import JSONResponse
+from google.auth import exceptions as google_auth_exceptions
+from google.auth.transport import requests as google_auth_requests
+from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pymongo.errors import DuplicateKeyError
@@ -583,10 +586,28 @@ def _trainer_action_secret() -> str:
     raise RuntimeError("TRAINER_ACTION_TOKEN_SECRET or ADMIN_PASS is required for trainer action tokens.")
 
 
-def _require_cloud_scheduler_secret(value: str) -> None:
-    expected = (os.environ.get("CLOUD_SCHEDULER_SECRET") or "").strip()
-    supplied = str(value or "").strip()
-    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+def _scheduler_oidc_configuration() -> tuple[str, str]:
+    return (
+        (os.environ.get("CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT") or "").strip(),
+        (os.environ.get("CLOUD_SCHEDULER_OIDC_AUDIENCE") or "").strip(),
+    )
+
+
+def _require_cloud_scheduler_oidc(authorization: str) -> None:
+    expected_email, expected_audience = _scheduler_oidc_configuration()
+    raw = (authorization or "").strip()
+    scheme, _, token = raw.partition(" ")
+    if not expected_email or not expected_audience or scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
+    try:
+        claims = google_id_token.verify_oauth2_token(
+            token.strip(),
+            google_auth_requests.Request(),
+            expected_audience,
+        )
+    except (google_auth_exceptions.GoogleAuthError, ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid scheduler credential.") from None
+    if claims.get("email") != expected_email or claims.get("email_verified") is not True:
         raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
 
 
@@ -2397,10 +2418,10 @@ async def app_health() -> JSONResponse:
 
 @api.post("/internal/jobs/pro-trial-warnings")
 async def run_pro_trial_warning_job(
-    x_cloud_scheduler_secret: str = Header(default="", alias="X-Cloud-Scheduler-Secret"),
+    authorization: str = Header(default="", alias="Authorization"),
 ) -> Dict[str, Any]:
     """Authenticated, once-daily execution boundary for day-23 warnings."""
-    _require_cloud_scheduler_secret(x_cloud_scheduler_secret)
+    _require_cloud_scheduler_oidc(authorization)
 
     def billing_url(trainer: Dict[str, Any]) -> str:
         trainer_id = str(trainer.get("id") or "")
