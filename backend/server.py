@@ -2447,6 +2447,74 @@ async def config() -> Dict[str, Any]:
     }
 
 
+def _canonical_suburb_for_seo_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """Return the canonical locality for an exact public SEO slug.
+
+    This deliberately does not accept arbitrary nested paths or turn display
+    text into a locality.  The canonical catalogue, rather than incoming URL
+    text or the current trainer sample, is the geography authority.
+    """
+    normalized = str(slug or "").strip().lower()
+    if not normalized or "/" in normalized:
+        return None
+    for row in suburb_catalogue.canonical_suburbs():
+        if row.get("slug") == normalized:
+            return row
+    return None
+
+
+def _configured_positive_int(name: str) -> Optional[int]:
+    """Read an explicit SEO threshold; missing/invalid values fail closed."""
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid %s configuration; SEO persistence is disabled", name)
+        return None
+    return value if value > 0 else None
+
+
+def _seo_word_count(copy: Dict[str, Any]) -> int:
+    text = " ".join(
+        [
+            str(copy.get("title") or ""),
+            str(copy.get("meta_description") or ""),
+            str(copy.get("intro") or ""),
+            *[
+                f"{section.get('heading', '')} {section.get('body', '')}"
+                for section in (copy.get("sections") or [])
+                if isinstance(section, dict)
+            ],
+            *[
+                f"{question.get('q', '')} {question.get('a', '')}"
+                for question in (copy.get("faq") or [])
+                if isinstance(question, dict)
+            ],
+        ]
+    )
+    return len(re.findall(r"\b[\w'-]+\b", text))
+
+
+def _unpublished_seo_response(*, slug: str, suburb: str, reason: str) -> Dict[str, Any]:
+    """Return useful, non-indexable navigation content without a provider call."""
+    return {
+        "slug": slug,
+        "suburb": suburb,
+        "category": "general",
+        "publication_status": "not_eligible",
+        "meta_robots": "noindex,follow",
+        "reason_codes": [reason],
+        "copy": {
+            "title": f"Dog training guidance in {suburb}",
+            "intro": "Browse the directory or use guided matching to find an appropriate trainer. Local availability is updated as eligible trainer profiles are published.",
+            "sections": [],
+            "faq": [],
+        },
+    }
+
+
 @api.post("/match")
 async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
     """Single input → 3 trainers. The only product surface for end users."""
@@ -4005,19 +4073,61 @@ async def reactivate_trainer_listing(payload: TrainerReactivateIn) -> Dict[str, 
 
 @api.get("/seo/{slug:path}")
 async def get_seo(slug: str) -> Dict[str, Any]:
+    canonical_suburb = _canonical_suburb_for_seo_slug(slug)
+    if not canonical_suburb:
+        # Crucially, unknown paths do not call AI or write seo_pages.
+        raise HTTPException(status_code=404, detail="Unknown canonical suburb")
+
+    slug = str(canonical_suburb["slug"])
     page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
     if page:
         return page
-    parts = slug.split("/")
-    suburb = parts[0].replace("-", " ").title()
-    category = (parts[1] if len(parts) > 1 else "general").replace("-", " ").lower()
-    copy = await ai_service.generate_seo_copy(suburb, category)
+
+    minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
+    minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    suburb = str(canonical_suburb["suburb_name"])
+    if minimum_trainers is None or minimum_words is None:
+        return _unpublished_seo_response(
+            slug=slug,
+            suburb=suburb,
+            reason="seo_thresholds_not_configured",
+        )
+
+    eligible_trainers = await db.trainers.count_documents(
+        {
+            "published": True,
+            "region": {"$in": ACTIVE_REGIONS},
+            "$or": [
+                {"suburb": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
+                {"serviced_suburbs": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
+            ],
+        }
+    )
+    if eligible_trainers < minimum_trainers:
+        return _unpublished_seo_response(
+            slug=slug,
+            suburb=suburb,
+            reason="insufficient_eligible_supply",
+        )
+
+    copy = await ai_service.generate_seo_copy(suburb, "general")
+    word_count = _seo_word_count(copy)
+    if word_count < minimum_words:
+        return _unpublished_seo_response(
+            slug=slug,
+            suburb=suburb,
+            reason="insufficient_content_quality",
+        )
     page = {
         "id": new_id(),
         "slug": slug,
         "suburb": suburb,
-        "category": category,
+        "category": "general",
         "copy": copy,
+        "publication_status": "published",
+        "meta_robots": "index,follow",
+        "eligible_trainer_count": eligible_trainers,
+        "content_word_count": word_count,
         "generated_at": now_iso(),
     }
     await db.seo_pages.insert_one(page.copy())

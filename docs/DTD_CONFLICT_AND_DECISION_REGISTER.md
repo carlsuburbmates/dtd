@@ -67,9 +67,9 @@
 
 ## CDR-008 — Acquisition authority
 
-- **Date/status:** 2026-09-11 — locked.
+- **Date/status:** 2026-09-11 — locked; evidence amended 2026-09-20.
 - **Decision:** use first-party submission/claim, owner-authorised official sites, or approved licensed feeds; ABR verifies identity; Gemini URL extraction can structure authorised content. Search Grounding, Places/Maps and generic scraping are excluded from persistent acquisition.
-- **Evidence:** owner-approved pipeline, implemented scripts and source manifests.
+- **Evidence:** owner-approved pipeline, implemented scripts and source manifests. On 2026-09-20, a separate reviewer independently checked Google's primary terms pages: Google Maps Platform Terms §3.2.3 says “copy and save business names, addresses, or user reviews”; Gemini API Additional Terms says “it is a violation of these terms to use Grounding with Google Search to extract or collect one or more of these components for another purpose” and separately prohibits storing or link-tracking Grounded Results/Search Suggestions outside stated exceptions. This confirms the existing prohibition against using Places/Maps or Gemini Search Grounding for DTD's persistent discovery/acquisition pipeline.
 - **Rationale:** lawful, reproducible supply growth with correction and suppression rights.
 - **Supersedes:** AI/search-as-database proposals.
 - **Affected:** acquisition spec and invariants.
@@ -91,3 +91,21 @@
 - **Rationale:** small, navigable authority set with contradictions detectable by topic.
 - **Supersedes:** monolithic master/canonical documents and active reconciliation prompts/status logs.
 - **Affected:** both repositories' documentation trees.
+
+## CDR-011 — Licensed discovery-source outreach outcome
+
+- **Date/status:** 2026-09-20 — current sourcing outcome; review if a new written licence becomes available.
+- **Decision:** no licensed automated discovery feed is currently available or pursued. First-party submission/claim, owner-authorised official URLs and bounded manual curation remain DTD's active acquisition channels under CDR-008 and the acquisition invariant.
+- **Evidence:** Thryv Data, operator of the former Sensis Business Search API, replied on 11 September 2026 that SAPI is no longer available and business data is no longer sold. Google's Programmable Search Products team replied on 16 September 2026 with (a) a general web-search API priced at US$15 CPM with a US$30,000/month minimum and (b) Vertex AI Grounded Generation for search over known domains, not discovery of unknown businesses. Neither product was pursued; the latter would also conflict with CDR-008's confirmed Grounding restriction. Thryv's referral to `smrtr.com.au` has not yet been vetted and remains one low-effort outreach lead.
+- **Rationale:** the outreach closes two investigated paths without pretending a compliant, affordable alternative exists. It preserves the lawful manual baseline rather than creating pressure to use prohibited Google-derived discovery.
+- **Supersedes:** the undetermined Sensis/Thryv SAPI candidate state and any implication that Google search products are an approved DTD discovery feed.
+- **Affected:** acquisition specification, source-outreach backlog and future vendor evaluation.
+
+## CDR-012 — Production web routing ownership
+
+- **Date/status:** 2026-09-23 — owner-approved implementation; VentraIP DNS cutover completed, Vercel retirement pending propagation stability.
+- **Decision:** Firebase Hosting remains the canonical public frontend; Cloud Run remains the backend; browser API calls use the main domain's `/api/*` path through Firebase Hosting to Cloud Run. DNS management is to move from Vercel DNS to VentraIP, with the required `learn` and mail records preserved and the legacy Vercel domain attachment retired.
+- **Evidence:** owner approval in the deployment session; existing Firebase Hosting site and Cloud Run service; local routing change and targeted build validation; VentraIP DNS Hosting now serves the Firebase apex/`www`/`learn` records, Zoho MX records, and preserved verification, DMARC, DKIM and SES TXT records. Authoritative queries to all three VentraIP nameservers agree. Public recursive resolvers are still mixed during nameserver propagation.
+- **Rationale:** one public frontend/API origin and one DNS authority reduce stale Vercel routing and CORS/configuration drift for the solo operator.
+- **Supersedes:** the split production arrangement in which Vercel DNS delegated the domain while Firebase served the frontend and the frontend bypassed Firebase for Cloud Run.
+- **Affected:** `firebase.json`, frontend API base URL, DNS/provider configuration, deployment runbook and current-state evidence.

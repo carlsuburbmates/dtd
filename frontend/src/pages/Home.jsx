@@ -134,7 +134,7 @@ export default function Home() {
     };
 
     return (
-        <div className="App public-page min-h-screen flex flex-col relative overflow-x-hidden bg-[#FAFAF7]">
+        <div className="App public-page min-h-screen flex flex-col relative overflow-x-clip bg-[#FAFAF7]">
             <PublicHeader />
 
             <main id="main-content" className="flex-1 pb-32">

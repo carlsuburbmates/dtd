@@ -47,8 +47,12 @@ Default local URLs:
 Backend:
 
 ```bash
-cd backend && pytest -q
+python backend/scripts/run_isolated_integration_suite.py
 ```
+
+This is the maintained full backend command. It starts a local API with a
+disposable loopback-only MongoDB database and removes that database afterwards.
+It never uses the production canonical trainer seed or external providers.
 
 Frontend:
 

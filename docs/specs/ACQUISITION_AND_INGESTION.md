@@ -63,8 +63,8 @@ This mode is designed but remains disabled until a licensed source contract, ada
 
 ## Source decisions
 
-- Thryv/Sensis remains a potential preferred licensed discovery direction, pending written commercial and usage terms.
-- Google Web Search Products was an inquiry path, not approved acquisition authority.
+- Sensis/Thryv SAPI is confirmed discontinued as of 11 September 2026; it is not a current licensed-source candidate.
+- Google Web Search Products outreach is closed: the available offers were not a viable or approved discovery authority, and Grounded Generation remains excluded under CDR-008.
 - MacroMatch/TotalCheck may be considered for validation only; they are not assumed discovery feeds.
 - A new source requires a named decision record before network use or persistence.
 

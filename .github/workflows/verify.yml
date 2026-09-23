@@ -3,13 +3,21 @@ name: Verify
 on:
   pull_request:
   push:
-    branches-ignore:
-      - main
 
 jobs:
   verify:
     name: Verify / verify
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,10 +37,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r backend/requirements.txt
           python -m py_compile backend/server.py backend/worker.py backend/services/*.py
-          pytest -q backend/tests/test_runtime_control_unit.py backend/tests/test_w8_billing_unit.py backend/tests/test_email_delivery_unit.py
+          python backend/scripts/run_isolated_integration_suite.py
+          node scripts/check_prelaunch_release_gate.js
 
       - name: Frontend checks
         working-directory: frontend
         run: |
-          npm --version
-          node -e "const p=require('./package.json'); if(!p.name){process.exit(1)}; console.log('package', p.name, p.version || '0.0.0')"
+          corepack enable
+          yarn install --frozen-lockfile
+          CI=true yarn test --watch=false
+          yarn build

@@ -1,8 +1,4 @@
-"""Iteration 3 — fraud, engagements, inferred conversion, discovery, and
-expanded oversight surface.
-
-Build on top of the iteration-2 baseline (backend_test.py) without modifying it.
-"""
+"""Fraud, engagements, inferred conversion, discovery and `/ops` contracts."""
 from __future__ import annotations
 
 import os
@@ -73,7 +69,7 @@ def _oversight(session):
 # --- Anti-gaming: intro IP/email duplicate suppression --------------------
 
 class TestAntiGamingIntros:
-    def test_first_intro_billed_then_email_dup_suppressed(self, session, trainer_id):
+    def test_first_intro_then_email_duplicate_is_delivery_suppressed(self, session, trainer_id):
         unique_email = f"TEST_dup_{uuid.uuid4().hex[:8]}@example.com"
 
         a = session.post(f"{API}/intros", json={
@@ -86,13 +82,13 @@ class TestAntiGamingIntros:
         })
         assert a.status_code == 200, a.text
         first = a.json()
-        # First intro is normally billed for a fresh email+IP+trainer combo. In a
-        # shared test-runner IP environment the IP-rate-limit may already have
+        # The first intro is normally delivered for a fresh email+IP+trainer
+        # combination. In a shared test-runner IP environment the IP-rate-limit may already have
         # triggered from prior tests, in which case we accept "suppressed" for
         # the first call but require ip_* reason (NOT email_*) so we know the
         # email-dup logic will work cleanly on the 2nd call.
-        assert first["billing_status"] in ("billed", "suppressed"), first
-        if first["billing_status"] == "suppressed":
+        assert first["delivery_status"] in ("delivered", "suppressed"), first
+        if first["delivery_status"] == "suppressed":
             reasons = first.get("fraud_reasons") or []
             assert any(r.startswith("ip_") for r in reasons), reasons
 
@@ -107,8 +103,9 @@ class TestAntiGamingIntros:
         })
         assert b.status_code == 200, b.text
         second = b.json()
-        assert second["billing_status"] == "suppressed", second
-        assert second["intro_fee_cents"] == 0
+        assert second["delivery_status"] == "suppressed", second
+        assert second["fraud_status"] == "suppressed", second
+        assert "intro_fee_cents" not in second
         reasons2 = second.get("fraud_reasons") or []
         assert isinstance(reasons2, list) and len(reasons2) >= 1
         # email-or-ip duplicate suppression must show up
@@ -133,6 +130,7 @@ class TestEngagementsInferredConversion:
             "trainer_id": trainer_id,
             "description": "TEST_ for engagement",
             "user_email": f"TEST_eng_{uuid.uuid4().hex[:8]}@example.com",
+            "user_name": "Engagement Test",
             "consent_contact_release": True,
             "consent_outcome_tracking": True,
         })
@@ -186,6 +184,7 @@ class TestConversionFraud:
             "trainer_id": trainer_id,
             "description": "TEST_ too-fast conversion",
             "user_email": f"TEST_fast_{uuid.uuid4().hex[:8]}@example.com",
+            "user_name": "Conversion Test",
             "consent_contact_release": True,
             "consent_outcome_tracking": True,
         }).json()
@@ -227,20 +226,17 @@ class TestDiscoveryQueue:
         assert (ds["pending"] + ds["promoted"] + ds["duplicate"] + ds["discarded"]) >= 1
 
 
-# --- Pricing stability (fixed launch fee) ---------------------------------
+# --- Commercial posture ----------------------------------------------------
 
-class TestPricingStability:
-    def test_frozen_at_baseline(self, session):
-        ov = _oversight(session)
-        ps_list = ov.get("pricing_state", [])
-        assert ps_list, "pricing_state empty"
-        # Launch pricing is fixed by policy: A$5 post-trial intro fee.
-        frozen_rows = [p for p in ps_list if p.get("frozen") is True]
-        assert frozen_rows, "expected fixed pricing rows"
-        for p in frozen_rows:
-            assert abs(float(p.get("multiplier", 0)) - 1.0) < 0.001, p
-            fee = int(p.get("intro_fee_cents", 0))
-            assert fee == 500, p
+class TestCommercialPosture:
+    def test_config_excludes_retired_per_intro_pricing(self, session):
+        r = session.get(f"{API}/config")
+        assert r.status_code == 200, r.text
+        config = r.json()
+        assert config["pro_trial_days"] == 30
+        assert "base_intro_fee_cents" not in config
+        assert "fixed_intro_fee_cents" not in config
+        assert "base_conversion_fee_cents" not in config
 
 
 # --- Oversight: shape for iteration 3 -------------------------------------
@@ -249,14 +245,17 @@ class TestOversightShapeIter3:
     def test_full_shape(self, session):
         ov = _oversight(session)
         # New top-level keys expected
-        for k in ("revenue", "throughput", "trust", "loops", "discovery_summary",
-                  "integrity", "top_trainers", "audit_recent", "pricing_state"):
+        for k in ("throughput", "trust", "loops", "discovery_summary",
+                  "integrity", "top_trainers", "audit_recent", "sponsor_inventory"):
             assert k in ov, f"missing top-level key: {k}"
 
         # autonomous loop snapshot includes all scheduled loop families
         loops = ov["loops"]
-        for k in ("ranking", "pricing", "verification", "discovery", "inference", "health"):
+        for k in ("ranking", "verification", "discovery", "inference", "health", "pro_trial_warnings"):
             assert k in loops, f"missing loops.{k}"
+
+        assert "revenue" not in ov
+        assert "pricing_state" not in ov
 
         # throughput.engagements_total
         assert "engagements_total" in ov["throughput"]

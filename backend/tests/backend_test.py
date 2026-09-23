@@ -1,15 +1,10 @@
-"""Dog Trainers Directory — intro-first match engine regression tests.
+"""Dog Trainers Directory public API regression tests.
 
-Covers (per redesign iteration 2):
-  * /api/config + root health
-  * Instant /match (single input → up to 3 results) and per-trainer detail
-  * /intros (records intro, returns contact, intro billing may be suppressed by fraud rules)
-  * /conversions (idempotent, tracked outcome by default)
-  * /submissions auto-publish (≥0.60; ≥0.85 = verified) and auto-hold (<0.6)
-  * /seo/{slug:path} including nested slugs
-  * /oversight login + read-only oversight surface (X-Admin-Pass)
-  * Mongo `_id` scrub everywhere
-  * Legacy admin mutation endpoints removed (404)
+The service-backed suite is run through
+``backend/scripts/run_isolated_integration_suite.py``.  That runner owns a
+disposable local database containing one explicitly verified, published test
+trainer.  Production's canonical intake seed is intentionally *not* reused:
+it creates unclaimed, unpublished profiles until their evidence is reviewed.
 """
 from __future__ import annotations
 
@@ -84,10 +79,13 @@ class TestConfig:
         r = session.get(f"{API}/config")
         assert r.status_code == 200
         d = r.json()
-        assert d["base_intro_fee_cents"] == 500
-        assert d.get("fixed_intro_fee_cents", d["base_intro_fee_cents"]) == d["base_intro_fee_cents"]
+        # Owner matching and introductions are free.  Legacy per-introduction
+        # configuration must not return as a public contract.
+        assert "base_intro_fee_cents" not in d
+        assert "fixed_intro_fee_cents" not in d
+        assert "base_conversion_fee_cents" not in d
         assert d.get("pro_trial_days", 30) == 30
-        assert d["base_conversion_fee_cents"] == 6500
+        assert d["public_matching_enabled"] is True
         assert isinstance(d["suburbs"], list)
         assert all(isinstance(x, str) for x in d["suburbs"])
         assert_no_id(d)
@@ -112,12 +110,11 @@ class TestMatch:
         assert 1 <= len(ms) <= 3
         for m in ms:
             assert "id" in m
-            assert "match_score" in m
             assert "match_reasoning" in m
-            assert "intro_fee_cents" in m
-            assert isinstance(m["intro_fee_cents"], int) and m["intro_fee_cents"] >= 300
-            assert "outcome_score" in m
-            assert "demand_multiplier" in m
+            assert isinstance(m["match_reasoning"], str) and m["match_reasoning"]
+            assert m["published"] is True
+            assert "intro_fee_cents" not in m
+            assert "demand_multiplier" not in m
         assert_no_id(body)
         pytest.last_match_id = body["match_id"]
         pytest.last_trainer_id = ms[0]["id"]
@@ -140,8 +137,10 @@ class TestTrainerDetail:
         assert r.status_code == 200
         d = r.json()
         assert d["id"] == tid
-        assert "intro_fee_cents" in d
-        assert "demand_multiplier" in d
+        assert d["published"] is True
+        assert d["verification_status"] == "verified"
+        assert "intro_fee_cents" not in d
+        assert "demand_multiplier" not in d
         assert_no_id(d)
 
     def test_404_for_unknown(self, session):
@@ -171,8 +170,9 @@ class TestIntrosConversions:
         assert r.status_code == 200, r.text
         intro = r.json()
         assert intro["trainer_id"] == tid
-        assert intro["intro_fee_cents"] >= 0
-        assert intro["billing_status"] in ("billed", "suppressed")
+        assert intro["delivery_status"] in ("delivered", "suppressed")
+        assert intro["fraud_status"] in ("clear", "suppressed")
+        assert "intro_fee_cents" not in intro
         contact = intro.get("contact", {})
         assert contact.get("name")  # contact info revealed
         assert_no_id(intro)
@@ -182,10 +182,9 @@ class TestIntrosConversions:
         r1 = session.post(f"{API}/conversions", json={"intro_id": intro_id, "confirmed": True})
         assert r1.status_code == 200, r1.text
         c = r1.json()
-        assert c.get("billing_status") in ("tracked", "billed", "suspicious")
-        if c.get("billing_status") == "tracked":
-            assert c.get("billed") is False
-            assert c.get("fee_cents") == 0
+        assert c.get("billing_status") in ("tracked", "suspicious")
+        assert c.get("billed") is False
+        assert c.get("fee_cents") == 0
         assert_no_id(c)
 
         # Conversion 2 — same intro_id, must NOT double-bill
@@ -201,7 +200,9 @@ class TestIntrosConversions:
             f"{API}/intros",
             json={
                 "trainer_id": str(uuid.uuid4()),
-                "description": "x",
+                "description": "Valid test request for an unknown trainer",
+                "user_email": "unknown-trainer@example.com",
+                "user_name": "Unknown Trainer Test",
                 "consent_contact_release": True,
                 "consent_outcome_tracking": True,
             },
@@ -216,30 +217,29 @@ class TestIntrosConversions:
 # --- Submissions: auto-publish vs auto-hold -------------------------------
 
 class TestSubmissions:
-    def test_strong_evidence_auto_publishes(self, session):
-        # Use a real Melbourne dog-training business so AI verification clears 0.6.
-        # Source: publicly listed business with operating website.
+    def test_evidence_without_statutory_verification_is_held(self, session):
+        # AI confidence and a website are not statutory verification.  This
+        # intentionally uses test-only data: real businesses must enter via an
+        # authorised acquisition source or a first-party submission/claim.
         payload = {
-            "name": "Positive K9 Training Melbourne",
+            "name": f"TEST_UnverifiedEvidence {uuid.uuid4().hex[:6]}",
             "suburb": "Eastern Suburbs",
             "region": "Greater Melbourne",
-            "website": "https://positivek9training.com.au",
+            "website": "https://example.test/unverified-evidence",
             "phone": "0411 234 567",
             "email": "info@positivek9training.com.au",
             "categories": ["obedience", "puppy", "behaviour"],
             "services": ["In-home training", "Group classes", "One-on-one"],
-            "bio": "Certified force-free trainers offering in-home and group sessions across Melbourne's Eastern Suburbs, the Dandenongs and Mornington Peninsula. Top-rated on Google and Facebook with 8+ years experience.",
-            "source_evidence_url": "https://positivek9training.com.au",
+            "bio": "Test-only force-free trainer profile supplied to confirm that unsupported evidence remains held for review.",
+            "source_evidence_url": "https://example.test/unverified-evidence",
             "consent_public_listing": True,
             "consent_information_accuracy": True,
         }
         r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
         sub = r.json()
-        assert sub["status"] in ("published", "held"), sub
-        # Strong evidence should publish (≥0.6) — not held
-        assert sub["status"] == "published", f"expected published, got {sub}"
-        assert sub.get("trainer_id"), "trainer_id required when published"
+        assert sub["status"] == "held", sub
+        assert sub.get("trainer_id"), "held submissions persist a reviewable trainer record"
         assert isinstance(sub["confidence_score"], (int, float))
         assert_no_id(sub)
 
@@ -255,25 +255,31 @@ class TestSubmissions:
         sub = r.json()
         # heuristic for name+suburb only is ~0.35 → held
         assert sub["status"] == "held", f"expected held, got {sub}"
-        assert sub.get("trainer_id") in (None, "")
+        assert sub.get("trainer_id"), "held submissions persist a reviewable trainer record"
         assert_no_id(sub)
 
 
-# --- SEO autogen with nested slug ----------------------------------------
+# --- SEO generation is canonical, eligible and bounded -------------------
 
 class TestSEO:
-    def test_nested_slug(self, session):
-        slug = "fitzroy/puppy-school"
+    def test_eligible_canonical_slug_is_cached(self, session):
+        slug = "fitzroy"
         r = session.get(f"{API}/seo/{slug}", timeout=90)
         assert r.status_code == 200
         d = r.json()
         assert d["slug"] == slug
         assert "copy" in d
+        assert d["publication_status"] == "published"
+        assert d["meta_robots"] == "index,follow"
         assert_no_id(d)
         # cache hit on 2nd call
         r2 = session.get(f"{API}/seo/{slug}", timeout=30)
         assert r2.status_code == 200
         assert r2.json()["id"] == d["id"]
+
+    def test_unknown_slug_is_not_a_generation_path(self, session):
+        r = session.get(f"{API}/seo/not-a-canonical-melbourne-suburb", timeout=30)
+        assert r.status_code == 404
 
 
 # --- Oversight (read-only) ------------------------------------------------
@@ -297,11 +303,9 @@ class TestOversight:
         assert r.status_code == 200, r.text
         d = r.json()
         for k in (
-            "revenue",
             "throughput",
             "loops",
             "alerts",
-            "pricing_state",
             "top_trainers",
             "audit_recent",
             "submissions_summary",
@@ -309,18 +313,14 @@ class TestOversight:
         ):
             assert k in d, f"missing {k}"
         # loops
-        for loop_key in ("ranking", "pricing", "verification", "health"):
+        for loop_key in ("ranking", "verification", "discovery", "inference", "health", "pro_trial_warnings"):
             assert loop_key in d["loops"]
-        # ranking ran at startup
-        assert d["loops"]["ranking"].get("trainers_scored", 0) >= 1
-        # at least one suburb priced after startup pass
-        assert isinstance(d["pricing_state"], list)
-        assert len(d["pricing_state"]) >= 1
-        ps = d["pricing_state"][0]
-        assert "intro_fee_cents" in ps and "multiplier" in ps
-        # top trainers populated with outcome_score
+        assert "revenue" not in d
+        assert "pricing_state" not in d
+        # The isolated fixture proves a published profile is visible in the
+        # operational surface without making canonical startup seeding public.
         assert len(d["top_trainers"]) >= 1
-        assert "outcome_score" in d["top_trainers"][0]
+        assert d["top_trainers"][0]["id"]
         assert_no_id(d)
 
 
@@ -339,7 +339,6 @@ class TestLegacyRemoved:
         ("/admin/ab-tests", "GET"),
         ("/admin/seo", "GET"),
         ("/featured", "GET"),
-        ("/trainers", "GET"),  # list endpoint intentionally removed
         ("/leads", "POST"),
         ("/suburbs", "GET"),
         ("/categories", "GET"),
@@ -351,3 +350,14 @@ class TestLegacyRemoved:
                             headers=HDR if "/admin" in path else None)
         # Acceptable: 404 (route absent) or 405 (path collision but no method)
         assert r.status_code in (404, 405), f"{method} {path} → {r.status_code}: should be removed"
+
+
+class TestDirectoryBrowse:
+    def test_published_trainers_are_browsable(self, session):
+        r = session.get(f"{API}/trainers")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["total"] >= 1
+        assert body["trainers"]
+        assert all(row["published"] is True for row in body["trainers"])
+        assert_no_id(body)

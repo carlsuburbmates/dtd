@@ -91,6 +91,19 @@ def test_first_leash_capture_is_not_a_main_api_route():
     assert "/api/owner-waitlist" in paths
 
 
+def test_seo_generation_thresholds_fail_closed_when_not_explicitly_configured(monkeypatch):
+    monkeypatch.delenv("SEO_MIN_PUBLISHED_TRAINERS", raising=False)
+    monkeypatch.delenv("SEO_MIN_CONTENT_WORDS", raising=False)
+    assert server._configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS") is None
+    assert server._configured_positive_int("SEO_MIN_CONTENT_WORDS") is None
+
+
+def test_unknown_seo_slug_is_rejected_before_database_access():
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(server.get_seo("not-a-canonical-melbourne-suburb"))
+    assert exc_info.value.status_code == 404
+
+
 class _Trainers:
     async def distinct(self, _field, _query):
         return ["Carlton", "Richmond"]

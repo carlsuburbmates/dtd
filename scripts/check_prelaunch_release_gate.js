@@ -28,21 +28,12 @@ function readText(filePath, label) {
 const serverText = readText(serverPath, "backend server");
 if (serverText) {
   check(
-    serverText.includes("PUBLIC_MATCHING_ENABLED"),
-    "matching gate symbol missing: PUBLIC_MATCHING_ENABLED",
+    serverText.includes('"public_matching_enabled": True'),
+    "active public-matching contract missing from /config",
   );
-  check(
-    serverText.includes("def _require_public_matching("),
-    "matching gate function missing: _require_public_matching",
-  );
-  check(
-    serverText.includes('_require_public_matching("Public matching")'),
-    "matching gate check missing on match path",
-  );
-  check(
-    serverText.includes('_require_public_matching("Public contact release")'),
-    "matching gate check missing on intro/contact path",
-  );
+  check(serverText.includes('@api.post("/match")'), "public match route missing");
+  check(serverText.includes('@api.post("/intros")'), "public intro route missing");
+  check(serverText.includes('@api.get("/trainers")'), "public directory route missing");
 
   check(
     serverText.includes('@api.get("/claims/validate")'),
@@ -70,6 +61,18 @@ if (serverText) {
     serverText.includes("phase_transition_decisions"),
     "phase symbol missing: phase_transition_decisions collection",
   );
+  check(
+    serverText.includes("_canonical_suburb_for_seo_slug"),
+    "canonical SEO slug gate missing",
+  );
+}
+
+for (const [relativePath, marker] of [
+  ["frontend/public/robots.txt", "User-agent:"],
+  ["frontend/public/sitemap.xml", "<?xml"],
+]) {
+  const content = readText(path.join(repoRoot, relativePath), "SEO resource");
+  check(content.includes(marker), `SEO resource malformed: ${relativePath}`);
 }
 
 if (!fs.existsSync(copyGuardPath)) {

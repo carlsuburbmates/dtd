@@ -3,7 +3,7 @@ import axios from "axios";
 const isProductionHost = typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
 const envBackend = process.env.REACT_APP_BACKEND_URL;
 const RAW_BACKEND_URL = (isProductionHost && (!envBackend || envBackend.includes("localhost")))
-    ? "https://dtd-api-870311309192.australia-southeast1.run.app"
+    ? window.location.origin
     : (envBackend || (typeof window !== "undefined" ? window.location.origin : ""));
 const BACKEND_URL = RAW_BACKEND_URL.replace(/\/+$/, "");
 export const API = `${BACKEND_URL}/api`;

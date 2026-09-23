@@ -111,7 +111,9 @@
             linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(245, 242, 235, 0.92) 24%, rgba(245, 242, 235, 1) 100%);
         background-color: hsl(var(--background));
         color: hsl(var(--foreground));
-        overflow-x: hidden;
+        /* Clip horizontal overflow without creating a scroll container that
+           prevents the public header from sticking during page scroll. */
+        overflow-x: clip;
     }
     body {
         margin: 0;

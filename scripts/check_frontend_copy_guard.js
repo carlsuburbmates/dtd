@@ -18,7 +18,12 @@ const targetedPages = [
   "frontend/src/pages/Submit.jsx",
 ].map((p) => path.join(repoRoot, p));
 
-const bannedLegacyPhrases = ["A$5", "trial-free", "per-intro fee"];
+const bannedLegacyPhrases = ["A$5", "trial-free"];
+const bannedCommercialClaims = [
+  "exclusive top-slot placement",
+  "featured across diagnostic match results",
+  "change suburb anytime",
+];
 
 function walkFiles(dir) {
   const out = [];
@@ -81,29 +86,15 @@ for (const filePath of walkFiles(frontendSrc)) {
   }
 }
 
-// Rule 3: Home owner-facing prelaunch section must not contain direct "Melbourne-wide" claim.
-const homePath = path.join(repoRoot, "frontend/src/pages/Home.jsx");
-const homeText = fs.readFileSync(homePath, "utf8");
-const prelaunchStart = homeText.indexOf('data-testid="match-coming-soon"');
-const prelaunchFallbackStart = homeText.indexOf('data-testid="owner-waitlist-form"');
-const start = prelaunchStart >= 0 ? prelaunchStart : prelaunchFallbackStart;
-
-if (start < 0) {
-  violations.push({
-    file: "frontend/src/pages/Home.jsx",
-    line: 1,
-    message: "could not locate prelaunch owner-facing section for Melbourne-wide guard",
-  });
-} else {
-  const end = homeText.indexOf(") : (", start);
-  const section = homeText.slice(start, end > start ? end : start + 4000);
-  const re = /melbourne-wide/i;
-  const hit = re.exec(section);
-  if (hit) {
+// Commercial claims must preserve two-slot capacity and fit-first matching.
+const pricingPath = path.join(repoRoot, "frontend/src/pages/Pricing.jsx");
+const pricingText = fs.readFileSync(pricingPath, "utf8");
+for (const phrase of bannedCommercialClaims) {
+  for (const hit of findMatches(pricingText, phrase)) {
     violations.push({
-      file: "frontend/src/pages/Home.jsx",
-      line: lineFromIndex(homeText, start + hit.index),
-      message: 'direct "Melbourne-wide" claim found in owner-facing prelaunch section',
+      file: path.relative(repoRoot, pricingPath),
+      line: lineFromIndex(pricingText, hit.index),
+      message: `retired commercial claim: "${phrase}"`,
     });
   }
 }
@@ -119,4 +110,4 @@ if (violations.length) {
 console.log("COPY_GUARD_CHECK=PASS");
 console.log(`Checked targeted pages: ${targetedPages.length}`);
 console.log("Legacy phrases allowed only in frontend/src/lib/publicPolicy.js");
-console.log('Home prelaunch section check: no direct "Melbourne-wide" claim');
+console.log("Commercial claim check: two-slot capacity and fit-first messaging preserved");
