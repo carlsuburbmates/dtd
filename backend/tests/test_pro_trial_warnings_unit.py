@@ -99,13 +99,34 @@ def test_existing_sent_event_prevents_duplicate(monkeypatch):
     assert not db.trainers.updates
 
 
-def test_scheduler_secret_fails_closed(monkeypatch):
-    monkeypatch.delenv("CLOUD_SCHEDULER_SECRET", raising=False)
-    with pytest.raises(server.HTTPException) as missing:
-        server._require_cloud_scheduler_secret("")
-    assert missing.value.status_code == 401
+def test_scheduler_oidc_accepts_only_expected_service_account(monkeypatch):
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT", "scheduler@dtd.test")
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_AUDIENCE", "https://dtd-api.test")
+    monkeypatch.setattr(
+        server.google_id_token,
+        "verify_oauth2_token",
+        lambda token, request, audience: {
+            "email": "scheduler@dtd.test",
+            "email_verified": True,
+            "aud": audience,
+        },
+    )
 
-    monkeypatch.setenv("CLOUD_SCHEDULER_SECRET", "expected")
-    with pytest.raises(server.HTTPException):
-        server._require_cloud_scheduler_secret("wrong")
-    server._require_cloud_scheduler_secret("expected")
+    server._require_cloud_scheduler_oidc("Bearer signed-token")
+
+    monkeypatch.setattr(
+        server.google_id_token,
+        "verify_oauth2_token",
+        lambda token, request, audience: {"email": "other@dtd.test", "email_verified": True},
+    )
+    with pytest.raises(server.HTTPException) as rejected:
+        server._require_cloud_scheduler_oidc("Bearer signed-token")
+    assert rejected.value.status_code == 401
+
+
+def test_scheduler_oidc_fails_closed_without_complete_configuration(monkeypatch):
+    monkeypatch.delenv("CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT", raising=False)
+    monkeypatch.delenv("CLOUD_SCHEDULER_OIDC_AUDIENCE", raising=False)
+    with pytest.raises(server.HTTPException) as missing:
+        server._require_cloud_scheduler_oidc("")
+    assert missing.value.status_code == 401
