@@ -17,7 +17,7 @@ Maintain or compute at least:
 - Search Console indexed/last-checked state when available;
 - last content/data refresh evidence.
 
-Threshold values must be explicit in implementation configuration and tests. Do not hard-code an undocumented number in page copy or infer indexability from the 539-record catalogue alone.
+Threshold values must be explicit in implementation configuration and tests. The current production defaults are `SEO_MIN_PUBLISHED_TRAINERS=3` and `SEO_MIN_CONTENT_WORDS=500`; review them against real publishing and traffic evidence rather than inferring indexability from the 539-record catalogue alone.
 
 ## Robots and sitemap contracts
 

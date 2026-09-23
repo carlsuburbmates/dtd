@@ -109,3 +109,12 @@
 - **Rationale:** one public frontend/API origin and one DNS authority reduce stale Vercel routing and CORS/configuration drift for the solo operator.
 - **Supersedes:** the split production arrangement in which Vercel DNS delegated the domain while Firebase served the frontend and the frontend bypassed Firebase for Cloud Run.
 - **Affected:** `firebase.json`, frontend API base URL, DNS/provider configuration, deployment runbook and current-state evidence.
+
+## CDR-013 — SEO publication thresholds
+
+- **Date/status:** 2026-09-24 — locked starting configuration; review with real publishing and traffic evidence.
+- **Decision:** an SEO suburb page is eligible for generation and indexation only when it has at least three eligible published trainers and generated content of at least 500 words. The thresholds are explicit environment configuration, not page-copy promises or an inference from the 539-record catalogue.
+- **Evidence:** explicit owner approval; the existing SEO/indexation contract requires configuration-based supply and quality gates.
+- **Rationale:** this gives the fail-closed implementation a concrete, adjustable starting point without treating an empty locality or thin generated copy as indexable.
+- **Supersedes:** the unresolved numerical-threshold state in DF-004 and the blank values in the environment template.
+- **Affected:** SEO/indexation specification, runtime environment configuration, tests and release verification.

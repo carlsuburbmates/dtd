@@ -47,7 +47,7 @@ Default local URLs:
 Backend:
 
 ```bash
-python backend/scripts/run_isolated_integration_suite.py
+python3 backend/scripts/run_isolated_integration_suite.py
 ```
 
 This is the maintained full backend command. It starts a local API with a
