@@ -2713,7 +2713,10 @@ async def _ops_seo_indexation_summary() -> Dict[str, Any]:
                 "suburb": str(canonical.get("suburb_name") or ""),
                 "eligible_trainer_count": eligible_count,
                 "content_word_count": word_count if page else None,
-                "publication_status": str(page.get("publication_status") or "not_stored") if page else "not_stored",
+                # A stored legacy record with no publication field is not the
+                # same thing as an absent record. Keep it visible to Ops as an
+                # unconfigured record requiring review.
+                "publication_status": str(page.get("publication_status") or "unconfigured") if page else "not_stored",
                 "meta_robots": str(page.get("meta_robots") or "noindex,follow") if page else "noindex,follow",
                 "indexable_now": indexable,
                 "reason_codes": reasons,

@@ -1251,6 +1251,12 @@ def test_ops_seo_inventory_rechecks_canonical_supply_and_stored_content(monkeypa
             "meta_robots": "index,follow",
             "copy": {"intro": "thin"},
         },
+        {
+            "id": "seo_richmond_unconfigured",
+            "slug": "richmond",
+            "suburb": "Richmond",
+            "copy": {"intro": "thin"},
+        },
     ]
     monkeypatch.setattr(server, "db", fake_db)
     monkeypatch.setenv("SEO_MIN_PUBLISHED_TRAINERS", "3")
@@ -1260,15 +1266,18 @@ def test_ops_seo_inventory_rechecks_canonical_supply_and_stored_content(monkeypa
 
     assert summary["status"] == "ready"
     assert summary["canonical_suburb_count"] == 539
-    assert summary["stored_record_count"] == 2
+    assert summary["stored_record_count"] == 3
+    assert summary["canonical_stored_record_count"] == 2
     assert summary["noncanonical_stored_record_count"] == 1
     assert summary["indexable_now_count"] == 1
-    assert summary["review_required_count"] == 1
+    assert summary["review_required_count"] == 2
     carlton = next(row for row in summary["rows"] if row["slug"] == "carlton")
     assert carlton["eligible_trainer_count"] == 3
     assert carlton["indexable_now"] is True
     legacy = next(row for row in summary["rows"] if row["slug"] == "legacy-not-a-suburb")
     assert legacy["reason_codes"] == ["noncanonical_stored_page"]
+    richmond = next(row for row in summary["rows"] if row["slug"] == "richmond")
+    assert richmond["publication_status"] == "unconfigured"
 
 
 def test_oversight_merges_persisted_case_review_state(monkeypatch):
