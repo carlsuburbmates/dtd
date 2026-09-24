@@ -9,6 +9,7 @@ const VIEW_ORDER = [
     "pipeline_flow",
     "work_queue",
     "trainer_supply",
+    "seo_indexation",
     "messages",
     "billing_reactivation",
     "recent_changes",
@@ -20,6 +21,7 @@ const VIEW_LABELS = {
     pipeline_flow: "Pipeline Flow",
     work_queue: "Work Queue",
     trainer_supply: "Trainer Supply",
+    seo_indexation: "SEO & Indexation",
     messages: "Messages",
     billing_reactivation: "Billing & Reactivation",
     system_activity: "System Activity",
@@ -31,6 +33,7 @@ const PAGE_INTROS = {
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
+    seo_indexation: "Review stored suburb pages against current canonical, supply, content and robots requirements before any indexation decision.",
     messages: "Check exactly what the system sent, to which workflow, and whether delivery succeeded or failed.",
     billing_reactivation: "Review trainer billing problems and reactivation cases without leaving the Operations Console.",
     system_activity: "Use this supporting section to watch system health, stale loops, and alerts after the main decision surfaces are clear.",
@@ -392,6 +395,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const readiness = snap.phase_readiness_snapshot || {};
     const supplyGeography = snap.ops_supply_geography || {};
     const supplyTrends = snap.ops_supply_trends || {};
+    const seoIndexation = snap.ops_seo_indexation || {};
     const loops = snap.ops_investigation?.loop_statuses || {};
     const messages = asArray(snap.message_log);
     const trainerInventory = asArray(snap.trainer_inventory);
@@ -432,6 +436,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             eyebrow: "Intro-ready",
             value: formatShortNumber(readiness.intro_ready_trainer_count || supplyTrends.intro_ready_now || 0),
             note: demandGapCount ? `${formatShortNumber(demandGapCount)} suburb gaps still need coverage.` : "No standout suburb gap is visible right now.",
+        },
+        seo_indexation: {
+            eyebrow: "Needs review",
+            value: formatShortNumber(seoIndexation.review_required_count || 0),
+            note: seoIndexation.inventory_truncated ? "SEO inventory is incomplete; do not make indexation decisions yet." : `${formatShortNumber(seoIndexation.indexable_now_count || 0)} stored page${Number(seoIndexation.indexable_now_count || 0) === 1 ? "" : "s"} currently meet the contract.`,
         },
         messages: {
             eyebrow: "Delivery issues",
@@ -576,6 +585,8 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         {activeView === "trainer_supply" ? (
                             <TrainerSupplyView trainerInventory={trainerInventory} supplyGeography={supplyGeography} supplyTrends={supplyTrends} />
                         ) : null}
+
+                        {activeView === "seo_indexation" ? <SeoIndexationView seoIndexation={seoIndexation} /> : null}
 
                         {activeView === "messages" ? (
                             <MessagesView messages={messages} />
@@ -1168,6 +1179,60 @@ function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) 
                             <tr>
                                 <td colSpan="11" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
                             </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
+}
+
+function SeoIndexationView({ seoIndexation }) {
+    const thresholds = seoIndexation.thresholds || {};
+    const rows = asArray(seoIndexation.rows);
+    const storedRows = rows.filter((row) => String(row.publication_status || "") !== "not_stored");
+    const reviewRows = storedRows.filter((row) => !row.indexable_now || asArray(row.reason_codes).includes("noncanonical_stored_page"));
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-seo-indexation">
+            <PageHeader title="SEO & Indexation" description={PAGE_INTROS.seo_indexation} />
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <SummaryCard title="Canonical suburbs" value={seoIndexation.canonical_suburb_count || 0} note="The bounded Greater Melbourne catalogue." />
+                <SummaryCard title="Stored pages" value={seoIndexation.stored_record_count || 0} note="Existing records only; this view does not generate copy." />
+                <SummaryCard title="Indexable now" value={seoIndexation.indexable_now_count || 0} note="Stored pages meeting current supply, content and robots rules." />
+                <SummaryCard title="Needs review" value={seoIndexation.review_required_count || 0} note="Stored pages that no longer meet a required condition." />
+            </div>
+            <div className="mt-4 rounded-3xl border border-[#22302C] bg-[#0D1412] px-4 py-3 text-sm text-[#C9C2B1]">
+                Current gates: at least {thresholds.minimum_published_trainers ?? "—"} eligible published trainers and {thresholds.minimum_content_words ?? "—"} content words. Missing pages remain non-indexable; this screen never creates, changes or deletes them.
+            </div>
+            {seoIndexation.inventory_truncated ? (
+                <div className="mt-4 rounded-3xl border border-[#5B2B27] bg-[#2B1715] px-4 py-3 text-sm text-[#F8D9D3]">
+                    The stored-page inventory was truncated. Do not make a migration or indexation decision until the complete inventory is available.
+                </div>
+            ) : null}
+            <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[900px] text-sm">
+                    <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                        <tr>
+                            <th className="pb-3 pr-3">Suburb / slug</th>
+                            <th className="pb-3 pr-3">Eligible trainers</th>
+                            <th className="pb-3 pr-3">Content words</th>
+                            <th className="pb-3 pr-3">Publication</th>
+                            <th className="pb-3 pr-3">Robots</th>
+                            <th className="pb-3">Current outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(reviewRows.length ? reviewRows : storedRows).length ? (reviewRows.length ? reviewRows : storedRows).slice(0, 100).map((row) => (
+                            <tr key={`${row.slug}-${row.generated_at || row.publication_status}`} className="border-t border-[#1E2A27]">
+                                <td className="py-3 pr-3"><div className="font-medium">{row.suburb || "Unknown"}</div><div className="mt-1 text-xs text-[#8B9E98]">{row.slug}</div></td>
+                                <td className="py-3 pr-3">{row.eligible_trainer_count ?? "—"}</td>
+                                <td className="py-3 pr-3">{row.content_word_count ?? "—"}</td>
+                                <td className="py-3 pr-3">{humanizeToken(row.publication_status)}</td>
+                                <td className="py-3 pr-3">{row.meta_robots || "—"}</td>
+                                <td className="py-3"><Badge label={row.indexable_now ? "Meets contract" : humanizeToken(asArray(row.reason_codes)[0] || "review required")} kind="state" /></td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">No stored SEO pages are present. Canonical suburbs remain navigable but non-indexable until a later eligible page is created.</td></tr>
                         )}
                     </tbody>
                 </table>

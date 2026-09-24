@@ -2581,6 +2581,182 @@ def _unpublished_seo_response(*, slug: str, suburb: str, reason: str) -> Dict[st
     }
 
 
+def _eligible_trainer_query_for_suburb(suburb: str) -> Dict[str, Any]:
+    """Return the one eligibility query shared by public SEO and protected ops."""
+    escaped_suburb = re.escape(suburb)
+    return {
+        "published": True,
+        "region": {"$in": ACTIVE_REGIONS},
+        "$or": [
+            {"suburb": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+            {"serviced_suburbs": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+        ],
+    }
+
+
+def _seo_page_word_count(page: Dict[str, Any]) -> int:
+    """Recalculate content quality from stored copy rather than trusting a flag."""
+    copy = page.get("copy")
+    return _seo_word_count(copy) if isinstance(copy, dict) else 0
+
+
+def _canonical_suburb_name_index() -> Dict[str, Dict[str, Any]]:
+    return {
+        str(row.get("suburb_name") or "").strip().lower(): row
+        for row in suburb_catalogue.canonical_suburbs()
+        if str(row.get("suburb_name") or "").strip()
+    }
+
+
+async def _ops_seo_indexation_summary() -> Dict[str, Any]:
+    """Read-only SEO inventory for the protected operations console.
+
+    This deliberately does not generate copy, change stored SEO records, or use
+    Search Console. It exposes whether existing records still satisfy the same
+    canonical/supply/content contract used by the public route.
+    """
+    minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
+    minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    canonical_rows = suburb_catalogue.canonical_suburbs()
+    canonical_by_slug = {
+        str(row.get("slug") or ""): row
+        for row in canonical_rows
+        if str(row.get("slug") or "")
+    }
+    canonical_by_name = _canonical_suburb_name_index()
+
+    trainers_coll = getattr(db, "trainers", None)
+    published_trainers = (
+        await trainers_coll.find(
+            {"published": True, "region": {"$in": ACTIVE_REGIONS}},
+            {"_id": 0, "id": 1, "suburb": 1, "serviced_suburbs": 1},
+        ).to_list(5000)
+        if trainers_coll is not None
+        else []
+    )
+    eligible_by_slug: Dict[str, int] = {slug: 0 for slug in canonical_by_slug}
+    for trainer in published_trainers:
+        matched_slugs = set()
+        raw_localities = [trainer.get("suburb")]
+        serviced_suburbs = trainer.get("serviced_suburbs")
+        if isinstance(serviced_suburbs, list):
+            raw_localities.extend(serviced_suburbs)
+        for locality in raw_localities:
+            canonical = canonical_by_name.get(str(locality or "").strip().lower())
+            if canonical:
+                matched_slugs.add(str(canonical.get("slug") or ""))
+        for matched_slug in matched_slugs:
+            if matched_slug in eligible_by_slug:
+                eligible_by_slug[matched_slug] += 1
+
+    pages_coll = getattr(db, "seo_pages", None)
+    stored_records = int(await pages_coll.count_documents({})) if pages_coll is not None else 0
+    inventory_limit = 2000
+    page_rows = (
+        await pages_coll.find(
+            {},
+            {
+                "_id": 0,
+                "id": 1,
+                "slug": 1,
+                "suburb": 1,
+                "publication_status": 1,
+                "meta_robots": 1,
+                "copy": 1,
+                "content_word_count": 1,
+                "generated_at": 1,
+            },
+        ).to_list(inventory_limit)
+        if pages_coll is not None
+        else []
+    )
+    pages_by_slug: Dict[str, List[Dict[str, Any]]] = {}
+    for page in page_rows:
+        pages_by_slug.setdefault(str(page.get("slug") or ""), []).append(page)
+
+    rows: List[Dict[str, Any]] = []
+    indexable_now = 0
+    review_required = 0
+    canonical_records = 0
+    noncanonical_records = 0
+    for slug, canonical in canonical_by_slug.items():
+        pages = pages_by_slug.pop(slug, [])
+        if pages:
+            canonical_records += len(pages)
+        page = pages[0] if pages else None
+        eligible_count = int(eligible_by_slug.get(slug) or 0)
+        word_count = _seo_page_word_count(page) if page else 0
+        reasons: List[str] = []
+        if minimum_trainers is None or minimum_words is None:
+            reasons.append("thresholds_not_configured")
+        elif eligible_count < minimum_trainers:
+            reasons.append("insufficient_eligible_supply")
+        if page is None:
+            reasons.append("no_stored_page")
+        elif minimum_words is not None and word_count < minimum_words:
+            reasons.append("insufficient_content_quality")
+        elif str(page.get("publication_status") or "") != "published":
+            reasons.append("stored_page_not_published")
+        elif str(page.get("meta_robots") or "") != "index,follow":
+            reasons.append("stored_page_not_indexable")
+        if len(pages) > 1:
+            reasons.append("duplicate_stored_pages")
+
+        indexable = bool(page) and not reasons
+        if indexable:
+            indexable_now += 1
+        elif page:
+            review_required += 1
+        rows.append(
+            {
+                "slug": slug,
+                "suburb": str(canonical.get("suburb_name") or ""),
+                "eligible_trainer_count": eligible_count,
+                "content_word_count": word_count if page else None,
+                "publication_status": str(page.get("publication_status") or "not_stored") if page else "not_stored",
+                "meta_robots": str(page.get("meta_robots") or "noindex,follow") if page else "noindex,follow",
+                "indexable_now": indexable,
+                "reason_codes": reasons,
+                "generated_at": page.get("generated_at") if page else None,
+            }
+        )
+
+    for slug, pages in pages_by_slug.items():
+        noncanonical_records += len(pages)
+        page = pages[0]
+        review_required += 1
+        rows.append(
+            {
+                "slug": slug or "(missing)",
+                "suburb": str(page.get("suburb") or ""),
+                "eligible_trainer_count": None,
+                "content_word_count": _seo_page_word_count(page),
+                "publication_status": str(page.get("publication_status") or "unknown"),
+                "meta_robots": str(page.get("meta_robots") or "unknown"),
+                "indexable_now": False,
+                "reason_codes": ["noncanonical_stored_page"],
+                "generated_at": page.get("generated_at"),
+            }
+        )
+
+    rows.sort(key=lambda row: (bool(row.get("indexable_now")), str(row.get("suburb") or "").lower()))
+    return {
+        "status": "ready" if minimum_trainers is not None and minimum_words is not None else "thresholds_not_configured",
+        "thresholds": {
+            "minimum_published_trainers": minimum_trainers,
+            "minimum_content_words": minimum_words,
+        },
+        "canonical_suburb_count": len(canonical_rows),
+        "stored_record_count": stored_records,
+        "canonical_stored_record_count": canonical_records,
+        "noncanonical_stored_record_count": noncanonical_records,
+        "indexable_now_count": indexable_now,
+        "review_required_count": review_required,
+        "inventory_truncated": stored_records > len(page_rows),
+        "rows": rows,
+    }
+
+
 @api.post("/match")
 async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
     """Single input → 3 trainers. The only product surface for end users."""
@@ -4152,13 +4328,9 @@ async def get_seo(slug: str) -> Dict[str, Any]:
         # Crucially, unknown paths do not call AI or write seo_pages.
         raise HTTPException(status_code=404, detail="Unknown canonical suburb")
 
-    slug = str(canonical_suburb["slug"])
-    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
-    if page:
-        return page
-
     minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
     minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    slug = str(canonical_suburb["slug"])
     suburb = str(canonical_suburb["suburb_name"])
     if minimum_trainers is None or minimum_words is None:
         return _unpublished_seo_response(
@@ -4167,22 +4339,29 @@ async def get_seo(slug: str) -> Dict[str, Any]:
             reason="seo_thresholds_not_configured",
         )
 
-    eligible_trainers = await db.trainers.count_documents(
-        {
-            "published": True,
-            "region": {"$in": ACTIVE_REGIONS},
-            "$or": [
-                {"suburb": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-                {"serviced_suburbs": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-            ],
-        }
-    )
+    eligible_trainers = await db.trainers.count_documents(_eligible_trainer_query_for_suburb(suburb))
     if eligible_trainers < minimum_trainers:
         return _unpublished_seo_response(
             slug=slug,
             suburb=suburb,
             reason="insufficient_eligible_supply",
         )
+
+    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
+    if page:
+        if _seo_page_word_count(page) < minimum_words:
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="insufficient_content_quality",
+            )
+        if str(page.get("publication_status") or "") != "published" or str(page.get("meta_robots") or "") != "index,follow":
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="stored_page_not_indexable",
+            )
+        return _scrub(page)
 
     copy = await ai_service.generate_seo_copy(suburb, "general")
     word_count = _seo_word_count(copy)
@@ -4735,6 +4914,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         growth_attribution_summary=growth_attribution_summary,
         reactivation_summary=reactivation_summary,
     )
+    seo_indexation = await _ops_seo_indexation_summary()
     ops_cases = await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -4827,6 +5007,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "reactivation_summary": reactivation_summary,
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
+        "ops_seo_indexation": seo_indexation,
         "trainer_inventory": trainer_inventory,
         "sponsor_inventory": sponsor_inventory_snapshot,
         "provider_health": provider_snapshot,
