@@ -71,6 +71,7 @@ The system maintains strict isolation between live production and staging/sandbo
   - Purpose: Developer experimentation, AI-assisted development, feature testing, and automated build verification.
   - Guardrails: Stripe operates strictly in Test Mode (`sk_test_...`); transactional emails target dummy/test sinks; directory data is non-production; zero-cost idle state (serverless scale-to-zero).
   - Promotion Gate: Features, data migrations, or infrastructure changes must pass verification in the sandbox before promotion to production.
+  - Deployment Automation: Executable via `bash scripts/deploy_sandbox.sh`. Automatically runs preflight code compilation, release gate checks, deploys `dtd-api-dev` with Secret Manager bindings, and verifies the `/api/health` endpoint against `dtd-sandbox`. Can be commanded on-demand by any AI assistant or run manually in shell.
 
 ## Operating cadence
 
