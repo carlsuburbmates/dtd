@@ -127,3 +127,21 @@
 - **Rationale:** the previously identified public-frontend visibility gap has been remediated while keeping external program approval separate from repository and deployment evidence.
 - **Supersedes:** the earlier technical migration state in which Cloud Run existed but the public frontend and routing were not sufficiently aligned for manual Google review.
 - **Affected:** Google Startup review response, deployment/current-state evidence and production handover.
+
+## CDR-015 — Sentry project identity and runtime connection
+
+- **Date/status:** 2026-09-24 — implemented and reconciled; autonomous alerting remains unaccepted.
+- **Decision:** Use Sentry organisation `dtd-i9` project `dtd` as the repository's single application-error project. Remove the obsolete `barkbond-web` and `javascript-nextjs` projects. Keep the deployed API connection on the managed DTD DSN and initialise Sentry in the process serving production requests.
+- **Evidence:** authenticated Sentry project inventory; project rename/platform update; deletion responses for the two obsolete projects; managed Secret Manager version 2; zero-traffic Cloud Run verification, promoted revision health check and production startup log.
+- **Rationale:** one repository, one named Sentry project and one deployed runtime path reduce identity drift without exposing provider credentials in source or documentation.
+- **Supersedes:** the earlier BarkBond-labelled project arrangement and the worker-only Sentry initialisation path.
+- **Affected:** Sentry provider configuration, API startup, worker startup, environment templates and current-state evidence.
+
+## CDR-016 — Google Cloud billing and owner-access reconciliation
+
+- **Date/status:** 2026-09-24 — reconciled; no further IAM or billing change authorised.
+- **Decision:** Keep project `gen-lang-client-0028123502` linked to billing account `0104B3-AB5AF0-8F0A01` under the `dogtrainersdirectory.com.au` organisation. Retain the existing project Owner access for the owner's personal identity because this is a one-owner project; do not change project IAM or billing administration as part of this work.
+- **Evidence:** Cloud Console billing-management view under the work organisation context; local project and billing-link inspection; no billing or IAM mutation was performed during reconciliation.
+- **Rationale:** the billing relationship is already aligned with the work organisation, and the retained owner access reflects the owner's explicit operating choice. The repository records the relationship without recording account credentials or private console URLs.
+- **Supersedes:** uncertainty about whether the current project was attached to a personal billing account.
+- **Affected:** current-state evidence and future Google Cloud access reconciliation.
