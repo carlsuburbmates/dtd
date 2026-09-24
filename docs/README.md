@@ -27,6 +27,7 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 | [specs/GEOGRAPHY_AND_CATCHMENTS.md](specs/GEOGRAPHY_AND_CATCHMENTS.md) | Canonical suburbs, regions and catchments | Geography, seed or inventory work |
 | [specs/SEO_AND_INDEXATION.md](specs/SEO_AND_INDEXATION.md) | Indexation eligibility, sitemap and robots rules | Public discovery and suburb-page work |
 | [specs/OPS_AND_OBSERVABILITY.md](specs/OPS_AND_OBSERVABILITY.md) | Operator workflows, automation and degraded states | `/ops`, alerts or production operations |
+| [specs/SANDBOX_VERIFICATION_MATRIX.md](specs/SANDBOX_VERIFICATION_MATRIX.md) | Mandatory pre-flight checklist and sandbox gates | Testing features before production promotion |
 | [specs/ACQUISITION_AND_INGESTION.md](specs/ACQUISITION_AND_INGESTION.md) | Lawful trainer sourcing, verification and lifecycle | Any data acquisition or profile ingestion work |
 
 ## State progression
