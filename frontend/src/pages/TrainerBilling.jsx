@@ -33,6 +33,8 @@ function formatBillingStatus(status) {
             return "Needs billing email";
         case "needs_billing_consent":
             return "Needs consent";
+        case "billing_activation_required":
+            return "Not accepting purchases";
         case "billing_system_blocked":
             return "Support review needed";
         default:
@@ -105,6 +107,7 @@ export default function TrainerBilling() {
     const [billingEmail, setBillingEmail] = useState("");
     const [checkoutError, setCheckoutError] = useState("");
     const [selectedSuburb, setSelectedSuburb] = useState("");
+    const [billingTermsAccepted, setBillingTermsAccepted] = useState(false);
 
     useEffect(() => {
         if (!trainerId || (!queryTrainerActionToken && !queryTrainerClaimSession)) return;
@@ -169,9 +172,12 @@ export default function TrainerBilling() {
     const issues = data?.issues || {};
     const inventory = data?.sponsor_inventory || {};
     const trial = data?.subscription?.trial || {};
+    const billing = data?.billing || {};
+    const checkoutAvailable = Boolean(billing.checkout_available);
     const selectedInventory = (inventory.suburbs || []).find((row) => row.suburb === selectedSuburb);
 
     const startCheckout = async (tier, interval = "month") => {
+        if (!checkoutAvailable || !billingTermsAccepted) return;
         setBusy(true);
         setCheckoutError("");
         try {
@@ -181,6 +187,7 @@ export default function TrainerBilling() {
                 suburb: tier === "suburb_sponsor" ? selectedSuburb : "",
                 interval,
                 consent_subscription_billing_terms: true,
+                billing_terms_version: billing.terms_version,
                 trainer_action_token: trainerActionToken || undefined,
                 trainer_claim_session: trainerClaimSession || undefined,
             });
@@ -264,9 +271,7 @@ export default function TrainerBilling() {
                                     <div className="font-semibold text-base text-[#1A3A32] mt-1">
                                         {audCents(data?.billed_total_cents || 0)}
                                     </div>
-                                    <div className="text-xs text-[#4A615A] mt-1">
-                                        Archived intro fees
-                                    </div>
+                                    <div className="text-xs text-[#4A615A] mt-1">Historical non-current records</div>
                                 </div>
                             </div>
                             {data?.status_counts && Object.keys(data.status_counts).length > 0 ? (
@@ -303,15 +308,20 @@ export default function TrainerBilling() {
 
                         <section className="card-public p-6" data-testid="trainer-subscription-plans">
                             <div className="small-caps">Optional upgrades</div>
-                            <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Choose the storefront value you need.</h2>
+                            <h2 className="font-serif text-3xl text-[#1A3A32] mt-2">Choose the directory visibility you need.</h2>
                             <p className="text-sm text-[#4A615A] mt-2">All prices are AUD and GST-inclusive. Core profiles remain free, with zero lead fees or commissions.</p>
+                            {!checkoutAvailable ? <p className="mt-4 rounded-xl border border-[#E5DFD3] bg-[#FAF8F5] p-3 text-sm text-[#4A615A]" data-testid="billing-activation-gate">Paid checkout is not accepting purchases yet. No subscription or charge can be created.</p> : null}
+                            <label className="mt-5 flex items-start gap-3 text-sm text-[#4A615A]" data-testid="billing-terms-consent">
+                                <input type="checkbox" checked={billingTermsAccepted} onChange={(event) => setBillingTermsAccepted(event.target.checked)} className="mt-1" disabled={!checkoutAvailable} />
+                                <span>I accept the current <Link to="/terms" className="underline text-[#1A3A32]">trainer subscription terms</Link> (version {billing.terms_version || "unavailable"}).</span>
+                            </label>
                             <div className="grid md:grid-cols-3 gap-3 mt-6">
                                 <div className="rounded-2xl border border-[#E4DDD3] p-5">
                                     <div className="font-semibold text-[#1A3A32]">Pro Storefront</div>
                                     <div className="font-serif text-3xl text-[#1A3A32] mt-2">A$19<span className="text-sm font-sans">/mo</span></div>
-                                    <p className="text-sm text-[#4A615A] mt-3">Booking embed, public website link, gallery and directory boost.</p>
-                                    <button type="button" disabled={busy} onClick={() => startCheckout("pro")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-pro">{trial.eligible ? "Start 30-day trial" : "Choose Pro"}</button>
-                                    <button type="button" disabled={busy} onClick={() => startCheckout("pro", "year")} className="mt-3 w-full text-sm text-[#1A3A32] underline underline-offset-4" data-testid="checkout-pro-annual">A$149/year</button>
+                                    <p className="text-sm text-[#4A615A] mt-3">Higher directory visibility, plus your public website and booking links when supplied.</p>
+                                    <button type="button" disabled={busy || !checkoutAvailable || !billingTermsAccepted} onClick={() => startCheckout("pro")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-pro">{trial.eligible ? "Start 30-day trial" : "Choose Pro"}</button>
+                                    <button type="button" disabled={busy || !checkoutAvailable || !billingTermsAccepted} onClick={() => startCheckout("pro", "year")} className="mt-3 w-full text-sm text-[#1A3A32] underline underline-offset-4" data-testid="checkout-pro-annual">A$149/year</button>
                                 </div>
                                 <div className="rounded-2xl border border-[#D9B36C] bg-[#FFF9ED] p-5">
                                     <div className="font-semibold text-[#1A3A32]">Suburb Sponsor</div>
@@ -325,7 +335,7 @@ export default function TrainerBilling() {
                                     <div className="text-xs text-[#5C6D59] mt-2" data-testid="sponsor-suburb-availability">
                                         {selectedInventory ? selectedInventory.available + " of " + selectedInventory.capacity + " positions available" : "Availability loading"}
                                     </div>
-                                    <button type="button" disabled={busy || !selectedSuburb || selectedInventory?.available === 0} onClick={() => startCheckout("suburb_sponsor")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-suburb">
+                                    <button type="button" disabled={busy || !checkoutAvailable || !billingTermsAccepted || !selectedSuburb || selectedInventory?.available === 0} onClick={() => startCheckout("suburb_sponsor")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-suburb">
                                         {selectedInventory?.available === 0 ? "Sold out" : "Reserve and continue"}
                                     </button>
                                 </div>
@@ -334,13 +344,13 @@ export default function TrainerBilling() {
                                     <div className="font-serif text-3xl text-[#1A3A32] mt-2">A$199<span className="text-sm font-sans">/mo</span></div>
                                     <p className="text-sm text-[#4A615A] mt-3">Pro included, plus fair rotation across the main directory and suburb pages.</p>
                                     <div className="text-xs text-[#5C6D59] mt-4">{inventory.citywide ? inventory.citywide.available + " of " + inventory.citywide.capacity + " positions available" : "Availability loading"}</div>
-                                    <button type="button" disabled={busy || inventory.citywide?.available === 0} onClick={() => startCheckout("citywide")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-citywide">
+                                    <button type="button" disabled={busy || !checkoutAvailable || !billingTermsAccepted || inventory.citywide?.available === 0} onClick={() => startCheckout("citywide")} className="btn-primary w-full justify-center mt-5" data-testid="checkout-citywide">
                                         {inventory.citywide?.available === 0 ? "Sold out" : "Reserve and continue"}
                                     </button>
                                 </div>
                             </div>
                             {checkoutError ? <p className="mt-4 rounded-xl border border-[#F0B8A8] bg-[#FFF4EF] p-3 text-sm text-[#8B3526]" role="alert" data-testid="checkout-error">{checkoutError}</p> : null}
-                            {data?.subscription?.stripe_customer_id ? (
+                            {checkoutAvailable && data?.subscription?.stripe_customer_id ? (
                                 <button type="button" disabled={busy} onClick={openPortal} className="btn-ghost mt-5" data-testid="subscription-portal">
                                     <CreditCard className="h-4 w-4" /> Manage subscription <ExternalLink className="h-4 w-4" />
                                 </button>
@@ -379,7 +389,7 @@ export default function TrainerBilling() {
                                 </a>
                             </div>
                             <p className="mt-4 text-xs text-[#5C6D59]">
-                                Active trainer billing operates via flat monthly Stripe subscriptions with zero commissions or lock-in.
+                                Trainer subscriptions use the selected monthly plan or annual Pro plan. Cancelling a subscription and requesting a refund are separate processes.
                             </p>
                             <label className="mt-5 block text-sm text-[#4A615A]">
                                 Billing email

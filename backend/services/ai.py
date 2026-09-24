@@ -103,6 +103,21 @@ def get_gemini_client() -> Optional[Any]:
         return None
 
 
+def _generate_content_config(**kwargs: Any) -> Any:
+    """Build the provider config without making injected-client tests need its SDK.
+
+    A live Gemini client can only be constructed when ``google.genai`` is
+    installed. Test doubles are deliberately injectable, however, and only
+    need the configuration shape. Returning the plain shape keeps that
+    contract offline while preserving the real SDK object in production.
+    """
+    try:
+        from google.genai import types
+    except ModuleNotFoundError:
+        return kwargs
+    return types.GenerateContentConfig(**kwargs)
+
+
 def _extract_json(text: str) -> Optional[Any]:
     """Extract a JSON object/array from a model response."""
     if not text:
@@ -721,8 +736,7 @@ async def extract_trainer_source(
 
     operation = "trainer_source_extraction"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=EXTRACTION_SYSTEM,
             temperature=0.1,
@@ -803,8 +817,7 @@ async def match_trainers(
 
     operation = "diagnostic_matching"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=MATCH_SYSTEM,
             temperature=0.2,
@@ -866,8 +879,7 @@ async def score_trainer(
 
     operation = "trainer_verification_scoring"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=VERIFY_SYSTEM,
             temperature=0.1,
@@ -953,8 +965,7 @@ async def generate_seo_copy(
 
     operation = "seo_copy_generation"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=SEO_SYSTEM,
             temperature=0.3,

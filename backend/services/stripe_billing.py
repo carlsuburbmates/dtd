@@ -46,10 +46,21 @@ SUBSCRIPTION_PLANS: Dict[str, Dict[str, Any]] = {
 }
 
 ACTIVE_SUBSCRIPTION_STATUSES = {"active", "trialing"}
+TERMINAL_NONPAYMENT_SUBSCRIPTION_STATUSES = {"unpaid", "incomplete_expired"}
+BILLING_TERMS_VERSION = "2026-09-24"
 
 
-def _require_consent_enabled() -> bool:
-    return (os.environ.get("STRIPE_REQUIRE_BILLING_CONSENT") or "0").strip() == "1"
+def billing_terms_version() -> str:
+    return BILLING_TERMS_VERSION
+
+
+def checkout_enabled() -> bool:
+    """Whether DTD is deliberately accepting new paid subscriptions.
+
+    A configured Stripe key may be present for webhook verification or
+    pre-launch work. It is not, by itself, permission to collect a payment.
+    """
+    return bool(billing_enabled() and (os.environ.get("ENABLE_TRAINER_BILLING_CHECKOUT") or "0").strip() == "1")
 
 
 def _days_until_due() -> int:
@@ -232,12 +243,10 @@ def subscription_plan(*, tier: str, suburb: Optional[str] = None, interval: str 
     }
 
 
-def _consent_ok(trainer: Dict[str, Any], consent_granted: bool) -> bool:
-    if not _require_consent_enabled():
-        return True
+def _consent_ok(trainer: Dict[str, Any], consent_granted: bool, consent_version: str) -> bool:
     if consent_granted:
-        return True
-    return bool(trainer.get("billing_terms_accepted_at"))
+        return str(consent_version or "") == billing_terms_version()
+    return bool(trainer.get("billing_terms_accepted_at")) and str(trainer.get("billing_terms_version") or "") == billing_terms_version()
 
 
 async def provision_trainer_billing_profile(
@@ -245,6 +254,7 @@ async def provision_trainer_billing_profile(
     trainer: Dict[str, Any],
     *,
     consent_granted: bool,
+    consent_version: str = "",
 ) -> Dict[str, Any]:
     """Ensure a trainer has a Stripe customer reference for intro invoicing.
 
@@ -258,13 +268,23 @@ async def provision_trainer_billing_profile(
         "billing_email": email,
     }
 
-    if not _consent_ok(trainer, consent_granted):
+    if not checkout_enabled():
+        status.update({"billing_profile_status": "billing_activation_required"})
+        await db.trainers.update_one({"id": trainer_id}, {"$set": status})
+        return status
+
+    if not _consent_ok(trainer, consent_granted, consent_version):
         status.update({"billing_profile_status": "consent_required"})
         await db.trainers.update_one({"id": trainer_id}, {"$set": status})
         return status
 
     if consent_granted:
-        status["billing_terms_accepted_at"] = now_iso()
+        status.update(
+            {
+                "billing_terms_accepted_at": now_iso(),
+                "billing_terms_version": billing_terms_version(),
+            }
+        )
 
     if not email:
         status.update({"billing_profile_status": "missing_email"})
@@ -327,6 +347,7 @@ async def create_checkout_session(
     suburb: Optional[str] = None,
     interval: str = "month",
     consent_granted: bool = False,
+    consent_version: str = "",
     idempotency_key: Optional[str] = None,
     reservation_id: str = "",
     billing_return_url: str = "",
@@ -340,14 +361,20 @@ async def create_checkout_session(
     trainer_id = str(trainer.get("id") or "")
     if not trainer_id:
         raise ValueError("trainer_id_required")
-    if not billing_enabled():
-        return {"ok": False, "code": "stripe_unconfigured", "plan": plan}
+    if not checkout_enabled():
+        return {"ok": False, "code": "billing_activation_required", "plan": plan}
 
-    profile = await provision_trainer_billing_profile(db, trainer, consent_granted=consent_granted)
+    profile = await provision_trainer_billing_profile(
+        db,
+        trainer,
+        consent_granted=consent_granted,
+        consent_version=consent_version,
+    )
     if profile.get("billing_profile_status") != "ready":
         return {"ok": False, "code": str(profile.get("billing_profile_status") or "billing_profile_unavailable"), "plan": plan}
 
     metadata = _subscription_metadata(trainer_id=trainer_id, plan=plan, reservation_id=reservation_id)
+    metadata["billing_terms_version"] = billing_terms_version()
     trial = trial_status(trainer)
     subscription_data: Dict[str, Any] = {"metadata": metadata}
     if plan["tier"] == "pro" and bool(trial.get("eligible")):
@@ -400,8 +427,8 @@ async def create_customer_portal_session(trainer: Dict[str, Any], *, return_url:
     customer_id = str(trainer.get("stripe_customer_id") or "").strip()
     if not customer_id:
         return {"ok": False, "code": "stripe_customer_missing"}
-    if not billing_enabled():
-        return {"ok": False, "code": "stripe_unconfigured"}
+    if not checkout_enabled():
+        return {"ok": False, "code": "billing_activation_required"}
     base_url = (os.environ.get("FRONTEND_BASE_URL") or "http://127.0.0.1:3001").strip().rstrip("/")
     resolved_return_url = str(return_url or "").strip() or f"{base_url}/trainer/billing"
     try:
@@ -471,7 +498,7 @@ def subscription_update_for_event(event_type: str, obj: Dict[str, Any]) -> Dict[
                             "pro_trial_consumed_at": now,
                         }
                     )
-        elif status == "incomplete_expired":
+        elif status in TERMINAL_NONPAYMENT_SUBSCRIPTION_STATUSES:
             updates["tier"] = "claimed"
             updates["subscription_ended_at"] = now
         return updates

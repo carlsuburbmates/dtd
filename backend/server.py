@@ -41,6 +41,11 @@ from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pymongo.errors import DuplicateKeyError
+
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional observability dependency locally
+    sentry_sdk = None
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
@@ -50,6 +55,7 @@ from services import event_contract
 from services import follow_up_tokens
 from services import fraud as fraud_service
 from services import notifications as notifications_service
+from services import provider_health
 from services import pro_trials
 from services import runtime_control
 from services import stripe_billing
@@ -84,6 +90,41 @@ api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("dtd")
+
+_SENTRY_INITIALIZED = False
+
+
+def _initialise_sentry() -> bool:
+    """Initialise Sentry in the process that serves API or worker work."""
+    global _SENTRY_INITIALIZED
+    if _SENTRY_INITIALIZED:
+        return True
+
+    dsn = (os.environ.get("SENTRY_DSN") or "").strip()
+    if not dsn or sentry_sdk is None:
+        return False
+
+    environment = (os.environ.get("SENTRY_ENVIRONMENT") or "development").strip()
+    try:
+        traces_sample_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    except ValueError:
+        traces_sample_rate = 0.1
+        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE; using 0.1")
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=environment,
+            traces_sample_rate=traces_sample_rate,
+            send_default_pii=False,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Sentry initialization failed; continuing without Sentry")
+        return False
+
+    _SENTRY_INITIALIZED = True
+    logger.info("Sentry initialized for environment=%s", environment)
+    return True
 
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 STARTUP_SEEDS_ENV = "ENABLE_STARTUP_SEEDS"
@@ -488,6 +529,7 @@ class TrainerCheckoutIn(BaseModel):
     suburb: Optional[str] = ""
     interval: str = "month"
     consent_subscription_billing_terms: bool = False
+    billing_terms_version: str = ""
     trainer_claim_session: Optional[str] = ""
     trainer_action_token: Optional[str] = ""
 
@@ -1395,6 +1437,7 @@ async def _ops_case_rows(
     message_log: List[Dict[str, Any]],
     ai_degradation_cases: Optional[List[Dict[str, Any]]] = None,
     sponsor_inventory_cases: Optional[List[Dict[str, Any]]] = None,
+    provider_cases: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
@@ -1858,6 +1901,8 @@ async def _ops_case_rows(
     for row in message_log:
         if str(row.get("status") or "") in {"failed", "sent"}:
             cases.append(_build_message_case(row))
+
+    cases.extend(provider_cases or [])
 
     overrides = await _load_ops_case_state_map([str(case.get("case_id") or "") for case in cases if case.get("case_id")])
     cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
@@ -3715,6 +3760,7 @@ async def get_trainer_billing_health(
             "name": trainer.get("name"),
             "billing_email": trainer.get("billing_email") or trainer.get("email"),
             "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
+            "billing_terms_version": trainer.get("billing_terms_version") or "",
             "stripe_customer_id": trainer.get("stripe_customer_id"),
             "tier": sub_tier,
             "subscription_tier": sub_tier,
@@ -3730,6 +3776,10 @@ async def get_trainer_billing_health(
             "stripe_subscription_id": trainer.get("stripe_subscription_id"),
             "stripe_customer_id": trainer.get("stripe_customer_id"),
             "trial": trial,
+        },
+        "billing": {
+            "checkout_available": stripe_billing.checkout_enabled(),
+            "terms_version": stripe_billing.billing_terms_version(),
         },
         "submission_id": (sub or {}).get("id"),
         "status_counts": statuses,
@@ -3785,8 +3835,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=404, detail="Trainer not found.")
     if str(trainer.get("claim_status") or "").lower() != "claimed":
         raise HTTPException(status_code=403, detail="Only a claimed trainer profile can start subscription checkout.")
-    if not payload.consent_subscription_billing_terms:
-        raise HTTPException(status_code=400, detail="Subscription billing consent is required before checkout.")
+    if not payload.consent_subscription_billing_terms or payload.billing_terms_version != stripe_billing.billing_terms_version():
+        raise HTTPException(status_code=400, detail="Accept the current subscription billing terms before checkout.")
 
     try:
         plan = stripe_billing.subscription_plan(tier=payload.tier, suburb=payload.suburb, interval=payload.interval)
@@ -3794,6 +3844,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if plan["tier"] == "suburb_sponsor" and not _trainer_serves_suburb(trainer, plan["suburb"]):
         raise HTTPException(status_code=403, detail="Suburb sponsorship must match a suburb served by this profile.")
+    if not stripe_billing.checkout_enabled():
+        raise HTTPException(status_code=503, detail="Trainer billing is not accepting purchases yet.")
 
     reservation: Dict[str, Any] = {}
     if plan["tier"] in {"suburb_sponsor", "citywide"}:
@@ -3802,7 +3854,7 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
             trainer_id=trainer_id,
             tier=plan["tier"],
             suburb=plan["suburb"],
-            idempotency_key=f"{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+            idempotency_key=f"{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         )
         if not reservation_result.get("ok"):
             code = str(reservation_result.get("code") or "inventory_unavailable")
@@ -3817,7 +3869,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         suburb=plan["suburb"],
         interval=plan["interval"],
         consent_granted=payload.consent_subscription_billing_terms,
-        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+        consent_version=payload.billing_terms_version,
+        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         reservation_id=str(reservation.get("reservation_id") or ""),
         billing_return_url=(
             f"{(os.environ.get('FRONTEND_BASE_URL') or 'http://127.0.0.1:3001').strip().rstrip('/')}/trainer/billing?"
@@ -4281,6 +4334,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     message_log = await _message_log_rows()
     ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
+    provider_snapshot = provider_health.snapshot()
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -4292,6 +4346,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
 
@@ -4671,6 +4726,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     }
     trainer_inventory = await _trainer_inventory_rows()
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
+    provider_snapshot = provider_health.snapshot()
     message_log = await _message_log_rows()
     supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
     supply_trends = await _ops_supply_trend_summary(
@@ -4693,6 +4749,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
     return _scrub({
@@ -4772,6 +4829,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "ops_supply_trends": supply_trends,
         "trainer_inventory": trainer_inventory,
         "sponsor_inventory": sponsor_inventory_snapshot,
+        "provider_health": provider_snapshot,
         "message_log": message_log,
         "ops_cases": ops_cases,
         "cases": ops_cases,
@@ -4789,6 +4847,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "reactivation_cases": reactivation_case_rows,
             "source_ingestion_sources": source_ingestion_state_rows,
             "discovery_alerts": discovery_alerts,
+            "provider_health": provider_snapshot,
         },
         "ts": now_iso(),
     })
@@ -4911,13 +4970,13 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
                     processed_reason = "subscription_metadata_invalid"
                 elif (
                     event_type in {"customer.subscription.deleted", "customer.subscription.paused"}
-                    or event_status == "incomplete_expired"
+                    or event_status in stripe_billing.TERMINAL_NONPAYMENT_SUBSCRIPTION_STATUSES
                 ) and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
                         db,
                         reservation_id=reservation_id,
                         subscription_id="" if reservation_id else subscription_id_for_inventory,
-                        reason="cancelled" if event_type.endswith("deleted") else "released",
+                        reason="cancelled" if event_type.endswith("deleted") else "payment_failed",
                     )
                 elif event_type == "charge.refunded" and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
@@ -5103,6 +5162,7 @@ async def _ensure_indexes() -> None:
 
 @app.on_event("startup")
 async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_loop_schedule: bool = True) -> None:
+    _initialise_sentry()
     ai_service.set_db(db)
     try:
         await asyncio.wait_for(_ensure_indexes(), timeout=10.0)

@@ -1,10 +1,10 @@
-# Codex Session Execution Standards
+# AI/LLM/Agent Session Execution Standards
 
-This file defines how future Codex sessions should execute work in this repository.
+This file defines how any AI, LLM, agent, bot, automated assistant or AI-enabled tool must execute work in this repository, regardless of provider, interface or task context. Platform-specific paths such as `.codex/` identify available tooling; they do not limit these rules to Codex.
 
-## Codex Capability Utilisation Rule (`LOCKED`)
+## AI Capability Utilisation Rule (`LOCKED`)
 
-All tasks must actively consider Codex-native capabilities where useful, including:
+All tasks must actively consider relevant available AI-native capabilities where useful, including:
 
 - skills
 - subagents
@@ -15,7 +15,17 @@ All tasks must actively consider Codex-native capabilities where useful, includi
 - available MCP/app integrations
 - project-specific reusable workflows
 
-Codex must not default to manual text editing when a more suitable native capability is available.
+The acting AI system must not default to manual text editing when a more suitable native capability is available.
+
+## Evidence-first owner-assistance rule (`LOCKED`)
+
+DTD is a solo-operator project. Any AI system entering or operating in this repository must reduce unnecessary human overhead by investigating before asking the owner to decide.
+
+1. Inspect the repository, current configuration, relevant provider state, existing decisions and available evidence before asking the owner to choose a value or direction.
+2. State verified facts, uncertainty, risks and a recommended path. Where a safe, reversible and in-scope default is supported by evidence, use it rather than presenting the owner with an arbitrary choice.
+3. Ask the owner only when the next action requires new authority or would materially change financial, security, legal, privacy, production, product-scope or irreversible state, or when the required decision cannot be resolved from available evidence.
+4. Do not ask the owner to invent thresholds, settings or architecture choices before measuring the current state. If a decision gate remains, explain exactly what is missing, why it matters and the smallest decision required.
+5. Prefer exception-driven operation and one focused decision gate over repeated broad clarification requests. This rule applies to every AI, LLM, agent, bot, assistant, plugin or automated workflow operating in the project.
 
 ## 1) Preflight Routing (required)
 

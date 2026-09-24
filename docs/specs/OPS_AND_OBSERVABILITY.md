@@ -43,7 +43,7 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 
 - API health includes dependency status without exposing secrets.
 - Sentry must initialise in the process actually serving production requests before being called active.
-- PostHog remains privacy-bounded and is not operational authority.
+- First-party attribution remains privacy-bounded and is not operational authority; Stripe and DTD persistence remain the sources of truth for monetisation reporting.
 - Add charts only where they reduce operator effort; a second operator system is not allowed.
 
 ## Credential and provider resilience

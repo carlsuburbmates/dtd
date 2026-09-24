@@ -1138,6 +1138,27 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert any(case["case_type"] == "owner_follow_up_case" for case in ops_cases)
 
 
+def test_oversight_exposes_sanitised_provider_control_gaps(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+    monkeypatch.setenv("MONGO_URL", "configured-for-test")
+    monkeypatch.setenv("RESEND_API_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "configured-for-test")
+    monkeypatch.setenv("ABR_GUID", "configured-for-test")
+
+    out = asyncio.run(server.oversight(None))
+
+    provider_health = out["provider_health"]
+    assert provider_health["status"] == "action_required"
+    assert provider_health["summary"]["providers_total"] == 6
+    assert all("configured-for-test" not in str(row) for row in provider_health["providers"])
+    atlas = next(row for row in provider_health["providers"] if row["id"] == "atlas")
+    assert atlas["runtime_status"] == "configuration_detected"
+    assert atlas["management_recovery_status"] == "not_evidenced"
+    assert atlas["last_verified_at"] is None
+    assert any(case["case_id"] == "provider:atlas" for case in out["ops_cases"])
+
+
 def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
     monkeypatch.setattr(server, "db", _fake_oversight_db())
 

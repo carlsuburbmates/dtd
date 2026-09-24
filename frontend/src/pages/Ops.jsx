@@ -400,6 +400,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const billingCases = asArray(snap.ops_investigation?.billing_recovery_cases);
     const reactivationCases = asArray(snap.ops_investigation?.reactivation_cases);
     const sourceIngestionSources = asArray(snap.ops_investigation?.source_ingestion_sources);
+    const providerHealth = snap.ops_investigation?.provider_health || snap.provider_health || {};
     const alerts = asArray(snap.alerts);
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const unhealthyLoops = Object.values(loops || {}).filter((meta) => String(meta?.status || "ok") !== "ok").length;
@@ -585,7 +586,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "system_activity" ? (
-                            <SystemActivityView loops={loops} alerts={alerts} sourceIngestionSources={sourceIngestionSources} />
+                            <SystemActivityView loops={loops} alerts={alerts} sourceIngestionSources={sourceIngestionSources} providerHealth={providerHealth} />
                         ) : null}
 
                         {activeView === "recent_changes" ? (
@@ -1335,8 +1336,10 @@ function BillingReactivationView({ billingCases, reactivationCases, sponsorInven
     );
 }
 
-function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
+function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHealth }) {
     const loopRows = Object.entries(loops || {});
+    const providers = asArray(providerHealth?.providers);
+    const providerExceptions = providers.filter((row) => row?.autonomy_status === "not_accepted").length;
     const unhealthyLoops = loopRows.filter(([, meta]) => String(meta?.status || "ok") !== "ok").length;
     const staleLoopNames = loopRows
         .filter(([, meta]) => String(meta?.status || "ok") !== "ok")
@@ -1346,10 +1349,11 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="System Activity" description={PAGE_INTROS.system_activity} />
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
                 <SummaryCard title="Unhealthy loops" value={unhealthyLoops} note={unhealthyLoops ? "These loops are no longer in a clean OK state." : "Loop health is currently clean."} />
                 <SummaryCard title="Active alerts" value={alerts.length} note={alerts.length ? "Review these after the main decision surfaces." : "No active alerts are reported."} />
                 <SummaryCard title="Source issues" value={sourceIngestionSources.length} note={sourceIngestionSources.length ? "Some source ingestion paths are degraded." : "No ingestion suppression is visible."} />
+                <SummaryCard title="Provider gaps" value={providerExceptions} note={providerExceptions ? "Runtime configuration is not evidence of an autonomous recovery path." : "Every material provider has the required evidence."} />
             </div>
             {unhealthyLoops || alerts.length ? (
                 <div className="mt-4 rounded-3xl border border-[#403423] bg-[#1F1910] px-4 py-3 text-sm text-[#F4E2B5]">
@@ -1417,6 +1421,38 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
                     </section>
                 </div>
             </div>
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                <div className="small-caps !text-[#8B9E98]">Provider control</div>
+                <p className="mt-2 text-sm text-[#8B9E98]">Sanitised status only. A configured runtime variable does not prove a provider, recovery identity, or alert route has been verified.</p>
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[960px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Provider</th>
+                                <th className="pb-3 pr-3">Runtime</th>
+                                <th className="pb-3 pr-3">Recovery</th>
+                                <th className="pb-3 pr-3">Safe check</th>
+                                <th className="pb-3 pr-3">Alert route</th>
+                                <th className="pb-3">Next safe step</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {providers.length ? providers.map((row) => (
+                                <tr key={row.id} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3"><div>{row.provider}</div><div className="text-xs text-[#8B9E98] mt-1">{row.purpose}</div></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.runtime_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.management_recovery_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.safe_verification_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.independent_alert_status)} kind="state" /></td>
+                                    <td className="py-3 text-[#C9C2B1]">{row.next_review || "No next step recorded."}</td>
+                                </tr>
+                            )) : (
+                                <tr><td className="py-3 text-[#8B9E98]" colSpan="6">Provider status is unavailable; do not treat provider control as verified.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </section>
     );
 }

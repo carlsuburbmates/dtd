@@ -26,14 +26,15 @@ const TIERS = [
         name: "Pro Trainer",
         price: "$19",
         cadence: "per month",
-        description: "Increased visibility for active trainers across multiple suburbs.",
+        priceDetail: "or A$149/year",
+        description: "Optional higher visibility in directory browsing for a claimed trainer profile.",
         highlight: true,
         features: [
             "Everything in Free Core Listing",
-            "Priority rank in suburb search results",
-            "Expanded service radius & suburbs",
-            "Enhanced profile with specialties & methods",
-            "Direct website & phone click tracking",
+            "Priority in directory browsing",
+            "Public website link when supplied",
+            "Public booking link when supplied",
+            "Diagnostic matching remains fit-first",
         ],
         ctaText: "Get Pro placement",
         ctaHref: "/trainers",
@@ -43,13 +44,12 @@ const TIERS = [
         name: "Suburb Sponsor",
         price: "$39",
         cadence: "per month",
-        description: "One of two sponsored visibility placements in your chosen Melbourne suburb.",
+        description: "One of two sponsored visibility placements in a served Greater Melbourne suburb.",
         highlight: false,
         features: [
             "Everything in Pro Trainer",
-            "Featured sponsor badge in chosen suburb",
-            "Prominent visibility in local directory browsing",
-            "High-intent local owner spotlight",
+            "Sponsored placement for one named suburb",
+            "Prominent local directory visibility",
             "Two sponsor placements available per suburb",
         ],
         ctaText: "Sponsor a suburb",
@@ -60,15 +60,14 @@ const TIERS = [
         name: "Melbourne-Wide",
         price: "$199",
         cadence: "per month",
-        description: "Full Greater Melbourne coverage for established training academies.",
+        description: "One of five citywide sponsored visibility positions across Greater Melbourne.",
         highlight: false,
         features: [
             "Everything in Suburb Sponsor",
-            "Network-wide spotlight across all Melbourne pages",
-            "Visibility priority in directory browsing",
+            "Citywide sponsored directory visibility",
+            "Priority in directory browsing",
             "Diagnostic matching remains fit-first",
-            "Maximum regional owner reach",
-            "Dedicated onboarding support",
+            "Five citywide positions available",
         ],
         ctaText: "Contact for regional",
         ctaHref: "/contact",
@@ -126,6 +125,7 @@ export default function Pricing() {
                                         <span className="font-serif text-4xl font-bold text-[#1A3A32]">{tier.price}</span>
                                         <span className="text-xs text-[#5C6D59]">/{tier.cadence}</span>
                                     </div>
+                                    {tier.priceDetail ? <div className="mt-1 text-xs text-[#5C6D59]">{tier.priceDetail}</div> : null}
                                     <p className="text-xs text-[#4A615A] mt-2 leading-relaxed min-h-[36px]">{tier.description}</p>
                                     <ul className="mt-6 space-y-3 border-t border-[#E5DFD3] pt-5">
                                         {tier.features.map((feature) => (
@@ -149,6 +149,12 @@ export default function Pricing() {
                             </article>
                         ))}
                     </div>
+                </section>
+
+                <section className="card-public p-6 mb-12 text-sm text-[#4A615A]" data-testid="pricing-billing-disclosure">
+                    <div className="small-caps">Billing availability</div>
+                    <p className="mt-2">A paid subscription is only created through an authorised checkout after the current billing terms are accepted. Until DTD activates that checkout, no purchase or charge is created.</p>
+                    <p className="mt-2">Eligible first-time Pro subscriptions receive a provider-backed 30-day trial once live billing is activated. Monthly-plan refund eligibility is 14 days; annual Pro eligibility is 30 days. Statutory consumer rights are not limited.</p>
                 </section>
 
                 {/* Owner Pricing / Value Promise */}

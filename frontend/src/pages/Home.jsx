@@ -12,7 +12,6 @@ const staggerChild = {
     show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.2, 0.8, 0.2, 1] } },
 };
 import { api, audCents } from "@/lib/api";
-import { captureEducationEvent, captureEducationPageView } from "@/lib/educationAnalytics";
 import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import OwnerWaitlistForm from "@/components/OwnerWaitlistForm";
@@ -54,10 +53,6 @@ export default function Home() {
                 setTrainerOnboardingOpen(Boolean(config.trainer_onboarding_open ?? true));
                 const suburbs = Array.isArray(config.suburbs) ? config.suburbs : [];
                 setMatchSuburbs(suburbs);
-                captureEducationPageView("home", {
-                    launch_phase: String(config.public_launch_phase || "live_matching"),
-                    public_emphasis: String(config.public_emphasis || "live_matching"),
-                });
             })
             .catch(() => {
                 if (!active) return;
@@ -200,7 +195,6 @@ export default function Home() {
                             <a
                                 href={FIRST_LEASH_URL}
                                 className="text-sm text-white/60 hover:text-white/90 transition-colors inline-flex items-center gap-1.5 pb-0.5 border-b border-white/20 hover:border-white/50"
-                                onClick={() => captureEducationEvent("home_hero_leash_clicked")}
                             >
                                 New dog at home? Open The First Leash.
                             </a>
@@ -306,7 +300,6 @@ export default function Home() {
                                 <div className="max-w-md p-6 bg-white border border-[#E5DFD3] rounded-2xl shadow-sm">
                                     <OwnerWaitlistForm
                                         attribution={attribution}
-                                        analyticsContext={{ source_surface: "home_waitlist", launch_phase: publicLaunchPhase }}
                                         formTestId="home-owner-waitlist-form"
                                         consentLabel="I agree to updates."
                                         submitLabel="Register interest"
@@ -430,7 +423,6 @@ export default function Home() {
                                 <a
                                     href={FIRST_LEASH_URL}
                                     className="btn-primary inline-flex items-center gap-2 self-start"
-                                    onClick={() => captureEducationEvent("home_footer_leash_clicked")}
                                 >
                                     Open The First Leash
                                     <ArrowRight className="w-4 h-4" />

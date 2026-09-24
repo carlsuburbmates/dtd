@@ -14,7 +14,7 @@ Each record carries stable identity and display fields sufficient for slug routi
 1. Prefer the production `suburbs` collection when it exactly satisfies the active catalogue contract.
 2. Fail soft to the same versioned static asset when the collection is unavailable or incomplete.
 3. `/api/config` exposes suburb count, catalogue version and actual source.
-4. Do not call fallback use a completed production seed.
+4. Treat fallback use as an open production-seed finding; do not call it a completed production seed.
 5. Seeding is idempotent, preserves unmanaged records unless explicitly governed, and writes audit evidence.
 
 ## Catchments

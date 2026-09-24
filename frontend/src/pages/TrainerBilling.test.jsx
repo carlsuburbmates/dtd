@@ -43,6 +43,10 @@ const billingData = {
     },
     issues: {},
     billed_total_cents: 0,
+    billing: {
+        checkout_available: true,
+        terms_version: "2026-09-24",
+    },
 };
 
 function renderPage() {
@@ -92,6 +96,7 @@ describe("P4 trainer subscription workflow", () => {
         await settle();
 
         await act(async () => {
+            view.container.querySelector("[data-testid='billing-terms-consent'] input").click();
             view.container.querySelector("[data-testid='checkout-suburb']").click();
             await Promise.resolve();
             await Promise.resolve();
@@ -103,8 +108,20 @@ describe("P4 trainer subscription workflow", () => {
             suburb: "Richmond",
             trainer_action_token: "action-token",
             consent_subscription_billing_terms: true,
+            billing_terms_version: "2026-09-24",
         }));
         expect(view.container.querySelector("[data-testid='checkout-error']").textContent).toContain("recorded for review");
+        view.cleanup();
+    });
+
+    it("does not expose a paid checkout when the backend launch gate is closed", async () => {
+        api.get.mockResolvedValueOnce({ data: { ...billingData, billing: { checkout_available: false, terms_version: "2026-09-24" } } });
+        const view = renderPage();
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='billing-activation-gate']").textContent).toContain("No subscription or charge");
+        expect(view.container.querySelector("[data-testid='checkout-pro']").disabled).toBe(true);
+        expect(view.container.querySelector("[data-testid='billing-terms-consent'] input").disabled).toBe(true);
         view.cleanup();
     });
 });

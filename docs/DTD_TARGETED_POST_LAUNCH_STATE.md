@@ -15,7 +15,7 @@ DTD should operate as a trustworthy Greater Melbourne directory that one non-tec
 4. **Clean launch supply.** Review placeholder, discovery-seed, aggregator-only and unstructured-provenance profiles. Publish, hold, correct or suppress each under the acquisition specification.
 5. **Complete SEO foundations.** Serve genuine sitemap and robots resources; compute per-suburb listing/content/indexation state; exclude ineligible pages; record Search Console evidence where available.
 6. **Launch billing as one controlled event.** Move Stripe to live mode, set `STRIPE_LIVE_ANCHOR_AT` at the same time, verify webhook and portal behavior, and enable refunds only after tested operator and audit paths are ready.
-7. **Finish observability.** Initialise Sentry in the deployed API path, preserve PostHog privacy controls, and add a low-maintenance reporting view only where it materially reduces operator work.
+7. **Finish observability.** Initialise Sentry in the deployed API path, keep first-party attribution privacy-bounded, and add a low-maintenance reporting view only where it materially reduces operator work.
 8. **Close acceptance across each flow.** Validate UI → API → persisted state → notification/fallback → `/ops`, including degraded provider and duplicate/idempotent paths.
 
 ## Already-aligned contracts to preserve
