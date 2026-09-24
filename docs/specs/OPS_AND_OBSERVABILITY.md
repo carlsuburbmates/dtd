@@ -46,6 +46,15 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 - PostHog remains privacy-bounded and is not operational authority.
 - Add charts only where they reduce operator effort; a second operator system is not allowed.
 
+## Credential and provider resilience
+
+The operator's browser session is an emergency recovery route, not an operating dependency. Runtime credentials and provider-management identities are separate, least-privileged managed secrets. No credential value belongs in source, local environment files, documentation or deployment literals.
+
+- A rotation creates a replacement first, stores a new managed-secret version, verifies a no-traffic/canary or otherwise safe provider path, promotes it, observes it, then revokes the prior credential. Immediate revocation is reserved for active containment.
+- The provider register records only sanitised operational metadata: provider/purpose, runtime or management scope, last verification, next expiry/review, degraded behaviour, independent alert route and recovery owner.
+- `/ops` must surface a material provider's most recent verified status and failed/stale recovery cases. Health checks must not disclose secrets or become a public control plane.
+- A provider integration is not accepted as autonomous until its runtime path, provider-management recovery path, safe verification and independent alert route have all been evidenced. If any is absent, it remains an explicit open finding.
+
 ## Operating cadence
 
 - **Each session:** posture, failed/stale flows, work queue, message failures, billing/reactivation, inventory, recent changes.

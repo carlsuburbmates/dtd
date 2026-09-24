@@ -119,6 +119,17 @@ When an authorised task uncovers a material code, configuration, security, data,
 
 This repository is public. Never put a credential, personal data, private artifact URL, or exploit instructions in the record. Keep the entry actionable but sanitised; report sensitive particulars to the owner separately. Escalate an urgent exposure instead of treating documentation as remediation.
 
+## Credential and provider resilience (locked)
+
+An interactive local browser, desktop login or remembered personal session is a recovery surface only; it must never be a production dependency.
+
+1. Runtime credentials and provider-management credentials live only in the appropriate managed secret store, never in source, local `.env` files, documentation, manifests or literal deployment configuration.
+2. The application runtime receives least-privileged credentials. Provider-management identities are separate, narrowly scoped, and may replace or revoke runtime credentials without being used on visitor request paths.
+3. Rotate by replacement, not interruption: create a replacement, store a new secret version, validate it on a no-traffic/canary deployment or other safe provider check, promote it, observe it, then revoke the old credential. Never revoke first unless an active incident demands immediate containment.
+4. Every material provider dependency needs a sanitised registry record: purpose/scope, runtime versus management identity, last successful verification, next review/expiry, degraded behaviour, independent alert route and recovery owner. Do not record secret values.
+5. Before declaring a provider integration or deployment complete, independently verify code, deployed configuration, live-safe provider behaviour and the control-plane ability to recover/rotate it. A successful user-facing request alone is insufficient.
+6. If a required provider-management identity or its recovery path is absent, create or update a verified open finding. Do not conceal the gap behind a local browser login or claim autonomous operation.
+
 ## 8) Turn Summary Requirement
 
 Include `Active skills this turn:` in responses whenever any skill is active.
