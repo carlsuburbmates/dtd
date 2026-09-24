@@ -17,6 +17,7 @@ DTD should operate as a trustworthy Greater Melbourne directory that one non-tec
 6. **Launch billing as one controlled event.** Move Stripe to live mode, set `STRIPE_LIVE_ANCHOR_AT` at the same time, verify webhook and portal behavior, and enable refunds only after tested operator and audit paths are ready.
 7. **Finish observability.** Initialise Sentry in the deployed API path, keep first-party attribution privacy-bounded, and add a low-maintenance reporting view only where it materially reduces operator work.
 8. **Close acceptance across each flow.** Validate UI → API → persisted state → notification/fallback → `/ops`, including degraded provider and duplicate/idempotent paths.
+9. **Operationalise the staging sandbox pipeline.** Connect GitHub to Cloud Build to automate sandbox deployment (`dogtrainersdirectory-dev` / `dtd-sandbox`) on development branches, and enforce an approval-gated path to production Cloud Run.
 
 ## Already-aligned contracts to preserve
 

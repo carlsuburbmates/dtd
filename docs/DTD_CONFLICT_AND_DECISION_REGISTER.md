@@ -145,3 +145,12 @@
 - **Rationale:** the billing relationship is already aligned with the work organisation, and the retained owner access reflects the owner's explicit operating choice. The repository records the relationship without recording account credentials or private console URLs.
 - **Supersedes:** uncertainty about whether the current project was attached to a personal billing account.
 - **Affected:** current-state evidence and future Google Cloud access reconciliation.
+
+## CDR-017 — Developer Staging Sandbox Environment (GCP & MongoDB Atlas)
+
+- **Date/status:** 2026-09-25 — locked architecture & implemented sandbox baseline.
+- **Decision:** Establish an isolated staging sandbox environment comprising GCP project `dogtrainersdirectory-dev` and a separate MongoDB Atlas project/cluster `dtd-sandbox` (M0 Free tier, AWS Sydney `ap-southeast-2`). Runtime secrets are managed strictly in Google Secret Manager within `dogtrainersdirectory-dev`. Production project `gen-lang-client-0028123502` and live MongoDB cluster `DTD` remain strictly isolated from experimentation. New feature development, CI/CD automated test builds, and simulated operational workflows target this sandbox before production promotion.
+- **Evidence:** Active GCP project `dogtrainersdirectory-dev` (Project Number: `625222421634`), billing account `0104B3-AB5AF0-8F0A01` linked; core serverless APIs enabled (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`); Secret Manager containing 8 isolated sandbox secrets; live pymongo connection test to `dtd-sandbox` cluster v8.0.32 passing in session.
+- **Rationale:** Protects live directory data, Stripe live billing, and public domain uptime from developer and AI experimentation errors; preserves zero-cost serverless baseline ($0 idle cost); upholds solo-operator safety.
+- **Supersedes:** The single-project live-only cloud architecture and any assumption that testing occurs directly on production Cloud Run or live MongoDB.
+- **Affected:** `DTD_CURRENT_STATE.md`, `specs/OPS_AND_OBSERVABILITY.md`, `DTD_TARGETED_POST_LAUNCH_STATE.md`, `README.md`.

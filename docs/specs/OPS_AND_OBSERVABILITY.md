@@ -55,6 +55,23 @@ The operator's browser session is an emergency recovery route, not an operating 
 - `/ops` must surface a material provider's most recent verified status and failed/stale recovery cases. Health checks must not disclose secrets or become a public control plane.
 - A provider integration is not accepted as autonomous until its runtime path, provider-management recovery path, safe verification and independent alert route have all been evidenced. If any is absent, it remains an explicit open finding.
 
+## Environment isolation and staging sandbox contract
+
+The system maintains strict isolation between live production and staging/sandbox environments:
+
+- **Production Environment:**
+  - Google Cloud Project: `gen-lang-client-0028123502`
+  - Database: MongoDB Atlas cluster `DTD` (`dtd` database)
+  - Purpose: Live dog owners, registered trainers, real Stripe subscriptions, and production domain (`dogtrainersdirectory.com.au`).
+  - Access & Mutations: Zero-downtime rolling/canary deployments; strict production change control; gated commercial/refund activations.
+
+- **Staging / Sandbox Environment:**
+  - Google Cloud Project: `dogtrainersdirectory-dev`
+  - Database: MongoDB Atlas cluster `dtd-sandbox` (`dtd_sandbox` database, AWS Sydney `ap-southeast-2`)
+  - Purpose: Developer experimentation, AI-assisted development, feature testing, and automated build verification.
+  - Guardrails: Stripe operates strictly in Test Mode (`sk_test_...`); transactional emails target dummy/test sinks; directory data is non-production; zero-cost idle state (serverless scale-to-zero).
+  - Promotion Gate: Features, data migrations, or infrastructure changes must pass verification in the sandbox before promotion to production.
+
 ## Operating cadence
 
 - **Each session:** posture, failed/stale flows, work queue, message failures, billing/reactivation, inventory, recent changes.
