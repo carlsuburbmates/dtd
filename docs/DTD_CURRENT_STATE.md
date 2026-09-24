@@ -146,3 +146,11 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** the remaining critical findings are not included in the deployed browser bundle, but they remain a CI/developer-machine risk because the build tool is currently declared as a production dependency. Some other advisories are build-tool or transitive-only; current evidence does not prove every reachable runtime path. Applying `npm audit fix --force` would introduce major-version changes without product regression review.
 - **Why deferred:** the next fixes require a deliberate `react-scripts` toolchain migration and resolution of the pre-existing `date-fns` 4 / `react-day-picker` 8 peer conflict. A forced resolver run would hide rather than resolve that compatibility issue.
 - **Next action:** move the build toolchain to a supported dependency model, resolve the date-picker peer constraint, then continue package upgrades in bounded batches with build, test and live-acceptance evidence.
+
+### DF-010 — GitHub Actions runtime and runner-image deprecation
+
+- **Observed/status:** 25 September 2026 — open; current verification passed.
+- **Evidence:** the successful PR #10 `Verify` runs reported that `actions/checkout@v4`, `actions/setup-node@v4` and `actions/setup-python@v5` still target Node.js 20 and are currently being forced to run on Node.js 24. GitHub also warned that `ubuntu-latest` will migrate to Ubuntu 26 on 19 October 2026.
+- **Impact/uncertainty:** this is not a current application or release failure, but an unaddressed workflow compatibility risk. A future GitHub runner/runtime change could make CI fail independently of a product change.
+- **Why deferred:** the currently approved release verification passed; changing CI action/runtime versions needs a bounded workflow update and a fresh remote verification run.
+- **Next action:** update the workflow actions/runtime expectations to supported releases before the announced runner transition, then confirm the full remote verification run remains green.
