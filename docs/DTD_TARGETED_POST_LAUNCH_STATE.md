@@ -9,7 +9,7 @@ DTD should operate as a trustworthy Greater Melbourne directory that one non-tec
 
 ## Work required to reach that state
 
-1. **Complete geographic production state.** Apply and verify the canonical 539-record catalogue in the production `suburbs` collection. Keep database-first reads and the versioned static fallback; surface source/version/count in operations evidence.
+1. **Maintain geographic production state.** The canonical 539-record catalogue is seeded and `/api/config` reports the `database` source. Preserve database-first reads, the versioned static fallback, audit evidence and source/version/count visibility through future catalogue changes.
 2. **Make automation operationally truthful.** Repair stale loops, failed notifications and reactivation delivery. Every automated flow must expose last success, failure, retry/fallback and operator action in `/ops`.
 3. **Reconcile the action layer.** Implement only approved, auditable `/ops` actions with confirmation and idempotency, or remove claims that they exist. Refund execution stays disabled until the live billing gate passes.
 4. **Clean launch supply.** Review placeholder, discovery-seed, aggregator-only and unstructured-provenance profiles. Publish, hold, correct or suppress each under the acquisition specification.
