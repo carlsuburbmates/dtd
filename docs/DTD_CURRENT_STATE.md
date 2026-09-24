@@ -156,6 +156,14 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** the currently approved release verification passed; changing CI action/runtime versions needs a bounded workflow update and a fresh remote verification run.
 - **Next action:** update the workflow actions/runtime expectations to supported releases before the announced runner transition, then confirm the full remote verification run remains green.
 
+### DF-011 — Frontend configuration fallback and public route metadata gaps
+
+- **Observed/status:** 25 September 2026 — open; identified during frontend and location-surface audit.
+- **Evidence:** `frontend/src/pages/Home.jsx` defaults a failed or incomplete `/config` response to `public_matching_enabled=true`, `public_launch_phase=live_matching` and trainer onboarding open. A local Chrome render with the frontend server running but no API config response displayed the live matching form, confirming the fallback is permissive. The same component loads `config.suburbs` into `matchSuburbs` but renders no `datalist` with the referenced `home-suburbs` id, so the homepage suburb suggestion path is disconnected. Its description and suburb controls also rely on placeholders rather than associated visible labels. `frontend/src/pages/Trainers.jsx` is the only reviewed public route that sets `document.title`; the other public routes, including `/melbourne/:suburb` and trainer profiles, inherit the static title/description from `frontend/public/index.html` and do not set route-specific canonical metadata.
+- **Impact/uncertainty:** an API/configuration outage can expose a matching surface whose runtime state has not been confirmed, while the homepage location input and route-level search metadata are weaker than the intended local-discovery and SEO contracts. The audit did not establish whether Firebase/Cloud Run production currently exercises the failure path.
+- **Why deferred:** this was a read-only audit. Choosing the outage posture (fail closed, waitlist, or explicit unavailable state), changing public form semantics, and adding route metadata are product/SEO changes requiring a bounded implementation decision and live acceptance.
+- **Next action:** choose and document the safe config-failure posture, then connect the canonical suburb catalogue to an accessible suggestion control, add associated form labels, add route-specific title/description/canonical handling, and cover config failure/partial-config and metadata behaviour with frontend tests before live verification.
+
 ### DF-012 — Cloud Run source-release build identity lacked least-privilege deployment access
 
 - **Observed/status:** 25 September 2026 — remediated and proven by a successful zero-traffic source build and release of `dtd-api-00054-pac`.
