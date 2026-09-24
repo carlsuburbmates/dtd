@@ -1,19 +1,19 @@
 # DTD Current State
 
-**Evidence date:** 24 September 2026
+**Evidence date:** 25 September 2026
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target.
 **Audit scope:** six-part, read-only code/product audit completed 20 September 2026, plus a read-only DNS/hosting reconciliation completed 23 September 2026. On 24 September, the owner separately authorised guarded Cloud Run recovery, Direct VPC/Cloud NAT rollout, Atlas network restriction, canonical suburb production seeding and one exact invalid-SEO-record cleanup; those production mutations are identified below. Other unexercised operator actions remain outside this evidence.
 
 ## Evidence boundaries
 
 - **Repository evidence:** source, configuration, tests and git state inspected locally.
-- **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026.
+- **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026; the Cloud Run service, Scheduler configuration and public health/config/SEO rejection paths were rechecked on 25 September 2026.
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
 
 ## Product and deployment
 
-- The main directory frontend and Cloud Run API are publicly reachable. On 24 September 2026, the API was recovered from a revision blocked by unavailable Sentry configuration, then moved through a zero-traffic Direct VPC canary to `dtd-api-vpc` with 100% traffic. Public health, configuration, trainer-read and Scheduler checks passed before and after the shift; startup logs confirm Sentry initialisation in `production` on the current service.
+- The main directory frontend and Cloud Run API are publicly reachable. On 24 September 2026, the API was recovered from a revision blocked by unavailable Sentry configuration, then moved through a zero-traffic Direct VPC canary to revision `dtd-api-00029-7cx`, which had 100% traffic when rechecked on 25 September. Public health, configuration, trainer-read and Scheduler checks passed before and after the shift; startup logs confirm Sentry initialisation in `production` on the current service.
 - The Google Cloud technical migration plan is complete. Firebase Hosting serves the public frontend in project `gen-lang-client-0028123502`; Cloud Run service `dtd-api` in `australia-southeast1` serves the backend; Firebase routes the public `/api/*` path to Cloud Run; and the production domain is managed through VentraIP DNS with Firebase, `learn` and mail records preserved. The public root, `www`, `robots.txt`, `sitemap.xml` and `/api/health` checks passed on 23 September 2026.
 - Google Cloud account and billing reconciliation on 24 September 2026 confirmed that project `gen-lang-client-0028123502` is linked to billing account `0104B3-AB5AF0-8F0A01` (`My Billing Account`) under the `dogtrainersdirectory.com.au` organisation. The authenticated Cloud Console management view and local project-level checks were consistent; no billing account or IAM mutation was made. Existing project Owner access for the owner's personal identity is intentionally retained for this one-owner project.
 - The Google for Startups Cloud Program application remains a separate external review state. The owner-provided Google guidance identified missing public frontend visibility as the review issue; the technical remediation is now complete. No sent support re-review request, Google approval, credits, or support re-review result has been verified or recorded in this repository.
@@ -56,7 +56,7 @@
 - It reviews and changes case state, but it does not currently provide the full approve/reject/merge/delist/cancel/refund action set promised by old specifications.
 - The latest captured authenticated snapshot reported 81 cases, 16 failed messages, 21 open reactivation candidates and stale background loops. These figures are a dated snapshot and must be refreshed before use.
 - The unknown PostHog frontend dependency is removed from the deployed Firebase build; live HTML no longer contains its loader/key. First-party attribution remains in the API for SEO and growth reporting. Cloud Run revision `dtd-api-00029-7cx` was zero-traffic tested then promoted after the current remote CI run passed; Sentry startup logs confirmed initialisation in `production`. A provider-signed test event and independent alert-route verification remain unexercised. MongoDB Atlas Charts is not integrated.
-- Domain mail administration is handled through Zoho Mail, while application transactional email uses Resend. No alternate mail runtime is recorded in active source or documentation.
+- Active source and documentation identify Zoho Mail for domain mail administration and Resend for application transactional email. This is repository evidence only; provider-console routing and recovery controls remain subject to the provider-verification gaps recorded below.
 - Sentry is reconciled to organisation `dtd-i9` and project `dtd` (Python); the obsolete `barkbond-web` and `javascript-nextjs` projects were removed. The deployed API reads the DTD DSN from managed Secret Manager version 2, and the current startup path is verified. A provider-signed test event and independent alert-route verification remain unexercised, so autonomous alerting is not claimed.
 
 ## SEO and delivery quality
