@@ -56,6 +56,7 @@
 - It reviews and changes case state, but it does not currently provide the full approve/reject/merge/delist/cancel/refund action set promised by old specifications.
 - The latest captured authenticated snapshot reported 81 cases, 16 failed messages, 21 open reactivation candidates and stale background loops. These figures are a dated snapshot and must be refreshed before use.
 - The unknown PostHog frontend dependency is removed from the deployed Firebase build; live HTML no longer contains its loader/key. First-party attribution remains in the API for SEO and growth reporting. Cloud Run revision `dtd-api-00029-7cx` was zero-traffic tested then promoted after the current remote CI run passed; Sentry startup logs confirmed initialisation in `production`. A provider-signed test event and independent alert-route verification remain unexercised. MongoDB Atlas Charts is not integrated.
+- Domain mail administration is handled through Zoho Mail, while application transactional email uses Resend. No alternate mail runtime is recorded in active source or documentation.
 - Sentry is reconciled to organisation `dtd-i9` and project `dtd` (Python); the obsolete `barkbond-web` and `javascript-nextjs` projects were removed. The deployed API reads the DTD DSN from managed Secret Manager version 2, and the current startup path is verified. A provider-signed test event and independent alert-route verification remain unexercised, so autonomous alerting is not claimed.
 
 ## SEO and delivery quality
