@@ -43,7 +43,7 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 
 - API health includes dependency status without exposing secrets.
 - Sentry must initialise in the process actually serving production requests before being called active.
-- PostHog remains privacy-bounded and is not operational authority.
+- First-party attribution remains privacy-bounded and is not operational authority; Stripe and DTD persistence remain the sources of truth for monetisation reporting.
 - Add charts only where they reduce operator effort; a second operator system is not allowed.
 
 ## Credential and provider resilience
@@ -54,6 +54,24 @@ The operator's browser session is an emergency recovery route, not an operating 
 - The provider register records only sanitised operational metadata: provider/purpose, runtime or management scope, last verification, next expiry/review, degraded behaviour, independent alert route and recovery owner.
 - `/ops` must surface a material provider's most recent verified status and failed/stale recovery cases. Health checks must not disclose secrets or become a public control plane.
 - A provider integration is not accepted as autonomous until its runtime path, provider-management recovery path, safe verification and independent alert route have all been evidenced. If any is absent, it remains an explicit open finding.
+
+## Environment isolation and staging sandbox contract
+
+The system maintains strict isolation between live production and staging/sandbox environments:
+
+- **Production Environment:**
+  - Google Cloud Project: `gen-lang-client-0028123502`
+  - Database: MongoDB Atlas cluster `DTD` (`dtd` database)
+  - Purpose: Live dog owners, registered trainers, real Stripe subscriptions, and production domain (`dogtrainersdirectory.com.au`).
+  - Access & Mutations: Zero-downtime rolling/canary deployments; strict production change control; gated commercial/refund activations.
+
+- **Staging / Sandbox Environment:**
+  - Google Cloud Project: `dogtrainersdirectory-dev`
+  - Database: MongoDB Atlas cluster `dtd-sandbox` (`dtd_sandbox` database, AWS Sydney `ap-southeast-2`)
+  - Purpose: Developer experimentation, AI-assisted development, feature testing, and automated build verification.
+  - Guardrails: Stripe operates strictly in Test Mode (`sk_test_...`); transactional emails target dummy/test sinks; directory data is non-production; zero-cost idle state (serverless scale-to-zero).
+  - Promotion Gate: Features, data migrations, or infrastructure changes must pass verification in the sandbox before promotion to production.
+  - Deployment Automation: Executable via `bash scripts/deploy_sandbox.sh`. It runs mandatory preflight compilation and release-gate checks, deploys `dtd-api-dev` with Secret Manager bindings, and fails unless `/api/health` confirms an available `dtd-sandbox` database. It may be run only by an authenticated, authorised operator or assistant; it is not an authority for arbitrary agents or for production promotion.
 
 ## Operating cadence
 

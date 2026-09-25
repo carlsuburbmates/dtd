@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { captureEducationEvent } from "@/lib/educationAnalytics";
 import { mapWaitlistError } from "@/lib/waitlistErrors";
 
 export default function OwnerWaitlistForm({
@@ -14,7 +13,6 @@ export default function OwnerWaitlistForm({
     submitTestId = "owner-waitlist-submit",
     consentLabel = "I agree to receive waitlist updates as the network expands.",
     submitLabel = "Join waitlist",
-    analyticsContext = {},
 }) {
     const [waitlistEmail, setWaitlistEmail] = useState("");
     const [waitlistSuburb, setWaitlistSuburb] = useState(initialSuburb.trim());
@@ -34,25 +32,21 @@ export default function OwnerWaitlistForm({
         if (!emailValid) {
             setWaitlistState("error");
             setWaitlistMessage("Please enter a valid email.");
-            captureEducationEvent("waitlist_rejected", { reason: "invalid_email", ...analyticsContext });
             return;
         }
         if (!suburbValue) {
             setWaitlistState("error");
             setWaitlistMessage("Please enter your suburb.");
-            captureEducationEvent("waitlist_rejected", { reason: "missing_suburb", ...analyticsContext });
             return;
         }
         if (!waitlistConsent) {
             setWaitlistState("error");
             setWaitlistMessage("Please tick consent to continue.");
-            captureEducationEvent("waitlist_rejected", { reason: "missing_consent", ...analyticsContext });
             return;
         }
 
         setWaitlistState("submitting");
         setWaitlistMessage("");
-        captureEducationEvent("waitlist_submitted", { suburb: suburbValue, ...analyticsContext });
         try {
             const r = await api.post("/owner-waitlist", {
                 email,
@@ -69,12 +63,10 @@ export default function OwnerWaitlistForm({
             if (duplicate) {
                 setWaitlistState("duplicate");
                 setWaitlistMessage("You are already on the waitlist for that suburb.");
-                captureEducationEvent("waitlist_duplicate", { suburb: suburbValue, ...analyticsContext });
                 return;
             }
             setWaitlistState("success");
             setWaitlistMessage("Thanks. You are on the owner waitlist.");
-            captureEducationEvent("waitlist_joined", { suburb: suburbValue, ...analyticsContext });
             setWaitlistEmail("");
             setWaitlistSuburb("");
             setWaitlistConsent(false);
@@ -82,12 +74,10 @@ export default function OwnerWaitlistForm({
             if (err?.response?.status === 409) {
                 setWaitlistState("duplicate");
                 setWaitlistMessage("You are already on the waitlist for that suburb.");
-                captureEducationEvent("waitlist_duplicate", { suburb: suburbValue, ...analyticsContext });
                 return;
             }
             setWaitlistState("error");
             setWaitlistMessage(mapWaitlistError(err?.response?.data?.detail));
-            captureEducationEvent("waitlist_failed", { suburb: suburbValue, ...analyticsContext });
         }
     };
 

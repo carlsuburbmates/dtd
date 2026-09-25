@@ -58,9 +58,9 @@
 
 ## CDR-007 — Canonical Greater Melbourne catalogue
 
-- **Date/status:** 2026-09-18 — locked asset; production seed pending proof.
+- **Date/status:** 2026-09-18 — locked asset; production seed verified 2026-09-24.
 - **Decision:** the versioned 539-record Australia Post delivery-locality-derived catalogue is the canonical DTD suburb list. It is not derived from trainer records. Database-first API reads may fall back to the same versioned asset.
-- **Evidence:** validated asset and seed tool; live `/api/config` count/version/source.
+- **Evidence:** validated asset and seed tool; live `/api/config` count/version/source. On 2026-09-24, the Cloud Run production connection dry-run found zero existing `suburbs` records and an exact plan to create 539 canonical records from SHA-256 `7c45008e4d25d68098d0006f8634ba6259cf1ca19b00cb8a38ef3503efe5d4e1`; no rows would be updated or preserved. The authorised first production run then created exactly 539 records, and the live API changed from `static_catalogue_fallback` to `database`. The required second production run reported 539 unchanged with zero created or updated. Both seed audit events are present.
 - **Rationale:** stable geography independent of current directory supply.
 - **Supersedes:** approximate 300-suburb claims and dynamic extraction from 20 trainer rows.
 - **Affected:** geography and SEO specs; `/api/config`; production seed.
@@ -103,10 +103,10 @@
 
 ## CDR-012 — Production web routing ownership
 
-- **Date/status:** 2026-09-23 — owner-approved implementation; VentraIP DNS cutover completed, Vercel retirement pending propagation stability.
-- **Decision:** Firebase Hosting remains the canonical public frontend; Cloud Run remains the backend; browser API calls use the main domain's `/api/*` path through Firebase Hosting to Cloud Run. DNS management is to move from Vercel DNS to VentraIP, with the required `learn` and mail records preserved and the legacy Vercel domain attachment retired.
-- **Evidence:** owner approval in the deployment session; existing Firebase Hosting site and Cloud Run service; local routing change and targeted build validation; VentraIP DNS Hosting now serves the Firebase apex/`www`/`learn` records, Zoho MX records, and preserved verification, DMARC, DKIM and SES TXT records. Authoritative queries to all three VentraIP nameservers agree. Public recursive resolvers are still mixed during nameserver propagation.
-- **Rationale:** one public frontend/API origin and one DNS authority reduce stale Vercel routing and CORS/configuration drift for the solo operator.
+- **Date/status:** 2026-09-24 — owner-approved implementation; Google Cloud technical migration and VentraIP DNS cutover completed; legacy Vercel domain ownership and obsolete catch-all configuration retired after public resolver verification.
+- **Decision:** Firebase Hosting remains the canonical public frontend; Cloud Run remains the backend; browser API calls use the main domain's `/api/*` path through Firebase Hosting to Cloud Run. VentraIP is the DNS authority, with the required `learn` and mail records preserved. The legacy Vercel domain attachment and wildcard/API route are retired only after public DNS propagation is stable.
+- **Evidence:** owner approval in the deployment session; existing Firebase Hosting site and Cloud Run service; local routing change and targeted build validation; VentraIP DNS Hosting now serves the Firebase apex/`www`/`learn` records, Zoho MX records, and preserved domain-verification, DMARC and DKIM records. Authoritative queries to all three VentraIP nameservers agree. Public recursive resolvers are still mixed during nameserver propagation.
+- **Rationale:** one public frontend/API origin and one DNS authority reduce stale Vercel routing and CORS/configuration drift for the solo operator. The Vercel removal followed independent resolver and public-route verification.
 - **Supersedes:** the split production arrangement in which Vercel DNS delegated the domain while Firebase served the frontend and the frontend bypassed Firebase for Cloud Run.
 - **Affected:** `firebase.json`, frontend API base URL, DNS/provider configuration, deployment runbook and current-state evidence.
 
@@ -118,3 +118,39 @@
 - **Rationale:** this gives the fail-closed implementation a concrete, adjustable starting point without treating an empty locality or thin generated copy as indexable.
 - **Supersedes:** the unresolved numerical-threshold state in DF-004 and the blank values in the environment template.
 - **Affected:** SEO/indexation specification, runtime environment configuration, tests and release verification.
+
+## CDR-014 — Google for Startups technical migration completion
+
+- **Date/status:** 2026-09-24 — technical migration complete; Google program re-review pending.
+- **Decision:** Treat the Google Cloud remediation plan as complete for the technical deployment scope: Firebase Hosting provides the public frontend in project `gen-lang-client-0028123502`, Cloud Run provides `dtd-api`, Firebase proxies `/api/*` to Cloud Run, and the domain's VentraIP DNS preserves the Firebase, `learn` and mail records. Do not represent the Google for Startups application as approved until Google provides written confirmation.
+- **Evidence:** owner-provided Google Cloud Startup guidance; successful Firebase deployment; public HTTP 200 checks for the root, `www`, `robots.txt`, `sitemap.xml` and `/api/health`; authoritative VentraIP queries for apex, `www`, `learn`, Zoho MX, domain-verification, DMARC and DKIM records; commit `e4e8406`.
+- **Rationale:** the previously identified public-frontend visibility gap has been remediated while keeping external program approval separate from repository and deployment evidence.
+- **Supersedes:** the earlier technical migration state in which Cloud Run existed but the public frontend and routing were not sufficiently aligned for manual Google review.
+- **Affected:** Google Startup review response, deployment/current-state evidence and production handover.
+
+## CDR-015 — Sentry project identity and runtime connection
+
+- **Date/status:** 2026-09-24 — implemented and reconciled; autonomous alerting remains unaccepted.
+- **Decision:** Use Sentry organisation `dtd-i9` project `dtd` as the repository's single application-error project. Remove the obsolete `barkbond-web` and `javascript-nextjs` projects. Keep the deployed API connection on the managed DTD DSN and initialise Sentry in the process serving production requests.
+- **Evidence:** authenticated Sentry project inventory; project rename/platform update; deletion responses for the two obsolete projects; managed Secret Manager version 2; zero-traffic Cloud Run verification, promoted revision health check and production startup log.
+- **Rationale:** one repository, one named Sentry project and one deployed runtime path reduce identity drift without exposing provider credentials in source or documentation.
+- **Supersedes:** the earlier BarkBond-labelled project arrangement and the worker-only Sentry initialisation path.
+- **Affected:** Sentry provider configuration, API startup, worker startup, environment templates and current-state evidence.
+
+## CDR-016 — Google Cloud billing and owner-access reconciliation
+
+- **Date/status:** 2026-09-24 — reconciled; no further IAM or billing change authorised.
+- **Decision:** Keep project `gen-lang-client-0028123502` linked to billing account `0104B3-AB5AF0-8F0A01` under the `dogtrainersdirectory.com.au` organisation. Retain the existing project Owner access for the owner's personal identity because this is a one-owner project; do not change project IAM or billing administration as part of this work.
+- **Evidence:** Cloud Console billing-management view under the work organisation context; local project and billing-link inspection; no billing or IAM mutation was performed during reconciliation.
+- **Rationale:** the billing relationship is already aligned with the work organisation, and the retained owner access reflects the owner's explicit operating choice. The repository records the relationship without recording account credentials or private console URLs.
+- **Supersedes:** uncertainty about whether the current project was attached to a personal billing account.
+- **Affected:** current-state evidence and future Google Cloud access reconciliation.
+
+## CDR-017 — Developer Staging Sandbox Environment (GCP & MongoDB Atlas)
+
+- **Date/status:** 2026-09-25 — locked architecture & implemented sandbox baseline.
+- **Decision:** Establish an isolated staging sandbox environment comprising GCP project `dogtrainersdirectory-dev` and a separate MongoDB Atlas project/cluster `dtd-sandbox` (M0 Free tier, AWS Sydney `ap-southeast-2`). Runtime secrets are managed strictly in Google Secret Manager within `dogtrainersdirectory-dev`. Production project `gen-lang-client-0028123502` and live MongoDB cluster `DTD` remain strictly isolated from experimentation. New feature development, CI/CD automated test builds, and simulated operational workflows target this sandbox before production promotion.
+- **Evidence:** Active GCP project `dogtrainersdirectory-dev` (Project Number: `625222421634`), billing account `0104B3-AB5AF0-8F0A01` linked; core serverless APIs enabled (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`); Secret Manager containing 8 isolated sandbox secrets; live pymongo connection test to `dtd-sandbox` cluster v8.0.32 passing in session.
+- **Rationale:** Protects live directory data, Stripe live billing, and public domain uptime from developer and AI experimentation errors; preserves zero-cost serverless baseline ($0 idle cost); upholds solo-operator safety.
+- **Supersedes:** The single-project live-only cloud architecture and any assumption that testing occurs directly on production Cloud Run or live MongoDB.
+- **Affected:** `DTD_CURRENT_STATE.md`, `specs/OPS_AND_OBSERVABILITY.md`, `DTD_TARGETED_POST_LAUNCH_STATE.md`, `README.md`.

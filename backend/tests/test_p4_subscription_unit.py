@@ -119,7 +119,7 @@ def test_customer_portal_preserves_supplied_return_url(monkeypatch):
                     calls.append(kwargs)
                     return SimpleNamespace(url="https://billing.stripe.test/session")
 
-    monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
     out = asyncio.run(
         stripe_billing.create_customer_portal_session(
@@ -132,10 +132,10 @@ def test_customer_portal_preserves_supplied_return_url(monkeypatch):
 
 
 def test_checkout_service_never_fabricates_url_when_stripe_is_unconfigured(monkeypatch):
-    monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: False)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: False)
     out = asyncio.run(stripe_billing.create_checkout_session(SimpleNamespace(), _trainer(), tier="pro"))
     assert out["ok"] is False
-    assert out["code"] == "stripe_unconfigured"
+    assert out["code"] == "billing_activation_required"
     assert "url" not in out
 
 
@@ -164,16 +164,18 @@ def test_checkout_service_creates_monthly_inclusive_checkout_and_verified_abn_ta
                     return SimpleNamespace(id="cs_123", url="https://checkout.stripe.test/cs_123")
 
     trainers = _Trainers([_trainer()])
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
     out = asyncio.run(
         stripe_billing.create_checkout_session(
-            SimpleNamespace(trainers=trainers), _trainer(), tier="suburb_sponsor", suburb="Brunswick", consent_granted=True, idempotency_key="checkout-1"
+            SimpleNamespace(trainers=trainers), _trainer(), tier="suburb_sponsor", suburb="Brunswick", consent_granted=True, consent_version=stripe_billing.billing_terms_version(), idempotency_key="checkout-1"
         )
     )
     assert out["ok"] is True, out
     assert out["session_id"] == "cs_123"
     assert trainers.rows["trainer_1"]["stripe_customer_tax_id"] == "txi_123"
+    assert trainers.rows["trainer_1"]["billing_terms_version"] == stripe_billing.billing_terms_version()
 
 
 def test_checkout_endpoint_requires_claim_session_and_served_suburb(monkeypatch):
@@ -189,6 +191,7 @@ def test_checkout_endpoint_requires_claim_session_and_served_suburb(monkeypatch)
         return {"ok": True, "url": "https://checkout.stripe.test/cs_1", "session_id": "cs_1", "customer_id": "cus_1"}
 
     monkeypatch.setattr(stripe_billing, "create_checkout_session", _checkout)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(
         server.suburb_inventory,
         "reserve",
@@ -197,7 +200,7 @@ def test_checkout_endpoint_requires_claim_session_and_served_suburb(monkeypatch)
     token = server._issue_trainer_claim_session(trainer_id="trainer_1", claim_event_id="claim_1")["token"]
     out = asyncio.run(
         server.create_trainer_billing_checkout(
-                server.TrainerCheckoutIn(trainer_id="trainer_1", tier="suburb_sponsor", suburb="Brunswick", consent_subscription_billing_terms=True, trainer_claim_session=token)
+                server.TrainerCheckoutIn(trainer_id="trainer_1", tier="suburb_sponsor", suburb="Brunswick", consent_subscription_billing_terms=True, billing_terms_version=stripe_billing.billing_terms_version(), trainer_claim_session=token)
         )
     )
     assert out["session_id"] == "cs_1"
@@ -206,6 +209,7 @@ def test_checkout_endpoint_requires_claim_session_and_served_suburb(monkeypatch)
     assert "trainerId=trainer_1" in return_url
     assert "claimSession=" not in return_url
     assert "token=" not in return_url
+    assert ":month:" in checkout_calls[0]["idempotency_key"]
 
     with pytest.raises(HTTPException) as consent:
         asyncio.run(
@@ -218,7 +222,7 @@ def test_checkout_endpoint_requires_claim_session_and_served_suburb(monkeypatch)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
             server.create_trainer_billing_checkout(
-                server.TrainerCheckoutIn(trainer_id="trainer_1", tier="suburb_sponsor", suburb="Richmond", consent_subscription_billing_terms=True, trainer_claim_session=token)
+                server.TrainerCheckoutIn(trainer_id="trainer_1", tier="suburb_sponsor", suburb="Richmond", consent_subscription_billing_terms=True, billing_terms_version=stripe_billing.billing_terms_version(), trainer_claim_session=token)
             )
         )
     assert exc.value.status_code == 403
@@ -259,9 +263,10 @@ def test_checkout_provider_failure_is_recorded_for_ops(monkeypatch):
         return {"ok": False, "code": "stripe_unconfigured"}
 
     monkeypatch.setattr(stripe_billing, "create_checkout_session", _unconfigured)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     token = server._issue_trainer_claim_session(trainer_id="trainer_1", claim_event_id="claim_1")["token"]
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(server.create_trainer_billing_checkout(server.TrainerCheckoutIn(trainer_id="trainer_1", tier="pro", consent_subscription_billing_terms=True, trainer_claim_session=token)))
+        asyncio.run(server.create_trainer_billing_checkout(server.TrainerCheckoutIn(trainer_id="trainer_1", tier="pro", consent_subscription_billing_terms=True, billing_terms_version=stripe_billing.billing_terms_version(), trainer_claim_session=token)))
     assert exc.value.status_code == 503
     assert events.inserted[0]["status"] == "provider_unavailable"
     assert events.inserted[0]["reason"] == "stripe_unconfigured"
@@ -367,6 +372,7 @@ def test_sponsor_checkout_reserves_inventory_and_releases_it_when_provider_fails
     monkeypatch.setattr(server.suburb_inventory, "reserve", _reserve)
     monkeypatch.setattr(server.suburb_inventory, "release_reservation", _release)
     monkeypatch.setattr(stripe_billing, "create_checkout_session", _checkout)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     token = server._issue_trainer_claim_session(trainer_id="trainer_1", claim_event_id="claim_1")["token"]
 
     with pytest.raises(HTTPException) as exc:
@@ -377,6 +383,7 @@ def test_sponsor_checkout_reserves_inventory_and_releases_it_when_provider_fails
                     tier="suburb_sponsor",
                     suburb="Brunswick",
                     consent_subscription_billing_terms=True,
+                    billing_terms_version=stripe_billing.billing_terms_version(),
                     trainer_claim_session=token,
                 )
             )
@@ -466,6 +473,34 @@ def test_sponsor_cancellation_webhook_releases_position(monkeypatch):
     assert trainers.rows["trainer_1"]["tier"] == "claimed"
     assert released[0]["reservation_id"] == "res_1"
     assert released[0]["reason"] == "cancelled"
+
+
+def test_terminal_sponsor_nonpayment_releases_position_and_entitlement(monkeypatch):
+    trainers = _Trainers([_trainer(tier="suburb_sponsor", stripe_subscription_id="sub_1", sponsor_reservation_id="res_1")])
+    events = _StripeEvents()
+    monkeypatch.setattr(server, "db", SimpleNamespace(trainers=trainers, stripe_events=events))
+    monkeypatch.setattr(
+        stripe_billing,
+        "construct_webhook_event",
+        lambda *_args, **_kwargs: {
+            "id": "evt_sponsor_unpaid",
+            "type": "customer.subscription.updated",
+            "data": {"object": {"id": "sub_1", "status": "unpaid", "metadata": {"trainer_id": "trainer_1", "tier": "suburb_sponsor", "suburb": "Brunswick", "reservation_id": "res_1"}}},
+        },
+    )
+    released = []
+    monkeypatch.setattr(
+        server.suburb_inventory,
+        "release_reservation",
+        lambda *_args, **kwargs: asyncio.sleep(0, result=released.append(kwargs) or {"ok": True, "released": 1}),
+    )
+
+    out = asyncio.run(server.stripe_webhook(_Request()))
+
+    assert out == {"ok": True, "needs_review": False}
+    assert trainers.rows["trainer_1"]["tier"] == "claimed"
+    assert trainers.rows["trainer_1"]["subscription_status"] == "unpaid"
+    assert released == [{"reservation_id": "res_1", "subscription_id": "", "reason": "payment_failed"}]
 
 
 def test_ops_refund_is_gated_and_success_releases_inventory(monkeypatch):

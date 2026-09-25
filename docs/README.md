@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 19 September 2026
+**Reconciled:** 24 September 2026
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -9,9 +9,9 @@ This folder is both the map of DTD's authoritative documentation and a readable 
 
 DTD is a free-to-dog-owners directory and guided matching service for Greater Melbourne. Trainers can hold free listings or buy flat-price visibility products; DTD never charges owners and never takes commissions or per-lead fees. The directory is publicly deployed and its core owner, trainer, matching, billing, suburb-catalogue, and operator surfaces exist, but commercial launch gates and several operational gaps remain. "Current" therefore means evidenced implementation state, not owner acceptance of the final product.
 
-The immediate target is to make that existing system safe and dependable for a solo operator: finish the production suburb seed, correct SEO resources and indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
+The immediate target is to make that existing system safe and dependable for a solo operator: maintain the seeded production suburb catalogue, correct SEO indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, remediate the documented dependency-security backlog, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
 
-The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL.
+The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL. The Google Cloud technical migration requested during the Google for Startups review is complete: Firebase Hosting serves the frontend in project `gen-lang-client-0028123502`, Cloud Run serves the API, and the public domain routes through the Google stack. An isolated developer staging sandbox (`dogtrainersdirectory-dev` and MongoDB Atlas `dtd-sandbox`) provides safe pre-production testing and development. The program application remains subject to Google's manual re-review; no approval or credit award is recorded here.
 
 ## Authority map
 
@@ -27,6 +27,7 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 | [specs/GEOGRAPHY_AND_CATCHMENTS.md](specs/GEOGRAPHY_AND_CATCHMENTS.md) | Canonical suburbs, regions and catchments | Geography, seed or inventory work |
 | [specs/SEO_AND_INDEXATION.md](specs/SEO_AND_INDEXATION.md) | Indexation eligibility, sitemap and robots rules | Public discovery and suburb-page work |
 | [specs/OPS_AND_OBSERVABILITY.md](specs/OPS_AND_OBSERVABILITY.md) | Operator workflows, automation and degraded states | `/ops`, alerts or production operations |
+| [specs/SANDBOX_VERIFICATION_MATRIX.md](specs/SANDBOX_VERIFICATION_MATRIX.md) | Mandatory pre-flight checklist and sandbox gates | Testing features before production promotion |
 | [specs/ACQUISITION_AND_INGESTION.md](specs/ACQUISITION_AND_INGESTION.md) | Lawful trainer sourcing, verification and lifecycle | Any data acquisition or profile ingestion work |
 
 ## State progression

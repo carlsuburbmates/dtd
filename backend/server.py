@@ -41,6 +41,11 @@ from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pymongo.errors import DuplicateKeyError
+
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional observability dependency locally
+    sentry_sdk = None
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
@@ -50,6 +55,7 @@ from services import event_contract
 from services import follow_up_tokens
 from services import fraud as fraud_service
 from services import notifications as notifications_service
+from services import provider_health
 from services import pro_trials
 from services import runtime_control
 from services import stripe_billing
@@ -84,6 +90,41 @@ api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("dtd")
+
+_SENTRY_INITIALIZED = False
+
+
+def _initialise_sentry() -> bool:
+    """Initialise Sentry in the process that serves API or worker work."""
+    global _SENTRY_INITIALIZED
+    if _SENTRY_INITIALIZED:
+        return True
+
+    dsn = (os.environ.get("SENTRY_DSN") or "").strip()
+    if not dsn or sentry_sdk is None:
+        return False
+
+    environment = (os.environ.get("SENTRY_ENVIRONMENT") or "development").strip()
+    try:
+        traces_sample_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    except ValueError:
+        traces_sample_rate = 0.1
+        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE; using 0.1")
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=environment,
+            traces_sample_rate=traces_sample_rate,
+            send_default_pii=False,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Sentry initialization failed; continuing without Sentry")
+        return False
+
+    _SENTRY_INITIALIZED = True
+    logger.info("Sentry initialized for environment=%s", environment)
+    return True
 
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 STARTUP_SEEDS_ENV = "ENABLE_STARTUP_SEEDS"
@@ -488,6 +529,7 @@ class TrainerCheckoutIn(BaseModel):
     suburb: Optional[str] = ""
     interval: str = "month"
     consent_subscription_billing_terms: bool = False
+    billing_terms_version: str = ""
     trainer_claim_session: Optional[str] = ""
     trainer_action_token: Optional[str] = ""
 
@@ -1395,6 +1437,7 @@ async def _ops_case_rows(
     message_log: List[Dict[str, Any]],
     ai_degradation_cases: Optional[List[Dict[str, Any]]] = None,
     sponsor_inventory_cases: Optional[List[Dict[str, Any]]] = None,
+    provider_cases: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
@@ -1858,6 +1901,8 @@ async def _ops_case_rows(
     for row in message_log:
         if str(row.get("status") or "") in {"failed", "sent"}:
             cases.append(_build_message_case(row))
+
+    cases.extend(provider_cases or [])
 
     overrides = await _load_ops_case_state_map([str(case.get("case_id") or "") for case in cases if case.get("case_id")])
     cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
@@ -2533,6 +2578,185 @@ def _unpublished_seo_response(*, slug: str, suburb: str, reason: str) -> Dict[st
             "sections": [],
             "faq": [],
         },
+    }
+
+
+def _eligible_trainer_query_for_suburb(suburb: str) -> Dict[str, Any]:
+    """Return the one eligibility query shared by public SEO and protected ops."""
+    escaped_suburb = re.escape(suburb)
+    return {
+        "published": True,
+        "region": {"$in": ACTIVE_REGIONS},
+        "$or": [
+            {"suburb": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+            {"serviced_suburbs": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+        ],
+    }
+
+
+def _seo_page_word_count(page: Dict[str, Any]) -> int:
+    """Recalculate content quality from stored copy rather than trusting a flag."""
+    copy = page.get("copy")
+    return _seo_word_count(copy) if isinstance(copy, dict) else 0
+
+
+def _canonical_suburb_name_index() -> Dict[str, Dict[str, Any]]:
+    return {
+        str(row.get("suburb_name") or "").strip().lower(): row
+        for row in suburb_catalogue.canonical_suburbs()
+        if str(row.get("suburb_name") or "").strip()
+    }
+
+
+async def _ops_seo_indexation_summary() -> Dict[str, Any]:
+    """Read-only SEO inventory for the protected operations console.
+
+    This deliberately does not generate copy, change stored SEO records, or use
+    Search Console. It exposes whether existing records still satisfy the same
+    canonical/supply/content contract used by the public route.
+    """
+    minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
+    minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    canonical_rows = suburb_catalogue.canonical_suburbs()
+    canonical_by_slug = {
+        str(row.get("slug") or ""): row
+        for row in canonical_rows
+        if str(row.get("slug") or "")
+    }
+    canonical_by_name = _canonical_suburb_name_index()
+
+    trainers_coll = getattr(db, "trainers", None)
+    published_trainers = (
+        await trainers_coll.find(
+            {"published": True, "region": {"$in": ACTIVE_REGIONS}},
+            {"_id": 0, "id": 1, "suburb": 1, "serviced_suburbs": 1},
+        ).to_list(5000)
+        if trainers_coll is not None
+        else []
+    )
+    eligible_by_slug: Dict[str, int] = {slug: 0 for slug in canonical_by_slug}
+    for trainer in published_trainers:
+        matched_slugs = set()
+        raw_localities = [trainer.get("suburb")]
+        serviced_suburbs = trainer.get("serviced_suburbs")
+        if isinstance(serviced_suburbs, list):
+            raw_localities.extend(serviced_suburbs)
+        for locality in raw_localities:
+            canonical = canonical_by_name.get(str(locality or "").strip().lower())
+            if canonical:
+                matched_slugs.add(str(canonical.get("slug") or ""))
+        for matched_slug in matched_slugs:
+            if matched_slug in eligible_by_slug:
+                eligible_by_slug[matched_slug] += 1
+
+    pages_coll = getattr(db, "seo_pages", None)
+    stored_records = int(await pages_coll.count_documents({})) if pages_coll is not None else 0
+    inventory_limit = 2000
+    page_rows = (
+        await pages_coll.find(
+            {},
+            {
+                "_id": 0,
+                "id": 1,
+                "slug": 1,
+                "suburb": 1,
+                "publication_status": 1,
+                "meta_robots": 1,
+                "copy": 1,
+                "content_word_count": 1,
+                "generated_at": 1,
+            },
+        ).to_list(inventory_limit)
+        if pages_coll is not None
+        else []
+    )
+    pages_by_slug: Dict[str, List[Dict[str, Any]]] = {}
+    for page in page_rows:
+        pages_by_slug.setdefault(str(page.get("slug") or ""), []).append(page)
+
+    rows: List[Dict[str, Any]] = []
+    indexable_now = 0
+    review_required = 0
+    canonical_records = 0
+    noncanonical_records = 0
+    for slug, canonical in canonical_by_slug.items():
+        pages = pages_by_slug.pop(slug, [])
+        if pages:
+            canonical_records += len(pages)
+        page = pages[0] if pages else None
+        eligible_count = int(eligible_by_slug.get(slug) or 0)
+        word_count = _seo_page_word_count(page) if page else 0
+        reasons: List[str] = []
+        if minimum_trainers is None or minimum_words is None:
+            reasons.append("thresholds_not_configured")
+        elif eligible_count < minimum_trainers:
+            reasons.append("insufficient_eligible_supply")
+        if page is None:
+            reasons.append("no_stored_page")
+        elif minimum_words is not None and word_count < minimum_words:
+            reasons.append("insufficient_content_quality")
+        elif str(page.get("publication_status") or "") != "published":
+            reasons.append("stored_page_not_published")
+        elif str(page.get("meta_robots") or "") != "index,follow":
+            reasons.append("stored_page_not_indexable")
+        if len(pages) > 1:
+            reasons.append("duplicate_stored_pages")
+
+        indexable = bool(page) and not reasons
+        if indexable:
+            indexable_now += 1
+        elif page:
+            review_required += 1
+        rows.append(
+            {
+                "slug": slug,
+                "suburb": str(canonical.get("suburb_name") or ""),
+                "eligible_trainer_count": eligible_count,
+                "content_word_count": word_count if page else None,
+                # A stored legacy record with no publication field is not the
+                # same thing as an absent record. Keep it visible to Ops as an
+                # unconfigured record requiring review.
+                "publication_status": str(page.get("publication_status") or "unconfigured") if page else "not_stored",
+                "meta_robots": str(page.get("meta_robots") or "noindex,follow") if page else "noindex,follow",
+                "indexable_now": indexable,
+                "reason_codes": reasons,
+                "generated_at": page.get("generated_at") if page else None,
+            }
+        )
+
+    for slug, pages in pages_by_slug.items():
+        noncanonical_records += len(pages)
+        page = pages[0]
+        review_required += 1
+        rows.append(
+            {
+                "slug": slug or "(missing)",
+                "suburb": str(page.get("suburb") or ""),
+                "eligible_trainer_count": None,
+                "content_word_count": _seo_page_word_count(page),
+                "publication_status": str(page.get("publication_status") or "unknown"),
+                "meta_robots": str(page.get("meta_robots") or "unknown"),
+                "indexable_now": False,
+                "reason_codes": ["noncanonical_stored_page"],
+                "generated_at": page.get("generated_at"),
+            }
+        )
+
+    rows.sort(key=lambda row: (bool(row.get("indexable_now")), str(row.get("suburb") or "").lower()))
+    return {
+        "status": "ready" if minimum_trainers is not None and minimum_words is not None else "thresholds_not_configured",
+        "thresholds": {
+            "minimum_published_trainers": minimum_trainers,
+            "minimum_content_words": minimum_words,
+        },
+        "canonical_suburb_count": len(canonical_rows),
+        "stored_record_count": stored_records,
+        "canonical_stored_record_count": canonical_records,
+        "noncanonical_stored_record_count": noncanonical_records,
+        "indexable_now_count": indexable_now,
+        "review_required_count": review_required,
+        "inventory_truncated": stored_records > len(page_rows),
+        "rows": rows,
     }
 
 
@@ -3715,6 +3939,7 @@ async def get_trainer_billing_health(
             "name": trainer.get("name"),
             "billing_email": trainer.get("billing_email") or trainer.get("email"),
             "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
+            "billing_terms_version": trainer.get("billing_terms_version") or "",
             "stripe_customer_id": trainer.get("stripe_customer_id"),
             "tier": sub_tier,
             "subscription_tier": sub_tier,
@@ -3730,6 +3955,10 @@ async def get_trainer_billing_health(
             "stripe_subscription_id": trainer.get("stripe_subscription_id"),
             "stripe_customer_id": trainer.get("stripe_customer_id"),
             "trial": trial,
+        },
+        "billing": {
+            "checkout_available": stripe_billing.checkout_enabled(),
+            "terms_version": stripe_billing.billing_terms_version(),
         },
         "submission_id": (sub or {}).get("id"),
         "status_counts": statuses,
@@ -3785,8 +4014,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=404, detail="Trainer not found.")
     if str(trainer.get("claim_status") or "").lower() != "claimed":
         raise HTTPException(status_code=403, detail="Only a claimed trainer profile can start subscription checkout.")
-    if not payload.consent_subscription_billing_terms:
-        raise HTTPException(status_code=400, detail="Subscription billing consent is required before checkout.")
+    if not payload.consent_subscription_billing_terms or payload.billing_terms_version != stripe_billing.billing_terms_version():
+        raise HTTPException(status_code=400, detail="Accept the current subscription billing terms before checkout.")
 
     try:
         plan = stripe_billing.subscription_plan(tier=payload.tier, suburb=payload.suburb, interval=payload.interval)
@@ -3794,6 +4023,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if plan["tier"] == "suburb_sponsor" and not _trainer_serves_suburb(trainer, plan["suburb"]):
         raise HTTPException(status_code=403, detail="Suburb sponsorship must match a suburb served by this profile.")
+    if not stripe_billing.checkout_enabled():
+        raise HTTPException(status_code=503, detail="Trainer billing is not accepting purchases yet.")
 
     reservation: Dict[str, Any] = {}
     if plan["tier"] in {"suburb_sponsor", "citywide"}:
@@ -3802,7 +4033,7 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
             trainer_id=trainer_id,
             tier=plan["tier"],
             suburb=plan["suburb"],
-            idempotency_key=f"{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+            idempotency_key=f"{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         )
         if not reservation_result.get("ok"):
             code = str(reservation_result.get("code") or "inventory_unavailable")
@@ -3817,7 +4048,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         suburb=plan["suburb"],
         interval=plan["interval"],
         consent_granted=payload.consent_subscription_billing_terms,
-        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+        consent_version=payload.billing_terms_version,
+        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         reservation_id=str(reservation.get("reservation_id") or ""),
         billing_return_url=(
             f"{(os.environ.get('FRONTEND_BASE_URL') or 'http://127.0.0.1:3001').strip().rstrip('/')}/trainer/billing?"
@@ -4099,13 +4331,9 @@ async def get_seo(slug: str) -> Dict[str, Any]:
         # Crucially, unknown paths do not call AI or write seo_pages.
         raise HTTPException(status_code=404, detail="Unknown canonical suburb")
 
-    slug = str(canonical_suburb["slug"])
-    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
-    if page:
-        return page
-
     minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
     minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    slug = str(canonical_suburb["slug"])
     suburb = str(canonical_suburb["suburb_name"])
     if minimum_trainers is None or minimum_words is None:
         return _unpublished_seo_response(
@@ -4114,22 +4342,29 @@ async def get_seo(slug: str) -> Dict[str, Any]:
             reason="seo_thresholds_not_configured",
         )
 
-    eligible_trainers = await db.trainers.count_documents(
-        {
-            "published": True,
-            "region": {"$in": ACTIVE_REGIONS},
-            "$or": [
-                {"suburb": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-                {"serviced_suburbs": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-            ],
-        }
-    )
+    eligible_trainers = await db.trainers.count_documents(_eligible_trainer_query_for_suburb(suburb))
     if eligible_trainers < minimum_trainers:
         return _unpublished_seo_response(
             slug=slug,
             suburb=suburb,
             reason="insufficient_eligible_supply",
         )
+
+    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
+    if page:
+        if _seo_page_word_count(page) < minimum_words:
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="insufficient_content_quality",
+            )
+        if str(page.get("publication_status") or "") != "published" or str(page.get("meta_robots") or "") != "index,follow":
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="stored_page_not_indexable",
+            )
+        return _scrub(page)
 
     copy = await ai_service.generate_seo_copy(suburb, "general")
     word_count = _seo_word_count(copy)
@@ -4281,6 +4516,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     message_log = await _message_log_rows()
     ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
+    provider_snapshot = provider_health.snapshot()
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -4292,6 +4528,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
 
@@ -4671,6 +4908,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     }
     trainer_inventory = await _trainer_inventory_rows()
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
+    provider_snapshot = provider_health.snapshot()
     message_log = await _message_log_rows()
     supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
     supply_trends = await _ops_supply_trend_summary(
@@ -4679,6 +4917,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         growth_attribution_summary=growth_attribution_summary,
         reactivation_summary=reactivation_summary,
     )
+    seo_indexation = await _ops_seo_indexation_summary()
     ops_cases = await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -4693,6 +4932,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
     return _scrub({
@@ -4770,8 +5010,10 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "reactivation_summary": reactivation_summary,
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
+        "ops_seo_indexation": seo_indexation,
         "trainer_inventory": trainer_inventory,
         "sponsor_inventory": sponsor_inventory_snapshot,
+        "provider_health": provider_snapshot,
         "message_log": message_log,
         "ops_cases": ops_cases,
         "cases": ops_cases,
@@ -4789,6 +5031,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "reactivation_cases": reactivation_case_rows,
             "source_ingestion_sources": source_ingestion_state_rows,
             "discovery_alerts": discovery_alerts,
+            "provider_health": provider_snapshot,
         },
         "ts": now_iso(),
     })
@@ -4911,13 +5154,13 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
                     processed_reason = "subscription_metadata_invalid"
                 elif (
                     event_type in {"customer.subscription.deleted", "customer.subscription.paused"}
-                    or event_status == "incomplete_expired"
+                    or event_status in stripe_billing.TERMINAL_NONPAYMENT_SUBSCRIPTION_STATUSES
                 ) and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
                         db,
                         reservation_id=reservation_id,
                         subscription_id="" if reservation_id else subscription_id_for_inventory,
-                        reason="cancelled" if event_type.endswith("deleted") else "released",
+                        reason="cancelled" if event_type.endswith("deleted") else "payment_failed",
                     )
                 elif event_type == "charge.refunded" and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
@@ -5103,6 +5346,7 @@ async def _ensure_indexes() -> None:
 
 @app.on_event("startup")
 async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_loop_schedule: bool = True) -> None:
+    _initialise_sentry()
     ai_service.set_db(db)
     try:
         await asyncio.wait_for(_ensure_indexes(), timeout=10.0)

@@ -104,6 +104,41 @@ def test_unknown_seo_slug_is_rejected_before_database_access():
     assert exc_info.value.status_code == 404
 
 
+def test_existing_thin_seo_page_remains_non_indexable_without_generation(monkeypatch):
+    class _EligibleTrainers:
+        async def count_documents(self, _query):
+            return 3
+
+    async def _unexpected_generation(*_args, **_kwargs):
+        raise AssertionError("Stored legacy page must not invoke SEO generation")
+
+    fake_db = SimpleNamespace(
+        trainers=_EligibleTrainers(),
+        seo_pages=_Collection(
+            rows=[
+                {
+                    "id": "seo_carlton",
+                    "slug": "carlton",
+                    "suburb": "Carlton",
+                    "publication_status": "published",
+                    "meta_robots": "index,follow",
+                    "copy": {"intro": "thin"},
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setattr(server.ai_service, "generate_seo_copy", _unexpected_generation)
+    monkeypatch.setenv("SEO_MIN_PUBLISHED_TRAINERS", "3")
+    monkeypatch.setenv("SEO_MIN_CONTENT_WORDS", "500")
+
+    out = asyncio.run(server.get_seo("carlton"))
+
+    assert out["publication_status"] == "not_eligible"
+    assert out["meta_robots"] == "noindex,follow"
+    assert out["reason_codes"] == ["insufficient_content_quality"]
+
+
 class _Trainers:
     async def distinct(self, _field, _query):
         return ["Carlton", "Richmond"]
@@ -344,6 +379,7 @@ def _fake_oversight_db():
         owner_waitlist=owner_waitlist,
         owner_waitlist_events=owner_waitlist_events,
         ops_case_states=_Collection(rows=[]),
+        seo_pages=_Collection(rows=[]),
     )
 
 
@@ -1138,6 +1174,27 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert any(case["case_type"] == "owner_follow_up_case" for case in ops_cases)
 
 
+def test_oversight_exposes_sanitised_provider_control_gaps(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+    monkeypatch.setenv("MONGO_URL", "configured-for-test")
+    monkeypatch.setenv("RESEND_API_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "configured-for-test")
+    monkeypatch.setenv("ABR_GUID", "configured-for-test")
+
+    out = asyncio.run(server.oversight(None))
+
+    provider_health = out["provider_health"]
+    assert provider_health["status"] == "action_required"
+    assert provider_health["summary"]["providers_total"] == 6
+    assert all("configured-for-test" not in str(row) for row in provider_health["providers"])
+    atlas = next(row for row in provider_health["providers"] if row["id"] == "atlas")
+    assert atlas["runtime_status"] == "configuration_detected"
+    assert atlas["management_recovery_status"] == "not_evidenced"
+    assert atlas["last_verified_at"] is None
+    assert any(case["case_id"] == "provider:atlas" for case in out["ops_cases"])
+
+
 def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
     monkeypatch.setattr(server, "db", _fake_oversight_db())
 
@@ -1162,6 +1219,65 @@ def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
     assert isinstance(trends.get("waitlist_joins_30d"), int)
     assert trends.get("submission_pace") in {"rising", "steady", "slowing", "quiet"}
     assert trends.get("published_pace") in {"rising", "steady", "slowing", "quiet"}
+
+
+def test_ops_seo_inventory_rechecks_canonical_supply_and_stored_content(monkeypatch):
+    fake_db = _fake_oversight_db()
+    fake_db.trainers.rows = [
+        {
+            "id": f"t_{index}",
+            "published": True,
+            "region": "Greater Melbourne",
+            "suburb": "Carlton",
+            "serviced_suburbs": [],
+        }
+        for index in range(3)
+    ]
+    fake_db.seo_pages.rows = [
+        {
+            "id": "seo_carlton",
+            "slug": "carlton",
+            "suburb": "Carlton",
+            "publication_status": "published",
+            "meta_robots": "index,follow",
+            "copy": {"intro": "useful " * 500},
+            "generated_at": "2026-09-25T00:00:00+00:00",
+        },
+        {
+            "id": "seo_legacy",
+            "slug": "legacy-not-a-suburb",
+            "suburb": "Legacy",
+            "publication_status": "published",
+            "meta_robots": "index,follow",
+            "copy": {"intro": "thin"},
+        },
+        {
+            "id": "seo_richmond_unconfigured",
+            "slug": "richmond",
+            "suburb": "Richmond",
+            "copy": {"intro": "thin"},
+        },
+    ]
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setenv("SEO_MIN_PUBLISHED_TRAINERS", "3")
+    monkeypatch.setenv("SEO_MIN_CONTENT_WORDS", "500")
+
+    summary = asyncio.run(server._ops_seo_indexation_summary())
+
+    assert summary["status"] == "ready"
+    assert summary["canonical_suburb_count"] == 539
+    assert summary["stored_record_count"] == 3
+    assert summary["canonical_stored_record_count"] == 2
+    assert summary["noncanonical_stored_record_count"] == 1
+    assert summary["indexable_now_count"] == 1
+    assert summary["review_required_count"] == 2
+    carlton = next(row for row in summary["rows"] if row["slug"] == "carlton")
+    assert carlton["eligible_trainer_count"] == 3
+    assert carlton["indexable_now"] is True
+    legacy = next(row for row in summary["rows"] if row["slug"] == "legacy-not-a-suburb")
+    assert legacy["reason_codes"] == ["noncanonical_stored_page"]
+    richmond = next(row for row in summary["rows"] if row["slug"] == "richmond")
+    assert richmond["publication_status"] == "unconfigured"
 
 
 def test_oversight_merges_persisted_case_review_state(monkeypatch):

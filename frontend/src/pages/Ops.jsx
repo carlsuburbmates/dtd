@@ -9,6 +9,7 @@ const VIEW_ORDER = [
     "pipeline_flow",
     "work_queue",
     "trainer_supply",
+    "seo_indexation",
     "messages",
     "billing_reactivation",
     "recent_changes",
@@ -20,6 +21,7 @@ const VIEW_LABELS = {
     pipeline_flow: "Pipeline Flow",
     work_queue: "Work Queue",
     trainer_supply: "Trainer Supply",
+    seo_indexation: "SEO & Indexation",
     messages: "Messages",
     billing_reactivation: "Billing & Reactivation",
     system_activity: "System Activity",
@@ -31,6 +33,7 @@ const PAGE_INTROS = {
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
+    seo_indexation: "Review stored suburb pages against current canonical, supply, content and robots requirements before any indexation decision.",
     messages: "Check exactly what the system sent, to which workflow, and whether delivery succeeded or failed.",
     billing_reactivation: "Review trainer billing problems and reactivation cases without leaving the Operations Console.",
     system_activity: "Use this supporting section to watch system health, stale loops, and alerts after the main decision surfaces are clear.",
@@ -392,6 +395,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const readiness = snap.phase_readiness_snapshot || {};
     const supplyGeography = snap.ops_supply_geography || {};
     const supplyTrends = snap.ops_supply_trends || {};
+    const seoIndexation = snap.ops_seo_indexation || {};
     const loops = snap.ops_investigation?.loop_statuses || {};
     const messages = asArray(snap.message_log);
     const trainerInventory = asArray(snap.trainer_inventory);
@@ -400,6 +404,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const billingCases = asArray(snap.ops_investigation?.billing_recovery_cases);
     const reactivationCases = asArray(snap.ops_investigation?.reactivation_cases);
     const sourceIngestionSources = asArray(snap.ops_investigation?.source_ingestion_sources);
+    const providerHealth = snap.ops_investigation?.provider_health || snap.provider_health || {};
     const alerts = asArray(snap.alerts);
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const unhealthyLoops = Object.values(loops || {}).filter((meta) => String(meta?.status || "ok") !== "ok").length;
@@ -431,6 +436,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             eyebrow: "Intro-ready",
             value: formatShortNumber(readiness.intro_ready_trainer_count || supplyTrends.intro_ready_now || 0),
             note: demandGapCount ? `${formatShortNumber(demandGapCount)} suburb gaps still need coverage.` : "No standout suburb gap is visible right now.",
+        },
+        seo_indexation: {
+            eyebrow: "Needs review",
+            value: formatShortNumber(seoIndexation.review_required_count || 0),
+            note: seoIndexation.inventory_truncated ? "SEO inventory is incomplete; do not make indexation decisions yet." : `${formatShortNumber(seoIndexation.indexable_now_count || 0)} stored page${Number(seoIndexation.indexable_now_count || 0) === 1 ? "" : "s"} currently meet the contract.`,
         },
         messages: {
             eyebrow: "Delivery issues",
@@ -576,6 +586,8 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                             <TrainerSupplyView trainerInventory={trainerInventory} supplyGeography={supplyGeography} supplyTrends={supplyTrends} />
                         ) : null}
 
+                        {activeView === "seo_indexation" ? <SeoIndexationView seoIndexation={seoIndexation} /> : null}
+
                         {activeView === "messages" ? (
                             <MessagesView messages={messages} />
                         ) : null}
@@ -585,7 +597,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "system_activity" ? (
-                            <SystemActivityView loops={loops} alerts={alerts} sourceIngestionSources={sourceIngestionSources} />
+                            <SystemActivityView loops={loops} alerts={alerts} sourceIngestionSources={sourceIngestionSources} providerHealth={providerHealth} />
                         ) : null}
 
                         {activeView === "recent_changes" ? (
@@ -1175,6 +1187,60 @@ function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) 
     );
 }
 
+function SeoIndexationView({ seoIndexation }) {
+    const thresholds = seoIndexation.thresholds || {};
+    const rows = asArray(seoIndexation.rows);
+    const storedRows = rows.filter((row) => String(row.publication_status || "") !== "not_stored");
+    const reviewRows = storedRows.filter((row) => !row.indexable_now || asArray(row.reason_codes).includes("noncanonical_stored_page"));
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-seo-indexation">
+            <PageHeader title="SEO & Indexation" description={PAGE_INTROS.seo_indexation} />
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <SummaryCard title="Canonical suburbs" value={seoIndexation.canonical_suburb_count || 0} note="The bounded Greater Melbourne catalogue." />
+                <SummaryCard title="Stored pages" value={seoIndexation.stored_record_count || 0} note="Existing records only; this view does not generate copy." />
+                <SummaryCard title="Indexable now" value={seoIndexation.indexable_now_count || 0} note="Stored pages meeting current supply, content and robots rules." />
+                <SummaryCard title="Needs review" value={seoIndexation.review_required_count || 0} note="Stored pages that no longer meet a required condition." />
+            </div>
+            <div className="mt-4 rounded-3xl border border-[#22302C] bg-[#0D1412] px-4 py-3 text-sm text-[#C9C2B1]">
+                Current gates: at least {thresholds.minimum_published_trainers ?? "—"} eligible published trainers and {thresholds.minimum_content_words ?? "—"} content words. Missing pages remain non-indexable; this screen never creates, changes or deletes them.
+            </div>
+            {seoIndexation.inventory_truncated ? (
+                <div className="mt-4 rounded-3xl border border-[#5B2B27] bg-[#2B1715] px-4 py-3 text-sm text-[#F8D9D3]">
+                    The stored-page inventory was truncated. Do not make a migration or indexation decision until the complete inventory is available.
+                </div>
+            ) : null}
+            <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[900px] text-sm">
+                    <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                        <tr>
+                            <th className="pb-3 pr-3">Suburb / slug</th>
+                            <th className="pb-3 pr-3">Eligible trainers</th>
+                            <th className="pb-3 pr-3">Content words</th>
+                            <th className="pb-3 pr-3">Publication</th>
+                            <th className="pb-3 pr-3">Robots</th>
+                            <th className="pb-3">Current outcome</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(reviewRows.length ? reviewRows : storedRows).length ? (reviewRows.length ? reviewRows : storedRows).slice(0, 100).map((row) => (
+                            <tr key={`${row.slug}-${row.generated_at || row.publication_status}`} className="border-t border-[#1E2A27]">
+                                <td className="py-3 pr-3"><div className="font-medium">{row.suburb || "Unknown"}</div><div className="mt-1 text-xs text-[#8B9E98]">{row.slug}</div></td>
+                                <td className="py-3 pr-3">{row.eligible_trainer_count ?? "—"}</td>
+                                <td className="py-3 pr-3">{row.content_word_count ?? "—"}</td>
+                                <td className="py-3 pr-3">{humanizeToken(row.publication_status)}</td>
+                                <td className="py-3 pr-3">{row.meta_robots || "—"}</td>
+                                <td className="py-3"><Badge label={row.indexable_now ? "Meets contract" : humanizeToken(asArray(row.reason_codes)[0] || "review required")} kind="state" /></td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">No stored SEO pages are present. Canonical suburbs remain navigable but non-indexable until a later eligible page is created.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    );
+}
+
 function MessagesView({ messages }) {
     const sentCount = messages.filter((row) => String(row?.status || "").toLowerCase() === "sent").length;
     const failedCount = messages.filter((row) => {
@@ -1335,8 +1401,10 @@ function BillingReactivationView({ billingCases, reactivationCases, sponsorInven
     );
 }
 
-function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
+function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHealth }) {
     const loopRows = Object.entries(loops || {});
+    const providers = asArray(providerHealth?.providers);
+    const providerExceptions = providers.filter((row) => row?.autonomy_status === "not_accepted").length;
     const unhealthyLoops = loopRows.filter(([, meta]) => String(meta?.status || "ok") !== "ok").length;
     const staleLoopNames = loopRows
         .filter(([, meta]) => String(meta?.status || "ok") !== "ok")
@@ -1346,10 +1414,11 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="System Activity" description={PAGE_INTROS.system_activity} />
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
                 <SummaryCard title="Unhealthy loops" value={unhealthyLoops} note={unhealthyLoops ? "These loops are no longer in a clean OK state." : "Loop health is currently clean."} />
                 <SummaryCard title="Active alerts" value={alerts.length} note={alerts.length ? "Review these after the main decision surfaces." : "No active alerts are reported."} />
                 <SummaryCard title="Source issues" value={sourceIngestionSources.length} note={sourceIngestionSources.length ? "Some source ingestion paths are degraded." : "No ingestion suppression is visible."} />
+                <SummaryCard title="Provider gaps" value={providerExceptions} note={providerExceptions ? "Runtime configuration is not evidence of an autonomous recovery path." : "Every material provider has the required evidence."} />
             </div>
             {unhealthyLoops || alerts.length ? (
                 <div className="mt-4 rounded-3xl border border-[#403423] bg-[#1F1910] px-4 py-3 text-sm text-[#F4E2B5]">
@@ -1417,6 +1486,38 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources }) {
                     </section>
                 </div>
             </div>
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                <div className="small-caps !text-[#8B9E98]">Provider control</div>
+                <p className="mt-2 text-sm text-[#8B9E98]">Sanitised status only. A configured runtime variable does not prove a provider, recovery identity, or alert route has been verified.</p>
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[960px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Provider</th>
+                                <th className="pb-3 pr-3">Runtime</th>
+                                <th className="pb-3 pr-3">Recovery</th>
+                                <th className="pb-3 pr-3">Safe check</th>
+                                <th className="pb-3 pr-3">Alert route</th>
+                                <th className="pb-3">Next safe step</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {providers.length ? providers.map((row) => (
+                                <tr key={row.id} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3"><div>{row.provider}</div><div className="text-xs text-[#8B9E98] mt-1">{row.purpose}</div></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.runtime_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.management_recovery_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.safe_verification_status)} kind="state" /></td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.independent_alert_status)} kind="state" /></td>
+                                    <td className="py-3 text-[#C9C2B1]">{row.next_review || "No next step recorded."}</td>
+                                </tr>
+                            )) : (
+                                <tr><td className="py-3 text-[#8B9E98]" colSpan="6">Provider status is unavailable; do not treat provider control as verified.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </section>
     );
 }

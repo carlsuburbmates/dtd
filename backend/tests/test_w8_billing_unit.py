@@ -43,10 +43,18 @@ def test_provision_trainer_billing_profile_creates_customer(monkeypatch):
             self.updated.append((filt, update))
 
     fake_db = SimpleNamespace(trainers=_Trainers())
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
     trainer = {"id": "t_1", "email": "trainer@example.com", "name": "Trainer"}
-    out = asyncio.run(stripe_billing.provision_trainer_billing_profile(fake_db, trainer, consent_granted=True))
+    out = asyncio.run(
+        stripe_billing.provision_trainer_billing_profile(
+            fake_db,
+            trainer,
+            consent_granted=True,
+            consent_version=stripe_billing.billing_terms_version(),
+        )
+    )
     assert out["billing_profile_status"] == "ready"
     assert out["stripe_customer_id"] == "cus_created_123"
 

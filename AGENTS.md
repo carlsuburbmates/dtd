@@ -1,10 +1,10 @@
-# Codex Session Execution Standards
+# AI/LLM/Agent Session Execution Standards
 
-This file defines how future Codex sessions should execute work in this repository.
+This file defines how any AI, LLM, agent, bot, automated assistant or AI-enabled tool must execute work in this repository, regardless of provider, interface or task context. Platform-specific paths such as `.codex/` identify available tooling; they do not limit these rules to Codex.
 
-## Codex Capability Utilisation Rule (`LOCKED`)
+## AI Capability Utilisation Rule (`LOCKED`)
 
-All tasks must actively consider Codex-native capabilities where useful, including:
+All tasks must actively consider relevant available AI-native capabilities where useful, including:
 
 - skills
 - subagents
@@ -15,7 +15,17 @@ All tasks must actively consider Codex-native capabilities where useful, includi
 - available MCP/app integrations
 - project-specific reusable workflows
 
-Codex must not default to manual text editing when a more suitable native capability is available.
+The acting AI system must not default to manual text editing when a more suitable native capability is available.
+
+## Evidence-first owner-assistance rule (`LOCKED`)
+
+DTD is a solo-operator project. Any AI system entering or operating in this repository must reduce unnecessary human overhead by investigating before asking the owner to decide.
+
+1. Inspect the repository, current configuration, relevant provider state, existing decisions and available evidence before asking the owner to choose a value or direction.
+2. State verified facts, uncertainty, risks and a recommended path. Where a safe, reversible and in-scope default is supported by evidence, use it rather than presenting the owner with an arbitrary choice.
+3. Ask the owner only when the next action requires new authority or would materially change financial, security, legal, privacy, production, product-scope or irreversible state, or when the required decision cannot be resolved from available evidence.
+4. Do not ask the owner to invent thresholds, settings or architecture choices before measuring the current state. If a decision gate remains, explain exactly what is missing, why it matters and the smallest decision required.
+5. Prefer exception-driven operation and one focused decision gate over repeated broad clarification requests. This rule applies to every AI, LLM, agent, bot, assistant, plugin or automated workflow operating in the project.
 
 ## 1) Preflight Routing (required)
 
@@ -97,6 +107,17 @@ Capability use never overrides project guardrails. Keep all existing prohibition
 - no unauthorized public market-coverage claims
 - no guaranteed outcomes claims
 - no unapproved scope expansion
+
+## 6A) Antigravity implementation and independent-audit handoff (`LOCKED`)
+
+For a work package delegated to Antigravity, use this sequence. A completion report alone is never evidence of completion.
+
+1. **Codex prepares the implementation prompt.** It names the roadmap/finding IDs, scope, non-goals, locked decisions, affected workflows, required tests and explicit acceptance evidence.
+2. **Antigravity implements locally on an isolated branch.** It may inspect, edit, commit locally and run local tests. It must not push remotely, open/merge a PR, deploy to the developer sandbox or production, mutate a provider, rotate credentials, or enable billing/authentication while implementing.
+3. **Antigravity returns an evidence handoff.** It includes commit SHA(s), changed files, local test commands/results, migrations/data effects, deployment/provider actions (which should be none), residual risks and every roadmap item claimed addressed.
+4. **Codex independently re-audits.** Review the actual diff and the whole affected path: UI/API, persistence, data migration, automation, notification/fallback, `/ops`, security/privacy, documentation, tests and the applicable sandbox matrix. Re-run proportionate tests and classify every claimed item `DONE`, `PARTIAL`, `OPEN`, `REGRESSED`, `NOT_VERIFIED` or `SUPERSEDED`.
+5. **Only an accepted Codex audit may advance the exact commit.** Codex may then push the audited branch and deploy it to the developer sandbox, verify the relevant live sandbox checklist, and report the result. Rejection or incomplete evidence returns the same work package to Antigravity; no environment advancement occurs.
+6. **Production remains a separate final gate.** A successful sandbox audit permits the documented zero-traffic canary and production acceptance only under the owner's applicable production authority. It never overrides separate gates for live Stripe charging, provider credential creation/revocation, billing/refunds, authentication or destructive data actions.
 
 ## 7) Validation Before Completion
 

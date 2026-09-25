@@ -88,10 +88,49 @@ const validSnapshot = {
         submission_pace: "steady",
         published_pace: "rising",
     },
+    ops_seo_indexation: {
+        status: "ready",
+        thresholds: { minimum_published_trainers: 3, minimum_content_words: 500 },
+        canonical_suburb_count: 539,
+        stored_record_count: 1,
+        canonical_stored_record_count: 1,
+        noncanonical_stored_record_count: 0,
+        indexable_now_count: 0,
+        review_required_count: 1,
+        inventory_truncated: false,
+        rows: [
+            {
+                slug: "carlton",
+                suburb: "Carlton",
+                eligible_trainer_count: 1,
+                content_word_count: 120,
+                publication_status: "published",
+                meta_robots: "index,follow",
+                indexable_now: false,
+                reason_codes: ["insufficient_eligible_supply"],
+            },
+        ],
+    },
     trainer_inventory: [],
     message_log: [],
     ops_cases: [],
     ops_investigation: {},
+    provider_health: {
+        status: "action_required",
+        providers: [
+            {
+                id: "atlas",
+                provider: "MongoDB Atlas",
+                purpose: "Directory database",
+                runtime_status: "configuration_detected",
+                management_recovery_status: "not_evidenced",
+                safe_verification_status: "not_evidenced",
+                independent_alert_status: "not_evidenced",
+                autonomy_status: "not_accepted",
+                next_review: "Verify static egress before narrowing database access.",
+            },
+        ],
+    },
     launch_phase_state: {
         current_phase: "supply_first",
         public_emphasis: "waitlist_first",
@@ -250,6 +289,45 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).toContain("Pipeline Flow");
         expect(view.container.textContent).toContain("Introductions");
         expect(view.container.textContent).toContain("Stalled Introductions");
+        view.cleanup();
+    });
+
+    it("renders the read-only SEO indexation inventory", async () => {
+        getSpy.mockResolvedValueOnce({ data: validSnapshot });
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            view.container.querySelector("[data-testid='ops-nav-seo_indexation']").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.querySelector("[data-testid='ops-seo-indexation']")).not.toBeNull();
+        expect(view.container.textContent).toContain("SEO & Indexation");
+        expect(view.container.textContent).toContain("Carlton");
+        expect(view.container.textContent).toContain("Insufficient Eligible Supply");
+        expect(view.container.textContent).toContain("this screen never creates, changes or deletes them");
+        view.cleanup();
+    });
+
+    it("shows sanitised provider-control status in system activity", async () => {
+        getSpy.mockResolvedValueOnce({ data: validSnapshot });
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            view.container.querySelector("[data-testid='ops-nav-system_activity']").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.textContent).toContain("Provider control");
+        expect(view.container.textContent).toContain("MongoDB Atlas");
+        expect(view.container.textContent).toContain("Runtime configuration is not evidence");
+        expect(view.container.textContent).not.toContain("configured-for-test");
         view.cleanup();
     });
 
