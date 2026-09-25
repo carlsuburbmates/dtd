@@ -75,32 +75,38 @@ Any modification touching the following 6 core functional areas must satisfy its
 
 ---
 
-## 3. Pre-Production Promotion Protocol (4-Step Gate)
+## 3. Review-before-environment promotion protocol (5-step gate)
 
-Before any code on a development or feature branch is merged into `main` and deployed to production, the operator or AI assistant must complete this sequence:
+Before a delegated implementation can reach the developer sandbox, remote review branch, `main` or production, the operator or AI assistant must complete this sequence:
 
 ```text
- 1. Automated Suite       2. Sandbox Verification      3. Git PR Review        4. Canary Deploy
-┌────────────────────┐    ┌──────────────────────┐    ┌───────────────────┐    ┌──────────────────┐
-│ py_compile         │    │ bash                 │    │ Pull Request      │    │ Zero-traffic     │
-│ check_prelaunch... │───►│ scripts/             │───►│ from dev to main  │───►│ canary smoke     │
-│ 315 isolated tests │    │ deploy_sandbox.sh    │    │ (Operator Gate)   │    │ 100% promotion   │
-└────────────────────┘    └──────────────────────┘    └───────────────────┘    └──────────────────┘
+ 1. Local Implementation  2. Independent Audit   3. Sandbox Verification  4. Remote Review   5. Canary Deploy
+┌────────────────────┐    ┌──────────────────────┐    ┌───────────────────┐    ┌────────────────┐    ┌──────────────────┐
+│ Antigravity branch │    │ Codex re-audits      │    │ audited commit    │    │ PR and CI       │    │ zero-traffic     │
+│ local tests only   │───►│ all affected flows   │───►│ only              │───►│ review evidence │───►│ production smoke │
+│ no push/deploy     │    │ accept or return     │    │ dev sandbox       │    │                │    │ 100% only if set │
+└────────────────────┘    └──────────────────────┘    └───────────────────┘    └────────────────┘    └──────────────────┘
 ```
 
-1. **Step 1: Automated Local Suite**
+1. **Step 1: Local implementation and automated suite**
+   - Antigravity works locally and does not push, open/merge a PR, deploy, mutate provider state or enable a gated feature.
    - Run `python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py`
    - Run `node scripts/check_prelaunch_release_gate.js`
    - Run `.venv/bin/python backend/scripts/run_isolated_integration_suite.py` (315 passing tests).
-2. **Step 2: Live Sandbox Execution**
+2. **Step 2: Independent Codex audit**
+   - Codex reviews the exact commit/diff and Antigravity evidence handoff.
+   - Codex re-tests the affected workflow end to end, including adjacent persistence, notification/fallback, `/ops`, privacy/security and documentation contracts.
+   - A `PARTIAL`, `OPEN`, `REGRESSED` or `NOT_VERIFIED` material result returns the package to implementation. It cannot be pushed or deployed.
+3. **Step 3: Live Sandbox Execution**
    - Execute `bash scripts/deploy_sandbox.sh`.
    - Verify `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app/api/health` returns HTTP 200 with `database: "available"`.
    - Test the relevant domain checklist above on the live sandbox service.
-3. **Step 3: Operator PR Review & Approval**
+4. **Step 4: Remote review and CI**
    - Commit changes cleanly and push to GitHub.
    - Open Pull Request to `main`.
-   - Per DTD locked safety policy (*"no production deploy unless approved"*), production requires operator confirmation.
-4. **Step 4: Controlled Production Canary Release**
+   - The PR includes Codex's accepted-audit result and the sandbox evidence; remote CI must be green.
+5. **Step 5: Controlled Production Canary Release**
    - Deploy zero-traffic revision to `gen-lang-client-0028123502`.
    - Smoke-test the tagged revision (`/api/health`, `/api/config`).
    - Shift 100% traffic with zero downtime.
+   - Per DTD locked safety policy, production requires applicable owner authority. Stripe, provider-credential, billing/refund, authentication and destructive-data gates remain separate.

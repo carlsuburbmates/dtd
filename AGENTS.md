@@ -108,6 +108,17 @@ Capability use never overrides project guardrails. Keep all existing prohibition
 - no guaranteed outcomes claims
 - no unapproved scope expansion
 
+## 6A) Antigravity implementation and independent-audit handoff (`LOCKED`)
+
+For a work package delegated to Antigravity, use this sequence. A completion report alone is never evidence of completion.
+
+1. **Codex prepares the implementation prompt.** It names the roadmap/finding IDs, scope, non-goals, locked decisions, affected workflows, required tests and explicit acceptance evidence.
+2. **Antigravity implements locally on an isolated branch.** It may inspect, edit, commit locally and run local tests. It must not push remotely, open/merge a PR, deploy to the developer sandbox or production, mutate a provider, rotate credentials, or enable billing/authentication while implementing.
+3. **Antigravity returns an evidence handoff.** It includes commit SHA(s), changed files, local test commands/results, migrations/data effects, deployment/provider actions (which should be none), residual risks and every roadmap item claimed addressed.
+4. **Codex independently re-audits.** Review the actual diff and the whole affected path: UI/API, persistence, data migration, automation, notification/fallback, `/ops`, security/privacy, documentation, tests and the applicable sandbox matrix. Re-run proportionate tests and classify every claimed item `DONE`, `PARTIAL`, `OPEN`, `REGRESSED`, `NOT_VERIFIED` or `SUPERSEDED`.
+5. **Only an accepted Codex audit may advance the exact commit.** Codex may then push the audited branch and deploy it to the developer sandbox, verify the relevant live sandbox checklist, and report the result. Rejection or incomplete evidence returns the same work package to Antigravity; no environment advancement occurs.
+6. **Production remains a separate final gate.** A successful sandbox audit permits the documented zero-traffic canary and production acceptance only under the owner's applicable production authority. It never overrides separate gates for live Stripe charging, provider credential creation/revocation, billing/refunds, authentication or destructive data actions.
+
 ## 7) Validation Before Completion
 
 Before finishing a task:
