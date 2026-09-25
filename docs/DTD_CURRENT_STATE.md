@@ -179,3 +179,27 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** the sandbox is project- and database-isolated from production, but its runtime identity combines application secret access with build/deployment-adjacent permissions. That increases the blast radius of a sandbox runtime compromise and conflicts with DTD's separate, least-privileged runtime-versus-management identity rule. This finding does not indicate access to production secrets or data.
 - **Why deferred:** repairing it requires authenticated Google Cloud IAM changes, a new sandbox runtime service account, secret-level grants, a safe sandbox redeploy and live health verification. The local GCP session is currently unauthenticated; no IAM or deployment mutation was attempted.
 - **Next action:** after reauthentication, create a dedicated `dtd-api-dev` runtime service account with only its necessary sandbox secret access, redeploy `dtd-api-dev` through the corrected script, verify health and confirm the default Compute identity no longer serves runtime traffic.
+
+### DF-014 — Reverification loop grants public state from AI confidence
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline. No production-record mutation was performed.
+- **Evidence:** `backend/services/engine.py` `reverify_listings` derives `published` from an AI confidence threshold and updates `published`, `verification_status` and `contact_ready` for selected existing trainer records. This conflicts with the acquisition invariant that AI confidence is not publication, verification or contact authority.
+- **Impact/uncertainty:** a stale listing could be published, hidden or made contact-ready by model output without newly obtained statutory/source evidence. The rebaseline has not yet queried production to identify whether any live records were affected.
+- **Why deferred:** correcting the loop requires a bounded workflow redesign and a read-only production impact assessment before any record-level remediation. That is implementation work for the next approved trust-authority package, not an audit-side data change.
+- **Next action:** make re-verification create a review/hold outcome unless independently evidenced authority permits a state transition; add high-confidence-without-evidence regression coverage; then perform a read-only production impact query and define any remediation separately.
+
+### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline.
+- **Evidence:** `frontend/src/pages/Home.jsx` links a match result to `/t/:id` with both the opaque match identifier and the owner's free-text description in a `q` query parameter. `frontend/src/pages/TrainerDetail.jsx` reads that parameter. The submitted description can therefore enter browser history, referrer handling and copied URLs.
+- **Impact/uncertainty:** behavioural information is unnecessarily exposed outside the match request/persistence boundary. The code establishes the exposure; this audit did not submit real owner data to test the live path.
+- **Why deferred:** the safe repair needs an end-to-end match-context design that preserves match → profile → enquiry without a public description parameter, plus tamper/foreign-match handling tests.
+- **Next action:** retain only safe opaque match context in the browser, keep description server-side with the match record, test privacy and authorisation failure paths, then verify the full journey in sandbox before release.
+
+### DF-016 — Public trust language exceeds the evidenced trust model
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline.
+- **Evidence:** `frontend/src/pages/TrainerDetail.jsx` labels paid Pro status as `Verified Pro`. Public pages also claim universal checks of credentials, insurance, affiliations, continuing education or ethical practices, while the current acquisition/trust authority documents support bounded source, ABR and review evidence rather than those universal claims.
+- **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
+- **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
+- **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release.
