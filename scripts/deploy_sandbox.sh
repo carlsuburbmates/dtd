@@ -3,32 +3,42 @@ set -euo pipefail
 
 # Script to deploy backend API to Google Cloud Run in staging sandbox (dogtrainersdirectory-dev)
 # Usage:
-#   bash scripts/deploy_sandbox.sh [--skip-tests]
+#   bash scripts/deploy_sandbox.sh
 
 PROJECT_ID="dogtrainersdirectory-dev"
 REGION="australia-southeast1"
 SERVICE_NAME="dtd-api-dev"
 SERVICE_ACCOUNT="625222421634-compute@developer.gserviceaccount.com"
 
-# 1. Run local test suite unless skipped
-SKIP_TESTS=0
-for arg in "$@"; do
-  if [ "$arg" == "--skip-tests" ]; then
-    SKIP_TESTS=1
-  fi
-done
+validate_health_response() {
+  HEALTH_RESPONSE="$1" python3 - <<'PY'
+import json
+import os
 
-if [ "$SKIP_TESTS" -eq 0 ]; then
-  echo "🔍 [1/3] Running preflight code compilation and tests..."
-  python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py
-  node scripts/check_prelaunch_release_gate.js
-  if [ -x ".venv/bin/python" ]; then
-    .venv/bin/python backend/scripts/run_isolated_integration_suite.py
-  fi
-  echo "✅ Preflight tests passed!"
-else
-  echo "⚠️ Skipping preflight tests per --skip-tests flag"
+try:
+    health = json.loads(os.environ["HEALTH_RESPONSE"])
+except (KeyError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Sandbox health response was not valid JSON: {error}")
+
+if health.get("ok") is not True or health.get("database") != "available":
+    raise SystemExit("Sandbox health response did not confirm an available database")
+PY
+}
+
+main() {
+if [ "$#" -ne 0 ]; then
+  echo "Usage: bash scripts/deploy_sandbox.sh" >&2
+  exit 64
 fi
+
+# 1. Run the mandatory local preflight suite.
+echo "🔍 [1/3] Running preflight code compilation and tests..."
+python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py
+node scripts/check_prelaunch_release_gate.js
+if [ -x ".venv/bin/python" ]; then
+  .venv/bin/python backend/scripts/run_isolated_integration_suite.py
+fi
+echo "✅ Preflight tests passed!"
 
 # 2. Deploy to Google Cloud Run
 echo "🚀 [2/3] Deploying ${SERVICE_NAME} to Google Cloud Run in project ${PROJECT_ID} (${REGION})..."
@@ -49,9 +59,19 @@ gcloud run deploy "${SERVICE_NAME}" \
 # 3. Post-deployment verification
 echo "📡 [3/3] Verifying deployed endpoint..."
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
+if [ -z "${SERVICE_URL}" ]; then
+  echo "Sandbox Cloud Run service returned no URL" >&2
+  exit 1
+fi
 echo "Sandbox URL: ${SERVICE_URL}"
 
-HEALTH_STATUS=$(curl -sSL --max-time 15 "${SERVICE_URL}/api/health" || true)
-echo "Health Response: ${HEALTH_STATUS}"
+HEALTH_RESPONSE=$(curl --fail --silent --show-error --location --max-time 15 "${SERVICE_URL}/api/health")
+validate_health_response "${HEALTH_RESPONSE}"
+echo "✅ Sandbox health verified: API is healthy and its database is available."
 
 echo "🎉 Sandbox deployment and verification complete!"
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+  main "$@"
+fi
