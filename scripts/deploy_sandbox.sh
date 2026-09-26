@@ -48,7 +48,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --source backend \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",AUTONOMY_LOOP_OWNER=none,PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500 \
+  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",AUTONOMY_LOOP_OWNER=none,PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500,VERTEXAI_PROJECT=${PROJECT_ID},VERTEXAI_LOCATION=${REGION} \
   --set-secrets MONGO_URL=dtd-mongo-url:latest,ADMIN_PASS=dtd-admin-pass:latest,TRAINER_ACTION_TOKEN_SECRET=dtd-trainer-action-token-secret:latest,STRIPE_SECRET_KEY=dtd-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=dtd-stripe-webhook-secret:latest,RESEND_API_KEY=dtd-resend-api-key:latest,ABR_GUID=dtd-abr-guid:latest,SENTRY_DSN=dtd-sentry-dsn:latest \
   --cpu 1 \
   --memory 1Gi \
@@ -69,7 +69,13 @@ HEALTH_RESPONSE=$(curl --fail --silent --show-error --location --max-time 15 "${
 validate_health_response "${HEALTH_RESPONSE}"
 echo "✅ Sandbox health verified: API is healthy and its database is available."
 
-echo "🎉 Sandbox deployment and verification complete!"
+# 4. Ingestion Infrastructure & Scheduler Setup
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/setup_sandbox_ingestion.sh" ]; then
+  echo "🤖 [4/4] Provisioning sandbox Vertex AI IAM and batch ingestion scheduler..."
+  bash "$(dirname "${BASH_SOURCE[0]}")/setup_sandbox_ingestion.sh"
+fi
+
+echo "🎉 Sandbox deployment, verification, and ingestion setup complete!"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
