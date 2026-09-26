@@ -303,11 +303,15 @@ async def reverify_listings(db, ai_service, batch: int = 5) -> Dict[str, Any]:
             conf = min(1.0, conf + 0.05)
         status = ai_service.status_for_score(conf)
         was_published = bool(t.get("published"))
-        published = conf >= 0.6
-        if published and not was_published:
-            auto_pub += 1
-        elif not published and was_published:
+        # DF-014 Remediation: AI confidence alone NEVER auto-publishes or toggles public listing visibility.
+        # Only statutory ABR status and verified evidence govern publication transitions.
+        abn_status = str(t.get("abn_status") or "").lower()
+        statutory_revoked = t.get("abn_verified") is False and abn_status in {"cancelled", "inactive", "deregistered"}
+        if was_published and statutory_revoked:
+            published = False
             auto_hide += 1
+        else:
+            published = was_published  # Preserve existing publication state; AI confidence never alters it
         history_entry = {"score": round(conf, 3), "ts": now_iso(), "model": score.get("model", "heuristic")}
         await db.trainers.update_one(
             {"id": t["id"]},

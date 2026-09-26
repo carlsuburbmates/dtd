@@ -57,6 +57,9 @@ from services import fraud as fraud_service
 from services import notifications as notifications_service
 from services import provider_health
 from services import pro_trials
+from services import ingestion_manager
+from services import pipeline_guardian
+from services import trainer_quality
 from services import runtime_control
 from services import stripe_billing
 from services import suburb_catalogue
@@ -635,21 +638,36 @@ def _scheduler_oidc_configuration() -> tuple[str, str]:
     )
 
 
-def _require_cloud_scheduler_oidc(authorization: str) -> None:
-    expected_email, expected_audience = _scheduler_oidc_configuration()
+def _require_cloud_scheduler_oidc(authorization: str, expected_route_audience: Optional[str] = None) -> None:
+    expected_email, raw_audience = _scheduler_oidc_configuration()
     raw = (authorization or "").strip()
     scheme, _, token = raw.partition(" ")
-    if not expected_email or not expected_audience or scheme.lower() != "bearer" or not token.strip():
+    if not expected_email or not raw_audience or scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
-    try:
-        claims = google_id_token.verify_oauth2_token(
-            token.strip(),
-            google_auth_requests.Request(),
-            expected_audience,
-        )
-    except (google_auth_exceptions.GoogleAuthError, ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid scheduler credential.") from None
-    if claims.get("email") != expected_email or claims.get("email_verified") is not True:
+
+    accepted_audiences = [a.strip() for a in raw_audience.split(",") if a.strip()]
+    if expected_route_audience and expected_route_audience not in accepted_audiences:
+        accepted_audiences.append(expected_route_audience)
+
+    verified_claims = None
+    last_exc = None
+    for aud in accepted_audiences:
+        try:
+            claims = google_id_token.verify_oauth2_token(
+                token.strip(),
+                google_auth_requests.Request(),
+                aud,
+            )
+            verified_claims = claims
+            break
+        except (google_auth_exceptions.GoogleAuthError, ValueError, TypeError) as exc:
+            last_exc = exc
+            continue
+
+    if verified_claims is None:
+        raise HTTPException(status_code=401, detail="Invalid scheduler credential.") from last_exc
+
+    if verified_claims.get("email") != expected_email or verified_claims.get("email_verified") is not True:
         raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
 
 
@@ -2475,6 +2493,68 @@ async def run_pro_trial_warning_job(
         return f"{base}/trainer/billing?{urlencode({'trainerId': trainer_id, 'token': token})}"
 
     return await pro_trials.process_expiry_warnings(db, billing_url_factory=billing_url)
+
+
+class TrainerIngestJobRequest(BaseModel):
+    source_urls: Optional[List[str]] = Field(default=None, description="Optional custom source URLs to ingest.")
+    batch_size: Optional[int] = Field(default=10, description="Max batch candidates to process.")
+    run_guardian: Optional[bool] = Field(default=True, description="Whether to run Supervisory Guardian after ingestion.")
+
+
+@api.post("/internal/jobs/trainer-ingest")
+async def run_trainer_ingest_job(
+    payload: Optional[TrainerIngestJobRequest] = None,
+    authorization: str = Header(default="", alias="Authorization"),
+) -> Dict[str, Any]:
+    """Authenticated, serverless execution boundary for automated trainer acquisition.
+
+    Guarded by Google Cloud Scheduler OIDC ID Token authentication.
+    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
+    """
+    _require_cloud_scheduler_oidc(authorization)
+
+    source_urls = payload.source_urls if payload else None
+    batch_size = payload.batch_size if payload and payload.batch_size else 10
+    run_guardian = payload.run_guardian if payload and payload.run_guardian is not None else True
+
+    try:
+        # 1. Run Engine 1: Batch Ingestion Orchestrator
+        ingestion_summary = await ingestion_manager.run_batch_ingestion_pipeline(
+            source_urls=source_urls,
+            db=db,
+            batch_size=batch_size,
+        )
+
+        # 2. Run Engine 2: Supervisory Verification Guardian
+        guardian_summary = None
+        if run_guardian:
+            guardian_summary = await pipeline_guardian.audit_corpus_integrity(db, auto_remediate=True)
+
+        return {
+            "ok": True,
+            "ingestion": ingestion_summary,
+            "guardian": guardian_summary,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        logger.exception("Critical failure in /internal/jobs/trainer-ingest: %s", exc)
+        if db is not None:
+            coll = getattr(db, "source_ingestion_state", None)
+            if coll is not None:
+                await coll.update_one(
+                    {"source_url": "system_job_failure"},
+                    {
+                        "$set": {
+                            "source_url": "system_job_failure",
+                            "last_checked_at": datetime.now(timezone.utc).isoformat(),
+                            "last_error": str(exc),
+                            "last_error_code": "internal_job_exception",
+                            "consecutive_failures": 1,
+                        }
+                    },
+                    upsert=True,
+                )
+        raise HTTPException(status_code=500, detail=f"Trainer ingestion failed: {exc}")
 
 
 @api.get("/config")

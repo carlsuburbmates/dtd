@@ -86,18 +86,44 @@ class StructuredValidationError(ValueError):
 
 
 def is_gemini_configured() -> bool:
-    """Check whether a Gemini API key is configured."""
-    return bool(os.environ.get("GEMINI_API_KEY", "").strip())
+    """Check whether Gemini is configured (Google AI Studio API key or Vertex AI ADC)."""
+    if bool(os.environ.get("GEMINI_API_KEY", "").strip()):
+        return True
+    if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes"):
+        return True
+    if bool(os.environ.get("VERTEXAI_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")):
+        return True
+    return False
 
 
 def get_gemini_client() -> Optional[Any]:
-    """Obtain a Google GenAI client if configured, otherwise None."""
+    """Obtain a Google GenAI client if configured, otherwise None.
+
+    Supports dual-mode configuration:
+    1. Google AI Studio: via GEMINI_API_KEY (default for local dev & testing).
+    2. Google Cloud Vertex AI: via Application Default Credentials (ADC) with
+       roles/aiplatform.user on Cloud Run when GOOGLE_GENAI_USE_VERTEXAI=true,
+       VERTEXAI_PROJECT, or GOOGLE_CLOUD_PROJECT is set.
+    """
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
+    use_vertex = (
+        os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes")
+        or bool(os.environ.get("VERTEXAI_PROJECT"))
+        or (not api_key and bool(os.environ.get("GOOGLE_CLOUD_PROJECT")))
+    )
+
+    if not api_key and not use_vertex:
         return None
+
     try:
         from google import genai
-        return genai.Client(api_key=api_key)
+        if api_key:
+            return genai.Client(api_key=api_key)
+
+        # Vertex AI mode via Application Default Credentials (ADC)
+        project = os.environ.get("VERTEXAI_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        location = os.environ.get("VERTEXAI_LOCATION", "australia-southeast1")
+        return genai.Client(vertexai=True, project=project, location=location)
     except Exception as e:
         logger.debug("Failed to initialize google.genai Client: %s", e)
         return None
