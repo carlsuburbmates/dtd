@@ -13,9 +13,9 @@ SERVICE_NAME="dtd-api-dev"
 SCHEDULER_JOB_NAME="dtd-trainer-ingest-cron"
 
 main() {
-  echo "🚀 [1/3] Enabling Vertex AI API in ${PROJECT_ID}..."
-  gcloud services enable aiplatform.googleapis.com --project="${PROJECT_ID}"
-  echo "✅ Vertex AI API enabled."
+  echo "🚀 [1/3] Enabling Vertex AI and Cloud Scheduler APIs in ${PROJECT_ID}..."
+  gcloud services enable aiplatform.googleapis.com cloudscheduler.googleapis.com --project="${PROJECT_ID}"
+  echo "✅ APIs enabled."
 
   echo "🔐 [2/3] Granting Vertex AI User (roles/aiplatform.user) to ${SERVICE_ACCOUNT}..."
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
