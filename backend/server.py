@@ -1410,8 +1410,11 @@ async def _load_ops_case_state_map(case_ids: List[str]) -> Dict[str, Dict[str, A
     states_coll = getattr(db, "ops_case_states", None)
     if states_coll is None or not case_ids:
         return {}
-    rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
-    return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+    try:
+        rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
+        return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+    except Exception:
+        return {}
 
 
 def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1461,11 +1464,14 @@ async def _ops_case_rows(
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
-    submissions_coll = getattr(db, "submissions", None)
-    held_submissions = await submissions_coll.find(
-        {"status": {"$in": ["pending", "held"]}},
-        {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1, "confidence_score": 1, "verification_model": 1, "reason": 1, "duplicate": 1},
-    ).sort("created_at", -1).limit(50).to_list(50) if submissions_coll is not None and hasattr(submissions_coll, "find") else []
+    try:
+        submissions_coll = getattr(db, "submissions", None)
+        held_submissions = await submissions_coll.find(
+            {"status": {"$in": ["pending", "held"]}},
+            {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1, "confidence_score": 1, "verification_model": 1, "reason": 1, "duplicate": 1},
+        ).sort("created_at", -1).limit(50).to_list(50) if submissions_coll is not None and hasattr(submissions_coll, "find") else []
+    except Exception:
+        held_submissions = []
     for row in held_submissions:
         status = str(row.get("status") or "pending")
         severity = "high" if status == "held" else "medium"
@@ -2503,21 +2509,19 @@ class TrainerIngestJobRequest(BaseModel):
     run_guardian: Optional[bool] = Field(default=True, description="Whether to run Supervisory Guardian after ingestion.")
 
 
-@api.post("/internal/jobs/trainer-ingest")
-async def run_trainer_ingest_job(
+async def _execute_trainer_ingest_pipeline(
     payload: Optional[TrainerIngestJobRequest] = None,
-    authorization: str = Header(default="", alias="Authorization"),
+    trigger: str = "cloud_scheduler",
 ) -> Dict[str, Any]:
-    """Authenticated, serverless execution boundary for automated trainer acquisition.
+    """Shared execution coordinator for Engine 1 (Ingestion) and Engine 2 (Supervisory Guardian).
 
-    Guarded by Google Cloud Scheduler OIDC ID Token authentication.
-    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
+    Persists comprehensive run metadata into db.ingestion_runs for full /ops auditability.
     """
-    _require_cloud_scheduler_oidc(authorization)
-
     source_urls = payload.source_urls if payload else None
     batch_size = payload.batch_size if payload and payload.batch_size else 10
     run_guardian = payload.run_guardian if payload and payload.run_guardian is not None else True
+    run_id = f"ingest_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
+    started_at = datetime.now(timezone.utc).isoformat()
 
     try:
         # 1. Run Engine 1: Batch Ingestion Orchestrator
@@ -2532,31 +2536,90 @@ async def run_trainer_ingest_job(
         if run_guardian:
             guardian_summary = await pipeline_guardian.audit_corpus_integrity(db, auto_remediate=True)
 
-        return {
+        completed_at = datetime.now(timezone.utc).isoformat()
+        result = {
+            "id": run_id,
             "ok": True,
+            "trigger": trigger,
+            "executed_at": started_at,
+            "completed_at": completed_at,
             "ingestion": ingestion_summary,
             "guardian": guardian_summary,
-            "executed_at": datetime.now(timezone.utc).isoformat(),
         }
-    except Exception as exc:
-        logger.exception("Critical failure in /internal/jobs/trainer-ingest: %s", exc)
+
         if db is not None:
+            ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+            if ingestion_runs_coll is not None:
+                try:
+                    await ingestion_runs_coll.insert_one(dict(result))
+                except Exception as exc:
+                    logger.warning("Failed writing to db.ingestion_runs: %s", exc)
+
+        return result
+    except Exception as exc:
+        logger.exception("Critical failure in trainer ingest pipeline (trigger=%s): %s", trigger, exc)
+        completed_at = datetime.now(timezone.utc).isoformat()
+        failure_record = {
+            "id": run_id,
+            "ok": False,
+            "trigger": trigger,
+            "executed_at": started_at,
+            "completed_at": completed_at,
+            "error": str(exc),
+        }
+        if db is not None:
+            ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+            if ingestion_runs_coll is not None:
+                try:
+                    await ingestion_runs_coll.insert_one(dict(failure_record))
+                except Exception:
+                    pass
             coll = getattr(db, "source_ingestion_state", None)
             if coll is not None:
-                await coll.update_one(
-                    {"source_url": "system_job_failure"},
-                    {
-                        "$set": {
-                            "source_url": "system_job_failure",
-                            "last_checked_at": datetime.now(timezone.utc).isoformat(),
-                            "last_error": str(exc),
-                            "last_error_code": "internal_job_exception",
-                            "consecutive_failures": 1,
-                        }
-                    },
-                    upsert=True,
-                )
+                try:
+                    await coll.update_one(
+                        {"source_url": "system_job_failure"},
+                        {
+                            "$set": {
+                                "source_url": "system_job_failure",
+                                "last_checked_at": completed_at,
+                                "last_error": str(exc),
+                                "last_error_code": "internal_job_exception",
+                                "consecutive_failures": 1,
+                            }
+                        },
+                        upsert=True,
+                    )
+                except Exception:
+                    pass
         raise HTTPException(status_code=500, detail=f"Trainer ingestion failed: {exc}")
+
+
+@api.post("/internal/jobs/trainer-ingest")
+async def run_trainer_ingest_job(
+    payload: Optional[TrainerIngestJobRequest] = None,
+    authorization: str = Header(default="", alias="Authorization"),
+) -> Dict[str, Any]:
+    """Authenticated, serverless execution boundary for automated trainer acquisition.
+
+    Guarded by Google Cloud Scheduler OIDC ID Token authentication.
+    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
+    """
+    _require_cloud_scheduler_oidc(authorization)
+    return await _execute_trainer_ingest_pipeline(payload=payload, trigger="cloud_scheduler")
+
+
+@api.post("/oversight/jobs/trainer-ingest")
+async def run_trainer_ingest_job_manual(
+    payload: Optional[TrainerIngestJobRequest] = None,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Operator-triggered execution boundary for automated trainer acquisition and supervisory audit.
+
+    Guarded by X-Admin-Pass oversight authentication.
+    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
+    """
+    return await _execute_trainer_ingest_pipeline(payload=payload, trigger="operator_manual")
 
 
 @api.get("/config")
@@ -4853,6 +4916,15 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     growth_attribution_summary = await _growth_attribution_summary()
     reactivation_summary = await _reactivation_summary()
     now_dt = datetime.now(timezone.utc)
+    ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+    recent_ingestion_runs = (
+        await ingestion_runs_coll.find({}, {"_id": 0}).sort("executed_at", -1).limit(10).to_list(10)
+        if ingestion_runs_coll is not None
+        else []
+    )
+    last_ingestion_run = recent_ingestion_runs[0] if recent_ingestion_runs else None
+    pipeline_guardian_state = await db.system_state.find_one({"key": "pipeline_guardian"}, {"_id": 0}) or {}
+
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
@@ -5092,6 +5164,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "nurture": nurture,
             "reactivation_route": reactivation_route,
             "pro_trial_warnings": pro_trial_warnings,
+            "pipeline_guardian": pipeline_guardian_state,
         },
         "alerts": health.get("alerts", []),
         "rollback_recent": rollback_recent,
@@ -5140,6 +5213,9 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "growth_attribution_summary": growth_attribution_summary,
         "reactivation_summary": reactivation_summary,
         "capability_health_summary": capability_health_summary,
+        "recent_ingestion_runs": recent_ingestion_runs,
+        "last_ingestion_run": last_ingestion_run,
+        "pipeline_guardian": pipeline_guardian_state,
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
         "ops_seo_indexation": seo_indexation,

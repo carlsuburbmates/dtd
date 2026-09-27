@@ -46,9 +46,12 @@
 ## Acquisition and ingestion
 
 - Twenty authorised Greater Melbourne profiles were locally built from owner-approved official trainer websites plus ABR identity/status evidence.
-- First-party trainer submission is the active growth path.
-- Post-launch autonomous acquisition is designed but not production-enabled. It lacks an approved licensed discovery contract, production adapter evidence and an explicit activation decision.
-- Gemini may structure a lawfully obtained URL; it is not authority to discover or persist trainer inventory. Search Grounding remains excluded. CDR-020 permits a future, session-only, Google-attributed urgent-support Maps/Places surface, but no such feature is implemented and Maps/Places remains excluded as a persistent acquisition feed.
+- First-party trainer submission is an active growth path alongside automated batch ingestion.
+- The automated acquisition pipeline is implemented as a serverless Dual-Engine architecture on Cloud Run (`backend/services/ingestion_manager.py` for Engine 1 batch crawler/extractor; `backend/services/pipeline_guardian.py` for Engine 2 supervisory auditor).
+- Google Cloud Scheduler (`dtd-trainer-ingest-cron`, daily 2:00 AM AEST, OIDC auth) triggers `/api/internal/jobs/trainer-ingest`.
+- The solo operator can trigger on-demand ingestion and supervisory audits directly from `/ops` via `/api/oversight/jobs/trainer-ingest`.
+- Match-ready capability projection enforces strict provenance boundaries (`CDR-021`, `CDR-022`, `DF-026`): only confirmed trainer declarations or validated official source facts (with TTL) enter matching. Marketing bios and commercial tiers are completely excluded from AI matching context.
+- Gemini on Vertex AI structures already lawful content; statutory ABR active registration and reachability gate publication, never raw AI confidence (DF-014). Maps/Places and generic SERP scraping remain strictly excluded.
 
 ## Operations and observability
 

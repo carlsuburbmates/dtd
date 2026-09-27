@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, Play, ShieldCheck } from "lucide-react";
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -406,6 +406,10 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const sourceIngestionSources = asArray(snap.ops_investigation?.source_ingestion_sources);
     const providerHealth = snap.ops_investigation?.provider_health || snap.provider_health || {};
     const alerts = asArray(snap.alerts);
+    const recentIngestionRuns = asArray(snap.recent_ingestion_runs);
+    const lastIngestionRun = snap.last_ingestion_run || recentIngestionRuns[0] || null;
+    const pipelineGuardian = snap.pipeline_guardian || snap.loops?.pipeline_guardian || {};
+    const capabilityHealth = snap.capability_health_summary || {};
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const unhealthyLoops = Object.values(loops || {}).filter((meta) => String(meta?.status || "ok") !== "ok").length;
     const failedMessages = messages.filter((row) => {
@@ -583,7 +587,16 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "trainer_supply" ? (
-                            <TrainerSupplyView trainerInventory={trainerInventory} supplyGeography={supplyGeography} supplyTrends={supplyTrends} />
+                            <TrainerSupplyView
+                                trainerInventory={trainerInventory}
+                                supplyGeography={supplyGeography}
+                                supplyTrends={supplyTrends}
+                                recentIngestionRuns={recentIngestionRuns}
+                                lastIngestionRun={lastIngestionRun}
+                                pipelineGuardian={pipelineGuardian}
+                                capabilityHealth={capabilityHealth}
+                                onRefresh={onRefresh}
+                            />
                         ) : null}
 
                         {activeView === "seo_indexation" ? <SeoIndexationView seoIndexation={seoIndexation} /> : null}
@@ -1096,12 +1109,146 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
     );
 }
 
-function TrainerSupplyView({ trainerInventory, supplyGeography, supplyTrends }) {
+function TrainerSupplyView({
+    trainerInventory,
+    supplyGeography,
+    supplyTrends,
+    recentIngestionRuns = [],
+    lastIngestionRun = null,
+    pipelineGuardian = {},
+    capabilityHealth = {},
+    onRefresh,
+}) {
+    const [ingesting, setIngesting] = useState(false);
     const topTrainerSuburbs = asArray(supplyGeography.trainer_suburbs_top).slice(0, 4);
     const demandGaps = asArray(supplyGeography.demand_gaps).slice(0, 4);
+
+    const handleRunIngestion = async () => {
+        setIngesting(true);
+        try {
+            const resp = await opsApi.post("/oversight/jobs/trainer-ingest", {
+                batch_size: 10,
+                run_guardian: true,
+            });
+            const d = resp.data || {};
+            const q = d.ingestion?.qualified ?? 0;
+            const h = d.ingestion?.held ?? 0;
+            const g = d.guardian?.status || "clean";
+            toast.success(`Acquisition run completed: ${q} qualified, ${h} held. Guardian: ${humanizeToken(g)}.`);
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            toast.error(`Acquisition run failed: ${err?.response?.data?.detail || err.message}`);
+        } finally {
+            setIngesting(false);
+        }
+    };
+
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="Trainer Supply" description={PAGE_INTROS.trainer_supply} />
+
+            {/* Automated Acquisition & Supervisory Guardian Control Panel */}
+            <div className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div className="small-caps !text-[#8B9E98] flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-[#4ADE80]" />
+                            Automated Acquisition &amp; Supervisory Guardian
+                        </div>
+                        <h3 className="font-serif text-xl tracking-tight mt-1 text-[#F5F2EB]">
+                            Autonomous Dual-Engine Pipeline
+                        </h3>
+                        <p className="text-sm text-[#8B9E98] font-mono mt-1 max-w-2xl">
+                            Engine 1 (Batch Ingestion &amp; Gemini Fact Extraction) + Engine 2 (Supervisory Verification Guardian).
+                            Runs daily at 2:00 AM AEST via Cloud Scheduler with statutory ABR verification and fail-closed match boundaries.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={handleRunIngestion}
+                            disabled={ingesting}
+                            className="admin-btn admin-btn-accent"
+                            data-testid="ops-run-ingestion"
+                        >
+                            {ingesting ? (
+                                <>
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                    Running Pipeline…
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="h-4 w-4" />
+                                    Run Ingestion &amp; Audit Now
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <SummaryCard
+                        title="Last Ingestion Run"
+                        value={lastIngestionRun ? humanizeToken(lastIngestionRun.trigger) : "None"}
+                        note={lastIngestionRun?.completed_at ? formatDateTime(lastIngestionRun.completed_at) : "No runs recorded yet"}
+                    />
+                    <SummaryCard
+                        title="Guardian Health"
+                        value={pipelineGuardian?.status ? humanizeToken(pipelineGuardian.status) : "Clean"}
+                        note={`${pipelineGuardian?.duplicates_detected || 0} duplicates · ${pipelineGuardian?.statutory_violations || 0} statutory violations`}
+                    />
+                    <SummaryCard
+                        title="Trainer Declared"
+                        value={capabilityHealth?.trainer_declared_capabilities || 0}
+                        note="180-day TTL · Active in matchmaking"
+                    />
+                    <SummaryCard
+                        title="AI Proposed (Held)"
+                        value={capabilityHealth?.ai_proposed_capabilities || 0}
+                        note="30-day TTL · Excluded from matches until confirmed"
+                    />
+                </div>
+
+                {asArray(recentIngestionRuns).length > 0 ? (
+                    <div className="mt-5 border-t border-[#1E2A27] pt-4">
+                        <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98] mb-3">
+                            Recent Ingestion &amp; Audit Runs
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em]">
+                                    <tr>
+                                        <th className="pb-2 pr-3">Run ID</th>
+                                        <th className="pb-2 pr-3">Trigger</th>
+                                        <th className="pb-2 pr-3">Executed</th>
+                                        <th className="pb-2 pr-3">Ingested / Held</th>
+                                        <th className="pb-2 pr-3">Guardian Status</th>
+                                        <th className="pb-2">Remediations</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {recentIngestionRuns.slice(0, 5).map((run) => (
+                                        <tr key={run.id || run.executed_at} className="border-t border-[#1E2A27]/60">
+                                            <td className="py-2 pr-3 font-mono text-[#F5F2EB]">{run.id || "—"}</td>
+                                            <td className="py-2 pr-3"><Badge label={humanizeToken(run.trigger || "unknown")} kind="state" /></td>
+                                            <td className="py-2 pr-3 text-[#8B9E98]">{formatDateTime(run.executed_at)}</td>
+                                            <td className="py-2 pr-3 text-[#F5F2EB]">
+                                                {run.ingestion ? `${run.ingestion.qualified || 0} qualified · ${run.ingestion.held || 0} held` : "—"}
+                                            </td>
+                                            <td className="py-2 pr-3">
+                                                <Badge label={humanizeToken(run.guardian?.status || (run.ok ? "ok" : "failed"))} kind="state" />
+                                            </td>
+                                            <td className="py-2 text-[#8B9E98]">
+                                                {run.guardian?.remediations_applied != null ? `${run.guardian.remediations_applied} applied` : "—"}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : null}
+            </div>
             <div className="flex items-center justify-between gap-3">
                 <div>
                     <div className="small-caps !text-[#8B9E98]">Review the live trainer set without leaving the console.</div>

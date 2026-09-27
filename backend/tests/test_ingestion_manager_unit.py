@@ -91,10 +91,20 @@ class _MockCollection:
 
 class _MockDB:
     def __init__(self):
-        self.trainers = _MockCollection()
-        self.discovery_queue = _MockCollection()
-        self.source_ingestion_state = _MockCollection()
-        self.system_state = _MockCollection()
+        self._collections = {}
+        self.trainers = self._get_coll("trainers")
+        self.discovery_queue = self._get_coll("discovery_queue")
+        self.source_ingestion_state = self._get_coll("source_ingestion_state")
+        self.system_state = self._get_coll("system_state")
+        self.ingestion_runs = self._get_coll("ingestion_runs")
+
+    def _get_coll(self, name: str) -> _MockCollection:
+        if name not in self._collections:
+            self._collections[name] = _MockCollection()
+        return self._collections[name]
+
+    def __getattr__(self, name: str) -> _MockCollection:
+        return self._get_coll(name)
 
 
 def test_resolve_candidate_source_urls_explicit():
@@ -287,3 +297,61 @@ def test_trainer_ingest_endpoint_executes_with_valid_oidc(monkeypatch):
         assert res["ingestion"]["qualified"] == 1
         assert res["guardian"]["status"] == "clean"
         assert "executed_at" in res
+
+
+def test_trainer_ingest_operator_manual_execution():
+    """Verifies that the /ops operator-manual endpoint runs with trigger='operator_manual' and persists to db.ingestion_runs."""
+    import server
+    mock_db = _MockDB()
+
+    fake_ingest_summary = {"ok": True, "total_processed": 2, "qualified": 2, "held": 0, "errors": []}
+    fake_guardian_summary = {"status": "clean", "total_trainers_scanned": 2, "anomalies": []}
+
+    with patch.object(server, "db", mock_db), \
+         patch("services.ingestion_manager.run_batch_ingestion_pipeline", new=AsyncMock(return_value=fake_ingest_summary)), \
+         patch("services.pipeline_guardian.audit_corpus_integrity", new=AsyncMock(return_value=fake_guardian_summary)):
+
+        payload = server.TrainerIngestJobRequest(source_urls=["https://trainer1.com.au"], batch_size=2)
+        res = asyncio.run(server.run_trainer_ingest_job_manual(payload=payload, _=None))
+
+        assert res["ok"] is True
+        assert res["trigger"] == "operator_manual"
+        assert res["ingestion"]["qualified"] == 2
+        assert res["guardian"]["status"] == "clean"
+        assert res["id"].startswith("ingest_")
+
+        # Verify persisted record in db.ingestion_runs
+        assert len(mock_db.ingestion_runs.rows) == 1
+        saved_run = mock_db.ingestion_runs.rows[0]
+        assert saved_run["id"] == res["id"]
+        assert saved_run["trigger"] == "operator_manual"
+        assert saved_run["ok"] is True
+        assert saved_run["ingestion"]["qualified"] == 2
+
+
+def test_trainer_ingest_pipeline_failure_records_to_db():
+    """Verifies that pipeline exceptions record a failure entry in db.ingestion_runs and /ops state."""
+    import server
+    mock_db = _MockDB()
+
+    with patch.object(server, "db", mock_db), \
+         patch("services.ingestion_manager.run_batch_ingestion_pipeline", new=AsyncMock(side_effect=RuntimeError("Simulated LLM outage"))):
+
+        with pytest.raises(server.HTTPException) as exc_info:
+            asyncio.run(server.run_trainer_ingest_job_manual(payload=None, _=None))
+
+        assert exc_info.value.status_code == 500
+        assert "Simulated LLM outage" in str(exc_info.value.detail)
+
+        # Verify failed run was logged in db.ingestion_runs
+        assert len(mock_db.ingestion_runs.rows) == 1
+        failed_run = mock_db.ingestion_runs.rows[0]
+        assert failed_run["ok"] is False
+        assert failed_run["trigger"] == "operator_manual"
+        assert "Simulated LLM outage" in failed_run["error"]
+
+        # Verify db.source_ingestion_state recorded the failure
+        assert len(mock_db.source_ingestion_state.rows) == 1
+        state_row = mock_db.source_ingestion_state.rows[0]
+        assert state_row["source_url"] == "system_job_failure"
+        assert state_row["last_error_code"] == "internal_job_exception"

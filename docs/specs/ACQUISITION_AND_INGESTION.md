@@ -30,22 +30,36 @@ owner-approved official URL
 
 Twenty authorised Greater Melbourne profiles have local reproducible manifests and scripts. This does not convert older records into equally evidenced profiles.
 
-### Post-launch acquisition
+### Post-launch autonomous acquisition (Dual-Engine Pipeline)
 
 ```text
-approved licensed discovery source
-→ candidate identity/URL
-→ official-site factual capture
-→ optional Gemini structuring
-→ ABR and geography checks
-→ canonicalise/dedupe/suppress
-→ quality gate
-→ publish or hold
-→ claim/correct/remove
-→ monitor and refresh
+Discovery source (explicit / queue / seed)
+→ Engine 1: Batch Ingestion Orchestrator
+   ├ Polite crawl (2.05s delay, robots.txt, 5s/10s timeouts)
+   ├ Structured extraction via Gemini on Vertex AI
+   ├ ATO Modulus 89 checksum & ABR Web Services check
+   ├ 4-Tier deduplication (ABN → domain → phone → name+suburb)
+   └ Claimed/paid profile protection (never overwritten)
+→ Engine 2: Supervisory Verification Guardian
+   ├ Global uniqueness verification (zero duplicates mandate)
+   ├ Statutory truth enforcer (DF-014: 100% active verified ABR required to publish)
+   ├ Anti-hallucination check (placeholder domain/name/phone rejection)
+   └ Auto-remediation & persistent audit logging
+→ State persistence in db.trainers, db.source_ingestion_state, db.ingestion_runs
+→ Operations Console (/ops) visibility & on-demand manual trigger
 ```
 
-This mode is designed but remains disabled until a licensed source contract, adapter, dry-run evidence, authenticated scheduling and explicit activation exist. `/submit` is the active primary growth path meanwhile.
+#### Execution and Trigger Boundaries
+
+1. **Cloud Scheduler (Serverless Cron):**
+   - Cloud Scheduler job `dtd-trainer-ingest-cron` executes daily at 2:00 AM AEST.
+   - Authenticated via OIDC Service Account (`dtd-scheduler-invoker@dtd-api-dev.iam.gserviceaccount.com`).
+   - Targets `POST /api/internal/jobs/trainer-ingest` with token verification via `_require_cloud_scheduler_oidc`.
+
+2. **Operator Manual Trigger (/ops):**
+   - Solo operator can trigger an on-demand batch ingestion and supervisory audit directly from `/ops` under the Trainer Supply section.
+   - Targets `POST /api/oversight/jobs/trainer-ingest` guarded by `require_oversight` (`X-Admin-Pass`).
+   - Run results are persisted to `db.ingestion_runs` and immediately refreshed in the console.
 
 ## Processing contract
 
