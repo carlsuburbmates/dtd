@@ -21,6 +21,7 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 | [DTD_TARGETED_POST_LAUNCH_STATE.md](DTD_TARGETED_POST_LAUNCH_STATE.md) | The concrete next build and operating target | When choosing or implementing near-term work |
 | [DTD_TARGETED_MATCHING_PIPELINE_STATE.md](DTD_TARGETED_MATCHING_PIPELINE_STATE.md) | The concrete owner-to-trainer matching target, including acquisition, AI, urgent support and acceptance | Before changing matching, trainer capability data or urgent-support work |
 | [DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) | Matching work packages, completion rules and independent verification evidence | Before implementing or accepting matching-pipeline work |
+| [specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md](specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md) | Versioned owner input, triage, eligibility, fit, presentation, privacy and acceptance rules | Before implementing or accepting a matching work package |
 | [DTD_VISIONISED_TARGET_STATE.md](DTD_VISIONISED_TARGET_STATE.md) | Possible later evolution with explicit triggers | For strategy; never as an implementation instruction |
 | [DTD_INVARIANTS_AND_CONSTRAINTS.md](DTD_INVARIANTS_AND_CONSTRAINTS.md) | Rules that every phase must preserve | Before any product, data, pricing, automation or ops change |
 | [DTD_CONFLICT_AND_DECISION_REGISTER.md](DTD_CONFLICT_AND_DECISION_REGISTER.md) | What was decided, why, and what it superseded | When an old statement or ambiguity resurfaces |

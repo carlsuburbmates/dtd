@@ -1,5 +1,7 @@
 # Matching and Ranking
 
+**Implementation contract:** [Owner-to-Trainer Matching Decision Contract v2](OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md). Where an older statement conflicts with its field, state, privacy or fit rules, Decision Contract v2 governs the matching workstream.
+
 ## Objective
 
 Return useful trainers based on owner needs and evidenced service suitability while keeping commercial influence bounded and explicit.

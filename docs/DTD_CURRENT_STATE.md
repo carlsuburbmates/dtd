@@ -238,13 +238,13 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** resolving hierarchy and routes is public product/UX work, outside this read-only audit.
 - **Next action:** define one owner entry path for live matching, give it a truthful direct navigation/CTA target, remove or replace the stale waitlist link, and verify desktop/mobile keyboard journeys from navigation through match form, result state and profile handoff.
 
-### DF-021 — The active documentation lacks an owner-match interface contract
+### DF-021 — Owner-match interface contract is authored; implementation remains open
 
-- **Observed/status:** 26 September 2026 — open; scope now defined, implementation contract still incomplete.
-- **Evidence:** `docs/specs/MATCHING_AND_RANKING.md` now establishes the Owner-to-Trainer Matching System workstream and its eligibility, fit and presentation separation. It still does not specify final public form copy, exact screen/API fields, consent language, loading/error/empty rendering or the completed enquiry/follow-up interface contract. Existing public pages and tests can therefore still drift independently from the matching contract.
-- **Impact/uncertainty:** future frontend or API work can preserve the score formula while breaking owner understanding, privacy or failure handling. The absence of a UI contract is not proof that every current owner response is wrong.
-- **Why deferred:** this audit records the missing authority; it does not invent final public copy or interaction design.
-- **Next action:** use the established matching-system workstream to define the versioned owner-facing workflow and API contract, then align implementation and sandbox verification to it.
+- **Observed/status:** 27 September 2026 — partial; the versioned implementation contract is authored, but the public workflow does not yet implement it.
+- **Evidence:** `docs/specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md` now defines the v2 fields, consent/retention evidence, triage/decision states, API response, privacy boundary, fit and presentation rules. `Home.jsx`, `/match`, profile handoff and their tests still implement the earlier free-text diagnostic flow.
+- **Impact/uncertainty:** implementation can now be audited against one interface authority, but existing pages and tests remain capable of drifting until the staged matching work is completed.
+- **Why deferred:** authoring the contract does not change public behaviour, retained records, AI-provider use or deployment.
+- **Next action:** implement P1 through P4 in `ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`, then verify the owner journey and sandbox evidence against Decision Contract v2.
 
 ### DF-022 — Owner matching consent is enforced but not persisted as evidence
 
@@ -254,13 +254,13 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** the audit does not change consent language, stored owner data, retention or production records.
 - **Next action:** define the matching-consent record and retention contract, persist only the required sanitised evidence with new match events, apply any migration/remediation decision separately, and test consent rejection, persisted consent evidence and expiry/cleanup behaviour in sandbox.
 
-### DF-023 — AI-assisted matching has no contract-defined weak-evidence response
+### DF-023 — Weak-evidence contract is authored; legacy AI/fallback implementation remains open
 
-- **Observed/status:** 27 September 2026 — open; CDR-024 corrects an earlier planning assumption that clarification, abstention or no-match was already selected.
-- **Evidence:** `backend/services/ai.py` currently asks Gemini to return one to three trainer IDs, scores and explanations directly from the owner description and supplied candidates. Its output validator rejects an empty list; on provider degradation, the deterministic fallback always returns up to three candidates with a `0.40` baseline score, including where there are no topic overlaps. There is no versioned Decision Contract that selects the response to ambiguous input, weak evidence, low supply, absent required capability evidence or provider degradation, nor a parity evaluation of that response across AI and fallback paths.
-- **Impact/uncertainty:** the current response is hard-coded rather than evidenced against a chosen product contract. It may or may not be appropriate once the owner-visible response is decided and evaluated; this finding is based on repository code, not live match outcomes.
-- **Why deferred:** establishing the operating model does not authorise a public matching, AI-provider, retention or deployment change. The repair requires a cohesive owner-flow and API redesign.
-- **Next action:** execute Decision Contract v2: select and version the response to ambiguous input, weak evidence, low supply, absent required capability evidence and provider degradation; preserve separate eligibility, fit and presentation layers; add same-fixture AI/fallback evaluation, API/UI tests and sandbox end-to-end evidence before release.
+- **Observed/status:** 27 September 2026 — partial; Decision Contract v2 resolves the owner-visible states, but code remains legacy.
+- **Evidence:** Decision Contract v2 selects `needs_clarification`, disclosed `limited_local_results`, `no_confirmed_match` and deterministic degraded equivalents. `backend/services/ai.py` still asks Gemini for a non-empty list of trainer IDs and the fallback still gives candidates a `0.40` baseline where there are no topic overlaps. No executable parity suite yet exists.
+- **Impact/uncertainty:** the target response is no longer an open product-policy choice; the live route still cannot be represented as implementing it.
+- **Why deferred:** authoring the operating model does not authorise a public matching, AI-provider, retention or deployment change. The repair requires the cohesive P1-P4 owner-flow and API redesign.
+- **Next action:** implement the Decision Contract fixture/harness, deterministic eligibility, AI/fallback schema and owner states in P1-P4; add same-fixture AI/fallback and sandbox evidence before release.
 
 ### DF-024 — No urgent-support pathway or verified provider register exists
 
@@ -278,10 +278,10 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** the owner changed the governing direction, not the public product or provider configuration. A compliant implementation needs a separate isolated UI/API design, product-specific terms and cost review, safety/privacy contract, degraded route and sandbox verification.
 - **Next action:** design the user-initiated urgent-support Maps/Places module as a separate vertical slice. Prove its Google attribution, data minimisation, no-persistence/no-AI boundary, owner-visible distinction from DTD recommendations, provider outage behaviour and `/ops` evidence before any approval-record or runtime change.
 
-### DF-026 — Trainer capability fields are not yet a match-ready projection with trainer declaration provenance
+### DF-026 — Match-ready projection foundation is not yet accepted for matching cutover
 
-- **Observed/status:** 26 September 2026 — foundation implemented in repository code (`feature/automated-ingestion-pipeline`); match cutover gated behind `ENABLE_MATCH_READY_PROJECTION_FILTER` until Decision Contract v2 matching audit.
-- **Evidence:** Field-level capability facts (`create_capability_fact`), canonical taxonomy normalization (`trainer_quality.py`), trainer declaration lifecycle (`POST /api/trainers/{id}/capabilities/confirm`), two-step claim flow (`TrainerDetail.jsx`), structured submission declarations (`Submit.jsx`), lifecycle invalidation (ABN statutory revocation, competing claims, crawl refresh failures), and non-PII capability health telemetry (`Ops.jsx`) are implemented and covered by 18 unit tests in `backend/tests/test_acquisition_match_readiness_unit.py`. Public match filtering remains isolated behind feature flag `ENABLE_MATCH_READY_PROJECTION_FILTER = False`, attaching non-filtering diagnostics while preserving public match flow until matching session audit.
-- **Impact/uncertainty:** Acquisition and projection foundations are verified locally. Production match cutover requires Decision Contract v2 alignment to avoid premature match candidate suppression.
-- **Why deferred:** Full matching cutover is owned by the matching pipeline session.
-- **Next action:** Align with matching pipeline session on Decision Contract v2, flip `ENABLE_MATCH_READY_PROJECTION_FILTER`, and verify live sandbox matching.
+- **Observed/status:** 27 September 2026 — partial/unaccepted; useful acquisition foundation exists on `b3aa7fd`, but Codex's independent audit found unresolved safety, scope and evidence defects. Active matching remains the earlier diagnostic flow because `ENABLE_MATCH_READY_PROJECTION_FILTER` is false.
+- **Evidence:** the projection, taxonomy, claim/confirmation and capability-health work has focused local test coverage. The same audit found an out-of-scope mutating `/ops` ingestion route, unsupported live-scheduler documentation, an unauthenticated capability-prefill read, incomplete confirmation payloads and incomplete refresh-field handling. The active `ai.py` path can still read raw fields while the filter is disabled.
+- **Impact/uncertainty:** no matching cutover may rely on this branch until the narrow P0 acquisition remediation is independently accepted. Local passing tests do not prove live scheduling or safe strict matching.
+- **Why deferred:** acquisition implementation belongs to its separate Antigravity workflow; matching consumes only its accepted output.
+- **Next action:** complete and audit P0 in `ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`; only then implement strict matching consumption under P2/P3 and verify an isolated sandbox dataset.

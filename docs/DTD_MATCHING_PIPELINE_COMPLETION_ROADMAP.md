@@ -26,7 +26,7 @@ For every status change, append a short evidence entry beneath the package conta
 
 | ID | Work package | Current status | Completion dependency | Related findings |
 | --- | --- | --- | --- | --- |
-| M0 | Decision contract and fixture baseline | `OPEN` | None | DF-018, DF-019, DF-021, DF-022, DF-023 |
+| M0 | Decision contract and fixture baseline | `PARTIAL` — Contract v2 is authored; fixture/harness implementation remains open | None | DF-018, DF-019, DF-021, DF-022, DF-023 |
 | M1 | Trainer declaration and capability projection | `OPEN` | M0 | DF-014, DF-026 |
 | M2 | Owner questionnaire, privacy and accessible states | `OPEN` | M0 | DF-015, DF-018, DF-021, DF-022 |
 | M3 | Eligibility, geography and presentation | `OPEN` | M0, M1 | DF-014, DF-019, DF-023, DF-026 |
@@ -52,7 +52,7 @@ These entries make planning uncertainty visible. They are not locked product dec
 
 | ID | Question | Current planning position | Resolution evidence |
 | --- | --- | --- | --- |
-| H1 | What should an owner see when input is ambiguous, capability evidence is weak, supply is thin or AI is degraded? | **Open.** CDR-024 requires Decision Contract v2 to compare and choose bounded responses; no outcome is preselected. | M0 decision table and same-fixture AI/fallback evaluation in M9. |
+| H1 | What should an owner see when input is ambiguous, capability evidence is weak, supply is thin or AI is degraded? | **Resolved in Decision Contract v2.** Use clarification, disclosed limited-local results, no-confirmed-match, or the matching deterministic degraded equivalent as the applicable evidence state. | Implement M0 fixtures and M9 same-fixture AI/fallback evaluation. |
 | H2 | How are urgent-provider corrections handled without creating a high-maintenance provider portal? | **Provisional default:** a public correction/removal request enters an evidence-backed `/ops` review; only authorised official-source facts can change a public provider record. No provider self-service publishing is assumed for the first slice. | M6 workflow, correction fixtures, source/provenance checks and operator-load review. |
 | H3 | How does a trainer learn that a capability field is stale, unsupported or no longer matchable? | **Provisional default:** the claim/profile surface shows the current structured capability status and correction path. Outbound notifications are not assumed until the communications path is evidenced and the need is demonstrated. | M1 trainer journey and M8 operator/trainer visibility tests. |
 | H4 | How is declaration gaming detected without speculative scoring or arbitrary thresholds? | **Provisional default:** enforce structured vocabularies, field provenance, freshness, evidence-state invalidation and paid-field exclusion first; record explicit invalid/unsupported/boundary-crossing declarations for review. | M0 taxonomy, M1 validation tests, M8 exception evidence and M9 adversarial fixtures. |
@@ -78,11 +78,11 @@ M1–M6 + M8 Operations and observability
 
 ### M0 — Versioned decision contract and fixture baseline
 
-**Status:** `OPEN`
+**Status:** `PARTIAL` — Contract v2 is authored; fixtures and the executable parity harness remain open.
 **Depends on:** none
 **Closes:** DF-021 in part; defines the repair scope for DF-018, DF-019, DF-022 and DF-023.
 
-Create `Owner-to-Trainer Matching Decision Contract v2` as the implementation contract. It must define the normalised owner-input fields, validation, consent records, retention metadata, triage and decision-state vocabulary, API request/response schemas, reason codes, evidence grades, policy penalties, thin-supply trigger, explanation rules and exact screen states. It must select the owner-visible response for ambiguous input, weak evidence, low supply, absent required capability evidence and AI degradation. It must define material AI/fallback agreement for the same fixture: decision state, candidate eligibility, reason-code compatibility, explanation-fact truthfulness and permitted ordering variance. It must state how outcome data is excluded from fit until attribution, sample, freshness, anti-gaming and appeal rules have been accepted and validated.
+Decision Contract v2 is authored at `specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md`. It resolves the owner-visible response for ambiguity, thin supply, absent current capability evidence and AI degradation; it also fixes the v2 input, privacy, eligibility, fit, presentation and acceptance boundaries. The remaining M0 work is to implement its fixtures, data builders and Gemini/fallback parity harness before public workflow work.
 
 Create a versioned fixture set with expected eligibility, fit and presentation outcomes. Each fixture must have permitted candidate facts, excluded facts, expected state, expected reason codes and expected displayed order; never use real owner descriptions. Define the initial anti-gaming event taxonomy around unsupported or out-of-vocabulary declarations, unsupported service-area expansion, stale-evidence attempts, repeated material declaration changes and any attempted paid-field input.
 
