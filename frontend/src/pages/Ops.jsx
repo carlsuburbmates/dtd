@@ -1139,7 +1139,7 @@ function TrainerSupplyView({
                         </h3>
                         <p className="text-sm text-[#8B9E98] font-mono mt-1 max-w-2xl">
                             Engine 1 (Batch Ingestion &amp; Gemini Fact Extraction) + Engine 2 (Supervisory Verification Guardian).
-                            Scheduled execution via Cloud Scheduler with statutory ABR verification and fail-closed match boundaries.
+                            Dual-engine repository capability; live cloud scheduling remains unverified without control-plane access. Read-only telemetry.
                         </p>
                     </div>
                 </div>

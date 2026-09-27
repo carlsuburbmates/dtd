@@ -3898,6 +3898,16 @@ async def get_trainer_capabilities_prefill(
             or trainer.get("catchment_type")
             or "specific_suburbs"
         ),
+        "delivery_constraints": (
+            (caps.get("delivery_constraints") or {}).get("canonical_value")
+            or trainer.get("delivery_constraints")
+            or {
+                "in_home_available": True,
+                "facility_available": False,
+                "travel_distance_km": 0.0,
+                "notes": "",
+            }
+        ),
         "capabilities_confirmed_at": trainer.get("capabilities_confirmed_at") or "",
         "claim_status": trainer.get("claim_status") or "unclaimed",
     }
@@ -4019,6 +4029,11 @@ async def confirm_trainer_capabilities(
         update_data["serviced_suburbs"] = payload.serviced_suburbs
     if payload.catchment_type is not None:
         update_data["catchment_type"] = payload.catchment_type
+    if payload.delivery_constraints is not None:
+        update_data["delivery_constraints"] = (
+            (confirmed_caps.get("delivery_constraints") or {}).get("canonical_value")
+            or payload.delivery_constraints
+        )
 
     await db.trainers.update_one({"id": trainer_id}, {"$set": update_data})
     await _audit(

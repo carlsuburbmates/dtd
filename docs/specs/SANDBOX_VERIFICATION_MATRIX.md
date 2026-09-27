@@ -17,7 +17,7 @@ Every verification step executes within the isolated developer staging sandbox:
 | **MongoDB Atlas** | Cluster `dtd-sandbox` (`dtd_sandbox` db) | Cluster `DTD` (`dtd` live db) |
 | **Stripe Engine** | Test Mode (`sk_test_...`) | Live Mode (`sk_live_...`) |
 | **Email Sinks** | Test sinks / admin addresses only | Live trainer / dog owner addresses |
-| **Scheduler / Jobs** | Triggered on-demand via `/ops` or manual curl | Automated Google Cloud Scheduler |
+| **Scheduler / Jobs** | Internal endpoint via authenticated OIDC curl (`/api/internal/jobs/trainer-ingest`) | Automated Google Cloud Scheduler |
 | **Idle Cost** | Scale-to-zero ($0 idle cost baseline) | Highly-available minimum instances |
 
 ---

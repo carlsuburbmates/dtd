@@ -452,6 +452,8 @@ describe("Ops auth transition", () => {
         expect(panel.textContent).toContain("8");  // ai proposed
         expect(panel.textContent).toContain("Policy version: v1");
         expect(panel.textContent).toContain("trainer_declaration");
+        expect(view.container.textContent).toContain("Dual-engine repository capability; live cloud scheduling remains unverified without control-plane access. Read-only telemetry.");
+        expect(view.container.textContent).not.toContain("Scheduled execution via Cloud Scheduler");
         view.cleanup();
     });
 });

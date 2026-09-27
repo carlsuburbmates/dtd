@@ -99,7 +99,12 @@ export default function TrainerDetail() {
         training_philosophy: "",
         serviced_suburbs: "",
         catchment_type: "specific_suburbs",
-        delivery_constraints: {},
+        delivery_constraints: {
+            in_home_available: true,
+            facility_available: false,
+            travel_distance_km: 0,
+            notes: "",
+        },
     });
     const [confirmStatement, setConfirmStatement] = useState(false);
     const [confirmBusy, setConfirmBusy] = useState(false);
@@ -241,6 +246,7 @@ export default function TrainerDetail() {
                 });
                 const pData = prefillRes.data || {};
                 const pre = pData.prefilled || pData.prefill || {};
+                const preDelivery = pre.delivery_constraints || {};
                 setClaimPrefill(pData);
                 setConfirmedCaps({
                     specialties: pre.specialties || [],
@@ -251,9 +257,15 @@ export default function TrainerDetail() {
                         ? pre.serviced_suburbs.join(", ")
                         : (pre.serviced_suburbs || trainer?.suburb || ""),
                     catchment_type: pre.catchment_type || "specific_suburbs",
-                    delivery_constraints: pre.delivery_constraints || {},
+                    delivery_constraints: {
+                        in_home_available: preDelivery.in_home_available ?? true,
+                        facility_available: preDelivery.facility_available ?? false,
+                        travel_distance_km: preDelivery.travel_distance_km ?? 0,
+                        notes: preDelivery.notes || "",
+                    },
                 });
             } catch {
+                const fallbackDelivery = trainer?.delivery_constraints || {};
                 setConfirmedCaps({
                     specialties: trainer?.specialties || [],
                     service_formats: trainer?.service_formats || [],
@@ -261,7 +273,12 @@ export default function TrainerDetail() {
                     training_philosophy: trainer?.training_philosophy || "",
                     serviced_suburbs: trainer?.suburb || "",
                     catchment_type: "specific_suburbs",
-                    delivery_constraints: {},
+                    delivery_constraints: {
+                        in_home_available: fallbackDelivery.in_home_available ?? true,
+                        facility_available: fallbackDelivery.facility_available ?? false,
+                        travel_distance_km: fallbackDelivery.travel_distance_km ?? 0,
+                        notes: fallbackDelivery.notes || "",
+                    },
                 });
             }
             setClaimStep("capabilities");
@@ -279,6 +296,16 @@ export default function TrainerDetail() {
             const updated = exists ? list.filter((x) => x !== itemId) : [...list, itemId];
             return { ...prev, [field]: updated };
         });
+    };
+
+    const updateDeliveryConstraint = (key, value) => {
+        setConfirmedCaps((prev) => ({
+            ...prev,
+            delivery_constraints: {
+                ...(prev.delivery_constraints || {}),
+                [key]: value,
+            },
+        }));
     };
 
     const submitCapabilityConfirmation = async (event) => {
@@ -302,7 +329,12 @@ export default function TrainerDetail() {
                 training_philosophy: confirmedCaps.training_philosophy,
                 serviced_suburbs: suburbsArray,
                 catchment_type: confirmedCaps.catchment_type,
-                delivery_constraints: confirmedCaps.delivery_constraints || {},
+                delivery_constraints: {
+                    in_home_available: Boolean(confirmedCaps.delivery_constraints?.in_home_available),
+                    facility_available: Boolean(confirmedCaps.delivery_constraints?.facility_available),
+                    travel_distance_km: Number(confirmedCaps.delivery_constraints?.travel_distance_km) || 0,
+                    notes: String(confirmedCaps.delivery_constraints?.notes || "").slice(0, 200),
+                },
             }, {
                 headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},
             });
@@ -702,6 +734,69 @@ export default function TrainerDetail() {
                                         className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
                                         data-testid="claim-serviced-suburbs"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Delivery Constraints & Logistics */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Delivery Constraints &amp; Logistics
+                                </label>
+                                <div className="space-y-2 border border-[#E5DFD3] rounded-lg p-2.5 bg-white">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(confirmedCaps.delivery_constraints?.in_home_available)}
+                                                onChange={(e) => updateDeliveryConstraint("in_home_available", e.target.checked)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid="claim-delivery-in-home"
+                                            />
+                                            <span>In-home visits</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(confirmedCaps.delivery_constraints?.facility_available)}
+                                                onChange={(e) => updateDeliveryConstraint("facility_available", e.target.checked)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid="claim-delivery-facility"
+                                            />
+                                            <span>Facility / centre</span>
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-[#E5DFD3]/60">
+                                        <div>
+                                            <label className="block text-[11px] font-medium text-[#4A615A] mb-1">
+                                                Max Travel Distance (km)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="200"
+                                                step="1"
+                                                value={confirmedCaps.delivery_constraints?.travel_distance_km ?? 0}
+                                                onChange={(e) => updateDeliveryConstraint("travel_distance_km", parseFloat(e.target.value) || 0)}
+                                                placeholder="0"
+                                                className="w-full text-xs p-1.5 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                                data-testid="claim-delivery-distance"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-medium text-[#4A615A] mb-1">
+                                                Delivery / Travel Notes
+                                            </label>
+                                            <input
+                                                type="text"
+                                                maxLength={200}
+                                                value={confirmedCaps.delivery_constraints?.notes || ""}
+                                                onChange={(e) => updateDeliveryConstraint("notes", e.target.value)}
+                                                placeholder="e.g. In-home visits within 15km; parking required"
+                                                className="w-full text-xs p-1.5 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                                data-testid="claim-delivery-notes"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

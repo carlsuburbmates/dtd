@@ -750,6 +750,8 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert "puppy_training" in prefill["prefilled"]["specialties"]
     assert "barking" in prefill["prefilled"]["specialties"]
     assert "specialties" in prefill["canonical_options"]
+    assert "delivery_constraints" in prefill["prefilled"]
+    assert "in_home_available" in prefill["prefilled"]["delivery_constraints"]
 
     # Step 2B: Confirmation statement is required (false raises 400/422)
     with pytest.raises(HTTPException) as exc_info:
@@ -767,7 +769,7 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
         )
     assert exc_info.value.status_code in (400, 422)
 
-    # Step 2C: Successful confirmation - sends every matchable declared field (P0 Item 4)
+    # Step 2C: Successful confirmation - sends every matchable declared field (P0 Item 4 / R2)
     confirm_res = asyncio.run(
         server.confirm_trainer_capabilities(
             trainer_id,
@@ -779,6 +781,12 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
                 training_philosophy="positive_reinforcement_force_free",
                 serviced_suburbs=["Brunswick", "Carlton"],
                 catchment_type="specific_suburbs",
+                delivery_constraints={
+                    "in_home_available": True,
+                    "facility_available": True,
+                    "travel_distance_km": 25.0,
+                    "notes": "Travels up to 25km with travel fee",
+                },
             ),
             request=mock_req,
             x_trainer_claim_session=claim_token,
@@ -799,6 +807,12 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert set(updated_caps["life_stages"]["value"]) == {"puppy", "adolescent"}
     assert updated_caps["training_philosophy"]["basis"] == "trainer_declaration"
     assert updated_caps["training_philosophy"]["value"] == "positive_reinforcement_force_free"
+    assert updated_caps["delivery_constraints"]["basis"] == "trainer_declaration"
+    assert updated_caps["delivery_constraints"]["permitted_in_projection"] is True
+    assert updated_caps["delivery_constraints"]["value"]["in_home_available"] is True
+    assert updated_caps["delivery_constraints"]["value"]["facility_available"] is True
+    assert updated_caps["delivery_constraints"]["value"]["travel_distance_km"] == 25.0
+    assert updated_caps["delivery_constraints"]["value"]["notes"] == "Travels up to 25km with travel fee"
 
     # Projection is now match-eligible
     trainer_doc["capabilities"] = updated_caps
@@ -807,6 +821,7 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert set(proj["specialties"]) == {"puppy_training", "obedience"}
     assert set(proj["service_formats"]) == {"in_home"}
     assert set(proj["life_stages"]) == {"puppy", "adolescent"}
+    assert proj["delivery_constraints"]["travel_distance_km"] == 25.0
 
 
 def test_raw_legacy_record_without_provenance_never_becomes_matchable():

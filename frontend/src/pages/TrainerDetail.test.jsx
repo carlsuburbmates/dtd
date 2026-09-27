@@ -112,6 +112,22 @@ describe("TrainerDetail ownership claim", () => {
         expect(view.container.querySelector("[data-testid='claim-capabilities-step']")).not.toBeNull();
         expect(view.container.textContent).toContain("Step 2: Declare Capabilities");
 
+        // Verify delivery constraints controls are present and editable
+        const inHomeCheck = view.container.querySelector("[data-testid='claim-delivery-in-home']");
+        const facilityCheck = view.container.querySelector("[data-testid='claim-delivery-facility']");
+        const distanceInput = view.container.querySelector("[data-testid='claim-delivery-distance']");
+        const notesInput = view.container.querySelector("[data-testid='claim-delivery-notes']");
+        expect(inHomeCheck).not.toBeNull();
+        expect(facilityCheck).not.toBeNull();
+        expect(distanceInput).not.toBeNull();
+        expect(notesInput).not.toBeNull();
+
+        act(() => {
+            facilityCheck.click();
+            changeValue(distanceInput, "25");
+            changeValue(notesInput, "Travels up to 25km with travel fee");
+        });
+
         const confirmCheck = view.container.querySelector("[data-testid='claim-confirm-statement']");
         const confirmBtn = view.container.querySelector("[data-testid='claim-confirm-submit']");
         expect(confirmCheck).not.toBeNull();
@@ -136,6 +152,12 @@ describe("TrainerDetail ownership claim", () => {
                 training_philosophy: expect.any(String),
                 serviced_suburbs: expect.any(Array),
                 catchment_type: expect.any(String),
+                delivery_constraints: expect.objectContaining({
+                    in_home_available: true,
+                    facility_available: true,
+                    travel_distance_km: 25,
+                    notes: "Travels up to 25km with travel fee",
+                }),
             }),
             expect.objectContaining({ headers: { "X-Trainer-Claim-Session": "claim-session-token" } })
         );
