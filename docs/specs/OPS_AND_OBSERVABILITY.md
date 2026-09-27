@@ -9,6 +9,7 @@ DTD has one non-technical operator. `/ops` is the single action and evidence sur
 - Public posture and commercial gates.
 - Trainer acquisition, review, publication and suppression state.
 - Enquiry/matching cases and follow-up state.
+- Matching decision-state distribution, AI/fallback degradation, thin-supply expansion, capability-data freshness and urgent-support directory/provider exceptions.
 - Message delivery failures, retries and fallbacks.
 - Billing, trial, webhook, refund and reactivation exceptions.
 - Suburb and sponsor inventory source/capacity.
@@ -45,6 +46,15 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 - Sentry must initialise in the process actually serving production requests before being called active.
 - First-party attribution remains privacy-bounded and is not operational authority; Stripe and DTD persistence remain the sources of truth for monetisation reporting.
 - Add charts only where they reduce operator effort; a second operator system is not allowed.
+
+## Matching and urgent-support operating contract
+
+Matching must expose evidence rather than a black-box score: decision-policy version, consent/retention metadata, search scope, triage state, eligible-candidate count, AI or deterministic-fallback path, reason codes, presented result IDs and degraded status. The surface must not reveal behavioural descriptions or other private owner content.
+
+- Capability exceptions show the affected trainer field, evidence basis, freshness state, suppression/invalidating event and the bounded recovery action; `/ops` must not silently turn stale or unsupported data into matchable capacity.
+- AI timeout, rate-limit, malformed-output and parity-evaluation failures become visible exceptions. A fallback response is not evidence that the model path is healthy.
+- Urgent-support operations show provider-directory freshness, declared coverage gaps, correction/removal requests, source failures and Maps/Places degradation separately from DTD directory facts. Google session content is never persisted in the operating record as a DTD provider fact.
+- Outcome and follow-up operations show consent, retry, suppression and terminal failure states. Outcome data cannot be surfaced as a fit advantage until the separately specified attribution, sample, freshness, anti-gaming and appeal contract is accepted.
 
 ## Credential and provider resilience
 

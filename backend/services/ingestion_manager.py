@@ -42,6 +42,7 @@ from .trainer_quality import (
     find_existing_trainer,
     is_claimed_profile,
     now_iso,
+    package_trainer_capabilities,
     publishing_quality,
     record_ingestion_failure,
     record_ingestion_success,
@@ -368,6 +369,15 @@ async def run_batch_ingestion_pipeline(
 
             # 6. New Profile Insertion
             trainer_id = f"trainer_{hashlib.sha1(url.encode('utf-8')).hexdigest()[:12]}"
+            ai_capabilities = package_trainer_capabilities(
+                specialties=candidate_doc.get("specialties"),
+                service_formats=candidate_doc.get("service_formats"),
+                training_philosophy=candidate_doc.get("philosophy"),
+                serviced_suburbs=[suburb] if suburb else [],
+                basis="ai_proposed",
+                evidence_reference=url,
+                confirmed_at=retrieved_at,
+            )
             new_trainer: Dict[str, Any] = {
                 "id": trainer_id,
                 "name": name,
@@ -380,6 +390,7 @@ async def run_batch_ingestion_pipeline(
                 "specialties": candidate_doc["specialties"],
                 "service_formats": candidate_doc["service_formats"],
                 "philosophy": candidate_doc["philosophy"],
+                "capabilities": ai_capabilities,
                 "bio": f"Professional dog training services based in {suburb}, Melbourne.",
                 "image_url": "",
                 "source_evidence_url": url,

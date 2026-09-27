@@ -12,7 +12,7 @@ This specification governs how DTD discovers, verifies, enriches, publishes, ref
 4. Association/partner feeds only under explicit permission or compatible terms.
 5. Bounded manual URL curation as a temporary bridge.
 
-ABR is approved for statutory ABN/name/status verification, not discovery. Google Places/Maps content and Gemini Search Grounding are excluded from persistent acquisition. Generic SERP scraping and unapproved directory copying are excluded.
+ABR is approved for statutory ABN/name/status verification, not discovery. Google Places/Maps content and Gemini Search Grounding are excluded from persistent acquisition. CDR-020 allows a separate, session-scoped Google-attributed Maps/Places urgent-support discovery/navigation surface, subject to the applicable product terms; it cannot create or update DTD trainer/provider records, claims, AI inputs, model evaluation/training or rankings. Generic SERP scraping and unapproved directory copying are excluded.
 
 ## Current operating modes
 
@@ -61,10 +61,31 @@ This mode is designed but remains disabled until a licensed source contract, ada
 10. **Trainer control:** claim, correct and remove paths remain available.
 11. **Refresh:** source-specific cadence and deletion/correction obligations apply; stale evidence surfaces in `/ops`.
 
+## Match-ready capability projection
+
+Acquisition and owner-to-trainer matching are connected but remain separate workflows. Acquisition establishes and maintains trainer facts through authorised official-source capture and the trainer's own onboarding/claim declaration. Matching consumes a deterministic, versioned projection of those facts; it does not discover, infer or repair them while serving an owner.
+
+1. **Identity and lifecycle gates:** publication, suppression/delisting, policy state, statutory identity/status where required, contact readiness and source freshness determine whether a trainer can enter the matchable pool.
+2. **Matchable capability facts:** only field-level, source-backed or trainer-confirmed facts may support matching: serviced suburbs/catchment, supported service formats, specialties, stated training philosophy/method boundaries and explicitly modelled availability constraints. Each must retain its source/evidence reference, retrieval or confirmation time, normalised value and evidence state.
+3. **Non-matchable data:** paid tier, sponsorship, billing state, marketing prose, unverified reviews, generic profile completeness, AI confidence and unsupported inferences never enter eligibility or raw fit. They may have separate presentation or operational roles only where another contract expressly permits them.
+4. **Automation boundary:** Gemini may structure an already lawful source into a proposed field value, but the acquisition quality gate—not Gemini—determines whether that field becomes matchable. A correction, suppression, failed refresh or stale capability fact removes or limits that fact from the projection and is visible in `/ops`.
+5. **Matching boundary:** Gemini receives only the eligible candidate set and the permitted projected fields. It cannot add a specialty, widen a catchment, infer a service format or promote a profile whose required matching facts are unknown, stale or unsupported.
+
+The matching decision contract must define the per-concern minimum evidence required before a trainer may be considered. The implementation may materialise this as a projection or derive it from canonical trainer records, but it must preserve the same field-level provenance, invalidation and audit evidence.
+
+### Trainer capability declaration
+
+Trainer onboarding and claim/update flows must collect a structured, explicit capability declaration. It is a first-class source of matching capacity, not optional marketing copy. A trainer declares and confirms the areas they serve, service formats, concerns/specialties, supported dog life stages where relevant, training philosophy/method boundaries, in-home or facility constraints, and any material availability constraints. The declaration must explain that these answers affect the owner requests for which DTD may consider the trainer.
+
+Authorised acquisition may prefill these values from an official source, but the trainer can confirm, correct or complete them. The persisted field record identifies whether its basis is `official_source` or `trainer_declaration`, who or what last confirmed it, and when. A trainer update supersedes the earlier capability declaration for matching once it passes deterministic validation; a correction, suppression or stale-field rule can remove it from matching capacity.
+
+Free text may explain a declared capability or be used to propose normalised values for trainer confirmation. It cannot alone create an unbounded specialty, service area or method claim. Paid tier never changes the declaration's matching effect.
+
 ## Source decisions
 
 - Sensis/Thryv SAPI is confirmed discontinued as of 11 September 2026; it is not a current licensed-source candidate.
 - Google Web Search Products outreach is closed: the available offers were not a viable or approved discovery authority, and Grounded Generation remains excluded under CDR-008.
+- The CDR-020 Maps/Places exception is not an acquisition-source approval. It is available only after its isolated urgent-support UI has passed product-specific terms, attribution, retention/caching, privacy and sandbox checks; it does not authorise the legacy trainer-discovery adapter.
 - MacroMatch/TotalCheck may be considered for validation only; they are not assumed discovery feeds.
 - A new source requires a named decision record before network use or persistence.
 

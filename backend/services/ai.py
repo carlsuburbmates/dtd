@@ -32,6 +32,11 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+try:
+    from services.trainer_quality import build_match_ready_projection  # type: ignore
+except ImportError:
+    from backend.services.trainer_quality import build_match_ready_projection  # type: ignore
+
 # Configuration contract from DTD Google Ecosystem Migration Spec
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 GEMINI_TIMEOUT_S = float(os.environ.get("GEMINI_TIMEOUT_S", "5.0"))
@@ -635,29 +640,35 @@ def route_extraction_confidence(conf: float) -> str:
 
 
 def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deterministic keyword overlap matching (paid tier is NEVER used)."""
+    """Deterministic keyword overlap matching based strictly on capability facts (bio & paid tier are EXCLUDED)."""
     q = (query or "").lower()
     tokens = [tok for tok in set(q.split()) if len(tok) > 3]
     scored: List[Dict[str, Any]] = []
     for t in trainers:
+        proj = t if "projection_version" in t else build_match_ready_projection(t)
+        if not proj.get("match_eligible"):
+            continue
+
         words = (
-            (t.get("name") or "")
+            (proj.get("name") or "")
             + " "
-            + (t.get("suburb") or "")
+            + (proj.get("suburb") or "")
             + " "
-            + " ".join(t.get("services") or [])
+            + " ".join(proj.get("specialties") or [])
             + " "
-            + " ".join(t.get("categories") or [])
+            + " ".join(proj.get("service_formats") or [])
             + " "
-            + " ".join(t.get("specialties") or [])
+            + " ".join(proj.get("life_stages") or [])
             + " "
-            + (t.get("bio") or "")
+            + (proj.get("training_philosophy") or "")
+            + " "
+            + " ".join(proj.get("serviced_suburbs") or [])
         ).lower()
         hits = sum(1 for tok in tokens if tok in words)
         score = min(1.0, 0.40 + 0.15 * hits) if hits > 0 else 0.40
         scored.append(
             {
-                "trainer_id": t.get("id"),
+                "trainer_id": proj.get("trainer_id") or t.get("id"),
                 "score": round(score, 2),
                 "reasoning": f"Deterministic keyword match ({hits} topic overlaps detected) for owner enquiry.",
             }
@@ -687,11 +698,12 @@ EXTRACTION_SYSTEM = (
 MATCH_SYSTEM = (
     "You are a calm, expert dog-training diagnostic advisor in Greater Melbourne, Australia. "
     "Given a list of candidate trainers "
-    "(each with id, name, suburb, specialties, service_formats, training_philosophy, bio) "
+    "(each with id, name, suburb, specialties, service_formats, training_philosophy, life_stages, serviced_suburbs) "
     "and a dog owner's enquiry, assess the best diagnostic fit based strictly on clinical, behavioral, "
     "and logistical relevance. "
     "RANKING INTEGRITY RULE: Paid tier or sponsorship MUST NEVER influence match fit — judge purely on "
     "dog needs and trainer capability. "
+    "PROJECTION RULE: Freeform marketing bio, unverified claims, and commercial tiers are excluded. Reason only from structured capability facts. "
     "Return ONLY a JSON array of up to 3 objects with keys:\n"
     "  - trainer_id: string\n"
     "  - score: float (0.0 to 1.0)\n"
@@ -825,21 +837,29 @@ async def match_trainers(
     if not trainers:
         return []
 
-    # Clean candidate payload: deliberately strip 'tier', 'billing_status', or sponsorship flags
+    # Clean candidate payload: project through build_match_ready_projection
+    # Deliberately exclude bio, tier, billing_status, pricing, or confidence scores
     candidates = []
     candidate_ids: Set[str] = set()
     for t in trainers:
-        t_id = str(t.get("id") or "")
+        proj = t if "projection_version" in t else build_match_ready_projection(t)
+        if not proj.get("match_eligible"):
+            continue
+        t_id = str(proj.get("trainer_id") or t.get("id") or "")
         candidate_ids.add(t_id)
         candidates.append({
             "id": t_id,
-            "name": t.get("name"),
-            "suburb": t.get("suburb"),
-            "specialties": t.get("specialties") or t.get("services") or [],
-            "service_formats": t.get("service_formats") or [],
-            "training_philosophy": t.get("training_philosophy") or "",
-            "bio": t.get("bio") or "",
+            "name": proj.get("name"),
+            "suburb": proj.get("suburb"),
+            "specialties": proj.get("specialties") or [],
+            "service_formats": proj.get("service_formats") or [],
+            "training_philosophy": proj.get("training_philosophy") or "",
+            "life_stages": proj.get("life_stages") or [],
+            "serviced_suburbs": proj.get("serviced_suburbs") or [],
         })
+
+    if not candidates:
+        return []
 
     operation = "diagnostic_matching"
     try:

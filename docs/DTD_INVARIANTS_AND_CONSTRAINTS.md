@@ -12,14 +12,14 @@ These rules apply in every phase. A proposed feature that conflicts with one req
 ## Matching and fairness
 
 5. Behavioural and service fit is calculated without paid status.
-6. Paid status may act only as the documented tiebreak inside the five-point comparable-fit band.
+6. Paid status may act only as the documented tiebreak for candidates within `0.05` (five percentage points) of the highest final fit.
 7. Safety, policy, suppression and eligibility gates outrank commercial priority.
 
 ## Acquisition and data authority
 
 8. Persistent trainer inventory may originate only from first-party submission/claim, an owner-authorised official URL, or an explicitly approved official/licensed source.
 9. ABR verifies statutory identity/status; it is not a trainer-discovery or service-quality source.
-10. Gemini may structure facts from an already-lawful source. AI confidence, Search Grounding and Places/Maps content are not acquisition authority.
+10. Gemini may structure facts from an already-lawful source. AI confidence and Search Grounding are not acquisition authority. Places/Maps content is not authority for persistent trainer or urgent-provider inventory, DTD claims, AI input, model evaluation/training or ranking. CDR-020 permits only a terms-compliant, session-scoped, Google-attributed urgent-support discovery/navigation surface; it creates no DTD provider fact.
 11. Every ingested profile carries source evidence, retrieval time, quality outcome and suppression checks. Trainers retain correction, claim and removal paths.
 12. Credentials and private provider data never enter documentation, manifests or public evidence.
 

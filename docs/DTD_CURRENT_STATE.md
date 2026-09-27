@@ -25,7 +25,7 @@
 ## Dog-owner workflows
 
 - Directory browsing, filters, trainer profiles and direct protected enquiries are implemented.
-- Guided matching calculates trainer fit independently of paid status. A paid-tier preference can reorder only trainers within the five-point comparable-fit band.
+- Guided matching calculates trainer fit independently of paid status. A paid-tier preference can reorder only trainers within `0.05` (five percentage points) of the highest final fit.
 - Outcome follow-up, waitlist and notification paths exist, but recent operator evidence includes failed messages and stale loops; unattended operation is not yet accepted.
 - Legacy education routes redirect to the separate First Leash site. Desktop/mobile primary navigation, the homepage hero/card/footer, and the campaign's education action link directly to First Leash's static root. The unused `POST /api/first-leash` capture model and route have been removed from the main API; the live OpenAPI contract no longer advertises that route.
 
@@ -48,7 +48,7 @@
 - Twenty authorised Greater Melbourne profiles were locally built from owner-approved official trainer websites plus ABR identity/status evidence.
 - First-party trainer submission is the active growth path.
 - Post-launch autonomous acquisition is designed but not production-enabled. It lacks an approved licensed discovery contract, production adapter evidence and an explicit activation decision.
-- Gemini may structure a lawfully obtained URL; it is not authority to discover or persist trainer inventory. Google Places/Maps and Search Grounding are excluded as persistent acquisition feeds.
+- Gemini may structure a lawfully obtained URL; it is not authority to discover or persist trainer inventory. Search Grounding remains excluded. CDR-020 permits a future, session-only, Google-attributed urgent-support Maps/Places surface, but no such feature is implemented and Maps/Places remains excluded as a persistent acquisition feed.
 
 ## Operations and observability
 
@@ -159,10 +159,10 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-011 — Frontend configuration fallback and public route metadata gaps
 
 - **Observed/status:** 25 September 2026 — open; identified during frontend and location-surface audit.
-- **Evidence:** `frontend/src/pages/Home.jsx` defaults a failed or incomplete `/config` response to `public_matching_enabled=true`, `public_launch_phase=live_matching` and trainer onboarding open. A local Chrome render with the frontend server running but no API config response displayed the live matching form, confirming the fallback is permissive. The same component loads `config.suburbs` into `matchSuburbs` but renders no `datalist` with the referenced `home-suburbs` id, so the homepage suburb suggestion path is disconnected. Its description and suburb controls also rely on placeholders rather than associated visible labels. `frontend/src/pages/Trainers.jsx` is the only reviewed public route that sets `document.title`; the other public routes, including `/melbourne/:suburb` and trainer profiles, inherit the static title/description from `frontend/public/index.html` and do not set route-specific canonical metadata.
+- **Evidence:** `frontend/src/pages/Home.jsx` defaults a failed or incomplete `/config` response to `public_matching_enabled=true`, `public_launch_phase=live_matching` and trainer onboarding open. A local Chrome render with the frontend server running but no API config response displayed the live matching form, confirming the fallback is permissive. The same component loads `config.suburbs` into `matchSuburbs` but renders no `datalist` with the referenced `home-suburbs` id, so the homepage suburb suggestion path is disconnected. Its description and suburb controls also rely on placeholders rather than associated visible labels. Its error and newly loaded match-result regions also have no live-announcement semantics, so assistive technology is not reliably told about a validation failure or new results. `frontend/src/pages/Trainers.jsx` is the only reviewed public route that sets `document.title`; the other public routes, including `/melbourne/:suburb` and trainer profiles, inherit the static title/description from `frontend/public/index.html` and do not set route-specific canonical metadata.
 - **Impact/uncertainty:** an API/configuration outage can expose a matching surface whose runtime state has not been confirmed, while the homepage location input and route-level search metadata are weaker than the intended local-discovery and SEO contracts. The audit did not establish whether Firebase/Cloud Run production currently exercises the failure path.
 - **Why deferred:** this was a read-only audit. Choosing the outage posture (fail closed, waitlist, or explicit unavailable state), changing public form semantics, and adding route metadata are product/SEO changes requiring a bounded implementation decision and live acceptance.
-- **Next action:** choose and document the safe config-failure posture, then connect the canonical suburb catalogue to an accessible suggestion control, add associated form labels, add route-specific title/description/canonical handling, and cover config failure/partial-config and metadata behaviour with frontend tests before live verification.
+- **Next action:** choose and document the safe config-failure posture, then connect the canonical suburb catalogue to an accessible suggestion control, add associated form labels and described error states, make match-error and result updates discoverable to assistive technology, add route-specific title/description/canonical handling, and cover config failure/partial-config and metadata behaviour with frontend tests before live verification.
 
 ### DF-012 — Cloud Run source-release build identity lacked least-privilege deployment access
 
@@ -186,7 +186,7 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** `backend/services/engine.py` `reverify_listings` derives `published` from an AI confidence threshold and updates `published`, `verification_status` and `contact_ready` for selected existing trainer records. This conflicts with the acquisition invariant that AI confidence is not publication, verification or contact authority.
 - **Impact/uncertainty:** a stale listing could be published, hidden or made contact-ready by model output without newly obtained statutory/source evidence. The rebaseline has not yet queried production to identify whether any live records were affected.
 - **Why deferred:** correcting the loop requires a bounded workflow redesign and a read-only production impact assessment before any record-level remediation. That is implementation work for the next approved trust-authority package, not an audit-side data change.
-- **Next action:** make re-verification create a review/hold outcome unless independently evidenced authority permits a state transition; add high-confidence-without-evidence regression coverage; then perform a read-only production impact query and define any remediation separately.
+- **Next action:** make re-verification create a review/hold outcome unless independently evidenced authority permits a state transition; add high-confidence-without-evidence regression coverage; then perform a read-only production impact query and define any remediation separately. This is a prerequisite for matching roadmap M1/M3 acceptance because eligibility cannot depend on AI-derived publication or contact authority.
 
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
@@ -194,12 +194,92 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** `frontend/src/pages/Home.jsx` links a match result to `/t/:id` with both the opaque match identifier and the owner's free-text description in a `q` query parameter. `frontend/src/pages/TrainerDetail.jsx` reads that parameter. The submitted description can therefore enter browser history, referrer handling and copied URLs.
 - **Impact/uncertainty:** behavioural information is unnecessarily exposed outside the match request/persistence boundary. The code establishes the exposure; this audit did not submit real owner data to test the live path.
 - **Why deferred:** the safe repair needs an end-to-end match-context design that preserves match → profile → enquiry without a public description parameter, plus tamper/foreign-match handling tests.
-- **Next action:** retain only safe opaque match context in the browser, keep description server-side with the match record, test privacy and authorisation failure paths, then verify the full journey in sandbox before release.
+- **Next action:** retain only safe opaque match context in the browser, keep description server-side with the match record, test privacy and authorisation failure paths, then verify the full journey in sandbox before release. Matching roadmap M2/M5/M9 own the connected privacy and end-to-end evidence.
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
 - **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline.
-- **Evidence:** `frontend/src/pages/TrainerDetail.jsx` labels paid Pro status as `Verified Pro`. Public pages also claim universal checks of credentials, insurance, affiliations, continuing education or ethical practices, while the current acquisition/trust authority documents support bounded source, ABR and review evidence rather than those universal claims.
+- **Evidence:** `frontend/src/pages/TrainerDetail.jsx` labels paid Pro status as `Verified Pro`. The matching homepage calls results a "vetted network" and says every trainer is reviewed; `HowItWorks.jsx` and `Trust.jsx` describe every listing as manually or strictly verified. Public pages also claim universal checks of credentials, insurance, affiliations, continuing education or ethical practices, while the current acquisition/trust authority documents support bounded source, ABR and review evidence rather than those universal claims.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
-- **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release.
+- **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release. Matching roadmap M5/M9 own the result/profile handoff portion of this correction.
+
+### DF-017 — Failed owner follow-ups cannot retry
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner–trainer matching contextualisation. No provider or production mutation was performed.
+- **Evidence:** `backend/services/automation.py` records both HTTP and transport failures as `t7_hire_check` outreach events. On later runs it skips an introduction whenever any event of that kind exists, irrespective of status. `backend/server.py` also creates a unique `(intro_id, kind)` index, so a second event cannot be inserted for the same follow-up. The focused email test covers successful delivery payload construction but does not cover failed-then-retry behaviour.
+- **Impact/uncertainty:** an owner whose T+7 follow-up fails receives no automated retry or alternative recovery path. The failure can remain visible through message/Operations evidence, but the loop cannot resolve it itself; current repository evidence does not establish the number of production records affected.
+- **Why deferred:** this contextualisation pass does not change owner communications, production data, provider configuration or scheduling.
+- **Next action:** make the follow-up lifecycle distinguish pending, retryable failure, delivered and terminal suppression states; add bounded backoff and a clear Operations recovery action; preserve no-duplicate delivery after success; add failure-to-retry unit coverage and sandbox verification with a simulated provider failure before any production promotion.
+
+### DF-018 — Public matching input lacks bounded, literal request handling
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner–trainer matching contextualisation. No live traffic, provider or data mutation was performed.
+- **Evidence:** `InstantMatchIn.description` accepts only a minimum length, with no maximum, and `/match` persists that value then includes it in the AI prompt. The same public endpoint has no application-level request throttle in the reviewed route/service path. Its optional suburb value is interpolated directly into a MongoDB regular expression, unlike the directory filter path which uses `re.escape`; it is neither bounded nor validated against the canonical locality catalogue. The intro anti-fraud limit applies only after an owner proceeds to an introduction, not to matching requests.
+- **Impact/uncertainty:** a public caller can submit unnecessarily large or repeated matching requests, increasing provider/load exposure and retaining excessive free text. Regex metacharacters can also make a purported suburb filter behave as a pattern rather than an exact locality. An external edge control may exist, but it is not established by this repository evidence.
+- **Why deferred:** this contextualisation pass does not alter public validation, retention, rate limits, provider spend or production behaviour.
+- **Next action:** enforce a server-side description ceiling consistent with the enquiry contract, validate suburb input against the canonical catalogue or escape it before querying, add a bounded abuse-control limit before AI invocation, and cover oversized, metacharacter, unknown-suburb, duplicate and provider-degraded requests in unit and sandbox tests. Establish the matching-request retention period before changing stored-record cleanup.
+
+### DF-019 — Broader matching fallback is not disclosed to the owner
+
+- **Observed/status:** 26 September 2026 — open; repository and local owner-journey evidence confirmed. No external mutation was performed.
+- **Evidence:** when `/match` finds no trainer in the owner-supplied suburb, `backend/server.py` silently re-queries all eligible Greater Melbourne trainers. Its response contains only `match_id` and `matches`; `Home.jsx` renders the result cards without a search-scope or fallback indicator. This conflicts with the matching specification, which requires catchment expansion to remain visible and never imply local presence.
+- **Impact/uncertainty:** an owner can reasonably believe a result is local to their requested suburb when the platform has broadened the search area. The trainer-card suburb reduces the risk but does not explain why the local request changed scope.
+- **Why deferred:** this audit does not change public matching behaviour, copy or the API contract.
+- **Next action:** return an explicit applied-search scope and fallback reason from the matching API; show an owner-facing message when results come from broader Greater Melbourne coverage; add exact-suburb, expanded-scope and no-result tests across API and UI.
+
+### DF-020 — Live owner matching is not a coherent public navigation path
+
+- **Observed/status:** 26 September 2026 — open; confirmed in the local frontend owner journey and source review.
+- **Evidence:** the current runtime presents live matching, but the homepage hero makes trainer joining the dominant action and routes the owner CTA to directory browsing. The guided-match form appears later on the homepage without a direct owner-match anchor. Primary navigation sends `For owners` to `HowItWorks.jsx`, which describes browse/review/contact steps and returns "Start searching" to the top of the homepage rather than the form. The footer still labels an owner route `Waitlist` and targets `#owner-guide-waitlist`, which is absent from that page.
+- **Impact/uncertainty:** owners cannot reliably understand or reach the live guided-match path from the main navigation. The mixed browse, waitlist and live-match language weakens confidence and creates avoidable drop-off; the audit did not measure real conversion loss.
+- **Why deferred:** resolving hierarchy and routes is public product/UX work, outside this read-only audit.
+- **Next action:** define one owner entry path for live matching, give it a truthful direct navigation/CTA target, remove or replace the stale waitlist link, and verify desktop/mobile keyboard journeys from navigation through match form, result state and profile handoff.
+
+### DF-021 — The active documentation lacks an owner-match interface contract
+
+- **Observed/status:** 26 September 2026 — open; scope now defined, implementation contract still incomplete.
+- **Evidence:** `docs/specs/MATCHING_AND_RANKING.md` now establishes the Owner-to-Trainer Matching System workstream and its eligibility, fit and presentation separation. It still does not specify final public form copy, exact screen/API fields, consent language, loading/error/empty rendering or the completed enquiry/follow-up interface contract. Existing public pages and tests can therefore still drift independently from the matching contract.
+- **Impact/uncertainty:** future frontend or API work can preserve the score formula while breaking owner understanding, privacy or failure handling. The absence of a UI contract is not proof that every current owner response is wrong.
+- **Why deferred:** this audit records the missing authority; it does not invent final public copy or interaction design.
+- **Next action:** use the established matching-system workstream to define the versioned owner-facing workflow and API contract, then align implementation and sandbox verification to it.
+
+### DF-022 — Owner matching consent is enforced but not persisted as evidence
+
+- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner-journey audit.
+- **Evidence:** `/match` rejects a request unless `consent_match_processing` is true, but the persisted `match_events` record stores the description, suburb, campaign, source, result IDs and timestamp without the consent value, consent time, policy/version reference or retention deadline. The later protected enquiry correctly persists its separate contact-release and outcome-tracking consents, demonstrating the distinction.
+- **Impact/uncertainty:** DTD can enforce consent at request time but cannot later evidence which matching-consent terms applied to a retained behavioural description. This is a records/accountability gap; the audit did not query production records or assess applicable legal retention obligations.
+- **Why deferred:** the audit does not change consent language, stored owner data, retention or production records.
+- **Next action:** define the matching-consent record and retention contract, persist only the required sanitised evidence with new match events, apply any migration/remediation decision separately, and test consent rejection, persisted consent evidence and expiry/cleanup behaviour in sandbox.
+
+### DF-023 — AI-assisted matching has no contract-defined weak-evidence response
+
+- **Observed/status:** 27 September 2026 — open; CDR-024 corrects an earlier planning assumption that clarification, abstention or no-match was already selected.
+- **Evidence:** `backend/services/ai.py` currently asks Gemini to return one to three trainer IDs, scores and explanations directly from the owner description and supplied candidates. Its output validator rejects an empty list; on provider degradation, the deterministic fallback always returns up to three candidates with a `0.40` baseline score, including where there are no topic overlaps. There is no versioned Decision Contract that selects the response to ambiguous input, weak evidence, low supply, absent required capability evidence or provider degradation, nor a parity evaluation of that response across AI and fallback paths.
+- **Impact/uncertainty:** the current response is hard-coded rather than evidenced against a chosen product contract. It may or may not be appropriate once the owner-visible response is decided and evaluated; this finding is based on repository code, not live match outcomes.
+- **Why deferred:** establishing the operating model does not authorise a public matching, AI-provider, retention or deployment change. The repair requires a cohesive owner-flow and API redesign.
+- **Next action:** execute Decision Contract v2: select and version the response to ambiguous input, weak evidence, low supply, absent required capability evidence and provider degradation; preserve separate eligibility, fit and presentation layers; add same-fixture AI/fallback evaluation, API/UI tests and sandbox end-to-end evidence before release.
+
+### DF-024 — No urgent-support pathway or verified provider register exists
+
+- **Observed/status:** 26 September 2026 — open; owner-directed urgent-support route is now part of the matching-system target.
+- **Evidence:** the current `/match` request accepts only free-text description, optional suburb and matching consent. It routes every accepted request into the ordinary published-trainer pool and has no urgent-support states, provider-record type, official-source coverage register, dedicated public page, provider freshness check or safe AI response contract. Preliminary official-provider research confirms that emergency and extended-hours veterinary support is a distinct, location- and hours-sensitive service category; it does not establish DTD-wide coverage.
+- **Impact/uncertainty:** owners with an urgent concern have no purpose-built route and could receive an ordinary trainer shortlist instead of current contact information. Without a source-backed register, DTD cannot safely claim Melbourne-wide emergency coverage or provider availability.
+- **Why deferred:** creating this pathway requires new public safety content, provider-data sourcing and refresh controls, AI route constraints, UI/API/persistence/`/ops` changes and sandbox verification. This research did not create or publish provider records, contact providers or alter matching behaviour.
+- **Next action:** execute the urgent-support execution plan in `specs/MATCHING_AND_RANKING.md`: define approved states and copy, create the lawful official-source provider register and coverage matrix, implement AI/fallback routing fixtures, then deliver and verify the dedicated pathway in sandbox before any public release.
+
+### DF-025 — Bounded Maps/Places urgent-support exception is not implemented or verified
+
+- **Observed/status:** 26 September 2026 — open; CDR-020 changes the product direction but not the live source-approval or runtime state.
+- **Evidence:** `backend/data/ingestion_source_approvals.json` still marks `google_places` unapproved, and the existing `PlacesClient`/provider-ingestion path is a trainer-discovery adapter that requests and persists Google business fields. There is no urgent-support UI, session-only Maps/Places integration, selected-product terms assessment, attribution implementation, privacy disclosure, retention control or sandbox evidence.
+- **Impact/uncertainty:** enabling the old adapter would breach the narrow CDR-020 boundary and could turn transient Maps content into DTD inventory or AI/ranking input. Conversely, DTD cannot yet offer the intended live urgent-support navigation aid.
+- **Why deferred:** the owner changed the governing direction, not the public product or provider configuration. A compliant implementation needs a separate isolated UI/API design, product-specific terms and cost review, safety/privacy contract, degraded route and sandbox verification.
+- **Next action:** design the user-initiated urgent-support Maps/Places module as a separate vertical slice. Prove its Google attribution, data minimisation, no-persistence/no-AI boundary, owner-visible distinction from DTD recommendations, provider outage behaviour and `/ops` evidence before any approval-record or runtime change.
+
+### DF-026 — Trainer capability fields are not yet a match-ready projection with trainer declaration provenance
+
+- **Observed/status:** 26 September 2026 — open; CDR-021 and CDR-022 make acquisition and trainer declarations the authority for matchable trainer facts.
+- **Evidence:** the trainer submission model stores `training_philosophy`, `specialties`, `service_formats`, `serviced_suburbs` and `catchment_type`, and has a general information-accuracy consent. The acquisition workflow has source, quality, suppression and refresh controls. The current matching path does not yet consume a field-level capability-evidence state, source/declaration type, matching-specific trainer confirmation, freshness value or deterministic matchability projection; it passes broad profile fields into matching after coarse profile filtering.
+- **Impact/uncertainty:** a published profile may appear matchable even where the specific capability required by the owner is unsupported, stale or merely marketing text, and trainers cannot yet see or explicitly confirm the exact capability data that affects their matching capacity. Conversely, a valid trainer declaration may lack the normalised evidence needed for reliable automated matching. This is repository evidence, not a claim about every production trainer record.
+- **Why deferred:** defining structured declarations, field-level provenance, invalidation and per-concern minimum evidence is part of the corrected Owner-to-Trainer Matching Decision Contract and requires trainer onboarding, schema, acquisition, matching, AI/fallback, `/ops` and sandbox work.
+- **Next action:** define the match-ready capability projection and trainer declaration in the Decision Contract v2; map each field to its official-source or trainer-declaration basis, confirmation and freshness requirements; then implement and test onboarding/claim updates, acquisition-to-matching invalidation, no-match and correction/suppression branches in sandbox.

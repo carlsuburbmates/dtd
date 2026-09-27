@@ -24,7 +24,7 @@ Every verification step executes within the isolated developer staging sandbox:
 
 ## 2. Domain-Specific Verification Checklists
 
-Any modification touching the following 6 core functional areas must satisfy its verification gate in the sandbox before requesting production promotion:
+Any modification touching the following 7 core functional areas must satisfy its verification gate in the sandbox before requesting production promotion:
 
 ### Domain 1: Autonomous Acquisition & Data Ingestion
 *Targets: `scripts/enrich_profiles_gemini.py`, web scraping loops, ABR lookup services, trainer deduplication.*
@@ -72,6 +72,16 @@ Any modification touching the following 6 core functional areas must satisfy its
 - [ ] **Idempotent Actions:** Operator buttons and actions accept idempotent request tokens to prevent double-execution on button double-clicks.
 - [ ] **Audit Trail:** Every mutating `/ops` action writes an audit entry containing action name, operator identifier, timestamp, and payload diff.
 - [ ] **Sanitized Reporting:** Diagnostic and health outputs disclose system state (`database: available`, queue counts) without exposing credentials, connection strings, or customer PII.
+
+### Domain 7: Owner-to-Trainer Matching & Urgent Support
+*Targets: owner questionnaire and result states, match-ready capability projection, Gemini/fallback decision service, protected enquiry, urgent-support provider directory and optional session-only Maps/Places surface.*
+
+- [ ] **Decision-State Contract:** Validate required inputs, consent capture, the Decision Contract-selected weak-evidence and degraded responses, and urgent-route states on mobile and desktop. Behavioural descriptions never appear in URLs, logs exposed to operators or trainer-facing profile data.
+- [ ] **Eligibility and Capability Evidence:** Published/suppressed/contact/freshness/geography/service-format/capability gates fail closed. Trainer onboarding, acquisition refresh, correction and suppression correctly create or invalidate the match-ready projection.
+- [ ] **AI/Fallback Parity:** Fixtures prove that Gemini and deterministic fallback return compatible schemas, reason-code vocabularies and materially consistent results, including the Decision Contract-selected response to timeout, rate-limit and invalid JSON.
+- [ ] **Fair Presentation:** Paid tier cannot change eligibility or raw fit. Tests cover the exact `0.05` boundary, stable non-commercial ties, fewer than three suitable candidates and disclosed expansion only when fewer than three trainers pass the local eligibility gates.
+- [ ] **Urgent Support Boundaries:** Approved urgent routes use versioned copy and official-source provider facts with freshness/correction handling. If the optional Maps/Places surface is enabled, test attribution, user initiation, session-only data handling, no AI/ranking input, no DTD-provider persistence and a truthful provider-outage route.
+- [ ] **Ops and Follow-up Evidence:** `/ops` exposes sanitised decision, degradation, provider freshness, capability invalidation and follow-up retry/terminal states without private owner data.
 
 ---
 

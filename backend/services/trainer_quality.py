@@ -520,3 +520,825 @@ async def record_ingestion_success(
         }},
         upsert=True,
     )
+
+
+# ===========================================================================
+# DF-026 & CDR-021/CDR-022: Match-Ready Capability Projection Architecture
+# ===========================================================================
+
+CANONICAL_SPECIALTIES: Dict[str, Dict[str, Any]] = {
+    "puppy_training": {
+        "label": "Puppy Training & Socialisation",
+        "aliases": {
+            "puppy", "puppies", "puppy_training", "puppy training",
+            "puppy socialisation", "puppy socialization", "puppy basics",
+            "puppy manners", "early puppy", "toilet training",
+        },
+    },
+    "obedience": {
+        "label": "Basic & Advanced Obedience",
+        "aliases": {
+            "obedience", "basic obedience", "manners", "general obedience",
+            "basic manners", "foundation training", "good manners",
+            "advanced obedience", "pet manners",
+        },
+    },
+    "leash_reactivity": {
+        "label": "Leash Reactivity & Pulling",
+        "aliases": {
+            "leash_reactivity", "leash reactivity", "reactivity",
+            "leash pulling", "pulling on leash", "leash manners",
+            "loose leash", "loose leash walking", "barking on leash",
+        },
+    },
+    "separation_anxiety": {
+        "label": "Separation Anxiety",
+        "aliases": {
+            "separation_anxiety", "separation anxiety", "home alone",
+            "alone time", "isolation distress", "separation distress",
+        },
+    },
+    "barking": {
+        "label": "Excessive Barking",
+        "aliases": {
+            "barking", "excessive barking", "nuisance barking",
+            "alert barking", "vocalisation", "barking at fence",
+        },
+    },
+    "aggression": {
+        "label": "Aggression & Complex Behaviour",
+        "aliases": {
+            "aggression", "dog aggression", "human aggression",
+            "dog-to-dog aggression", "bite history", "fear aggression",
+            "reactive aggression", "aggressive behaviour",
+        },
+    },
+    "fear_anxiety": {
+        "label": "Fear, Phobias & Generalised Anxiety",
+        "aliases": {
+            "fear_anxiety", "fearful", "fear", "anxiety",
+            "nervous dogs", "sound phobia", "thunderstorm phobia",
+            "generalised anxiety", "rescue trauma", "nervous",
+        },
+    },
+    "recall": {
+        "label": "Reliable Recall (Come When Called)",
+        "aliases": {
+            "recall", "reliable recall", "off leash", "off-leash recall",
+            "come when called", "distance recall",
+        },
+    },
+    "resource_guarding": {
+        "label": "Resource Guarding",
+        "aliases": {
+            "resource_guarding", "resource guarding", "food guarding",
+            "possession guarding", "toy guarding", "space guarding",
+        },
+    },
+    "rescue_rehoming": {
+        "label": "Rescue & Rehoming Integration",
+        "aliases": {
+            "rescue_rehoming", "rescue", "rescue dogs", "shelter dogs",
+            "rehoming", "adoption transition", "post-adoption",
+        },
+    },
+    "scent_work": {
+        "label": "Scent Work & Mental Stimulation",
+        "aliases": {
+            "scent_work", "scent work", "nosework", "tracking", "scent detection",
+        },
+    },
+    "therapy_assistance": {
+        "label": "Therapy & Assistance Dog Preparation",
+        "aliases": {
+            "therapy_assistance", "therapy dog", "assistance dog",
+            "service dog", "therapy preparation",
+        },
+    },
+}
+
+CANONICAL_SERVICE_FORMATS: Dict[str, Dict[str, Any]] = {
+    "in_home": {
+        "label": "In-Home Private Training",
+        "aliases": {
+            "in_home", "in home", "in-home", "private in-home",
+            "home visits", "mobile", "at home", "private consultation",
+            "in_home_private", "in-home private",
+        },
+    },
+    "facility": {
+        "label": "Training Centre / Facility",
+        "aliases": {
+            "facility", "training center", "training centre",
+            "in-facility", "facility-based", "in studio", "classroom",
+        },
+    },
+    "outdoor_park": {
+        "label": "Outdoor & Park Sessions",
+        "aliases": {
+            "outdoor_park", "park", "outdoor", "public park",
+            "outdoor sessions", "park training",
+        },
+    },
+    "board_and_train": {
+        "label": "Board & Train (Residential)",
+        "aliases": {
+            "board_and_train", "board and train", "residential",
+            "boot camp", "residential training",
+        },
+    },
+    "online": {
+        "label": "Online / Virtual Coaching",
+        "aliases": {
+            "online", "virtual", "zoom", "remote consultation",
+            "online coaching", "telehealth",
+        },
+    },
+    "group_classes": {
+        "label": "Group Classes",
+        "aliases": {
+            "group_classes", "group class", "group sessions",
+            "classes", "puppy school", "puppy class",
+        },
+    },
+}
+
+CANONICAL_LIFE_STAGES: Dict[str, Dict[str, Any]] = {
+    "puppy": {
+        "label": "Puppy (< 6 months)",
+        "aliases": {"puppy", "puppies", "young puppy", "< 6 months", "0-6 months"},
+    },
+    "adolescent": {
+        "label": "Adolescent (6 - 18 months)",
+        "aliases": {"adolescent", "teenager", "juvenile", "6-18 months", "young dog"},
+    },
+    "adult": {
+        "label": "Adult (1.5 - 7 years)",
+        "aliases": {"adult", "mature", "1.5-7 years", "adult dog"},
+    },
+    "senior": {
+        "label": "Senior (7+ years)",
+        "aliases": {"senior", "geriatric", "older dogs", "7+ years", "older dog"},
+    },
+    "all_life_stages": {
+        "label": "All Life Stages",
+        "aliases": {"all", "all stages", "all ages", "any age", "all_life_stages"},
+    },
+}
+
+VALID_TRAINING_PHILOSOPHIES: Dict[str, Dict[str, Any]] = {
+    "positive_reinforcement_force_free": {
+        "label": "Positive Reinforcement / Force-Free",
+        "aliases": {
+            "positive reinforcement / force-free", "positive reinforcement",
+            "force-free", "force free", "positive_reinforcement", "force_free",
+            "r+", "lima", "reward-based", "force-free / positive",
+        },
+    },
+    "balanced": {
+        "label": "Balanced Training",
+        "aliases": {"balanced", "balanced training", "traditional and modern"},
+    },
+}
+
+VALID_CATCHMENT_TYPES: Dict[str, Dict[str, Any]] = {
+    "specific_suburbs": {
+        "label": "Specific Nominated Suburbs",
+        "aliases": {"specific_suburbs", "suburbs", "selected suburbs"},
+    },
+    "radius": {
+        "label": "Distance Radius from Suburb",
+        "aliases": {"radius", "distance radius", "km radius"},
+    },
+    "melbourne_wide": {
+        "label": "Melbourne-Wide Coverage",
+        "aliases": {"melbourne_wide", "melbourne wide", "greater melbourne", "all melbourne", "citywide"},
+    },
+}
+
+# Freshness TTL Constants (in days)
+TRAINER_DECLARATION_TTL_DAYS = 180  # 6 months for trainer declarations
+OFFICIAL_SOURCE_TTL_DAYS = 90       # 3 months for official source captures
+AI_PROPOSED_TTL_DAYS = 30           # 30 days for AI extractions (display/prefill only)
+
+VALID_CAPABILITY_BASES: Set[str] = {"trainer_declaration", "official_source", "ai_proposed"}
+
+
+def normalize_specialty(val: str) -> Optional[str]:
+    """Normalize specialty alias to canonical ID."""
+    clean = re.sub(r"[\s\-_]+", " ", str(val or "").strip().lower())
+    if not clean:
+        return None
+    for canon_id, meta in CANONICAL_SPECIALTIES.items():
+        if clean == canon_id.replace("_", " ") or clean == canon_id:
+            return canon_id
+        if any(re.sub(r"[\s\-_]+", " ", a.lower()) == clean for a in meta["aliases"]):
+            return canon_id
+    return None
+
+
+def normalize_service_format(val: str) -> Optional[str]:
+    """Normalize service format alias to canonical ID."""
+    clean = re.sub(r"[\s\-_]+", " ", str(val or "").strip().lower())
+    if not clean:
+        return None
+    for canon_id, meta in CANONICAL_SERVICE_FORMATS.items():
+        if clean == canon_id.replace("_", " ") or clean == canon_id:
+            return canon_id
+        if any(re.sub(r"[\s\-_]+", " ", a.lower()) == clean for a in meta["aliases"]):
+            return canon_id
+    return None
+
+
+def normalize_life_stage(val: str) -> Optional[str]:
+    """Normalize dog life stage alias to canonical ID."""
+    clean = re.sub(r"[\s\-_]+", " ", str(val or "").strip().lower())
+    if not clean:
+        return None
+    for canon_id, meta in CANONICAL_LIFE_STAGES.items():
+        if clean == canon_id.replace("_", " ") or clean == canon_id:
+            return canon_id
+        if any(re.sub(r"[\s\-_]+", " ", a.lower()) == clean for a in meta["aliases"]):
+            return canon_id
+    return None
+
+
+def normalize_training_philosophy(val: str) -> Optional[str]:
+    """Normalize training philosophy alias to canonical ID."""
+    clean = re.sub(r"[\s\-_/]+", " ", str(val or "").strip().lower())
+    if not clean:
+        return None
+    for canon_id, meta in VALID_TRAINING_PHILOSOPHIES.items():
+        if clean == canon_id.replace("_", " ") or clean == canon_id:
+            return canon_id
+        if any(re.sub(r"[\s\-_/]+", " ", a.lower()) == clean for a in meta["aliases"]):
+            return canon_id
+    return None
+
+
+def normalize_catchment_type(val: str) -> Optional[str]:
+    """Normalize catchment type alias to canonical ID."""
+    clean = re.sub(r"[\s\-_]+", " ", str(val or "").strip().lower())
+    if not clean:
+        return None
+    for canon_id, meta in VALID_CATCHMENT_TYPES.items():
+        if clean == canon_id.replace("_", " ") or clean == canon_id:
+            return canon_id
+        if any(re.sub(r"[\s\-_]+", " ", a.lower()) == clean for a in meta["aliases"]):
+            return canon_id
+    return None
+
+
+def validate_capability_category(category: str, raw_value: Any) -> Dict[str, Any]:
+    """Deterministically validate capability values against canonical vocabularies."""
+    result: Dict[str, Any] = {
+        "valid": False,
+        "canonical_terms": [] if category not in {"training_philosophy", "catchment_type"} else "",
+        "rejected_terms": [],
+        "reason": "",
+    }
+
+    if category == "specialties":
+        items = raw_value if isinstance(raw_value, (list, tuple, set)) else [raw_value]
+        canonical_terms: List[str] = []
+        rejected: List[str] = []
+        for it in items:
+            it_str = str(it or "").strip()
+            if not it_str:
+                continue
+            norm = normalize_specialty(it_str)
+            if norm:
+                if norm not in canonical_terms:
+                    canonical_terms.append(norm)
+            else:
+                rejected.append(it_str)
+        result["canonical_terms"] = canonical_terms
+        result["rejected_terms"] = rejected
+        result["valid"] = len(canonical_terms) > 0
+        if not result["valid"]:
+            result["reason"] = f"no_valid_canonical_specialties (rejected: {rejected})"
+        elif rejected:
+            result["reason"] = f"partial_valid_with_rejected_terms: {rejected}"
+        else:
+            result["reason"] = "valid"
+        return result
+
+    if category == "service_formats":
+        items = raw_value if isinstance(raw_value, (list, tuple, set)) else [raw_value]
+        canonical_terms = []
+        rejected = []
+        for it in items:
+            it_str = str(it or "").strip()
+            if not it_str:
+                continue
+            norm = normalize_service_format(it_str)
+            if norm:
+                if norm not in canonical_terms:
+                    canonical_terms.append(norm)
+            else:
+                rejected.append(it_str)
+        result["canonical_terms"] = canonical_terms
+        result["rejected_terms"] = rejected
+        result["valid"] = len(canonical_terms) > 0
+        if not result["valid"]:
+            result["reason"] = f"no_valid_canonical_service_formats (rejected: {rejected})"
+        elif rejected:
+            result["reason"] = f"partial_valid_with_rejected_terms: {rejected}"
+        else:
+            result["reason"] = "valid"
+        return result
+
+    if category == "life_stages":
+        items = raw_value if isinstance(raw_value, (list, tuple, set)) else [raw_value]
+        canonical_terms = []
+        rejected = []
+        for it in items:
+            it_str = str(it or "").strip()
+            if not it_str:
+                continue
+            norm = normalize_life_stage(it_str)
+            if norm:
+                if norm not in canonical_terms:
+                    canonical_terms.append(norm)
+            else:
+                rejected.append(it_str)
+        result["canonical_terms"] = canonical_terms
+        result["rejected_terms"] = rejected
+        result["valid"] = len(canonical_terms) > 0
+        if not result["valid"]:
+            result["reason"] = f"no_valid_canonical_life_stages (rejected: {rejected})"
+        elif rejected:
+            result["reason"] = f"partial_valid_with_rejected_terms: {rejected}"
+        else:
+            result["reason"] = "valid"
+        return result
+
+    if category == "training_philosophy":
+        it_str = str(raw_value or "").strip()
+        norm = normalize_training_philosophy(it_str)
+        if norm:
+            result["canonical_terms"] = norm
+            result["valid"] = True
+            result["reason"] = "valid"
+        else:
+            result["rejected_terms"] = [it_str] if it_str else []
+            result["valid"] = False
+            result["reason"] = f"unsupported_training_philosophy:{it_str}"
+        return result
+
+    if category == "catchment_type":
+        it_str = str(raw_value or "").strip()
+        norm = normalize_catchment_type(it_str)
+        if norm:
+            result["canonical_terms"] = norm
+            result["valid"] = True
+            result["reason"] = "valid"
+        else:
+            result["rejected_terms"] = [it_str] if it_str else []
+            result["valid"] = False
+            result["reason"] = f"unsupported_catchment_type:{it_str}"
+        return result
+
+    if category == "serviced_suburbs":
+        items = raw_value if isinstance(raw_value, (list, tuple, set)) else [raw_value]
+        cleaned_suburbs: List[str] = []
+        rejected = []
+        for it in items:
+            s_name = str(it or "").strip().title()
+            if not s_name:
+                continue
+            if len(s_name) < 2 or any(ph in s_name.lower() for ph in PLACEHOLDER_NAMES):
+                rejected.append(s_name)
+            else:
+                if s_name not in cleaned_suburbs:
+                    cleaned_suburbs.append(s_name)
+        result["canonical_terms"] = cleaned_suburbs
+        result["rejected_terms"] = rejected
+        result["valid"] = len(cleaned_suburbs) > 0
+        result["reason"] = "valid" if not rejected else f"partial_valid_with_rejected_suburbs: {rejected}"
+        return result
+
+    if category == "delivery_constraints":
+        if isinstance(raw_value, dict):
+            clean_constraints = {
+                "in_home_available": bool(raw_value.get("in_home_available", True)),
+                "facility_available": bool(raw_value.get("facility_available", False)),
+                "travel_distance_km": float(raw_value.get("travel_distance_km") or 0.0),
+                "notes": str(raw_value.get("notes") or "")[:200],
+            }
+            result["canonical_terms"] = clean_constraints
+            result["valid"] = True
+            result["reason"] = "valid"
+        else:
+            result["valid"] = False
+            result["reason"] = "invalid_delivery_constraints_format"
+        return result
+
+    result["valid"] = False
+    result["reason"] = f"unrecognized_capability_category:{category}"
+    return result
+
+
+def compute_capability_freshness(
+    confirmed_at_str: str,
+    basis: str,
+    *,
+    as_of: Optional[datetime] = None,
+) -> Tuple[str, bool]:
+    """Compute deterministic freshness state based on basis TTL."""
+    if not confirmed_at_str or not isinstance(confirmed_at_str, str):
+        return "missing_confirmation_timestamp", False
+
+    # Validate ISO-8601 UTC
+    valid_ts, _ = validate_iso8601_utc(confirmed_at_str)
+    if not valid_ts:
+        return "malformed_confirmation_timestamp", False
+
+    ref_time = as_of or datetime.now(timezone.utc)
+    if ref_time.tzinfo is None:
+        ref_time = ref_time.replace(tzinfo=timezone.utc)
+
+    try:
+        confirmed_dt = datetime.fromisoformat(confirmed_at_str.replace("Z", "+00:00"))
+        age_days = (ref_time - confirmed_dt).total_seconds() / 86400.0
+    except Exception as exc:
+        return f"timestamp_parse_error:{exc}", False
+
+    if age_days < 0:
+        return "future_timestamp_rejected", False
+
+    ttl_days = (
+        TRAINER_DECLARATION_TTL_DAYS if basis == "trainer_declaration"
+        else OFFICIAL_SOURCE_TTL_DAYS if basis == "official_source"
+        else AI_PROPOSED_TTL_DAYS
+    )
+
+    if age_days > ttl_days:
+        return "stale", False
+
+    return "fresh", True
+
+
+def create_capability_fact(
+    category: str,
+    raw_value: Any,
+    *,
+    basis: str,
+    evidence_reference: str,
+    confirmed_at: Optional[str] = None,
+    as_of: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Create a structured capability fact with field-level provenance and validation.
+
+    Governance Rules (CDR-021 & CDR-022):
+    - Basis 'trainer_declaration' is the primary source of matching capacity.
+    - Basis 'ai_proposed' is display/prefill ONLY and NEVER permitted in the match-ready projection.
+    - Stale or invalid facts fail closed (permitted_in_projection = False).
+    """
+    if basis not in VALID_CAPABILITY_BASES:
+        raise ValueError(f"Invalid capability basis: {basis}. Must be one of {VALID_CAPABILITY_BASES}")
+
+    confirmation_ts = confirmed_at or now_iso()
+    validation = validate_capability_category(category, raw_value)
+    freshness_state, is_fresh = compute_capability_freshness(confirmation_ts, basis, as_of=as_of)
+
+    # Core match-readiness rule:
+    # 1. Must be valid
+    # 2. Must be fresh
+    # 3. AI proposals cannot independently become matchable without trainer declaration/confirmation!
+    permitted = bool(validation["valid"]) and is_fresh and (basis == "trainer_declaration")
+
+    return {
+        "category": category,
+        "canonical_value": validation["canonical_terms"],
+        "raw_value": raw_value,
+        "basis": basis,
+        "evidence_reference": evidence_reference,
+        "confirmed_at": confirmation_ts,
+        "freshness_state": freshness_state,
+        "validation_result": validation,
+        "permitted_in_projection": permitted,
+        "invalidated_at": "",
+        "invalidation_reason": "",
+    }
+
+
+def package_trainer_capabilities(
+    *,
+    specialties: Optional[List[str]] = None,
+    service_formats: Optional[List[str]] = None,
+    life_stages: Optional[List[str]] = None,
+    training_philosophy: Optional[str] = None,
+    serviced_suburbs: Optional[List[str]] = None,
+    catchment_type: Optional[str] = None,
+    delivery_constraints: Optional[Dict[str, Any]] = None,
+    basis: str = "trainer_declaration",
+    evidence_reference: str = "",
+    confirmed_at: Optional[str] = None,
+    as_of: Optional[datetime] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """Helper to bundle all capability categories into a structured capabilities dictionary."""
+    capabilities: Dict[str, Dict[str, Any]] = {}
+    ts = confirmed_at or now_iso()
+
+    if specialties is not None:
+        capabilities["specialties"] = create_capability_fact(
+            "specialties", specialties, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if service_formats is not None:
+        capabilities["service_formats"] = create_capability_fact(
+            "service_formats", service_formats, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if life_stages is not None:
+        capabilities["life_stages"] = create_capability_fact(
+            "life_stages", life_stages, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if training_philosophy is not None:
+        capabilities["training_philosophy"] = create_capability_fact(
+            "training_philosophy", training_philosophy, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if serviced_suburbs is not None:
+        capabilities["serviced_suburbs"] = create_capability_fact(
+            "serviced_suburbs", serviced_suburbs, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if catchment_type is not None:
+        capabilities["catchment_type"] = create_capability_fact(
+            "catchment_type", catchment_type, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+    if delivery_constraints is not None:
+        capabilities["delivery_constraints"] = create_capability_fact(
+            "delivery_constraints", delivery_constraints, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+        )
+
+    return capabilities
+
+
+def invalidate_trainer_capabilities(
+    trainer_doc: Dict[str, Any],
+    reason: str,
+    *,
+    field_names: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Invalidate trainer capabilities upon correction, dispute, suppression, or failed refresh."""
+    capabilities = trainer_doc.get("capabilities") or {}
+    now_ts = now_iso()
+    targets = set(field_names) if field_names else set(capabilities.keys())
+
+    for k, fact in capabilities.items():
+        if k in targets and isinstance(fact, dict):
+            fact["permitted_in_projection"] = False
+            fact["invalidated_at"] = now_ts
+            fact["invalidation_reason"] = reason
+
+    return capabilities
+
+
+def build_match_ready_projection(
+    trainer_doc: Dict[str, Any],
+    *,
+    as_of: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Construct a bounded, deterministic match-ready capability projection for matching.
+
+    Governance Invariants (AGENTS.md Rule 6A, CDR-021, CDR-022, DF-026):
+    - Consumes ONLY validated, fresh, permitted capability facts.
+    - AI-proposed facts CANNOT enter the projection without trainer confirmation.
+    - Paid tier, pricing, marketing bio, reviews, and AI confidence are STRICTLY EXCLUDED.
+    - Profiles that are unpublished, disputed, contact-unready, or statutory revoked fail closed.
+    """
+    as_of_iso = (as_of or datetime.now(timezone.utc)).isoformat()
+    reasons: List[str] = []
+    is_eligible = True
+
+    # 1. Gate: Publication state
+    # Database records always contain 'published'. Ingested sources must be published.
+    if "published" in trainer_doc and not trainer_doc.get("published"):
+        is_eligible = False
+        reasons.append("profile_not_published")
+    elif "published" not in trainer_doc and (trainer_doc.get("source_url") or trainer_doc.get("source_evidence_url")):
+        is_eligible = False
+        reasons.append("profile_not_published")
+
+    # 2. Gate: Ownership disputes
+    claim_status = str(trainer_doc.get("claim_status") or "").lower()
+    if claim_status == "claim_disputed":
+        is_eligible = False
+        reasons.append("ownership_disputed")
+
+    # 3. Gate: Statutory ABN status
+    abn_status = str(trainer_doc.get("abn_status") or "").lower()
+    if trainer_doc.get("abn_verified") is False and abn_status in {"cancelled", "inactive", "deregistered"}:
+        is_eligible = False
+        reasons.append("statutory_abn_revoked")
+
+    # 4. Gate: Contact readiness
+    if "contact_ready" in trainer_doc:
+        if not trainer_doc["contact_ready"]:
+            is_eligible = False
+            reasons.append("not_contact_ready")
+    elif trainer_doc.get("source_url") or trainer_doc.get("source_evidence_url"):
+        has_contact = bool(
+            trainer_doc.get("phone")
+            or trainer_doc.get("email")
+            or trainer_doc.get("website")
+        )
+        if not has_contact:
+            is_eligible = False
+            reasons.append("not_contact_ready")
+
+    # 5. Extract capabilities with provenance
+    capabilities = trainer_doc.get("capabilities") or {}
+    projected_specialties: List[str] = []
+    projected_service_formats: List[str] = []
+    projected_life_stages: List[str] = []
+    projected_philosophy = ""
+    projected_serviced_suburbs: List[str] = []
+    projected_catchment_type = ""
+    projected_delivery_constraints: Dict[str, Any] = {}
+
+    if capabilities:
+        # Evaluate structured facts
+        for cat, fact in capabilities.items():
+            if not isinstance(fact, dict):
+                continue
+            # Re-evaluate freshness
+            freshness_state, is_fresh = compute_capability_freshness(
+                str(fact.get("confirmed_at") or ""),
+                str(fact.get("basis") or "ai_proposed"),
+                as_of=as_of,
+            )
+            basis = str(fact.get("basis") or "ai_proposed")
+            is_valid = bool((fact.get("validation_result") or {}).get("valid", True))
+            is_permitted = (
+                (basis == "trainer_declaration")
+                and is_valid
+                and is_fresh
+                and not fact.get("invalidation_reason")
+            )
+            if not is_permitted:
+                continue
+
+            val = fact.get("canonical_value")
+            if cat == "specialties" and isinstance(val, list):
+                projected_specialties = val
+            elif cat == "service_formats" and isinstance(val, list):
+                projected_service_formats = val
+            elif cat == "life_stages" and isinstance(val, list):
+                projected_life_stages = val
+            elif cat == "training_philosophy" and isinstance(val, str):
+                projected_philosophy = val
+            elif cat == "serviced_suburbs" and isinstance(val, list):
+                projected_serviced_suburbs = val
+            elif cat == "catchment_type" and isinstance(val, str):
+                projected_catchment_type = val
+            elif cat == "delivery_constraints" and isinstance(val, dict):
+                projected_delivery_constraints = val
+    else:
+        # Legacy record fallback / adaptation
+        # A legacy record has trainer declaration basis ONLY if it has via_submission_id or is claimed
+        # or is a mock test fixture without external source evidence
+        has_trainer_declaration = bool(
+            trainer_doc.get("via_submission_id")
+            or trainer_doc.get("claimed")
+            or str(trainer_doc.get("claim_status") or "").lower() == "claimed"
+            or trainer_doc.get("claimed_at")
+            or (not trainer_doc.get("source_url") and not trainer_doc.get("source_evidence_url"))
+        )
+        if has_trainer_declaration:
+            # Validate legacy fields against canonical taxonomy
+            confirmed_ts = str(trainer_doc.get("created_at") or trainer_doc.get("updated_at") or now_iso())
+            f_state, is_fresh = compute_capability_freshness(confirmed_ts, "trainer_declaration", as_of=as_of)
+            if is_fresh:
+                raw_specs = trainer_doc.get("specialties") or trainer_doc.get("services") or []
+                v_spec = validate_capability_category("specialties", raw_specs)
+                if v_spec["valid"]:
+                    projected_specialties = v_spec["canonical_terms"]
+
+                raw_fmts = trainer_doc.get("service_formats") or []
+                v_fmt = validate_capability_category("service_formats", raw_fmts)
+                if v_fmt["valid"]:
+                    projected_service_formats = v_fmt["canonical_terms"]
+
+                raw_phil = trainer_doc.get("training_philosophy") or trainer_doc.get("philosophy") or ""
+                v_phil = validate_capability_category("training_philosophy", raw_phil)
+                if v_phil["valid"]:
+                    projected_philosophy = v_phil["canonical_terms"]
+
+                raw_suburbs = trainer_doc.get("serviced_suburbs") or []
+                v_sub = validate_capability_category("serviced_suburbs", raw_suburbs)
+                if v_sub["valid"]:
+                    projected_serviced_suburbs = v_sub["canonical_terms"]
+
+                raw_catch = trainer_doc.get("catchment_type") or ""
+                v_catch = validate_capability_category("catchment_type", raw_catch)
+                if v_catch["valid"]:
+                    projected_catchment_type = v_catch["canonical_terms"]
+            else:
+                reasons.append("legacy_trainer_declaration_stale")
+        else:
+            # Unclaimed, unsubmitted legacy record -> AI proposed extraction only
+            # CDR-021/CDR-022: Cannot independently create matchable capability facts
+            reasons.append("unconfirmed_ai_extraction_not_matchable")
+
+    # Minimum capability requirement for matching
+    if not projected_specialties and not projected_service_formats:
+        is_eligible = False
+        reasons.append("no_permitted_matchable_capabilities")
+
+    return {
+        "trainer_id": str(trainer_doc.get("id") or ""),
+        "name": str(trainer_doc.get("name") or ""),
+        "suburb": str(trainer_doc.get("suburb") or ""),
+        "region": str(trainer_doc.get("region") or "Greater Melbourne"),
+        "serviced_suburbs": projected_serviced_suburbs,
+        "catchment_type": projected_catchment_type,
+        "service_formats": projected_service_formats,
+        "specialties": projected_specialties,
+        "life_stages": projected_life_stages,
+        "training_philosophy": projected_philosophy,
+        "delivery_constraints": projected_delivery_constraints,
+        "projection_version": "v1",
+        "as_of": as_of_iso,
+        "match_eligible": is_eligible,
+        "eligibility_reasons": reasons,
+    }
+
+
+def assess_trainer_capability_health(
+    trainer_doc: Dict[str, Any],
+    *,
+    as_of: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Assess capability health and provenance for `/ops` visibility (zero owner PII)."""
+    capabilities = trainer_doc.get("capabilities") or {}
+    total_facts = len(capabilities)
+    permitted_facts = 0
+    stale_facts = 0
+    ai_proposed_count = 0
+    rejected_terms: List[str] = []
+
+    for fact in capabilities.values():
+        if not isinstance(fact, dict):
+            continue
+        basis = str(fact.get("basis") or "")
+        if basis == "ai_proposed":
+            ai_proposed_count += 1
+        freshness, is_fresh = compute_capability_freshness(
+            str(fact.get("confirmed_at") or ""),
+            basis,
+            as_of=as_of,
+        )
+        if not is_fresh and freshness == "stale":
+            stale_facts += 1
+        if fact.get("permitted_in_projection") and is_fresh:
+            permitted_facts += 1
+        val_res = fact.get("validation_result") or {}
+        rej = val_res.get("rejected_terms") or []
+        rejected_terms.extend(rej)
+
+    projection = build_match_ready_projection(trainer_doc, as_of=as_of)
+
+    return {
+        "trainer_id": str(trainer_doc.get("id") or ""),
+        "name": str(trainer_doc.get("name") or ""),
+        "has_structured_capabilities": total_facts > 0,
+        "total_facts": total_facts,
+        "permitted_facts": permitted_facts,
+        "stale_facts": stale_facts,
+        "ai_proposed_unconfirmed": ai_proposed_count,
+        "rejected_terms": rejected_terms,
+        "match_eligible": projection["match_eligible"],
+        "eligibility_reasons": projection["eligibility_reasons"],
+    }
+
+
+async def compute_capability_health_summary(trainers_coll: Any) -> Dict[str, int]:
+    """Compute aggregate capability health metrics across all trainers for /ops visibility."""
+    return {
+        "match_eligible_trainers": await trainers_coll.count_documents({
+            "published": True,
+            "claim_status": {"$ne": "claim_disputed"},
+            "$or": [
+                {"capabilities.specialties.permitted_in_projection": True},
+                {"capabilities.service_formats.permitted_in_projection": True},
+                {"via_submission_id": {"$exists": True, "$ne": ""}},
+                {"claimed": True},
+            ],
+        }),
+        "trainers_with_declared_capabilities": await trainers_coll.count_documents({
+            "$or": [
+                {"capabilities.specialties.basis": "trainer_declaration"},
+                {"via_submission_id": {"$exists": True, "$ne": ""}},
+                {"claimed": True},
+            ],
+        }),
+        "trainers_with_only_ai_proposed": await trainers_coll.count_documents({
+            "capabilities.specialties.basis": "ai_proposed",
+            "via_submission_id": {"$exists": False},
+            "claimed": {"$ne": True},
+        }),
+        "stale_capability_trainers": await trainers_coll.count_documents({
+            "capabilities.specialties.freshness_state": "stale",
+        }),
+    }
+

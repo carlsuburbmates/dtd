@@ -18,6 +18,7 @@ DTD should operate as a trustworthy Greater Melbourne directory that one non-tec
 7. **Finish observability.** Initialise Sentry in the deployed API path, keep first-party attribution privacy-bounded, and add a low-maintenance reporting view only where it materially reduces operator work.
 8. **Close acceptance across each flow.** Validate UI → API → persisted state → notification/fallback → `/ops`, including degraded provider and duplicate/idempotent paths.
 9. **Operationalise the staging sandbox pipeline.** Connect GitHub to Cloud Build to automate sandbox deployment (`dogtrainersdirectory-dev` / `dtd-sandbox`) on development branches, and enforce an approval-gated path to production Cloud Run.
+10. **Complete the matching pipeline as a coherent product.** Deliver the AI-assisted, acquisition-connected owner-to-trainer workflow defined in `DTD_TARGETED_MATCHING_PIPELINE_STATE.md`, including trainer capability declarations, Decision Contract-defined weak-evidence states, urgent support, fairness, privacy and `/ops` evidence.
 
 ## Already-aligned contracts to preserve
 
@@ -25,7 +26,7 @@ DTD should operate as a trustworthy Greater Melbourne directory that one non-tec
 - A$0/A$19/A$39/A$199 product set, with Pro annual at A$149 and no A$99 Regional tier.
 - Thirty-day Pro trial anchored to Stripe live mode plus the explicit cohort timestamp, with day-23 warning.
 - Two suburb sponsors per suburb, four sponsored suburbs per business by default, and five Melbourne-Wide positions.
-- Diagnostic fit independent of payment, with commercial priority only in the five-point comparable-fit band.
+- Diagnostic fit independent of payment, with commercial priority only within `0.05` (five percentage points) of the highest final fit.
 - Interval-based refunds that include Melbourne-Wide monthly subscriptions.
 - Separate First Leash deployment and privacy-safe static handoff.
 - Lawful, evidence-bearing acquisition with suppression and trainer correction/removal rights.

@@ -459,6 +459,8 @@ class SubmissionIn(BaseModel):
     service_formats: List[str] = Field(default_factory=list)
     serviced_suburbs: List[str] = Field(default_factory=list)
     catchment_type: Optional[str] = ""
+    life_stages: List[str] = Field(default_factory=list)
+    delivery_constraints: Optional[Dict[str, Any]] = None
     booking_url: Optional[str] = ""
     gallery_images: List[str] = Field(default_factory=list)
     sponsored_suburbs: List[str] = Field(default_factory=list)
@@ -3367,6 +3369,19 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         **sub,
     }
 
+    declared_capabilities = trainer_quality.package_trainer_capabilities(
+        specialties=sub.get("specialties"),
+        service_formats=sub.get("service_formats"),
+        life_stages=sub.get("life_stages"),
+        training_philosophy=sub.get("training_philosophy"),
+        serviced_suburbs=sub.get("serviced_suburbs"),
+        catchment_type=sub.get("catchment_type"),
+        delivery_constraints=sub.get("delivery_constraints"),
+        basis="trainer_declaration",
+        evidence_reference=sub_doc["id"],
+        confirmed_at=now_iso(),
+    )
+
     if existing_trainer:
         trainer_id = existing_trainer["id"]
         update_fields = {
@@ -3395,6 +3410,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "service_formats": sub.get("service_formats") or existing_trainer.get("service_formats", []),
             "serviced_suburbs": sub.get("serviced_suburbs") or existing_trainer.get("serviced_suburbs", []),
             "catchment_type": sub.get("catchment_type") or existing_trainer.get("catchment_type", ""),
+            "capabilities": declared_capabilities,
             "booking_url": sub.get("booking_url") or existing_trainer.get("booking_url", ""),
             "gallery_images": sub.get("gallery_images") or existing_trainer.get("gallery_images", []),
             "sponsored_suburbs": sub.get("sponsored_suburbs") or existing_trainer.get("sponsored_suburbs", []),
@@ -3443,6 +3459,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "service_formats": sub.get("service_formats", []),
             "serviced_suburbs": sub.get("serviced_suburbs", []),
             "catchment_type": sub.get("catchment_type", ""),
+            "capabilities": declared_capabilities,
             "booking_url": sub.get("booking_url", ""),
             "gallery_images": sub.get("gallery_images", []),
             "sponsored_suburbs": sub.get("sponsored_suburbs", []),
@@ -3711,9 +3728,41 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         )
         raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
 
+    existing_caps = trainer.get("capabilities") or {}
+    declared_caps = {}
+    if existing_caps:
+        for cat, fact in existing_caps.items():
+            if isinstance(fact, dict):
+                declared_caps[cat] = trainer_quality.create_capability_fact(
+                    cat,
+                    fact.get("raw_value") or fact.get("canonical_value"),
+                    basis="trainer_declaration",
+                    evidence_reference=f"claim_event:{event['id']}",
+                    confirmed_at=now.isoformat(),
+                )
+    else:
+        declared_caps = trainer_quality.package_trainer_capabilities(
+            specialties=trainer.get("specialties") or trainer.get("services"),
+            service_formats=trainer.get("service_formats"),
+            training_philosophy=trainer.get("training_philosophy") or trainer.get("philosophy"),
+            serviced_suburbs=trainer.get("serviced_suburbs"),
+            catchment_type=trainer.get("catchment_type"),
+            basis="trainer_declaration",
+            evidence_reference=f"claim_event:{event['id']}",
+            confirmed_at=now.isoformat(),
+        )
+
     claim_update = await db.trainers.update_one(
         {"id": trainer_id, "claim_status": {"$in": ["", "unclaimed", "pending_verification"]}},
-        {"$set": {"claim_status": "claimed", "tier": "claimed", "claimed_at": now.isoformat(), "claim_event_id": event["id"]}},
+        {
+            "$set": {
+                "claim_status": "claimed",
+                "tier": "claimed",
+                "claimed_at": now.isoformat(),
+                "claim_event_id": event["id"],
+                "capabilities": declared_caps,
+            }
+        },
     )
     if getattr(claim_update, "matched_count", 1) != 1:
         await db.claim_events.update_one(
@@ -4790,6 +4839,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "live_total": await db.trainers.count_documents({"published": True}),
     }
 
+    capability_health_summary = await trainer_quality.compute_capability_health_summary(db.trainers)
+
     rollback_recent = await db.config_snapshots.find(
         {"rolled_back": True}, {"_id": 0}
     ).sort("rolled_back_at", -1).to_list(5)
@@ -5088,6 +5139,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "kpi_prelaunch": kpi_prelaunch,
         "growth_attribution_summary": growth_attribution_summary,
         "reactivation_summary": reactivation_summary,
+        "capability_health_summary": capability_health_summary,
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
         "ops_seo_indexation": seo_indexation,

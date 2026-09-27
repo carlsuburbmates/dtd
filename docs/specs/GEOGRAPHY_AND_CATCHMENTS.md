@@ -22,7 +22,7 @@ Each record carries stable identity and display fields sufficient for slug routi
 - **Suburb:** one canonical locality used for route/filter and sponsorship inventory.
 - **Service radius/area:** a trainer's evidenced travel coverage; it does not change the canonical locality.
 - **Greater Melbourne/Melbourne-Wide:** citywide service/visibility scope, not a synthetic suburb.
-- Fallback expansion may broaden results when local supply is absent but must label the broader scope.
+- For owner matching, expansion may broaden results only when fewer than three trainers pass the local eligibility gates. It must label the broader scope and never describe expanded results as local. Other directory/search fallback rules require their own documented trigger.
 
 ## Sponsorship geography
 
