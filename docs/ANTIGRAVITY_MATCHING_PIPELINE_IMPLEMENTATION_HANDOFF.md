@@ -1,6 +1,6 @@
 # Antigravity Handoff — Owner-to-Trainer Matching Pipeline
 
-**Prepared by:** Codex matching-pipeline session  
+**Prepared by:** Codex matching-pipeline session
 **Scope:** local implementation only, in staged packages. This is the execution handoff and acceptance contract for `DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md`.
 
 ## Why this work is needed
