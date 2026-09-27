@@ -90,6 +90,8 @@ Create a versioned fixture set with expected eligibility, fit and presentation o
 
 **Required evidence:** contract document; fixture files; schema validation tests; decision-table review; independent audit.
 
+**Evidence entry — 27 September 2026:** contract authority committed as `b4ce0c0` (`docs/specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md`) and the staged Antigravity implementation handoff committed as `b4ce0c0` (`docs/ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`). Documentation consistency and whitespace checks passed. No fixture, executable parity harness, code, provider or deployment evidence exists yet; M0 remains `PARTIAL`.
+
 ### M1 — Trainer capability declaration and match-ready projection
 
 **Status:** `OPEN`
