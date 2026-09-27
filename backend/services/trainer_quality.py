@@ -533,6 +533,7 @@ CANONICAL_SPECIALTIES: Dict[str, Dict[str, Any]] = {
             "puppy", "puppies", "puppy_training", "puppy training",
             "puppy socialisation", "puppy socialization", "puppy basics",
             "puppy manners", "early puppy", "toilet training",
+            "puppy preschool", "puppy school", "puppy classes", "puppy approach",
         },
     },
     "obedience": {
@@ -540,7 +541,19 @@ CANONICAL_SPECIALTIES: Dict[str, Dict[str, Any]] = {
         "aliases": {
             "obedience", "basic obedience", "manners", "general obedience",
             "basic manners", "foundation training", "good manners",
-            "advanced obedience", "pet manners",
+            "advanced obedience", "pet manners", "dog training",
+            "general dog training", "puppy & dog training", "dog & puppy training",
+        },
+    },
+    "behaviour_modification": {
+        "label": "Behaviour Modification & Challenges",
+        "aliases": {
+            "behaviour_modification", "behavior_modification", "behaviour modification",
+            "behavior modification", "behavioural challenges", "behavioral challenges",
+            "behaviour consultations", "behaviour consultation", "behaviour support",
+            "behavior support", "behaviour & training", "behaviour problems",
+            "problem behaviours", "behaviour consults", "behavioural consultations",
+            "behavioural support", "challenging behaviours",
         },
     },
     "leash_reactivity": {
@@ -623,7 +636,10 @@ CANONICAL_SERVICE_FORMATS: Dict[str, Dict[str, Any]] = {
         "aliases": {
             "in_home", "in home", "in-home", "private in-home",
             "home visits", "mobile", "at home", "private consultation",
-            "in_home_private", "in-home private",
+            "in_home_private", "in-home private", "in-house training",
+            "in house training", "private dog training", "private training",
+            "private consults", "consultations", "in-home training",
+            "in home training",
         },
     },
     "facility": {
@@ -658,7 +674,8 @@ CANONICAL_SERVICE_FORMATS: Dict[str, Dict[str, Any]] = {
         "label": "Group Classes",
         "aliases": {
             "group_classes", "group class", "group sessions",
-            "classes", "puppy school", "puppy class",
+            "classes", "puppy school", "puppy class", "group training",
+            "puppy preschool", "puppy classes",
         },
     },
 }

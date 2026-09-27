@@ -724,3 +724,29 @@ def test_compute_capability_health_summary_exposes_clean_telemetry():
     for marker in ["owner", "email", "phone", "dog_name", "enquiry", "passcode"]:
         assert marker not in serialized, f"capability_health_summary leaked marker: {marker}"
 
+
+def test_real_melbourne_seed_trainers_map_cleanly_to_taxonomies():
+    """Verify that all 20 real Melbourne seed trainers map cleanly to canonical taxonomies."""
+    from pathlib import Path
+    seed_path = Path(__file__).resolve().parent.parent / "data" / "melbourne_trainers_seed.json"
+    assert seed_path.exists(), "melbourne_trainers_seed.json must exist"
+
+    with open(seed_path) as f:
+        seed = json.load(f)
+
+    candidates = seed.get("candidates") or []
+    assert len(candidates) >= 20, "Expected at least 20 real Melbourne seed trainers"
+
+    for candidate in candidates:
+        name = candidate["name"]
+        raw_services = candidate.get("services") or []
+        assert raw_services, f"Candidate {name} should have raw services listed"
+
+        v_spec = validate_capability_category("specialties", raw_services)
+        v_fmt = validate_capability_category("service_formats", raw_services)
+
+        # Every candidate must map to at least one specialty or service format
+        total_matched = len(v_spec["canonical_terms"]) + len(v_fmt["canonical_terms"])
+        assert total_matched > 0, f"Real Melbourne trainer {name} with services {raw_services} failed to map to any canonical taxonomy"
+
+
