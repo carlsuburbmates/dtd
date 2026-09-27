@@ -656,29 +656,312 @@ def test_claim_verification_promotes_capabilities_to_trainer_declaration(monkeyp
     fake_db = _make_fake_db(trainers=[trainer_doc], claim_events=[claim_event])
     monkeypatch.setattr(server, "db", fake_db)
 
-
+    # Calling OTP verify proves ownership, but DOES NOT promote capabilities
     res = asyncio.run(
         server.verify_trainer_claim(
             trainer_id,
             server.TrainerClaimVerifyIn(claim_event_id=claim_event_id, otp=otp),
         )
     )
-    assert res.get("session", {}).get("token") is not None
+    session_token = res.get("session", {}).get("token")
+    assert session_token is not None
     assert trainer_doc.get("claim_status") == "claimed"
 
+    # Crucial assertion: Capabilities remain ai_proposed and are NOT promoted solely by OTP
     updated_caps = trainer_doc["capabilities"]
+    assert updated_caps["specialties"]["basis"] == "ai_proposed"
+    assert updated_caps["specialties"]["permitted_in_projection"] is False
+    assert updated_caps["service_formats"]["basis"] == "ai_proposed"
+    assert updated_caps["service_formats"]["permitted_in_projection"] is False
+
+    # Projection remains unmatchable
+    proj_after_otp = build_match_ready_projection(trainer_doc)
+    assert proj_after_otp["match_eligible"] is False
+    assert "no_permitted_matchable_capabilities" in proj_after_otp["eligibility_reasons"]
+
+
+def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
+    """R2: Explicit capability confirmation promotes capabilities, invalidates omitted facts, and requires statement."""
+    import asyncio
+    import uuid
+    import server
+    from fastapi import HTTPException
+
+    trainer_id = f"trainer_confirm_test_{uuid.uuid4().hex[:8]}"
+    now_ts = now_iso()
+
+    # Start with AI-proposed capabilities (including an unwanted specialty 'barking')
+    ai_caps = package_trainer_capabilities(
+        specialties=["puppy_training", "barking"],
+        service_formats=["in_home", "online"],
+        basis="ai_proposed",
+        evidence_reference="https://scraped.com.au",
+        confirmed_at=now_ts,
+    )
+    trainer_doc = {
+        "id": trainer_id,
+        "name": "Confirmation Candidate",
+        "suburb": "Brunswick",
+        "email": "cand@example.com.au",
+        "phone": "0412345678",
+        "published": True,
+        "contact_ready": True,
+        "claim_status": "claimed",
+        "capabilities": ai_caps,
+    }
+
+    fake_db = _make_fake_db(trainers=[trainer_doc])
+    monkeypatch.setattr(server, "db", fake_db)
+
+    session_data = server._issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id="claim_event_test_1")
+    claim_token = session_data["token"]
+
+    from starlette.requests import Request
+    mock_req = Request({"type": "http", "headers": [(b"x-trainer-claim-session", claim_token.encode("utf-8"))]})
+
+    # Step 2A: Prefill endpoint returns existing capabilities and canonical options
+    prefill = asyncio.run(
+        server.get_trainer_capabilities_prefill(
+            trainer_id,
+            request=mock_req,
+            x_trainer_claim_session=claim_token,
+        )
+    )
+    assert "puppy_training" in prefill["prefilled"]["specialties"]
+    assert "barking" in prefill["prefilled"]["specialties"]
+    assert "specialties" in prefill["canonical_options"]
+
+    # Step 2B: Confirmation statement is required (false raises 400)
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            server.confirm_trainer_capabilities(
+                trainer_id,
+                server.TrainerCapabilitiesConfirmIn(
+                    confirmation_statement=False,
+                    specialties=["puppy_training"],
+                    service_formats=["in_home"],
+                ),
+                request=mock_req,
+                x_trainer_claim_session=claim_token,
+            )
+        )
+    assert exc_info.value.status_code in (400, 422)
+
+    # Step 2C: Successful confirmation - keeps puppy_training, omits barking, selects in_home
+    confirm_res = asyncio.run(
+        server.confirm_trainer_capabilities(
+            trainer_id,
+            server.TrainerCapabilitiesConfirmIn(
+                confirmation_statement=True,
+                specialties=["puppy_training", "obedience"],  # Corrected/added
+                service_formats=["in_home"],                 # Kept in_home, omitted online
+                training_philosophy="positive_reinforcement_force_free",
+            ),
+            request=mock_req,
+            x_trainer_claim_session=claim_token,
+        )
+    )
+    assert confirm_res["ok"] is True
+    updated_caps = confirm_res["capabilities"]
+
+    # Verified declaration basis
     assert updated_caps["specialties"]["basis"] == "trainer_declaration"
     assert updated_caps["specialties"]["permitted_in_projection"] is True
-    assert updated_caps["specialties"]["evidence_reference"] == f"claim_event:{claim_event_id}"
+    assert set(updated_caps["specialties"]["value"]) == {"puppy_training", "obedience"}
     assert updated_caps["service_formats"]["basis"] == "trainer_declaration"
     assert updated_caps["service_formats"]["permitted_in_projection"] is True
+    assert set(updated_caps["service_formats"]["value"]) == {"in_home"}
 
-    # Projection is now match-ready
-    proj_verified = build_match_ready_projection(trainer_doc)
-    assert proj_verified["match_eligible"] is True
-    assert set(proj_verified["specialties"]) == {"puppy_training", "obedience"}
-    assert set(proj_verified["service_formats"]) == {"in_home"}
+    # Projection is now match-eligible
+    trainer_doc["capabilities"] = updated_caps
+    proj = build_match_ready_projection(trainer_doc)
+    assert proj["match_eligible"] is True
+    assert set(proj["specialties"]) == {"puppy_training", "obedience"}
+    assert set(proj["service_formats"]) == {"in_home"}
 
+
+def test_raw_legacy_record_without_provenance_never_becomes_matchable():
+    """R1: A raw legacy record with raw specialties/formats but no capability record/provenance fails closed."""
+    legacy_trainer = {
+        "id": "trainer_legacy_1",
+        "name": "Legacy Unconfirmed Academy",
+        "suburb": "Richmond",
+        "published": True,
+        "contact_ready": True,
+        "specialties": ["Puppy Training", "Obedience"],
+        "service_formats": ["In-Home Training"],
+        # No capabilities fact dictionary, no declaration, no source_url
+    }
+    projection = build_match_ready_projection(legacy_trainer)
+    assert projection["match_eligible"] is False, "Legacy unconfirmed profile MUST NOT be match-eligible"
+    assert len(projection["specialties"]) == 0
+    assert len(projection["service_formats"]) == 0
+    assert "legacy_unconfirmed_provenance" in projection["eligibility_reasons"]
+
+
+def test_competing_claim_dispute_invalidates_capabilities_in_server(monkeypatch):
+    """R4: A competing submission on an already claimed profile atomically invalidates capabilities."""
+    import asyncio
+    import server
+
+    existing_trainer = {
+        "id": "claimed_trainer_1",
+        "name": "Owner Profile",
+        "suburb": "Carlton",
+        "abn": "12345678901",
+        "email": "owner@profile.com.au",
+        "claim_status": "claimed",
+        "published": True,
+        "contact_ready": True,
+        "capabilities": package_trainer_capabilities(
+            specialties=["puppy_training"],
+            service_formats=["in_home"],
+            basis="trainer_declaration",
+            evidence_reference="claim_1",
+            confirmed_at=now_iso(),
+        ),
+    }
+    fake_db = _make_fake_db(trainers=[existing_trainer])
+    monkeypatch.setattr(server, "db", fake_db)
+
+    sub_payload = server.SubmissionIn(
+        name="Competing Submitter",
+        suburb="Carlton",
+        abn="12345678901",
+        email="competitor@profile.com.au",
+        consent_public_listing=True,
+        consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
+    )
+    res = asyncio.run(server.create_submission(sub_payload))
+    assert res["status"] == "held"
+    assert res["duplicate"] is True
+    assert res["reason"] == "profile_already_claimed"
+
+    assert existing_trainer["claim_status"] == "claim_disputed"
+    assert existing_trainer["capabilities"]["specialties"]["permitted_in_projection"] is False
+    assert existing_trainer["capabilities"]["specialties"]["invalidation_reason"] == "ownership_dispute"
+
+    proj = build_match_ready_projection(existing_trainer)
+    assert proj["match_eligible"] is False
+
+
+def test_statutory_revocation_unpublishes_and_invalidates_capabilities_in_engine(monkeypatch):
+    """R4: Statutory ABR cancellation in reverify_listings unpublishes trainer and invalidates capabilities."""
+    import asyncio
+    from services import engine
+
+    trainer = {
+        "id": "revoked_trainer_1",
+        "name": "Deregistered Business",
+        "suburb": "Collingwood",
+        "abn": "99999999999",
+        "abn_status": "cancelled",
+        "abn_verified": False,
+        "published": True,
+        "contact_ready": True,
+        "verified_at": "2026-01-01T00:00:00+00:00",
+        "capabilities": package_trainer_capabilities(
+            specialties=["puppy_training"],
+            service_formats=["in_home"],
+            basis="trainer_declaration",
+            evidence_reference="sub_1",
+            confirmed_at=now_iso(),
+        ),
+    }
+    fake_db = _make_fake_db(trainers=[trainer])
+    fake_db.evidence = _FakeCollection()
+    fake_db.system_state = _FakeCollection()
+
+    class MockAIService:
+        async def score_trainer(self, payload):
+            return {"confidence": 0.5, "signals": [], "model": "heuristic", "reasoning": "ABN cancelled"}
+        def status_for_score(self, score):
+            return "hold"
+
+    res = asyncio.run(engine.reverify_listings(fake_db, MockAIService(), batch=1))
+    assert res.get("trainers_reverified", 1) >= 0
+
+    assert trainer["published"] is False
+    assert trainer["capabilities"]["specialties"]["permitted_in_projection"] is False
+    assert trainer["capabilities"]["specialties"]["invalidation_reason"] == "statutory_abn_revoked"
+
+    proj = build_match_ready_projection(trainer)
+    assert proj["match_eligible"] is False
+
+
+def test_reverify_listings_ai_confidence_cannot_alter_publication_state(monkeypatch):
+    """DF-014: AI confidence alone NEVER alters publication status in reverify_listings."""
+    import asyncio
+    from services import engine
+
+    t_unpub = {
+        "id": "t_unpub",
+        "name": "Unpublished Trainer",
+        "suburb": "Fitzroy",
+        "abn_status": "active",
+        "abn_verified": True,
+        "published": False,
+        "contact_ready": True,
+        "verified_at": "2026-01-01T00:00:00+00:00",
+    }
+    t_pub = {
+        "id": "t_pub",
+        "name": "Published Trainer",
+        "suburb": "Fitzroy",
+        "abn_status": "active",
+        "abn_verified": True,
+        "published": True,
+        "contact_ready": True,
+        "verified_at": "2026-01-01T00:00:00+00:00",
+    }
+
+    fake_db = _make_fake_db(trainers=[t_unpub, t_pub])
+    fake_db.evidence = _FakeCollection()
+    fake_db.system_state = _FakeCollection()
+
+    class MockAIService:
+        async def score_trainer(self, payload):
+            if payload["name"] == "Unpublished Trainer":
+                return {"confidence": 0.99, "signals": [], "model": "heuristic", "reasoning": "High confidence"}
+            return {"confidence": 0.10, "signals": [], "model": "heuristic", "reasoning": "Low confidence"}
+        def status_for_score(self, score):
+            return "verified" if score >= 0.6 else "hold"
+
+    asyncio.run(engine.reverify_listings(fake_db, MockAIService(), batch=2))
+
+    assert t_unpub["published"] is False, "AI confidence MUST NOT publish an unpublished trainer"
+    assert t_pub["published"] is True, "AI confidence drop MUST NOT unpublish a trainer with active ABR verification"
+
+
+@pytest.mark.anyio
+async def test_match_trainers_does_not_filter_public_flow_by_default(monkeypatch):
+    """R5: Match filtering is disabled by default; passes unconfirmed candidates with diagnostic metadata."""
+    from types import SimpleNamespace
+    monkeypatch.delenv("ENABLE_MATCH_READY_PROJECTION_FILTER", raising=False)
+
+    legacy_trainer = {
+        "id": "trainer_candidate_1",
+        "name": "Test Candidate",
+        "suburb": "Richmond",
+        "published": True,
+        "contact_ready": True,
+        "services": ["Puppy Training"],
+    }
+
+    class MockModel:
+        async def generate_content(self, model, contents, config):
+            class MockResp:
+                text = json.dumps([{"trainer_id": "trainer_candidate_1", "score": 0.8, "reasoning": "Fit"}])
+            return MockResp()
+
+    class MockClient:
+        aio = SimpleNamespace(models=MockModel())
+
+    matches = await ai.match_trainers("puppy help", [legacy_trainer], client=MockClient())
+    assert len(matches) == 1, "Public candidate flow MUST NOT be suppressed before Decision Contract v2"
+    assert matches[0]["match_ready"] is False
+    assert "legacy_unconfirmed_provenance" in matches[0]["eligibility_reasons"]
 
 
 def test_compute_capability_health_summary_exposes_clean_telemetry():
@@ -689,39 +972,55 @@ def test_compute_capability_health_summary_exposes_clean_telemetry():
     t1 = {
         "id": "t1",
         "published": True,
+        "contact_ready": True,
         "claim_status": "claimed",
-        "capabilities": {
-            "specialties": {"basis": "trainer_declaration", "permitted_in_projection": True},
-        },
+        "capabilities": package_trainer_capabilities(
+            specialties=["puppy_training"],
+            service_formats=["in_home"],
+            basis="trainer_declaration",
+            evidence_reference="claim_1",
+            confirmed_at=now_iso(),
+        ),
     }
     t2 = {
         "id": "t2",
         "published": True,
+        "contact_ready": True,
         "claim_status": "unclaimed",
-        "capabilities": {
-            "specialties": {"basis": "ai_proposed", "permitted_in_projection": False},
-        },
+        "capabilities": package_trainer_capabilities(
+            specialties=["puppy_training"],
+            service_formats=["in_home"],
+            basis="ai_proposed",
+            evidence_reference="scrape_1",
+            confirmed_at=now_iso(),
+        ),
     }
     t3 = {
         "id": "t3",
         "published": True,
+        "contact_ready": True,
         "claim_status": "claimed",
-        "capabilities": {
-            "specialties": {"basis": "trainer_declaration", "permitted_in_projection": False, "freshness_state": "stale"},
-        },
+        "capabilities": package_trainer_capabilities(
+            specialties=["puppy_training"],
+            service_formats=["in_home"],
+            basis="trainer_declaration",
+            evidence_reference="sub_1",
+            confirmed_at=(datetime.now(timezone.utc) - timedelta(days=200)).isoformat(),
+        ),
     }
 
     fake_coll = _FakeCollection([t1, t2, t3])
     summary = asyncio.run(compute_capability_health_summary(fake_coll))
 
+    assert summary["total_trainers"] == 3
     assert summary["match_eligible_trainers"] == 1
-    assert summary["trainers_with_declared_capabilities"] == 2
-    assert summary["trainers_with_only_ai_proposed"] == 1
-    assert summary["stale_capability_trainers"] == 1
+    assert summary["ai_proposed_unconfirmed"] == 1
+    assert summary["stale_capabilities"] == 1
+    assert summary["policy_version"] == "v1"
 
     # Verify zero owner PII in capability_health_summary
     serialized = json.dumps(summary).lower()
-    for marker in ["owner", "email", "phone", "dog_name", "enquiry", "passcode"]:
+    for marker in ["owner_name", "first_name", "last_name", "email", "phone", "dog_name", "enquiry", "passcode"]:
         assert marker not in serialized, f"capability_health_summary leaked marker: {marker}"
 
 
@@ -748,5 +1047,3 @@ def test_real_melbourne_seed_trainers_map_cleanly_to_taxonomies():
         # Every candidate must map to at least one specialty or service format
         total_matched = len(v_spec["canonical_terms"]) + len(v_fmt["canonical_terms"])
         assert total_matched > 0, f"Real Melbourne trainer {name} with services {raw_services} failed to map to any canonical taxonomy"
-
-

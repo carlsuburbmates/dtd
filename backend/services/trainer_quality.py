@@ -7,6 +7,7 @@ Shared between CLI intake tools (scripts/) and automated backend jobs (services/
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import logging
@@ -465,23 +466,35 @@ async def record_ingestion_failure(
     if dry_run or db is None:
         return
     coll = getattr(db, "source_ingestion_state", None)
-    if coll is None:
-        return
     now_ts = now_iso()
-    await coll.update_one(
-        {"source_url": source_url},
-        {
-            "$set": {
-                "source_url": source_url,
-                "last_checked_at": now_ts,
-                "last_error": error_reason,
-                "last_error_code": "source_ingestion_failure",
-                "last_http_status": 0,
-                "consecutive_failures": 1,
-            }
-        },
-        upsert=True,
-    )
+    if coll is not None:
+        await coll.update_one(
+            {"source_url": source_url},
+            {
+                "$set": {
+                    "source_url": source_url,
+                    "last_checked_at": now_ts,
+                    "last_error": error_reason,
+                    "last_error_code": "source_ingestion_failure",
+                    "last_http_status": 0,
+                    "consecutive_failures": 1,
+                }
+            },
+            upsert=True,
+        )
+
+    # R4: If existing trainer profile is linked to this failing source URL, invalidate capabilities upon refresh failure
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is not None:
+        existing_trainer = await trainers_coll.find_one({"source_url": source_url}, {"_id": 0})
+        if not existing_trainer:
+            existing_trainer = await trainers_coll.find_one({"website": source_url}, {"_id": 0})
+        if existing_trainer and existing_trainer.get("capabilities"):
+            inv_caps = invalidate_trainer_capabilities(existing_trainer, reason=f"source_refresh_failed:{error_reason}")
+            await trainers_coll.update_one(
+                {"id": existing_trainer["id"]},
+                {"$set": {"capabilities": inv_caps, "source_last_error": error_reason, "updated_at": now_ts}},
+            )
 
 
 async def record_ingestion_success(
@@ -741,6 +754,35 @@ AI_PROPOSED_TTL_DAYS = 30           # 30 days for AI extractions (display/prefil
 VALID_CAPABILITY_BASES: Set[str] = {"trainer_declaration", "official_source", "ai_proposed"}
 
 
+@dataclass(frozen=True)
+class CapabilityProjectionPolicy:
+    """Configurable projection policy boundary separating immutable data integrity from Decision Contract v2 policy.
+
+    Immutable Data Integrity Rules:
+    - Canonical taxonomy validation against CANONICAL_SPECIALTIES, CANONICAL_SERVICE_FORMATS, etc.
+    - Field-level provenance tracking (basis, confirmed_at, evidence_reference).
+    - Lifecycle invalidation enforcement (invalidated facts cannot be projected).
+    - Hard status/gate requirements (publication, ownership dispute, statutory ABN revocation, contact readiness).
+    - Strict exclusion of commercial bias (paid tier, pricing, marketing bio, reviews, AI confidence).
+
+    Decision Contract v2 Policy Inputs (Configurable):
+    - permitted_bases: The evidence bases eligible for matching consideration.
+    - declaration_ttl_days: Validity window for direct trainer declarations.
+    - official_source_ttl_days: Validity window for structured official source captures.
+    - ai_proposed_ttl_days: Validity window for AI extractions (display/prefill only).
+    - require_specialties_or_formats: Minimum capability gate before match eligibility is granted.
+    """
+    version: str = "v1"
+    permitted_bases: Tuple[str, ...] = ("trainer_declaration",)
+    declaration_ttl_days: int = 180
+    official_source_ttl_days: int = 90
+    ai_proposed_ttl_days: int = 30
+    require_specialties_or_formats: bool = True
+
+
+DEFAULT_PROJECTION_POLICY = CapabilityProjectionPolicy()
+
+
 def normalize_specialty(val: str) -> Optional[str]:
     """Normalize specialty alias to canonical ID."""
     clean = re.sub(r"[\s\-_]+", " ", str(val or "").strip().lower())
@@ -961,10 +1003,13 @@ def compute_capability_freshness(
     basis: str,
     *,
     as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
 ) -> Tuple[str, bool]:
     """Compute deterministic freshness state based on basis TTL."""
     if not confirmed_at_str or not isinstance(confirmed_at_str, str):
         return "missing_confirmation_timestamp", False
+
+    active_policy = policy or DEFAULT_PROJECTION_POLICY
 
     # Validate ISO-8601 UTC
     valid_ts, _ = validate_iso8601_utc(confirmed_at_str)
@@ -985,9 +1030,9 @@ def compute_capability_freshness(
         return "future_timestamp_rejected", False
 
     ttl_days = (
-        TRAINER_DECLARATION_TTL_DAYS if basis == "trainer_declaration"
-        else OFFICIAL_SOURCE_TTL_DAYS if basis == "official_source"
-        else AI_PROPOSED_TTL_DAYS
+        active_policy.declaration_ttl_days if basis == "trainer_declaration"
+        else active_policy.official_source_ttl_days if basis == "official_source"
+        else active_policy.ai_proposed_ttl_days
     )
 
     if age_days > ttl_days:
@@ -1004,6 +1049,7 @@ def create_capability_fact(
     evidence_reference: str,
     confirmed_at: Optional[str] = None,
     as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
 ) -> Dict[str, Any]:
     """Create a structured capability fact with field-level provenance and validation.
 
@@ -1015,19 +1061,21 @@ def create_capability_fact(
     if basis not in VALID_CAPABILITY_BASES:
         raise ValueError(f"Invalid capability basis: {basis}. Must be one of {VALID_CAPABILITY_BASES}")
 
+    active_policy = policy or DEFAULT_PROJECTION_POLICY
     confirmation_ts = confirmed_at or now_iso()
     validation = validate_capability_category(category, raw_value)
-    freshness_state, is_fresh = compute_capability_freshness(confirmation_ts, basis, as_of=as_of)
+    freshness_state, is_fresh = compute_capability_freshness(confirmation_ts, basis, as_of=as_of, policy=active_policy)
 
     # Core match-readiness rule:
     # 1. Must be valid
     # 2. Must be fresh
-    # 3. AI proposals cannot independently become matchable without trainer declaration/confirmation!
-    permitted = bool(validation["valid"]) and is_fresh and (basis == "trainer_declaration")
+    # 3. Must be permitted under active policy
+    permitted = bool(validation["valid"]) and is_fresh and (basis in active_policy.permitted_bases)
 
     return {
         "category": category,
         "canonical_value": validation["canonical_terms"],
+        "value": validation["canonical_terms"],
         "raw_value": raw_value,
         "basis": basis,
         "evidence_reference": evidence_reference,
@@ -1053,6 +1101,7 @@ def package_trainer_capabilities(
     evidence_reference: str = "",
     confirmed_at: Optional[str] = None,
     as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """Helper to bundle all capability categories into a structured capabilities dictionary."""
     capabilities: Dict[str, Dict[str, Any]] = {}
@@ -1060,31 +1109,31 @@ def package_trainer_capabilities(
 
     if specialties is not None:
         capabilities["specialties"] = create_capability_fact(
-            "specialties", specialties, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "specialties", specialties, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if service_formats is not None:
         capabilities["service_formats"] = create_capability_fact(
-            "service_formats", service_formats, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "service_formats", service_formats, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if life_stages is not None:
         capabilities["life_stages"] = create_capability_fact(
-            "life_stages", life_stages, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "life_stages", life_stages, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if training_philosophy is not None:
         capabilities["training_philosophy"] = create_capability_fact(
-            "training_philosophy", training_philosophy, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "training_philosophy", training_philosophy, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if serviced_suburbs is not None:
         capabilities["serviced_suburbs"] = create_capability_fact(
-            "serviced_suburbs", serviced_suburbs, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "serviced_suburbs", serviced_suburbs, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if catchment_type is not None:
         capabilities["catchment_type"] = create_capability_fact(
-            "catchment_type", catchment_type, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "catchment_type", catchment_type, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
     if delivery_constraints is not None:
         capabilities["delivery_constraints"] = create_capability_fact(
-            "delivery_constraints", delivery_constraints, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of,
+            "delivery_constraints", delivery_constraints, basis=basis, evidence_reference=evidence_reference, confirmed_at=ts, as_of=as_of, policy=policy,
         )
 
     return capabilities
@@ -1102,10 +1151,13 @@ def invalidate_trainer_capabilities(
     targets = set(field_names) if field_names else set(capabilities.keys())
 
     for k, fact in capabilities.items():
-        if k in targets and isinstance(fact, dict):
+        if (not field_names or k in targets) and isinstance(fact, dict):
             fact["permitted_in_projection"] = False
             fact["invalidated_at"] = now_ts
             fact["invalidation_reason"] = reason
+
+    if "capabilities" in trainer_doc:
+        trainer_doc["capabilities"] = capabilities
 
     return capabilities
 
@@ -1114,6 +1166,7 @@ def build_match_ready_projection(
     trainer_doc: Dict[str, Any],
     *,
     as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
 ) -> Dict[str, Any]:
     """Construct a bounded, deterministic match-ready capability projection for matching.
 
@@ -1122,7 +1175,9 @@ def build_match_ready_projection(
     - AI-proposed facts CANNOT enter the projection without trainer confirmation.
     - Paid tier, pricing, marketing bio, reviews, and AI confidence are STRICTLY EXCLUDED.
     - Profiles that are unpublished, disputed, contact-unready, or statutory revoked fail closed.
+    - R1: Legacy records without explicit provenance/confirmation fail closed with legacy_unconfirmed_provenance.
     """
+    active_policy = policy or DEFAULT_PROJECTION_POLICY
     as_of_iso = (as_of or datetime.now(timezone.utc)).isoformat()
     reasons: List[str] = []
     is_eligible = True
@@ -1178,19 +1233,21 @@ def build_match_ready_projection(
         for cat, fact in capabilities.items():
             if not isinstance(fact, dict):
                 continue
-            # Re-evaluate freshness
+            # Re-evaluate freshness using active policy
             freshness_state, is_fresh = compute_capability_freshness(
                 str(fact.get("confirmed_at") or ""),
                 str(fact.get("basis") or "ai_proposed"),
                 as_of=as_of,
+                policy=active_policy,
             )
             basis = str(fact.get("basis") or "ai_proposed")
             is_valid = bool((fact.get("validation_result") or {}).get("valid", True))
             is_permitted = (
-                (basis == "trainer_declaration")
+                (basis in active_policy.permitted_bases)
                 and is_valid
                 and is_fresh
                 and not fact.get("invalidation_reason")
+                and not fact.get("invalidated_at")
             )
             if not is_permitted:
                 continue
@@ -1211,20 +1268,12 @@ def build_match_ready_projection(
             elif cat == "delivery_constraints" and isinstance(val, dict):
                 projected_delivery_constraints = val
     else:
-        # Legacy record fallback / adaptation
-        # A legacy record has trainer declaration basis ONLY if it has via_submission_id or is claimed
-        # or is a mock test fixture without external source evidence
-        has_trainer_declaration = bool(
-            trainer_doc.get("via_submission_id")
-            or trainer_doc.get("claimed")
-            or str(trainer_doc.get("claim_status") or "").lower() == "claimed"
-            or trainer_doc.get("claimed_at")
-            or (not trainer_doc.get("source_url") and not trainer_doc.get("source_evidence_url"))
-        )
-        if has_trainer_declaration:
-            # Validate legacy fields against canonical taxonomy
+        # R1: Missing provenance is NOT promoted to a trainer declaration.
+        # Legacy records without structured capabilities fail closed unless explicit test fixture basis is provided.
+        test_fixture_basis = str(trainer_doc.get("_test_fixture_basis") or "")
+        if test_fixture_basis in active_policy.permitted_bases:
             confirmed_ts = str(trainer_doc.get("created_at") or trainer_doc.get("updated_at") or now_iso())
-            f_state, is_fresh = compute_capability_freshness(confirmed_ts, "trainer_declaration", as_of=as_of)
+            f_state, is_fresh = compute_capability_freshness(confirmed_ts, test_fixture_basis, as_of=as_of, policy=active_policy)
             if is_fresh:
                 raw_specs = trainer_doc.get("specialties") or trainer_doc.get("services") or []
                 v_spec = validate_capability_category("specialties", raw_specs)
@@ -1253,14 +1302,14 @@ def build_match_ready_projection(
             else:
                 reasons.append("legacy_trainer_declaration_stale")
         else:
-            # Unclaimed, unsubmitted legacy record -> AI proposed extraction only
-            # CDR-021/CDR-022: Cannot independently create matchable capability facts
-            reasons.append("unconfirmed_ai_extraction_not_matchable")
+            is_eligible = False
+            reasons.append("legacy_unconfirmed_provenance")
 
     # Minimum capability requirement for matching
-    if not projected_specialties and not projected_service_formats:
-        is_eligible = False
-        reasons.append("no_permitted_matchable_capabilities")
+    if active_policy.require_specialties_or_formats:
+        if not projected_specialties and not projected_service_formats:
+            is_eligible = False
+            reasons.append("no_permitted_matchable_capabilities")
 
     return {
         "trainer_id": str(trainer_doc.get("id") or ""),
@@ -1274,7 +1323,7 @@ def build_match_ready_projection(
         "life_stages": projected_life_stages,
         "training_philosophy": projected_philosophy,
         "delivery_constraints": projected_delivery_constraints,
-        "projection_version": "v1",
+        "projection_version": active_policy.version,
         "as_of": as_of_iso,
         "match_eligible": is_eligible,
         "eligibility_reasons": reasons,
@@ -1285,13 +1334,16 @@ def assess_trainer_capability_health(
     trainer_doc: Dict[str, Any],
     *,
     as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
 ) -> Dict[str, Any]:
     """Assess capability health and provenance for `/ops` visibility (zero owner PII)."""
+    active_policy = policy or DEFAULT_PROJECTION_POLICY
     capabilities = trainer_doc.get("capabilities") or {}
     total_facts = len(capabilities)
     permitted_facts = 0
     stale_facts = 0
     ai_proposed_count = 0
+    invalidated_count = 0
     rejected_terms: List[str] = []
 
     for fact in capabilities.values():
@@ -1304,16 +1356,19 @@ def assess_trainer_capability_health(
             str(fact.get("confirmed_at") or ""),
             basis,
             as_of=as_of,
+            policy=active_policy,
         )
         if not is_fresh and freshness == "stale":
             stale_facts += 1
-        if fact.get("permitted_in_projection") and is_fresh:
+        if fact.get("invalidated_at") or fact.get("invalidation_reason"):
+            invalidated_count += 1
+        if fact.get("permitted_in_projection") and is_fresh and not fact.get("invalidation_reason") and not fact.get("invalidated_at") and (basis in active_policy.permitted_bases):
             permitted_facts += 1
         val_res = fact.get("validation_result") or {}
         rej = val_res.get("rejected_terms") or []
         rejected_terms.extend(rej)
 
-    projection = build_match_ready_projection(trainer_doc, as_of=as_of)
+    projection = build_match_ready_projection(trainer_doc, as_of=as_of, policy=active_policy)
 
     return {
         "trainer_id": str(trainer_doc.get("id") or ""),
@@ -1322,6 +1377,7 @@ def assess_trainer_capability_health(
         "total_facts": total_facts,
         "permitted_facts": permitted_facts,
         "stale_facts": stale_facts,
+        "invalidated_facts": invalidated_count,
         "ai_proposed_unconfirmed": ai_proposed_count,
         "rejected_terms": rejected_terms,
         "match_eligible": projection["match_eligible"],
@@ -1329,33 +1385,86 @@ def assess_trainer_capability_health(
     }
 
 
-async def compute_capability_health_summary(trainers_coll: Any) -> Dict[str, int]:
-    """Compute aggregate capability health metrics across all trainers for /ops visibility."""
-    return {
-        "match_eligible_trainers": await trainers_coll.count_documents({
-            "published": True,
-            "claim_status": {"$ne": "claim_disputed"},
-            "$or": [
-                {"capabilities.specialties.permitted_in_projection": True},
-                {"capabilities.service_formats.permitted_in_projection": True},
-                {"via_submission_id": {"$exists": True, "$ne": ""}},
-                {"claimed": True},
-            ],
-        }),
-        "trainers_with_declared_capabilities": await trainers_coll.count_documents({
-            "$or": [
-                {"capabilities.specialties.basis": "trainer_declaration"},
-                {"via_submission_id": {"$exists": True, "$ne": ""}},
-                {"claimed": True},
-            ],
-        }),
-        "trainers_with_only_ai_proposed": await trainers_coll.count_documents({
-            "capabilities.specialties.basis": "ai_proposed",
-            "via_submission_id": {"$exists": False},
-            "claimed": {"$ne": True},
-        }),
-        "stale_capability_trainers": await trainers_coll.count_documents({
-            "capabilities.specialties.freshness_state": "stale",
-        }),
-    }
+async def compute_capability_health_summary(
+    trainers_coll: Any,
+    *,
+    as_of: Optional[datetime] = None,
+    policy: Optional[CapabilityProjectionPolicy] = None,
+) -> Dict[str, int]:
+    """Compute aggregate capability health metrics across all trainers for /ops visibility.
 
+    Evaluates effective projection logic across all trainers. Zero owner PII.
+    Provides actionable, non-PII reason categories.
+    """
+    active_policy = policy or DEFAULT_PROJECTION_POLICY
+    cursor = trainers_coll.find({}, {
+        "_id": 0,
+        "id": 1,
+        "name": 1,
+        "suburb": 1,
+        "published": 1,
+        "claim_status": 1,
+        "contact_ready": 1,
+        "abn_status": 1,
+        "abn_verified": 1,
+        "phone": 1,
+        "email": 1,
+        "website": 1,
+        "capabilities": 1,
+        "source_url": 1,
+        "source_evidence_url": 1,
+    })
+
+    if hasattr(cursor, "to_list"):
+        trainers = await cursor.to_list(10000)
+    else:
+        trainers = list(cursor)
+
+    total_trainers = len(trainers)
+    match_eligible_count = 0
+    missing_declaration_count = 0
+    ai_proposed_unconfirmed_count = 0
+    stale_count = 0
+    invalidated_count = 0
+    ownership_disputed_count = 0
+    suppressed_or_unpublished_count = 0
+    contact_gate_count = 0
+
+    for t in trainers:
+        proj = build_match_ready_projection(t, as_of=as_of, policy=active_policy)
+        reasons = proj.get("eligibility_reasons") or []
+        caps = t.get("capabilities") or {}
+
+        if proj.get("match_eligible"):
+            match_eligible_count += 1
+            continue
+
+        # Classify reasons
+        if "ownership_disputed" in reasons or str(t.get("claim_status") or "").lower() == "claim_disputed":
+            ownership_disputed_count += 1
+        elif "profile_not_published" in reasons or "statutory_abn_revoked" in reasons:
+            suppressed_or_unpublished_count += 1
+        elif "not_contact_ready" in reasons:
+            contact_gate_count += 1
+        elif any(isinstance(f, dict) and (f.get("invalidated_at") or f.get("invalidation_reason")) for f in caps.values()):
+            invalidated_count += 1
+        elif any(isinstance(f, dict) and compute_capability_freshness(str(f.get("confirmed_at") or ""), str(f.get("basis") or ""), as_of=as_of, policy=active_policy)[0] == "stale" for f in caps.values()):
+            stale_count += 1
+        elif any(isinstance(f, dict) and f.get("basis") == "ai_proposed" for f in caps.values()):
+            ai_proposed_unconfirmed_count += 1
+        else:
+            missing_declaration_count += 1
+
+    return {
+        "policy_version": active_policy.version,
+        "permitted_bases": list(active_policy.permitted_bases),
+        "total_trainers": total_trainers,
+        "match_eligible_trainers": match_eligible_count,
+        "missing_declaration": missing_declaration_count,
+        "ai_proposed_unconfirmed": ai_proposed_unconfirmed_count,
+        "stale_capabilities": stale_count,
+        "invalidated_capabilities": invalidated_count,
+        "ownership_disputed": ownership_disputed_count,
+        "suppressed_or_unpublished": suppressed_or_unpublished_count,
+        "not_contact_ready": contact_gate_count,
+    }

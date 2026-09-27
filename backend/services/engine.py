@@ -33,6 +33,10 @@ from . import automation as automation_service
 from . import deduplication
 from . import notifications as notifications_service
 from . import suburb_inventory
+try:
+    from services import trainer_quality  # type: ignore
+except ImportError:
+    from backend.services import trainer_quality  # type: ignore
 
 logger = logging.getLogger("dtd.engine")
 
@@ -307,25 +311,30 @@ async def reverify_listings(db, ai_service, batch: int = 5) -> Dict[str, Any]:
         # Only statutory ABR status and verified evidence govern publication transitions.
         abn_status = str(t.get("abn_status") or "").lower()
         statutory_revoked = t.get("abn_verified") is False and abn_status in {"cancelled", "inactive", "deregistered"}
+        update_set: Dict[str, Any] = {
+            "confidence_score": conf,
+            "verification_status": status,
+            "verification_reasoning": score.get("reasoning", ""),
+            "verification_signals": score.get("signals", []),
+            "verification_model": score.get("model", "heuristic"),
+            "verified_at": now_iso(),
+            "contact_ready": bool(t.get("website") or t.get("phone") or t.get("email")),
+        }
         if was_published and statutory_revoked:
             published = False
             auto_hide += 1
+            # R4: Atomically invalidate capabilities upon statutory revocation
+            inv_caps = trainer_quality.invalidate_trainer_capabilities(t, reason="statutory_abn_revoked")
+            update_set["capabilities"] = inv_caps
         else:
             published = was_published  # Preserve existing publication state; AI confidence never alters it
+        update_set["published"] = published
+
         history_entry = {"score": round(conf, 3), "ts": now_iso(), "model": score.get("model", "heuristic")}
         await db.trainers.update_one(
             {"id": t["id"]},
             {
-                "$set": {
-                    "confidence_score": conf,
-                    "verification_status": status,
-                    "verification_reasoning": score.get("reasoning", ""),
-                    "verification_signals": score.get("signals", []),
-                    "verification_model": score.get("model", "heuristic"),
-                    "verified_at": now_iso(),
-                    "published": published,
-                    "contact_ready": bool(t.get("website") or t.get("phone") or t.get("email")),
-                },
+                "$set": update_set,
                 "$push": {"verification_history": {"$each": [history_entry], "$slice": -20}},
             },
         )

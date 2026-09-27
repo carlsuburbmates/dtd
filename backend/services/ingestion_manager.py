@@ -320,7 +320,7 @@ async def run_batch_ingestion_pipeline(
             # 4. Canonical Publishing Quality Assessment
             quality = publishing_quality(candidate_doc)
             is_active_abn = bool(abr_evidence.get("is_active")) and quality.get("active_abn_evidence")
-            
+
             # DF-014 Remediation: Only statutory active ABR + reachability + quality eligibility can publish
             is_eligible_to_publish = bool(quality.get("eligible")) and is_active_abn
 

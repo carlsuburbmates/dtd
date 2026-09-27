@@ -136,4 +136,76 @@ describe("Submit page validation and submission test", () => {
 
         expect(container.textContent).toContain("Submission received for manual review.");
     });
+
+    it("captures structured capability declarations and transmits them cleanly", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                id: "sub-caps-456",
+                status: "published",
+                verification_reasoning: "Profile verified with valid ABN and declared capabilities.",
+            },
+        });
+
+        await act(async () => {
+            root.render(<Submit />);
+        });
+
+        // Verification: Explanatory notice rendered
+        expect(container.textContent).toContain("Confirmed capabilities directly determine which dog owner requests DTD will match with your profile");
+        expect(container.textContent).toContain("Freeform bio and marketing text do not influence matching eligibility");
+
+        const nameInput = container.querySelector("[data-testid='submit-name']");
+        const suburbInput = container.querySelector("[data-testid='submit-suburb']");
+        const abnInput = container.querySelector("[data-testid='submit-abn']");
+        const form = container.querySelector("form[data-testid='submit-form']");
+
+        act(() => {
+            changeValue(nameInput, "Alpha K9 Training");
+            changeValue(suburbInput, "Fitzroy");
+            changeValue(abnInput, "98765432101");
+        });
+
+        // Check structured capability fields
+        const puppyCheckbox = container.querySelector("[data-testid='submit-specialty-puppy_training']");
+        const inHomeCheckbox = container.querySelector("[data-testid='submit-format-in_home']");
+        const stagePuppyCheckbox = container.querySelector("[data-testid='submit-stage-puppy']");
+        const philosophySelect = container.querySelector("[data-testid='submit-training-philosophy']");
+
+        expect(puppyCheckbox).not.toBeNull();
+        expect(inHomeCheckbox).not.toBeNull();
+        expect(stagePuppyCheckbox).not.toBeNull();
+
+        act(() => {
+            puppyCheckbox.click();
+            inHomeCheckbox.click();
+            stagePuppyCheckbox.click();
+            const descriptor = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value");
+            descriptor.set.call(philosophySelect, "positive_reinforcement_force_free");
+            philosophySelect.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+
+        const consentPublic = container.querySelector("[data-testid='submit-consent-public']");
+        const consentAccuracy = container.querySelector("[data-testid='submit-consent-accuracy']");
+        const consentBilling = container.querySelector("[data-testid='submit-consent-billing']");
+
+        act(() => {
+            consentPublic.click();
+            consentAccuracy.click();
+            consentBilling.click();
+        });
+
+        await act(async () => {
+            form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+
+        expect(api.post).toHaveBeenCalledWith("/submissions", expect.objectContaining({
+            name: "Alpha K9 Training",
+            suburb: "Fitzroy",
+            abn: "98765432101",
+            specialties: ["puppy_training"],
+            service_formats: ["in_home"],
+            life_stages: ["puppy"],
+            training_philosophy: "positive_reinforcement_force_free",
+        }));
+    });
 });

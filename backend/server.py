@@ -3369,6 +3369,14 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         existing_trainer = await db.trainers.find_one({"website": str(sub["website"]).strip()}, {"_id": 0})
 
     if existing_trainer and str(existing_trainer.get("claim_status") or "").lower() in {"claimed", "claim_disputed"}:
+        # R4: Atomically invalidate capabilities upon ownership dispute
+        inv_caps = trainer_quality.invalidate_trainer_capabilities(existing_trainer, reason="ownership_dispute")
+        await db.trainers.update_one(
+            {"id": existing_trainer["id"]},
+            {"$set": {"claim_status": "claim_disputed", "capabilities": inv_caps, "updated_at": now_iso()}},
+        )
+        await _audit("trainer_capabilities_invalidated", existing_trainer["id"], after={"reason": "ownership_dispute"}, actor="system")
+
         sub_doc = {
             "id": new_id(),
             "trainer_id": existing_trainer["id"],
@@ -3791,30 +3799,8 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         )
         raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
 
-    existing_caps = trainer.get("capabilities") or {}
-    declared_caps = {}
-    if existing_caps:
-        for cat, fact in existing_caps.items():
-            if isinstance(fact, dict):
-                declared_caps[cat] = trainer_quality.create_capability_fact(
-                    cat,
-                    fact.get("raw_value") or fact.get("canonical_value"),
-                    basis="trainer_declaration",
-                    evidence_reference=f"claim_event:{event['id']}",
-                    confirmed_at=now.isoformat(),
-                )
-    else:
-        declared_caps = trainer_quality.package_trainer_capabilities(
-            specialties=trainer.get("specialties") or trainer.get("services"),
-            service_formats=trainer.get("service_formats"),
-            training_philosophy=trainer.get("training_philosophy") or trainer.get("philosophy"),
-            serviced_suburbs=trainer.get("serviced_suburbs"),
-            catchment_type=trainer.get("catchment_type"),
-            basis="trainer_declaration",
-            evidence_reference=f"claim_event:{event['id']}",
-            confirmed_at=now.isoformat(),
-        )
-
+    # R2: Keep identity/ownership claim verification separate from capability confirmation.
+    # The server MUST NOT promote capabilities solely because OTP verification succeeded.
     claim_update = await db.trainers.update_one(
         {"id": trainer_id, "claim_status": {"$in": ["", "unclaimed", "pending_verification"]}},
         {
@@ -3823,7 +3809,6 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
                 "tier": "claimed",
                 "claimed_at": now.isoformat(),
                 "claim_event_id": event["id"],
-                "capabilities": declared_caps,
             }
         },
     )
@@ -3839,7 +3824,213 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
     )
     session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
     await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
-    return _scrub({"ok": True, "trainer_id": trainer_id, "claim_status": "claimed", "tier": "claimed", "session": session})
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "claim_status": "claimed",
+        "tier": "claimed",
+        "capabilities_confirmed": bool(trainer.get("capabilities_confirmed_at")),
+        "session": session,
+    })
+
+
+class TrainerCapabilitiesConfirmIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    specialties: Optional[List[str]] = None
+    service_formats: Optional[List[str]] = None
+    life_stages: Optional[List[str]] = None
+    training_philosophy: Optional[str] = None
+    serviced_suburbs: Optional[List[str]] = None
+    catchment_type: Optional[str] = None
+    delivery_constraints: Optional[Dict[str, Any]] = None
+    confirmation_statement: bool = False
+    trainer_claim_session: Optional[str] = None
+
+
+@api.get("/trainers/{trainer_id}/capabilities/prefill")
+async def get_trainer_capabilities_prefill(
+    trainer_id: str,
+    request: Request,
+    x_trainer_claim_session: Optional[str] = Header(None, alias="X-Trainer-Claim-Session"),
+) -> Dict[str, Any]:
+    """Retrieve prefilled trainer capabilities and canonical taxonomy options for confirmation UI."""
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+
+    caps = trainer.get("capabilities") or {}
+    prefill = {
+        "specialties": (
+            (caps.get("specialties") or {}).get("canonical_value")
+            or trainer.get("specialties")
+            or trainer.get("services")
+            or []
+        ),
+        "service_formats": (
+            (caps.get("service_formats") or {}).get("canonical_value")
+            or trainer.get("service_formats")
+            or []
+        ),
+        "life_stages": (
+            (caps.get("life_stages") or {}).get("canonical_value")
+            or trainer.get("life_stages")
+            or []
+        ),
+        "training_philosophy": (
+            (caps.get("training_philosophy") or {}).get("canonical_value")
+            or trainer.get("training_philosophy")
+            or trainer.get("philosophy")
+            or ""
+        ),
+        "serviced_suburbs": (
+            (caps.get("serviced_suburbs") or {}).get("canonical_value")
+            or trainer.get("serviced_suburbs")
+            or ([trainer.get("suburb")] if trainer.get("suburb") else [])
+        ),
+        "catchment_type": (
+            (caps.get("catchment_type") or {}).get("canonical_value")
+            or trainer.get("catchment_type")
+            or "specific_suburbs"
+        ),
+        "capabilities_confirmed_at": trainer.get("capabilities_confirmed_at") or "",
+        "claim_status": trainer.get("claim_status") or "unclaimed",
+    }
+    options = {
+        "specialties": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_SPECIALTIES.items()
+        ],
+        "service_formats": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_SERVICE_FORMATS.items()
+        ],
+        "life_stages": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_LIFE_STAGES.items()
+        ],
+        "training_philosophies": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.VALID_TRAINING_PHILOSOPHIES.items()
+        ],
+        "catchment_types": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.VALID_CATCHMENT_TYPES.items()
+        ],
+    }
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "prefill": prefill,
+        "prefilled": prefill,
+        "options": options,
+        "canonical_options": options,
+    })
+
+
+@api.post("/trainers/{trainer_id}/capabilities/confirm")
+async def confirm_trainer_capabilities(
+    trainer_id: str,
+    payload: TrainerCapabilitiesConfirmIn,
+    request: Request,
+    x_trainer_claim_session: Optional[str] = Header(None, alias="X-Trainer-Claim-Session"),
+) -> Dict[str, Any]:
+    """Explicitly confirm and declare structured trainer capabilities (R2).
+
+    Requires explicit confirmation statement and valid trainer claim session or admin pass.
+    """
+    req_headers = request.headers if request else {}
+    token = (
+        x_trainer_claim_session
+        or req_headers.get("X-Trainer-Claim-Session")
+        or payload.trainer_claim_session
+        or (req_headers.get("Authorization") or "").replace("Bearer ", "").strip()
+    )
+    admin_pass = req_headers.get("X-Admin-Pass") or ""
+    expected_admin_pass = os.environ.get("ADMIN_PASS")
+    is_admin = bool(expected_admin_pass and admin_pass and hmac.compare_digest(admin_pass, expected_admin_pass))
+
+    claim_session = None
+    if not is_admin:
+        if not token:
+            raise HTTPException(status_code=401, detail="Trainer claim session or admin authorization required.")
+        claim_session = _verify_trainer_claim_session(token, trainer_id=trainer_id)
+
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+
+    if str(trainer.get("claim_status") or "").lower() == "claim_disputed":
+        raise HTTPException(status_code=409, detail="This profile is under ownership dispute and capabilities cannot be confirmed.")
+
+    # R2: Strict confirmation statement requirement
+    if not payload.confirmation_statement:
+        raise HTTPException(
+            status_code=422,
+            detail="Explicit confirmation statement is required before capabilities gain trainer declaration basis.",
+        )
+
+    now_ts = now_iso()
+    claim_ref = f"claim_confirmation:{claim_session['claim_event_id']}" if claim_session else f"ops_confirmation:{now_ts}"
+
+    # Package validated structured capabilities
+    confirmed_caps = trainer_quality.package_trainer_capabilities(
+        specialties=payload.specialties,
+        service_formats=payload.service_formats,
+        life_stages=payload.life_stages,
+        training_philosophy=payload.training_philosophy,
+        serviced_suburbs=payload.serviced_suburbs,
+        catchment_type=payload.catchment_type,
+        delivery_constraints=payload.delivery_constraints,
+        basis="trainer_declaration",
+        evidence_reference=claim_ref,
+        confirmed_at=now_ts,
+    )
+
+    # R4: Preserve historical audit trail; omit/corrected fields receive invalidation rather than deletion
+    existing_caps = trainer.get("capabilities") or {}
+    for cat, old_fact in existing_caps.items():
+        if cat not in confirmed_caps and isinstance(old_fact, dict):
+            old_fact["permitted_in_projection"] = False
+            old_fact["invalidated_at"] = now_ts
+            old_fact["invalidation_reason"] = "trainer_corrected"
+            confirmed_caps[cat] = old_fact
+
+    update_data: Dict[str, Any] = {
+        "capabilities": confirmed_caps,
+        "capabilities_confirmed_at": now_ts,
+        "updated_at": now_ts,
+    }
+    if payload.specialties is not None:
+        update_data["specialties"] = payload.specialties
+    if payload.service_formats is not None:
+        update_data["service_formats"] = payload.service_formats
+    if payload.life_stages is not None:
+        update_data["life_stages"] = payload.life_stages
+    if payload.training_philosophy is not None:
+        update_data["training_philosophy"] = payload.training_philosophy
+    if payload.serviced_suburbs is not None:
+        update_data["serviced_suburbs"] = payload.serviced_suburbs
+    if payload.catchment_type is not None:
+        update_data["catchment_type"] = payload.catchment_type
+
+    await db.trainers.update_one({"id": trainer_id}, {"$set": update_data})
+    await _audit(
+        "trainer_capabilities_confirmed",
+        trainer_id,
+        after={"categories": list(confirmed_caps.keys()), "confirmed_at": now_ts, "ref": claim_ref},
+        actor="trainer" if claim_session else "ops",
+    )
+
+    updated_trainer = {**trainer, **update_data}
+    projection = trainer_quality.build_match_ready_projection(updated_trainer)
+
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "capabilities": confirmed_caps,
+        "match_ready": projection["match_eligible"],
+        "projection": projection,
+    })
 
 
 @api.post("/owner-waitlist")

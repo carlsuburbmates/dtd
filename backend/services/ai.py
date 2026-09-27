@@ -41,6 +41,9 @@ except ImportError:
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
 GEMINI_TIMEOUT_S = float(os.environ.get("GEMINI_TIMEOUT_S", "5.0"))
 MAX_DEGRADATION_EVENTS = 100
+ENABLE_MATCH_READY_PROJECTION_FILTER = (
+    os.environ.get("ENABLE_MATCH_READY_PROJECTION_FILTER", "").lower() in ("1", "true", "yes")
+)
 
 VALID_PHILOSOPHIES: Set[str] = {
     "Positive Reinforcement / Force-Free",
@@ -646,23 +649,23 @@ def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[st
     scored: List[Dict[str, Any]] = []
     for t in trainers:
         proj = t if "projection_version" in t else build_match_ready_projection(t)
-        if not proj.get("match_eligible"):
+        if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
             continue
 
         words = (
-            (proj.get("name") or "")
+            (proj.get("name") or t.get("name") or "")
             + " "
-            + (proj.get("suburb") or "")
+            + (proj.get("suburb") or t.get("suburb") or "")
             + " "
-            + " ".join(proj.get("specialties") or [])
+            + " ".join(proj.get("specialties") or t.get("specialties") or t.get("services") or [])
             + " "
-            + " ".join(proj.get("service_formats") or [])
+            + " ".join(proj.get("service_formats") or t.get("service_formats") or [])
             + " "
-            + " ".join(proj.get("life_stages") or [])
+            + " ".join(proj.get("life_stages") or t.get("life_stages") or [])
             + " "
-            + (proj.get("training_philosophy") or "")
+            + (proj.get("training_philosophy") or t.get("training_philosophy") or t.get("philosophy") or "")
             + " "
-            + " ".join(proj.get("serviced_suburbs") or [])
+            + " ".join(proj.get("serviced_suburbs") or t.get("serviced_suburbs") or [])
         ).lower()
         hits = sum(1 for tok in tokens if tok in words)
         score = min(1.0, 0.40 + 0.15 * hits) if hits > 0 else 0.40
@@ -671,6 +674,8 @@ def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[st
                 "trainer_id": proj.get("trainer_id") or t.get("id"),
                 "score": round(score, 2),
                 "reasoning": f"Deterministic keyword match ({hits} topic overlaps detected) for owner enquiry.",
+                "match_ready": bool(proj.get("match_eligible")),
+                "eligibility_reasons": proj.get("eligibility_reasons") or [],
             }
         )
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -841,21 +846,26 @@ async def match_trainers(
     # Deliberately exclude bio, tier, billing_status, pricing, or confidence scores
     candidates = []
     candidate_ids: Set[str] = set()
+    diagnostics_by_id: Dict[str, Dict[str, Any]] = {}
     for t in trainers:
         proj = t if "projection_version" in t else build_match_ready_projection(t)
-        if not proj.get("match_eligible"):
+        if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
             continue
         t_id = str(proj.get("trainer_id") or t.get("id") or "")
         candidate_ids.add(t_id)
+        diagnostics_by_id[t_id] = {
+            "match_ready": bool(proj.get("match_eligible")),
+            "eligibility_reasons": proj.get("eligibility_reasons") or [],
+        }
         candidates.append({
             "id": t_id,
-            "name": proj.get("name"),
-            "suburb": proj.get("suburb"),
-            "specialties": proj.get("specialties") or [],
-            "service_formats": proj.get("service_formats") or [],
-            "training_philosophy": proj.get("training_philosophy") or "",
-            "life_stages": proj.get("life_stages") or [],
-            "serviced_suburbs": proj.get("serviced_suburbs") or [],
+            "name": proj.get("name") or t.get("name"),
+            "suburb": proj.get("suburb") or t.get("suburb"),
+            "specialties": proj.get("specialties") or t.get("specialties") or t.get("services") or [],
+            "service_formats": proj.get("service_formats") or t.get("service_formats") or [],
+            "training_philosophy": proj.get("training_philosophy") or t.get("training_philosophy") or t.get("philosophy") or "",
+            "life_stages": proj.get("life_stages") or t.get("life_stages") or [],
+            "serviced_suburbs": proj.get("serviced_suburbs") or t.get("serviced_suburbs") or [],
         })
 
     if not candidates:
@@ -885,7 +895,13 @@ async def match_trainers(
         if not parsed:
             raise StructuredValidationError("Empty or non-JSON output from Gemini match")
 
-        return validate_match_output(parsed, candidate_ids)
+        results = validate_match_output(parsed, candidate_ids)
+        for item in results:
+            t_id = str(item.get("trainer_id") or "")
+            if t_id in diagnostics_by_id:
+                item["match_ready"] = diagnostics_by_id[t_id]["match_ready"]
+                item["eligibility_reasons"] = diagnostics_by_id[t_id]["eligibility_reasons"]
+        return results
 
     except asyncio.TimeoutError:
         await record_degradation_event(

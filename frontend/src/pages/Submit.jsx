@@ -6,6 +6,50 @@ import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import { usePublicMonetizationCopy } from "@/lib/publicPolicy";
 
+const CANONICAL_SPECIALTY_OPTIONS = [
+    { id: "puppy_training", label: "Puppy Training & Socialisation" },
+    { id: "obedience", label: "Basic & Advanced Obedience" },
+    { id: "behaviour_modification", label: "Behaviour Modification" },
+    { id: "leash_reactivity", label: "Leash Reactivity & Pulling" },
+    { id: "separation_anxiety", label: "Separation Anxiety" },
+    { id: "barking", label: "Excessive Barking" },
+    { id: "aggression", label: "Aggression & Complex Behaviour" },
+    { id: "fear_anxiety", label: "Fear, Phobias & Anxiety" },
+    { id: "recall", label: "Reliable Recall" },
+    { id: "resource_guarding", label: "Resource Guarding" },
+    { id: "rescue_rehoming", label: "Rescue & Rehoming" },
+    { id: "scent_work", label: "Scent Work & Mental Stimulation" },
+    { id: "therapy_assistance", label: "Therapy & Assistance Dog Prep" },
+];
+
+const CANONICAL_FORMAT_OPTIONS = [
+    { id: "in_home", label: "In-Home Private Training" },
+    { id: "facility", label: "Training Centre / Facility" },
+    { id: "outdoor_park", label: "Outdoor & Park Sessions" },
+    { id: "board_and_train", label: "Board & Train (Residential)" },
+    { id: "online", label: "Online / Virtual Coaching" },
+    { id: "group_classes", label: "Group Classes" },
+];
+
+const CANONICAL_STAGE_OPTIONS = [
+    { id: "puppy", label: "Puppy (< 6 months)" },
+    { id: "adolescent", label: "Adolescent (6 - 18 months)" },
+    { id: "adult", label: "Adult (1.5 - 7 years)" },
+    { id: "senior", label: "Senior (7+ years)" },
+    { id: "all_life_stages", label: "All Life Stages" },
+];
+
+const TRAINING_PHILOSOPHY_OPTIONS = [
+    { id: "positive_reinforcement_force_free", label: "Positive Reinforcement / Force-Free" },
+    { id: "balanced", label: "Balanced Training" },
+];
+
+const CATCHMENT_OPTIONS = [
+    { id: "specific_suburbs", label: "Specific Nominated Suburbs" },
+    { id: "radius", label: "Distance Radius from Suburb" },
+    { id: "melbourne_wide", label: "Melbourne-Wide Coverage" },
+];
+
 export default function Submit() {
     const monetizationCopy = usePublicMonetizationCopy();
     const [form, setForm] = useState({
@@ -21,6 +65,12 @@ export default function Submit() {
         services: "",
         categories: "",
         source_evidence_url: "",
+        specialties: [],
+        service_formats: [],
+        life_stages: [],
+        training_philosophy: "",
+        catchment_type: "specific_suburbs",
+        serviced_suburbs: "",
         consent_public_listing: false,
         consent_information_accuracy: false,
         consent_intro_billing_terms: false,
@@ -50,6 +100,15 @@ export default function Submit() {
                 return copy;
             });
         }
+    };
+
+    const toggleArrayItem = (field, id) => {
+        setForm((prev) => {
+            const list = prev[field] || [];
+            const exists = list.includes(id);
+            const updated = exists ? list.filter((x) => x !== id) : [...list, id];
+            return { ...prev, [field]: updated };
+        });
     };
 
     const submit = async (e) => {
@@ -101,6 +160,12 @@ export default function Submit() {
                 source_evidence_url: form.source_evidence_url.trim(),
                 services: form.services ? form.services.split(",").map((s) => s.trim()).filter(Boolean) : [],
                 categories: form.categories ? form.categories.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean) : [],
+                specialties: form.specialties,
+                service_formats: form.service_formats,
+                life_stages: form.life_stages,
+                training_philosophy: form.training_philosophy || undefined,
+                catchment_type: form.catchment_type || undefined,
+                serviced_suburbs: form.serviced_suburbs ? form.serviced_suburbs.split(",").map((s) => s.trim()).filter(Boolean) : [],
             });
             setResult(r.data);
             toast.success(r.data.status === "published" ? "Live now." : r.data.status === "held" ? "Received, more detail may be needed." : "Submitted.");
@@ -235,25 +300,25 @@ export default function Submit() {
                                 placeholder="Where updates are sent"
                             />
                         </Field>
-                        <Field label="Services (comma)" full>
+                        <Field label="Services (public display only)" full>
                             <input
                                 data-testid="submit-services"
                                 className="input-public"
                                 value={form.services}
                                 onChange={change("services")}
-                                placeholder="In-home, Group classes"
+                                placeholder="In-home, Group classes (informational only)"
                             />
                         </Field>
-                        <Field label="Categories (comma)" full>
+                        <Field label="Categories (public display only)" full>
                             <input
                                 data-testid="submit-categories"
                                 className="input-public"
                                 value={form.categories}
                                 onChange={change("categories")}
-                                placeholder="puppy, behaviour"
+                                placeholder="puppy, behaviour (informational only)"
                             />
                         </Field>
-                        <Field label="Short description" full>
+                        <Field label="Short description (informational)" full>
                             <textarea
                                 data-testid="submit-bio"
                                 rows={3}
@@ -271,6 +336,131 @@ export default function Submit() {
                                 onChange={change("source_evidence_url")}
                             />
                         </Field>
+
+                        {/* Structured Capability Declaration */}
+                        <div className="sm:col-span-2 rounded-2xl border border-[#D9B36C]/70 bg-[#FFFDF7] p-5 my-2" data-testid="submit-capabilities-section">
+                            <div className="flex items-center gap-2 mb-2">
+                                <ShieldCheck className="w-5 h-5 text-[#1A3A32]" />
+                                <h3 className="font-serif text-lg text-[#1A3A32]">Trainer Capabilities &amp; Match Declaration</h3>
+                            </div>
+                            <p className="text-xs text-[#4A615A] leading-relaxed mb-4">
+                                <strong>How matching works:</strong> Confirmed capabilities directly determine which dog owner requests DTD will match with your profile. Freeform bio and marketing text do not influence matching eligibility.
+                            </p>
+
+                            {/* Specialties */}
+                            <div className="mb-4">
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-2 uppercase tracking-wide">
+                                    Specialties &amp; Concerns
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {CANONICAL_SPECIALTY_OPTIONS.map((spec) => (
+                                        <label key={spec.id} className="flex items-start gap-2 text-xs text-[#2A443B] p-1.5 rounded hover:bg-[#F2ECE1]/50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.specialties.includes(spec.id)}
+                                                onChange={() => toggleArrayItem("specialties", spec.id)}
+                                                className="mt-0.5 h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`submit-specialty-${spec.id}`}
+                                            />
+                                            <span>{spec.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Service Formats */}
+                            <div className="mb-4 pt-3 border-t border-[#E5DFD3]">
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-2 uppercase tracking-wide">
+                                    Service Delivery Formats
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {CANONICAL_FORMAT_OPTIONS.map((fmt) => (
+                                        <label key={fmt.id} className="flex items-start gap-2 text-xs text-[#2A443B] p-1.5 rounded hover:bg-[#F2ECE1]/50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.service_formats.includes(fmt.id)}
+                                                onChange={() => toggleArrayItem("service_formats", fmt.id)}
+                                                className="mt-0.5 h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`submit-format-${fmt.id}`}
+                                            />
+                                            <span>{fmt.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Life Stages */}
+                            <div className="mb-4 pt-3 border-t border-[#E5DFD3]">
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-2 uppercase tracking-wide">
+                                    Life Stages Accepted
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {CANONICAL_STAGE_OPTIONS.map((stage) => (
+                                        <label key={stage.id} className="flex items-start gap-2 text-xs text-[#2A443B] p-1.5 rounded hover:bg-[#F2ECE1]/50 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.life_stages.includes(stage.id)}
+                                                onChange={() => toggleArrayItem("life_stages", stage.id)}
+                                                className="mt-0.5 h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`submit-stage-${stage.id}`}
+                                            />
+                                            <span>{stage.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Training Philosophy & Catchment */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[#E5DFD3]">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Training Philosophy
+                                    </label>
+                                    <select
+                                        value={form.training_philosophy}
+                                        onChange={change("training_philosophy")}
+                                        className="input-public text-xs"
+                                        data-testid="submit-training-philosophy"
+                                    >
+                                        <option value="">Select philosophy (optional)</option>
+                                        {TRAINING_PHILOSOPHY_OPTIONS.map((opt) => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Service Area Catchment
+                                    </label>
+                                    <select
+                                        value={form.catchment_type}
+                                        onChange={change("catchment_type")}
+                                        className="input-public text-xs"
+                                        data-testid="submit-catchment-type"
+                                    >
+                                        {CATCHMENT_OPTIONS.map((opt) => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {form.catchment_type === "specific_suburbs" && (
+                                <div className="mt-3">
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1">
+                                        Additional Serviced Suburbs (comma separated)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={form.serviced_suburbs}
+                                        onChange={change("serviced_suburbs")}
+                                        className="input-public text-xs"
+                                        placeholder="Fitzroy, Collingwood, Brunswick"
+                                        data-testid="submit-serviced-suburbs"
+                                    />
+                                </div>
+                            )}
+                        </div>
 
                         <div className="sm:col-span-2 space-y-2 mt-1">
                             <label className={`flex items-start gap-2 text-xs p-2.5 rounded-xl transition-colors cursor-pointer ${errors.consent_public_listing ? "bg-rose-50 border border-rose-200 text-rose-900" : "text-[#4A615A] hover:bg-[#FAF8F5]"}`}>

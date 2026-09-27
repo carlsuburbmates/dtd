@@ -78,8 +78,8 @@ M1–M6 + M8 Operations and observability
 
 ### M0 — Versioned decision contract and fixture baseline
 
-**Status:** `OPEN`  
-**Depends on:** none  
+**Status:** `OPEN`
+**Depends on:** none
 **Closes:** DF-021 in part; defines the repair scope for DF-018, DF-019, DF-022 and DF-023.
 
 Create `Owner-to-Trainer Matching Decision Contract v2` as the implementation contract. It must define the normalised owner-input fields, validation, consent records, retention metadata, triage and decision-state vocabulary, API request/response schemas, reason codes, evidence grades, policy penalties, thin-supply trigger, explanation rules and exact screen states. It must select the owner-visible response for ambiguous input, weak evidence, low supply, absent required capability evidence and AI degradation. It must define material AI/fallback agreement for the same fixture: decision state, candidate eligibility, reason-code compatibility, explanation-fact truthfulness and permitted ordering variance. It must state how outcome data is excluded from fit until attribution, sample, freshness, anti-gaming and appeal rules have been accepted and validated.
@@ -92,8 +92,8 @@ Create a versioned fixture set with expected eligibility, fit and presentation o
 
 ### M1 — Trainer capability declaration and match-ready projection
 
-**Status:** `OPEN`  
-**Depends on:** M0  
+**Status:** `OPEN`
+**Depends on:** M0
 **Closes:** DF-026; establishes the matching prerequisite for DF-014.
 
 Implement the structured declaration across trainer onboarding, claim and profile-update paths. It must collect and confirm service areas, formats, concerns/specialties, relevant life stages, philosophy/method boundaries, in-home/facility constraints and material availability limits. Official-source data may prefill fields; trainers can correct or complete them.
@@ -106,8 +106,8 @@ Materialise or deterministically derive a match-ready projection with field-leve
 
 ### M2 — Owner questionnaire, consent, privacy and accessible decision states
 
-**Status:** `OPEN`  
-**Depends on:** M0  
+**Status:** `OPEN`
+**Depends on:** M0
 **Closes:** DF-015, DF-018, DF-021 and DF-022 in part; supports DF-020.
 
 Replace the free-text-only match entry with the contract's mobile-first structured questionnaire. Validate canonical suburb/postcode, dog age/life stage, one or more concerns, service format, relevant method preference, bounded optional description and distinct consents before AI invocation. Add accessible labels, errors and live announcements for validation, loading and new decision states.
@@ -120,8 +120,8 @@ Persist only minimised, sanitised match data plus consent version/time and reten
 
 ### M3 — Deterministic eligibility, geographic search and fair presentation
 
-**Status:** `OPEN`  
-**Depends on:** M0 and M1  
+**Status:** `OPEN`
+**Depends on:** M0 and M1
 **Closes:** DF-019; depends on the DF-014 acquisition authority repair and supports DF-023 and DF-026.
 
 Implement the deterministic candidate pipeline before any AI fit call. Apply publication, suppression, policy, source-freshness, contact-readiness, declared service area, service-format and required-capability gates. Publication and contact gates must come from the acquisition-authority path, not model confidence. Build the local pool first. Expand only when fewer than three trainers pass local eligibility, disclose the expanded scope, and never present expanded candidates as local.
@@ -134,8 +134,8 @@ Apply deterministic presentation after fit. Where Decision Contract v2 selects a
 
 ### M4 — AI-assisted fit, explanation and deterministic fallback
 
-**Status:** `OPEN`  
-**Depends on:** M0, M1 and M3  
+**Status:** `OPEN`
+**Depends on:** M0, M1 and M3
 **Closes:** DF-023.
 
 Implement Gemini only over the bounded eligible projection and sanitised owner signals. The model returns the strict schema and response states selected by Decision Contract v2, with factual reason codes/explanations where candidates are presented. It receives neither commercial fields nor excluded candidates, raw provider/Google content, unsupported profile prose or unbounded owner data.
@@ -148,8 +148,8 @@ Build a deterministic fallback using exactly the same input projection, decision
 
 ### M5 — Results, protected enquiry and outcome/follow-up lifecycle
 
-**Status:** `OPEN`  
-**Depends on:** M0, M2, M3 and M4  
+**Status:** `OPEN`
+**Depends on:** M0, M2, M3 and M4
 **Closes:** DF-015, DF-016, DF-017 and DF-020 in part.
 
 Deliver one coherent owner path from a clear entry point to decision state, result cards, trainer profile and protected enquiry. Results must lead with the selected decision state and explain why a candidate fits using factual plain language where candidates are presented. They must disclose service area, format and expansion. Every Decision Contract-selected response and degraded route must be a useful destination, not a dead end. Replace unsupported “vetted”, “verified” or similar trust language with labels that match the actual evidence taxonomy.
@@ -162,8 +162,8 @@ Protect the match context server-side. Release only minimum relevant information
 
 ### M6 — Urgent-support directory and deterministic triage
 
-**Status:** `OPEN`  
-**Depends on:** M0 and M2  
+**Status:** `OPEN`
+**Depends on:** M0 and M2
 **Closes:** DF-024.
 
 Create the approved urgent-route state machine and versioned owner-facing safety cards. Immediate human danger must bypass ordinary matching. Possible urgent animal-health needs must show only current, provider-authored contact information from the official-source urgent-provider directory. Serious behavioural and unclear states follow the contract and never generate freeform treatment, veterinary or legal advice.
@@ -176,8 +176,8 @@ Create the separate urgent-provider record type and its official-source provenan
 
 ### M7 — Optional Google Maps/Places urgent-support discovery surface
 
-**Status:** `OPEN` (conditional; required only if the surface is enabled)  
-**Depends on:** M6  
+**Status:** `OPEN` (conditional; required only if the surface is enabled)
+**Depends on:** M6
 **Closes:** DF-025 when enabled and verified.
 
 Before implementation, verify the precise selected Maps product's current terms, allowed data fields, attribution/display rules, session/caching limits, permitted Place-ID handling, privacy disclosure, cost controls and outage behaviour. Build an isolated, user-initiated navigation/discovery surface only after this review.
@@ -190,8 +190,8 @@ Google content must be visibly attributed and distinct from DTD directory facts.
 
 ### M8 — Matching operations, audit records and anti-gaming controls
 
-**Status:** `OPEN`  
-**Depends on:** M1 through M6  
+**Status:** `OPEN`
+**Depends on:** M1 through M6
 **Closes:** the `/ops` and record-evidence portions of DF-017 and DF-022 through DF-026.
 
 Create sanitised records for policy version, consent/retention metadata, applied search scope, triage outcome, eligible-candidate count, AI/fallback path, reason codes, result IDs and degraded events. `/ops` must surface decision-state distribution, selected weak-evidence-response and thin-supply patterns, model health, provider-directory freshness/coverage/corrections, capability invalidation, anti-gaming exception events and follow-up lifecycle failures.
@@ -204,7 +204,7 @@ Provide only bounded recovery actions with authentication, confirmation, idempot
 
 ### M9 — Integrated fixture, sandbox and independent-audit acceptance
 
-**Status:** `OPEN`  
+**Status:** `OPEN`
 **Depends on:** M0 through M6 and M8; M7 only if enabled.
 
 Run the matching-specific sandbox gate in `specs/SANDBOX_VERIFICATION_MATRIX.md` against an isolated, disposable dataset. The suite must cover at least these realistic scenarios:
@@ -234,7 +234,7 @@ Each implementation package is delegated, if at all, under the Antigravity local
 
 ### M10 — Separate production promotion gate
 
-**Status:** `OPEN`  
+**Status:** `OPEN`
 **Depends on:** M9.
 
 Production promotion is outside sandbox completion. It requires the applicable owner authority and the existing review, remote CI, zero-traffic canary, live-safe smoke test and production acceptance sequence. No roadmap item authorises billing activation, provider/credential mutation, data-retention change or public coverage claim by implication.

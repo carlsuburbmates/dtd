@@ -1020,9 +1020,9 @@ def test_submission_with_already_claimed_abn_creates_held_dispute(monkeypatch):
     assert result["reason"] == "profile_already_claimed"
     assert result["trainer_id"] == "tr_existing_claimed"
 
-    # Existing trainer must not be modified
+    # Existing trainer must not be modified in name, but transitions to claim_disputed
     assert existing_claimed_trainer["name"] == "Original K9 Academy"
-    assert existing_claimed_trainer["claim_status"] == "claimed"
+    assert existing_claimed_trainer["claim_status"] == "claim_disputed"
     assert len(fake_db.trainers.rows) == 1
 
     # Submission must be held in db.submissions with high severity

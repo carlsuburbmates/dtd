@@ -88,10 +88,11 @@ describe("TrainerDetail ownership claim", () => {
         view.cleanup();
     });
 
-    it("starts and verifies an email claim without exposing the OTP", async () => {
+    it("starts, verifies OTP, and requires explicit capability confirmation before completion", async () => {
         api.post
             .mockResolvedValueOnce({ data: { claim_event_id: "claim_1", status: "pending_verification", masked_destination: "s***@dogs.com.au" } })
-            .mockResolvedValueOnce({ data: { ok: true, claim_status: "claimed", session: { token: "claim-session-token" } } });
+            .mockResolvedValueOnce({ data: { ok: true, claim_status: "claimed", session: { token: "claim-session-token" } } })
+            .mockResolvedValueOnce({ data: { ok: true, capabilities: { specialties: { basis: "trainer_declaration" } } } });
         const view = renderDetail();
         await settle();
 
@@ -105,9 +106,61 @@ describe("TrainerDetail ownership claim", () => {
         act(() => changeValue(view.container.querySelector("[data-testid='claim-otp']"), "123456"));
         await act(async () => view.container.querySelector("[data-testid='claim-verify']").click());
         await settle();
-        expect(api.post).toHaveBeenLastCalledWith("/trainers/trainer_1/claim/verify", { claim_event_id: "claim_1", otp: "123456" });
+        expect(api.post).toHaveBeenCalledWith("/trainers/trainer_1/claim/verify", { claim_event_id: "claim_1", otp: "123456" });
+
+        // Step 2: Capability confirmation is rendered, NOT direct success
+        expect(view.container.querySelector("[data-testid='claim-capabilities-step']")).not.toBeNull();
+        expect(view.container.textContent).toContain("Step 2: Declare Capabilities");
+
+        const confirmCheck = view.container.querySelector("[data-testid='claim-confirm-statement']");
+        const confirmBtn = view.container.querySelector("[data-testid='claim-confirm-submit']");
+        expect(confirmCheck).not.toBeNull();
+        expect(confirmBtn).not.toBeNull();
+
+        act(() => {
+            confirmCheck.click();
+        });
+
+        await act(async () => {
+            confirmBtn.click();
+        });
+        await settle();
+
+        expect(api.post).toHaveBeenLastCalledWith(
+            "/trainers/trainer_1/capabilities/confirm",
+            expect.objectContaining({ confirmation_statement: true }),
+            expect.objectContaining({ headers: { "X-Trainer-Claim-Session": "claim-session-token" } })
+        );
+
         expect(view.container.querySelector("[data-testid='claim-success']")).not.toBeNull();
         expect(view.container.querySelector("[data-testid='claim-open-billing']").getAttribute("href")).toContain("claimSession=claim-session-token");
+        view.cleanup();
+    });
+
+    it("allows trainer to skip capability confirmation remaining unconfirmed", async () => {
+        api.post
+            .mockResolvedValueOnce({ data: { claim_event_id: "claim_2", status: "pending_verification", masked_destination: "s***@dogs.com.au" } })
+            .mockResolvedValueOnce({ data: { ok: true, claim_status: "claimed", session: { token: "claim-session-token-2" } } });
+        const view = renderDetail();
+        await settle();
+
+        act(() => view.container.querySelector("[data-testid='claim-profile-open']").click());
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-email']"), "owner@dogs.com.au"));
+        await act(async () => view.container.querySelector("[data-testid='claim-start']").click());
+
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-otp']"), "123456"));
+        await act(async () => view.container.querySelector("[data-testid='claim-verify']").click());
+        await settle();
+
+        const skipBtn = view.container.querySelector("[data-testid='claim-skip-capabilities']");
+        expect(skipBtn).not.toBeNull();
+
+        act(() => {
+            skipBtn.click();
+        });
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='claim-success']")).not.toBeNull();
         view.cleanup();
     });
 });

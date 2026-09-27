@@ -1198,14 +1198,14 @@ function TrainerSupplyView({
                         note={`${pipelineGuardian?.duplicates_detected || 0} duplicates · ${pipelineGuardian?.statutory_violations || 0} statutory violations`}
                     />
                     <SummaryCard
-                        title="Trainer Declared"
-                        value={capabilityHealth?.trainer_declared_capabilities || 0}
-                        note="180-day TTL · Active in matchmaking"
+                        title="Match Eligible Trainers"
+                        value={`${capabilityHealth?.match_eligible_trainers || 0} / ${capabilityHealth?.total_trainers || 0}`}
+                        note={`Policy: ${capabilityHealth?.policy_version || "v1"} · Permitted: ${(capabilityHealth?.permitted_bases || []).join(", ") || "trainer_declaration"}`}
                     />
                     <SummaryCard
                         title="AI Proposed (Held)"
-                        value={capabilityHealth?.ai_proposed_capabilities || 0}
-                        note="30-day TTL · Excluded from matches until confirmed"
+                        value={capabilityHealth?.ai_proposed_unconfirmed || 0}
+                        note="Awaiting trainer declaration; excluded from match"
                     />
                 </div>
 
@@ -1249,7 +1249,73 @@ function TrainerSupplyView({
                     </div>
                 ) : null}
             </div>
-            <div className="flex items-center justify-between gap-3">
+
+            {/* Capability Health & Match-Readiness Telemetry Panel (R7) */}
+            <div className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5" data-testid="ops-capability-health-panel">
+                <div className="flex flex-col gap-2">
+                    <div className="small-caps !text-[#8B9E98] flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-[#4ADE80]" />
+                        Match-Readiness &amp; Capability Health Boundary (Non-PII)
+                    </div>
+                    <h3 className="font-serif text-xl tracking-tight text-[#F5F2EB]">
+                        Effective Capability Projection Telemetry
+                    </h3>
+                    <p className="text-sm text-[#8B9E98] font-mono max-w-3xl">
+                        Reflects runtime match-ready projection rules. Only active, fresh facts with permitted evidence basis enter matching capacity. Stale, unconfirmed, or disputed facts fail closed without modifying raw records.
+                    </p>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <SummaryCard
+                        title="Match-Eligible"
+                        value={capabilityHealth?.match_eligible_trainers || 0}
+                        note="Passed all projection &amp; publication gates"
+                    />
+                    <SummaryCard
+                        title="Missing Declaration"
+                        value={capabilityHealth?.missing_declaration || 0}
+                        note="Legacy or unconfirmed profile"
+                    />
+                    <SummaryCard
+                        title="AI-Proposed (Unconfirmed)"
+                        value={capabilityHealth?.ai_proposed_unconfirmed || 0}
+                        note="Display/prefill only; fails closed"
+                    />
+                    <SummaryCard
+                        title="Stale Capabilities"
+                        value={capabilityHealth?.stale_capabilities || 0}
+                        note="Exceeded policy TTL; excluded from match"
+                    />
+                    <SummaryCard
+                        title="Invalidated / Revoked"
+                        value={capabilityHealth?.invalidated_capabilities || 0}
+                        note="Corrected, superseded, or statutory revoked"
+                    />
+                    <SummaryCard
+                        title="Ownership Disputed"
+                        value={capabilityHealth?.ownership_disputed || 0}
+                        note="Competing claim held for review"
+                    />
+                    <SummaryCard
+                        title="Suppressed / Unpublished"
+                        value={capabilityHealth?.suppressed_or_unpublished || 0}
+                        note="Delisted or statutory ABR revoked"
+                    />
+                    <SummaryCard
+                        title="Contact Gated"
+                        value={capabilityHealth?.not_contact_ready || 0}
+                        note="Missing direct contact information"
+                    />
+                </div>
+
+                <div className="mt-4 border-t border-[#1E2A27] pt-3 flex flex-wrap items-center justify-between text-xs font-mono text-[#8B9E98]">
+                    <span>Policy version: <strong>{capabilityHealth?.policy_version || "v1"}</strong></span>
+                    <span>Permitted bases: <strong>{(capabilityHealth?.permitted_bases || ["trainer_declaration"]).join(", ")}</strong></span>
+                    <span>Evaluated across <strong>{capabilityHealth?.total_trainers || 0}</strong> total trainer records</span>
+                </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 mt-6">
                 <div>
                     <div className="small-caps !text-[#8B9E98]">Review the live trainer set without leaving the console.</div>
                     <p className="text-sm text-[#8B9E98] font-mono mt-2">Use this view to decide whether supply is strong enough to move forward or whether the website should hold and gather more evidence.</p>

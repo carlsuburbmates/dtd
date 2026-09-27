@@ -21,6 +21,31 @@ function claimErrorMessage(error) {
     return "We could not verify this profile right now. Please try again.";
 }
 
+const CANONICAL_SPECIALTY_OPTIONS = [
+    { id: "puppy_training", label: "Puppy Training & Socialisation" },
+    { id: "obedience", label: "Basic & Advanced Obedience" },
+    { id: "behaviour_modification", label: "Behaviour Modification" },
+    { id: "leash_reactivity", label: "Leash Reactivity & Pulling" },
+    { id: "separation_anxiety", label: "Separation Anxiety" },
+    { id: "barking", label: "Excessive Barking" },
+    { id: "aggression", label: "Aggression & Complex Behaviour" },
+    { id: "fear_anxiety", label: "Fear, Phobias & Anxiety" },
+    { id: "recall", label: "Reliable Recall" },
+    { id: "resource_guarding", label: "Resource Guarding" },
+    { id: "rescue_rehoming", label: "Rescue & Rehoming" },
+    { id: "scent_work", label: "Scent Work & Mental Stimulation" },
+    { id: "therapy_assistance", label: "Therapy & Assistance Dog Prep" },
+];
+
+const CANONICAL_FORMAT_OPTIONS = [
+    { id: "in_home", label: "In-Home Private Training" },
+    { id: "facility", label: "Training Centre / Facility" },
+    { id: "outdoor_park", label: "Outdoor & Park Sessions" },
+    { id: "board_and_train", label: "Board & Train (Residential)" },
+    { id: "online", label: "Online / Virtual Coaching" },
+    { id: "group_classes", label: "Group Classes" },
+];
+
 export default function TrainerDetail() {
     const { id } = useParams();
     const [search] = useSearchParams();
@@ -46,6 +71,15 @@ export default function TrainerDetail() {
     const [claimError, setClaimError] = useState("");
     const [claimComplete, setClaimComplete] = useState(false);
     const [claimSessionToken, setClaimSessionToken] = useState("");
+    const [claimStep, setClaimStep] = useState("email");
+    const [claimPrefill, setClaimPrefill] = useState(null);
+    const [confirmedCaps, setConfirmedCaps] = useState({
+        specialties: [],
+        service_formats: [],
+    });
+    const [confirmStatement, setConfirmStatement] = useState(false);
+    const [confirmBusy, setConfirmBusy] = useState(false);
+    const [confirmError, setConfirmError] = useState("");
     const [form, setForm] = useState({
         user_name: "",
         user_email: "",
@@ -172,14 +206,77 @@ export default function TrainerDetail() {
                 claim_event_id: claimEvent.claim_event_id,
                 otp: claimCode,
             });
-            setClaimSessionToken(response.data?.session?.token || "");
+            const sessionToken = response.data?.session?.token || "";
+            setClaimSessionToken(sessionToken);
             setTrainer((current) => current ? { ...current, claim_status: "claimed", tier: "claimed" } : current);
-            setClaimComplete(true);
+
+            // Fetch prefill facts for Step 2
+            try {
+                const prefillRes = await api.get(`/trainers/${id}/capabilities/prefill`, {
+                    headers: sessionToken ? { "X-Trainer-Claim-Session": sessionToken } : {},
+                });
+                const pData = prefillRes.data || {};
+                const pre = pData.prefilled || {};
+                setClaimPrefill(pData);
+                setConfirmedCaps({
+                    specialties: pre.specialties || [],
+                    service_formats: pre.service_formats || [],
+                });
+            } catch {
+                setConfirmedCaps({
+                    specialties: trainer?.specialties || [],
+                    service_formats: trainer?.service_formats || [],
+                });
+            }
+            setClaimStep("capabilities");
         } catch (error) {
             setClaimError(claimErrorMessage(error));
         } finally {
             setClaimBusy(false);
         }
+    };
+
+    const toggleConfirmArrayItem = (field, itemId) => {
+        setConfirmedCaps((prev) => {
+            const list = prev[field] || [];
+            const exists = list.includes(itemId);
+            const updated = exists ? list.filter((x) => x !== itemId) : [...list, itemId];
+            return { ...prev, [field]: updated };
+        });
+    };
+
+    const submitCapabilityConfirmation = async (event) => {
+        if (event) event.preventDefault();
+        if (!confirmStatement) {
+            setConfirmError("Please affirm the confirmation statement to declare capabilities.");
+            return;
+        }
+        setConfirmBusy(true);
+        setConfirmError("");
+        try {
+            const res = await api.post(`/trainers/${id}/capabilities/confirm`, {
+                confirmation_statement: true,
+                specialties: confirmedCaps.specialties,
+                service_formats: confirmedCaps.service_formats,
+            }, {
+                headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},
+            });
+            if (res.data?.capabilities) {
+                setTrainer((curr) => curr ? { ...curr, capabilities: res.data.capabilities } : curr);
+            }
+            setClaimStep("done");
+            setClaimComplete(true);
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            setConfirmError(typeof detail === "string" ? detail : "Failed to confirm capabilities.");
+        } finally {
+            setConfirmBusy(false);
+        }
+    };
+
+    const skipCapabilityConfirmation = () => {
+        setClaimStep("done");
+        setClaimComplete(true);
     };
 
     const closeClaim = (open) => {
@@ -190,6 +287,9 @@ export default function TrainerDetail() {
             setClaimEvent(null);
             setClaimComplete(false);
             setClaimSessionToken("");
+            setClaimStep("email");
+            setConfirmError("");
+            setConfirmStatement(false);
         }
     };
 
@@ -423,10 +523,110 @@ export default function TrainerDetail() {
             <Dialog open={claimOpen} onOpenChange={closeClaim}>
                 <DialogContent className="border-[#E5DFD3] bg-[#FAFAF7] p-6 sm:rounded-2xl" data-testid="claim-dialog">
                     <DialogHeader>
-                        <DialogTitle className="font-serif text-3xl text-[#1A3A32]">Claim this profile</DialogTitle>
-                        <DialogDescription className="text-[#4A615A]">We will send a six-digit code to the email already recorded on this listing.</DialogDescription>
+                        <DialogTitle className="font-serif text-3xl text-[#1A3A32]">
+                            {claimStep === "capabilities" ? "Confirm capabilities" : "Claim this profile"}
+                        </DialogTitle>
+                        <DialogDescription className="text-[#4A615A]">
+                            {claimStep === "capabilities"
+                                ? "Ownership verified. Explicitly declare your active capabilities to become matchable with dog owners."
+                                : "We will send a six-digit code to the email already recorded on this listing."}
+                        </DialogDescription>
                     </DialogHeader>
-                    {claimComplete ? <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] p-4 text-sm text-[#14532D]" data-testid="claim-success"><CheckCircle2 className="mr-2 inline h-4 w-4" />Profile claimed. Core remains free.{claimSessionToken ? <Link to={`/trainer/billing?trainerId=${encodeURIComponent(id)}&claimSession=${encodeURIComponent(claimSessionToken)}`} className="btn-primary mt-4 w-full justify-center" data-testid="claim-open-billing">Review optional upgrades</Link> : null}</div> : !claimEvent ? (
+                    {claimComplete || claimStep === "done" ? (
+                        <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] p-4 text-sm text-[#14532D]" data-testid="claim-success">
+                            <CheckCircle2 className="mr-2 inline h-4 w-4" />Profile claimed. Core remains free.
+                            {claimSessionToken ? (
+                                <Link to={`/trainer/billing?trainerId=${encodeURIComponent(id)}&claimSession=${encodeURIComponent(claimSessionToken)}`} className="btn-primary mt-4 w-full justify-center" data-testid="claim-open-billing">
+                                    Review optional upgrades
+                                </Link>
+                            ) : null}
+                        </div>
+                    ) : claimStep === "capabilities" ? (
+                        <form onSubmit={submitCapabilityConfirmation} className="space-y-4" data-testid="claim-capabilities-step">
+                            <div className="rounded-xl border border-[#D9B36C]/70 bg-[#FFFDF7] p-3 text-xs text-[#4A615A] leading-relaxed">
+                                <strong className="text-[#1A3A32]">Step 2: Declare Capabilities.</strong> Freeform bio and marketing text do not influence matching. Only explicitly confirmed capabilities are matchable.
+                            </div>
+
+                            {/* Specialties */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Specialties &amp; Concerns
+                                </label>
+                                <div className="max-h-36 overflow-y-auto space-y-1 pr-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_SPECIALTY_OPTIONS.map((spec) => (
+                                        <label key={spec.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.specialties.includes(spec.id)}
+                                                onChange={() => toggleConfirmArrayItem("specialties", spec.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-specialty-${spec.id}`}
+                                            />
+                                            <span>{spec.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Service Formats */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Service Formats
+                                </label>
+                                <div className="grid grid-cols-2 gap-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_FORMAT_OPTIONS.map((fmt) => (
+                                        <label key={fmt.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.service_formats.includes(fmt.id)}
+                                                onChange={() => toggleConfirmArrayItem("service_formats", fmt.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-format-${fmt.id}`}
+                                            />
+                                            <span>{fmt.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Confirmation Checkbox */}
+                            <label className="flex items-start gap-2 text-xs text-[#1A3A32] p-2.5 rounded-lg bg-[#FAF8F5] border border-[#E5DFD3] cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={confirmStatement}
+                                    onChange={(e) => setConfirmStatement(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                    data-testid="claim-confirm-statement"
+                                />
+                                <span>I explicitly confirm these capabilities and service boundaries represent my active training offerings.</span>
+                            </label>
+
+                            {confirmError ? (
+                                <p className="text-sm text-[#8B2020]" role="alert" data-testid="claim-confirm-error">
+                                    {confirmError}
+                                </p>
+                            ) : null}
+
+                            <div className="flex flex-col gap-2 pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={confirmBusy}
+                                    className="btn-primary w-full"
+                                    data-testid="claim-confirm-submit"
+                                >
+                                    {confirmBusy ? "Confirming…" : "Confirm Capabilities"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={skipCapabilityConfirmation}
+                                    className="btn-ghost w-full text-xs text-[#4A615A]"
+                                    data-testid="claim-skip-capabilities"
+                                >
+                                    Skip for now (remain unconfirmed)
+                                </button>
+                            </div>
+                        </form>
+                    ) : !claimEvent ? (
                         <form onSubmit={startClaim} className="space-y-4">
                             <label className="grid gap-2 text-sm font-medium text-[#1A3A32]">Listing email<input type="email" autoComplete="email" value={claimEmail} onChange={(event) => setClaimEmail(event.target.value)} className="input-public" placeholder="you@business.com.au" data-testid="claim-email" /></label>
                             {claimError ? <p className="text-sm text-[#8B2020]" role="alert" data-testid="claim-error">{claimError}</p> : null}

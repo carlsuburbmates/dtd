@@ -38,7 +38,7 @@ class _MockCollection:
                     break
             if match:
                 matched.append(r.copy())
-        
+
         class _Cursor:
             def __init__(self, items):
                 self.items = items

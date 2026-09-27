@@ -410,4 +410,48 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).toContain("Dog owner");
         view.cleanup();
     });
+
+    it("renders the capability health and match-readiness panel with truthful non-PII counts in Trainer Supply view", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                capability_health_summary: {
+                    policy_version: "v1",
+                    permitted_bases: ["trainer_declaration"],
+                    total_trainers: 42,
+                    match_eligible_trainers: 12,
+                    missing_declaration: 18,
+                    ai_proposed_unconfirmed: 8,
+                    stale_capabilities: 2,
+                    invalidated_capabilities: 1,
+                    ownership_disputed: 1,
+                    suppressed_or_unpublished: 0,
+                    not_contact_ready: 0,
+                },
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const supplyButton = view.container.querySelector("[data-testid='ops-nav-trainer_supply']");
+        expect(supplyButton).not.toBeNull();
+        await act(async () => {
+            supplyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        const panel = view.container.querySelector("[data-testid='ops-capability-health-panel']");
+        expect(panel).not.toBeNull();
+        expect(panel.textContent).toContain("Match-Readiness & Capability Health Boundary (Non-PII)");
+        expect(panel.textContent).toContain("Effective Capability Projection Telemetry");
+        expect(panel.textContent).toContain("12"); // match eligible
+        expect(panel.textContent).toContain("18"); // missing declaration
+        expect(panel.textContent).toContain("8");  // ai proposed
+        expect(panel.textContent).toContain("Policy version: v1");
+        expect(panel.textContent).toContain("trainer_declaration");
+        view.cleanup();
+    });
 });
