@@ -299,46 +299,81 @@ def test_trainer_ingest_endpoint_executes_with_valid_oidc(monkeypatch):
         assert "executed_at" in res
 
 
-def test_trainer_ingest_operator_manual_execution():
-    """Verifies that the /ops operator-manual endpoint runs with trigger='operator_manual' and persists to db.ingestion_runs."""
-    import server
+def test_record_ingestion_failure_invalidates_capabilities_on_source_evidence_url():
+    """P0 Item 5: Verifies that source-refresh invalidation recognizes source_evidence_url."""
+    from services.trainer_quality import (
+        record_ingestion_failure,
+        package_trainer_capabilities,
+        now_iso,
+    )
+
     mock_db = _MockDB()
+    test_caps = package_trainer_capabilities(
+        specialties=["puppy_training"],
+        service_formats=["in_home"],
+        basis="trainer_declaration",
+        evidence_reference="claim_event_1",
+        confirmed_at=now_iso(),
+    )
+    assert test_caps["specialties"]["permitted_in_projection"] is True
 
-    fake_ingest_summary = {"ok": True, "total_processed": 2, "qualified": 2, "held": 0, "errors": []}
-    fake_guardian_summary = {"status": "clean", "total_trainers_scanned": 2, "anomalies": []}
+    # Trainer document linked via source_evidence_url
+    trainer_doc = {
+        "id": "tr_evidence_url_test",
+        "name": "Evidence URL Trainer",
+        "suburb": "Brunswick",
+        "source_evidence_url": "https://failing-trainer-evidence.com.au",
+        "capabilities": test_caps,
+    }
+    mock_db.trainers.rows.append(trainer_doc)
 
-    with patch.object(server, "db", mock_db), \
-         patch("services.ingestion_manager.run_batch_ingestion_pipeline", new=AsyncMock(return_value=fake_ingest_summary)), \
-         patch("services.pipeline_guardian.audit_corpus_integrity", new=AsyncMock(return_value=fake_guardian_summary)):
+    # Ingestion failure recorded against the source_evidence_url
+    asyncio.run(
+        record_ingestion_failure(
+            mock_db,
+            "https://failing-trainer-evidence.com.au",
+            "http_500_internal_error",
+        )
+    )
 
-        payload = server.TrainerIngestJobRequest(source_urls=["https://trainer1.com.au"], batch_size=2)
-        res = asyncio.run(server.run_trainer_ingest_job_manual(payload=payload, _=None))
-
-        assert res["ok"] is True
-        assert res["trigger"] == "operator_manual"
-        assert res["ingestion"]["qualified"] == 2
-        assert res["guardian"]["status"] == "clean"
-        assert res["id"].startswith("ingest_")
-
-        # Verify persisted record in db.ingestion_runs
-        assert len(mock_db.ingestion_runs.rows) == 1
-        saved_run = mock_db.ingestion_runs.rows[0]
-        assert saved_run["id"] == res["id"]
-        assert saved_run["trigger"] == "operator_manual"
-        assert saved_run["ok"] is True
-        assert saved_run["ingestion"]["qualified"] == 2
+    # Capabilities must be invalidated
+    updated_trainer = mock_db.trainers.rows[0]
+    caps = updated_trainer["capabilities"]
+    assert caps["specialties"]["permitted_in_projection"] is False
+    assert "source_refresh_failed" in caps["specialties"]["invalidation_reason"]
+    assert updated_trainer["source_last_error"] == "http_500_internal_error"
 
 
-def test_trainer_ingest_pipeline_failure_records_to_db():
+def test_oversight_trainer_ingest_mutation_route_removed():
+    """P0 Item 1: Asserts that POST /api/oversight/jobs/trainer-ingest has been quarantined/removed."""
+    import server
+    route_paths = [route.path for route in server.app.routes]
+    assert "/api/oversight/jobs/trainer-ingest" not in route_paths
+    assert "/oversight/jobs/trainer-ingest" not in route_paths
+
+
+def test_trainer_ingest_pipeline_failure_records_to_db(monkeypatch):
     """Verifies that pipeline exceptions record a failure entry in db.ingestion_runs and /ops state."""
     import server
     mock_db = _MockDB()
+
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT", "scheduler@dtd.test")
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_AUDIENCE", "https://dtd-api.test")
+    monkeypatch.setattr(
+        server.google_id_token,
+        "verify_oauth2_token",
+        lambda token, request, audience: {
+            "email": "scheduler@dtd.test",
+            "email_verified": True,
+            "aud": audience,
+        },
+    )
 
     with patch.object(server, "db", mock_db), \
          patch("services.ingestion_manager.run_batch_ingestion_pipeline", new=AsyncMock(side_effect=RuntimeError("Simulated LLM outage"))):
 
         with pytest.raises(server.HTTPException) as exc_info:
-            asyncio.run(server.run_trainer_ingest_job_manual(payload=None, _=None))
+            asyncio.run(server.run_trainer_ingest_job(payload=None, authorization="Bearer valid-token"))
 
         assert exc_info.value.status_code == 500
         assert "Simulated LLM outage" in str(exc_info.value.detail)
@@ -347,7 +382,7 @@ def test_trainer_ingest_pipeline_failure_records_to_db():
         assert len(mock_db.ingestion_runs.rows) == 1
         failed_run = mock_db.ingestion_runs.rows[0]
         assert failed_run["ok"] is False
-        assert failed_run["trigger"] == "operator_manual"
+        assert failed_run["trigger"] == "cloud_scheduler"
         assert "Simulated LLM outage" in failed_run["error"]
 
         # Verify db.source_ingestion_state recorded the failure

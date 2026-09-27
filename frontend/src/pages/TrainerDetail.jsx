@@ -46,6 +46,25 @@ const CANONICAL_FORMAT_OPTIONS = [
     { id: "group_classes", label: "Group Classes" },
 ];
 
+const CANONICAL_STAGE_OPTIONS = [
+    { id: "puppy", label: "Puppy (< 6 months)" },
+    { id: "adolescent", label: "Adolescent (6 - 18 months)" },
+    { id: "adult", label: "Adult (1.5 - 7 years)" },
+    { id: "senior", label: "Senior (7+ years)" },
+    { id: "all_life_stages", label: "All Life Stages" },
+];
+
+const TRAINING_PHILOSOPHY_OPTIONS = [
+    { id: "positive_reinforcement_force_free", label: "Positive Reinforcement / Force-Free" },
+    { id: "balanced", label: "Balanced Training" },
+];
+
+const CATCHMENT_OPTIONS = [
+    { id: "specific_suburbs", label: "Specific Nominated Suburbs" },
+    { id: "radius", label: "Distance Radius from Suburb" },
+    { id: "melbourne_wide", label: "Melbourne-Wide Coverage" },
+];
+
 export default function TrainerDetail() {
     const { id } = useParams();
     const [search] = useSearchParams();
@@ -76,6 +95,11 @@ export default function TrainerDetail() {
     const [confirmedCaps, setConfirmedCaps] = useState({
         specialties: [],
         service_formats: [],
+        life_stages: [],
+        training_philosophy: "",
+        serviced_suburbs: "",
+        catchment_type: "specific_suburbs",
+        delivery_constraints: {},
     });
     const [confirmStatement, setConfirmStatement] = useState(false);
     const [confirmBusy, setConfirmBusy] = useState(false);
@@ -216,16 +240,28 @@ export default function TrainerDetail() {
                     headers: sessionToken ? { "X-Trainer-Claim-Session": sessionToken } : {},
                 });
                 const pData = prefillRes.data || {};
-                const pre = pData.prefilled || {};
+                const pre = pData.prefilled || pData.prefill || {};
                 setClaimPrefill(pData);
                 setConfirmedCaps({
                     specialties: pre.specialties || [],
                     service_formats: pre.service_formats || [],
+                    life_stages: pre.life_stages || [],
+                    training_philosophy: pre.training_philosophy || "",
+                    serviced_suburbs: Array.isArray(pre.serviced_suburbs)
+                        ? pre.serviced_suburbs.join(", ")
+                        : (pre.serviced_suburbs || trainer?.suburb || ""),
+                    catchment_type: pre.catchment_type || "specific_suburbs",
+                    delivery_constraints: pre.delivery_constraints || {},
                 });
             } catch {
                 setConfirmedCaps({
                     specialties: trainer?.specialties || [],
                     service_formats: trainer?.service_formats || [],
+                    life_stages: trainer?.life_stages || [],
+                    training_philosophy: trainer?.training_philosophy || "",
+                    serviced_suburbs: trainer?.suburb || "",
+                    catchment_type: "specific_suburbs",
+                    delivery_constraints: {},
                 });
             }
             setClaimStep("capabilities");
@@ -254,10 +290,19 @@ export default function TrainerDetail() {
         setConfirmBusy(true);
         setConfirmError("");
         try {
+            const suburbsArray = typeof confirmedCaps.serviced_suburbs === "string"
+                ? confirmedCaps.serviced_suburbs.split(",").map((s) => s.trim()).filter(Boolean)
+                : (confirmedCaps.serviced_suburbs || []);
+
             const res = await api.post(`/trainers/${id}/capabilities/confirm`, {
                 confirmation_statement: true,
                 specialties: confirmedCaps.specialties,
                 service_formats: confirmedCaps.service_formats,
+                life_stages: confirmedCaps.life_stages,
+                training_philosophy: confirmedCaps.training_philosophy,
+                serviced_suburbs: suburbsArray,
+                catchment_type: confirmedCaps.catchment_type,
+                delivery_constraints: confirmedCaps.delivery_constraints || {},
             }, {
                 headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},
             });
@@ -586,6 +631,77 @@ export default function TrainerDetail() {
                                             <span>{fmt.label}</span>
                                         </label>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Life Stages */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Dog Life Stages Accepted
+                                </label>
+                                <div className="grid grid-cols-2 gap-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_STAGE_OPTIONS.map((stg) => (
+                                        <label key={stg.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.life_stages.includes(stg.id)}
+                                                onChange={() => toggleConfirmArrayItem("life_stages", stg.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-stage-${stg.id}`}
+                                            />
+                                            <span>{stg.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Training Philosophy */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Training Philosophy
+                                </label>
+                                <select
+                                    value={confirmedCaps.training_philosophy}
+                                    onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, training_philosophy: e.target.value }))}
+                                    className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                    data-testid="claim-philosophy"
+                                >
+                                    <option value="">Select methodology preference…</option>
+                                    {TRAINING_PHILOSOPHY_OPTIONS.map((opt) => (
+                                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Catchment & Serviced Suburbs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Service Catchment
+                                    </label>
+                                    <select
+                                        value={confirmedCaps.catchment_type}
+                                        onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, catchment_type: e.target.value }))}
+                                        className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                        data-testid="claim-catchment-type"
+                                    >
+                                        {CATCHMENT_OPTIONS.map((opt) => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Serviced Suburbs
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={confirmedCaps.serviced_suburbs}
+                                        onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, serviced_suburbs: e.target.value }))}
+                                        placeholder="e.g. Richmond, South Yarra"
+                                        className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                        data-testid="claim-serviced-suburbs"
+                                    />
                                 </div>
                             </div>
 

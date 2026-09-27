@@ -47,10 +47,8 @@
 
 - Twenty authorised Greater Melbourne profiles were locally built from owner-approved official trainer websites plus ABR identity/status evidence.
 - First-party trainer submission is an active growth path alongside automated batch ingestion.
-- The automated acquisition pipeline is implemented as a serverless Dual-Engine architecture on Cloud Run (`backend/services/ingestion_manager.py` for Engine 1 batch crawler/extractor; `backend/services/pipeline_guardian.py` for Engine 2 supervisory auditor).
-- Google Cloud Scheduler (`dtd-trainer-ingest-cron`, daily 2:00 AM AEST, OIDC auth) triggers `/api/internal/jobs/trainer-ingest`.
-- The solo operator can trigger on-demand ingestion and supervisory audits directly from `/ops` via `/api/oversight/jobs/trainer-ingest`.
-- Match-ready capability projection enforces strict provenance boundaries (`CDR-021`, `CDR-022`, `DF-026`): only confirmed trainer declarations or validated official source facts (with TTL) enter matching. Marketing bios and commercial tiers are completely excluded from AI matching context.
+- The automated acquisition pipeline is implemented as a serverless Dual-Engine architecture in repository code (`backend/services/ingestion_manager.py` for Engine 1 batch crawler/extractor; `backend/services/pipeline_guardian.py` for Engine 2 supervisory auditor) with an authenticated Cloud Scheduler endpoint (`/api/internal/jobs/trainer-ingest` requiring OIDC auth). Live Cloud Scheduler configuration in Google Cloud remains unverified without authenticated control-plane evidence; no live mutation route is exposed in `/ops`.
+- Match-ready capability projection enforces strict provenance boundaries (`CDR-021`, `CDR-022`, `DF-026`): only confirmed trainer declarations or validated official source facts (with TTL) enter matching. The foundation exists in code and telemetry, but active match filtering remains disabled (`ENABLE_MATCH_READY_PROJECTION_FILTER = False`) until Decision Contract v2 matching audit. Marketing bios and commercial tiers are completely excluded from AI matching context.
 - Gemini on Vertex AI structures already lawful content; statutory ABR active registration and reachability gate publication, never raw AI confidence (DF-014). Maps/Places and generic SERP scraping remain strictly excluded.
 
 ## Operations and observability

@@ -719,7 +719,27 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     from starlette.requests import Request
     mock_req = Request({"type": "http", "headers": [(b"x-trainer-claim-session", claim_token.encode("utf-8"))]})
 
-    # Step 2A: Prefill endpoint returns existing capabilities and canonical options
+    # P0 Item 3: Prefill endpoint requires and validates trainer claim session
+    unauth_req = Request({"type": "http", "headers": []})
+    with pytest.raises(HTTPException) as unauth_exc:
+        asyncio.run(
+            server.get_trainer_capabilities_prefill(trainer_id, request=unauth_req)
+        )
+    assert unauth_exc.value.status_code == 401
+
+    foreign_session = server._issue_trainer_claim_session(trainer_id="foreign_trainer_99", claim_event_id="claim_2")
+    foreign_req = Request({"type": "http", "headers": [(b"x-trainer-claim-session", foreign_session["token"].encode("utf-8"))]})
+    with pytest.raises(HTTPException) as foreign_exc:
+        asyncio.run(
+            server.get_trainer_capabilities_prefill(
+                trainer_id,
+                request=foreign_req,
+                x_trainer_claim_session=foreign_session["token"],
+            )
+        )
+    assert foreign_exc.value.status_code == 403
+
+    # Step 2A: Prefill endpoint returns existing capabilities and canonical options when authenticated
     prefill = asyncio.run(
         server.get_trainer_capabilities_prefill(
             trainer_id,
@@ -731,7 +751,7 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert "barking" in prefill["prefilled"]["specialties"]
     assert "specialties" in prefill["canonical_options"]
 
-    # Step 2B: Confirmation statement is required (false raises 400)
+    # Step 2B: Confirmation statement is required (false raises 400/422)
     with pytest.raises(HTTPException) as exc_info:
         asyncio.run(
             server.confirm_trainer_capabilities(
@@ -747,7 +767,7 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
         )
     assert exc_info.value.status_code in (400, 422)
 
-    # Step 2C: Successful confirmation - keeps puppy_training, omits barking, selects in_home
+    # Step 2C: Successful confirmation - sends every matchable declared field (P0 Item 4)
     confirm_res = asyncio.run(
         server.confirm_trainer_capabilities(
             trainer_id,
@@ -755,7 +775,10 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
                 confirmation_statement=True,
                 specialties=["puppy_training", "obedience"],  # Corrected/added
                 service_formats=["in_home"],                 # Kept in_home, omitted online
+                life_stages=["puppy", "adolescent"],
                 training_philosophy="positive_reinforcement_force_free",
+                serviced_suburbs=["Brunswick", "Carlton"],
+                catchment_type="specific_suburbs",
             ),
             request=mock_req,
             x_trainer_claim_session=claim_token,
@@ -764,13 +787,18 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert confirm_res["ok"] is True
     updated_caps = confirm_res["capabilities"]
 
-    # Verified declaration basis
+    # Verified declaration basis across all fields
     assert updated_caps["specialties"]["basis"] == "trainer_declaration"
     assert updated_caps["specialties"]["permitted_in_projection"] is True
     assert set(updated_caps["specialties"]["value"]) == {"puppy_training", "obedience"}
     assert updated_caps["service_formats"]["basis"] == "trainer_declaration"
     assert updated_caps["service_formats"]["permitted_in_projection"] is True
     assert set(updated_caps["service_formats"]["value"]) == {"in_home"}
+    assert updated_caps["life_stages"]["basis"] == "trainer_declaration"
+    assert updated_caps["life_stages"]["permitted_in_projection"] is True
+    assert set(updated_caps["life_stages"]["value"]) == {"puppy", "adolescent"}
+    assert updated_caps["training_philosophy"]["basis"] == "trainer_declaration"
+    assert updated_caps["training_philosophy"]["value"] == "positive_reinforcement_force_free"
 
     # Projection is now match-eligible
     trainer_doc["capabilities"] = updated_caps
@@ -778,6 +806,7 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert proj["match_eligible"] is True
     assert set(proj["specialties"]) == {"puppy_training", "obedience"}
     assert set(proj["service_formats"]) == {"in_home"}
+    assert set(proj["life_stages"]) == {"puppy", "adolescent"}
 
 
 def test_raw_legacy_record_without_provenance_never_becomes_matchable():

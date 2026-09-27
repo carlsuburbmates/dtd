@@ -128,7 +128,15 @@ describe("TrainerDetail ownership claim", () => {
 
         expect(api.post).toHaveBeenLastCalledWith(
             "/trainers/trainer_1/capabilities/confirm",
-            expect.objectContaining({ confirmation_statement: true }),
+            expect.objectContaining({
+                confirmation_statement: true,
+                specialties: expect.any(Array),
+                service_formats: expect.any(Array),
+                life_stages: expect.any(Array),
+                training_philosophy: expect.any(String),
+                serviced_suburbs: expect.any(Array),
+                catchment_type: expect.any(String),
+            }),
             expect.objectContaining({ headers: { "X-Trainer-Claim-Session": "claim-session-token" } })
         );
 

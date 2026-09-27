@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, Play, ShieldCheck } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
 import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -1119,70 +1119,28 @@ function TrainerSupplyView({
     capabilityHealth = {},
     onRefresh,
 }) {
-    const [ingesting, setIngesting] = useState(false);
     const topTrainerSuburbs = asArray(supplyGeography.trainer_suburbs_top).slice(0, 4);
     const demandGaps = asArray(supplyGeography.demand_gaps).slice(0, 4);
-
-    const handleRunIngestion = async () => {
-        setIngesting(true);
-        try {
-            const resp = await opsApi.post("/oversight/jobs/trainer-ingest", {
-                batch_size: 10,
-                run_guardian: true,
-            });
-            const d = resp.data || {};
-            const q = d.ingestion?.qualified ?? 0;
-            const h = d.ingestion?.held ?? 0;
-            const g = d.guardian?.status || "clean";
-            toast.success(`Acquisition run completed: ${q} qualified, ${h} held. Guardian: ${humanizeToken(g)}.`);
-            if (onRefresh) onRefresh();
-        } catch (err) {
-            toast.error(`Acquisition run failed: ${err?.response?.data?.detail || err.message}`);
-        } finally {
-            setIngesting(false);
-        }
-    };
 
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="Trainer Supply" description={PAGE_INTROS.trainer_supply} />
 
-            {/* Automated Acquisition & Supervisory Guardian Control Panel */}
+            {/* Automated Acquisition & Supervisory Guardian Telemetry Panel */}
             <div className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                         <div className="small-caps !text-[#8B9E98] flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-[#4ADE80]" />
-                            Automated Acquisition &amp; Supervisory Guardian
+                            Automated Acquisition &amp; Supervisory Guardian Telemetry
                         </div>
                         <h3 className="font-serif text-xl tracking-tight mt-1 text-[#F5F2EB]">
                             Autonomous Dual-Engine Pipeline
                         </h3>
                         <p className="text-sm text-[#8B9E98] font-mono mt-1 max-w-2xl">
                             Engine 1 (Batch Ingestion &amp; Gemini Fact Extraction) + Engine 2 (Supervisory Verification Guardian).
-                            Runs daily at 2:00 AM AEST via Cloud Scheduler with statutory ABR verification and fail-closed match boundaries.
+                            Scheduled execution via Cloud Scheduler with statutory ABR verification and fail-closed match boundaries.
                         </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={handleRunIngestion}
-                            disabled={ingesting}
-                            className="admin-btn admin-btn-accent"
-                            data-testid="ops-run-ingestion"
-                        >
-                            {ingesting ? (
-                                <>
-                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                    Running Pipeline…
-                                </>
-                            ) : (
-                                <>
-                                    <Play className="h-4 w-4" />
-                                    Run Ingestion &amp; Audit Now
-                                </>
-                            )}
-                        </button>
                     </div>
                 </div>
 

@@ -483,18 +483,22 @@ async def record_ingestion_failure(
             upsert=True,
         )
 
-    # R4: If existing trainer profile is linked to this failing source URL, invalidate capabilities upon refresh failure
+    # R4 & P0: If existing trainer profile is linked to this failing source URL (via source_url, source_evidence_url, or website), invalidate capabilities upon refresh failure
     trainers_coll = getattr(db, "trainers", None)
     if trainers_coll is not None:
-        existing_trainer = await trainers_coll.find_one({"source_url": source_url}, {"_id": 0})
-        if not existing_trainer:
-            existing_trainer = await trainers_coll.find_one({"website": source_url}, {"_id": 0})
-        if existing_trainer and existing_trainer.get("capabilities"):
-            inv_caps = invalidate_trainer_capabilities(existing_trainer, reason=f"source_refresh_failed:{error_reason}")
-            await trainers_coll.update_one(
-                {"id": existing_trainer["id"]},
-                {"$set": {"capabilities": inv_caps, "source_last_error": error_reason, "updated_at": now_ts}},
-            )
+        matched_trainers = []
+        for field in ("source_url", "source_evidence_url", "website"):
+            found = await trainers_coll.find_one({field: source_url}, {"_id": 0})
+            if found and found.get("id") and not any(t["id"] == found["id"] for t in matched_trainers):
+                matched_trainers.append(found)
+
+        for existing_trainer in matched_trainers:
+            if existing_trainer and existing_trainer.get("capabilities"):
+                inv_caps = invalidate_trainer_capabilities(existing_trainer, reason=f"source_refresh_failed:{error_reason}")
+                await trainers_coll.update_one(
+                    {"id": existing_trainer["id"]},
+                    {"$set": {"capabilities": inv_caps, "source_last_error": error_reason, "updated_at": now_ts}},
+                )
 
 
 async def record_ingestion_success(

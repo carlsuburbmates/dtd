@@ -2609,19 +2609,6 @@ async def run_trainer_ingest_job(
     return await _execute_trainer_ingest_pipeline(payload=payload, trigger="cloud_scheduler")
 
 
-@api.post("/oversight/jobs/trainer-ingest")
-async def run_trainer_ingest_job_manual(
-    payload: Optional[TrainerIngestJobRequest] = None,
-    _: None = Depends(require_oversight),
-) -> Dict[str, Any]:
-    """Operator-triggered execution boundary for automated trainer acquisition and supervisory audit.
-
-    Guarded by X-Admin-Pass oversight authentication.
-    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
-    """
-    return await _execute_trainer_ingest_pipeline(payload=payload, trigger="operator_manual")
-
-
 @api.get("/config")
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
@@ -3853,7 +3840,26 @@ async def get_trainer_capabilities_prefill(
     request: Request,
     x_trainer_claim_session: Optional[str] = Header(None, alias="X-Trainer-Claim-Session"),
 ) -> Dict[str, Any]:
-    """Retrieve prefilled trainer capabilities and canonical taxonomy options for confirmation UI."""
+    """Retrieve prefilled trainer capabilities and canonical taxonomy options for confirmation UI.
+
+    Requires valid trainer claim session matching trainer_id or administrative oversight credentials.
+    """
+    req_headers = request.headers if request else {}
+    session_hdr = x_trainer_claim_session if isinstance(x_trainer_claim_session, str) else None
+    token = (
+        session_hdr
+        or req_headers.get("X-Trainer-Claim-Session")
+        or (req_headers.get("Authorization") or "").replace("Bearer ", "").strip()
+    )
+    admin_pass = req_headers.get("X-Admin-Pass") or ""
+    expected_admin_pass = os.environ.get("ADMIN_PASS")
+    is_admin = bool(expected_admin_pass and admin_pass and hmac.compare_digest(admin_pass, expected_admin_pass))
+
+    if not is_admin:
+        if not token:
+            raise HTTPException(status_code=401, detail="Trainer claim session or admin authorization required.")
+        _verify_trainer_claim_session(token, trainer_id=trainer_id)
+
     trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer not found.")
@@ -3939,8 +3945,9 @@ async def confirm_trainer_capabilities(
     Requires explicit confirmation statement and valid trainer claim session or admin pass.
     """
     req_headers = request.headers if request else {}
+    session_hdr = x_trainer_claim_session if isinstance(x_trainer_claim_session, str) else None
     token = (
-        x_trainer_claim_session
+        session_hdr
         or req_headers.get("X-Trainer-Claim-Session")
         or payload.trainer_claim_session
         or (req_headers.get("Authorization") or "").replace("Bearer ", "").strip()
