@@ -751,7 +751,9 @@ def test_trainer_explicit_capability_confirmation_flow(monkeypatch):
     assert "barking" in prefill["prefilled"]["specialties"]
     assert "specialties" in prefill["canonical_options"]
     assert "delivery_constraints" in prefill["prefilled"]
-    assert "in_home_available" in prefill["prefilled"]["delivery_constraints"]
+    assert prefill["prefilled"]["delivery_constraints"]["in_home_available"] is False
+    assert prefill["prefilled"]["delivery_constraints"]["facility_available"] is False
+    assert prefill["prefilled"]["delivery_constraints"]["travel_distance_km"] == 0.0
 
     # Step 2B: Confirmation statement is required (false raises 400/422)
     with pytest.raises(HTTPException) as exc_info:
@@ -1091,3 +1093,266 @@ def test_real_melbourne_seed_trainers_map_cleanly_to_taxonomies():
         # Every candidate must map to at least one specialty or service format
         total_matched = len(v_spec["canonical_terms"]) + len(v_fmt["canonical_terms"])
         assert total_matched > 0, f"Real Melbourne trainer {name} with services {raw_services} failed to map to any canonical taxonomy"
+
+
+# ==============================================================================
+# R3: Fail-Closed Delivery Constraints & Conservative Prefill Regression Tests
+# ==============================================================================
+
+def test_delivery_constraints_domain_validation_rejects_malformed_and_unbounded():
+    """R3: validate_capability_category('delivery_constraints') strictly enforces schema and ranges."""
+    # Case 1: String booleans must be rejected
+    res_str_bool = validate_capability_category("delivery_constraints", {
+        "in_home_available": "false",
+        "facility_available": "true",
+    })
+    assert res_str_bool["valid"] is False
+    assert res_str_bool["reason"] == "invalid_in_home_available_must_be_boolean"
+
+    res_facility_str = validate_capability_category("delivery_constraints", {
+        "in_home_available": False,
+        "facility_available": "true",
+    })
+    assert res_facility_str["valid"] is False
+    assert res_facility_str["reason"] == "invalid_facility_available_must_be_boolean"
+
+    # Case 2: Numeric non-booleans for availability flags
+    res_num_bool = validate_capability_category("delivery_constraints", {
+        "in_home_available": 1,
+    })
+    assert res_num_bool["valid"] is False
+    assert res_num_bool["reason"] == "invalid_in_home_available_must_be_boolean"
+
+    # Case 3: Negative travel distance
+    res_neg_dist = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": -1.0,
+    })
+    assert res_neg_dist["valid"] is False
+    assert res_neg_dist["reason"] == "invalid_travel_distance_km_range"
+
+    # Case 4: Unbounded travel distance (> 200 km)
+    res_unbounded = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": 999999.0,
+    })
+    assert res_unbounded["valid"] is False
+    assert res_unbounded["reason"] == "invalid_travel_distance_km_range"
+
+    # Case 5: Non-finite travel distance (nan, inf)
+    res_nan = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": float("nan"),
+    })
+    assert res_nan["valid"] is False
+    assert res_nan["reason"] == "invalid_travel_distance_km_non_finite"
+
+    res_inf = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": float("inf"),
+    })
+    assert res_inf["valid"] is False
+    assert res_inf["reason"] == "invalid_travel_distance_km_non_finite"
+
+    # Case 6: Non-numeric distance type (string or bool)
+    res_str_dist = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": "25",
+    })
+    assert res_str_dist["valid"] is False
+    assert res_str_dist["reason"] == "invalid_travel_distance_km_type"
+
+    res_bool_dist = validate_capability_category("delivery_constraints", {
+        "travel_distance_km": True,
+    })
+    assert res_bool_dist["valid"] is False
+    assert res_bool_dist["reason"] == "invalid_travel_distance_km_type"
+
+    # Case 7: Overlong notes (> 200 chars)
+    res_overlong_notes = validate_capability_category("delivery_constraints", {
+        "notes": "x" * 201,
+    })
+    assert res_overlong_notes["valid"] is False
+    assert res_overlong_notes["reason"] == "notes_exceeds_max_length_200"
+
+    # Case 8: Non-string notes
+    res_non_str_notes = validate_capability_category("delivery_constraints", {
+        "notes": 12345,
+    })
+    assert res_non_str_notes["valid"] is False
+    assert res_non_str_notes["reason"] == "invalid_notes_must_be_string"
+
+    # Case 9: Non-dict input
+    res_non_dict = validate_capability_category("delivery_constraints", "in_home")
+    assert res_non_dict["valid"] is False
+    assert res_non_dict["reason"] == "invalid_delivery_constraints_format"
+
+    # Case 10: Valid dictionary passes and normalises canonical terms with conservative defaults
+    res_valid = validate_capability_category("delivery_constraints", {
+        "in_home_available": True,
+        "facility_available": False,
+        "travel_distance_km": 30.5,
+        "notes": "  Servicing inner north  ",
+    })
+    assert res_valid["valid"] is True
+    assert res_valid["reason"] == "valid"
+    assert res_valid["canonical_terms"] == {
+        "in_home_available": True,
+        "facility_available": False,
+        "travel_distance_km": 30.5,
+        "notes": "Servicing inner north",
+    }
+
+
+def test_delivery_constraints_pydantic_schema_validation():
+    """R3: DeliveryConstraintsIn model strictly validates input types before endpoint execution."""
+    import server
+    import pydantic
+
+    # String booleans raise ValidationError
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(in_home_available="false")
+    assert "Availability flags must be actual booleans" in str(exc.value)
+
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(facility_available="true")
+    assert "Availability flags must be actual booleans" in str(exc.value)
+
+    # String distance raises ValidationError
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(travel_distance_km="25")
+    assert "travel_distance_km must be a number" in str(exc.value)
+
+    # Negative distance raises ValidationError
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(travel_distance_km=-5.0)
+    assert "between 0 and 200 km" in str(exc.value)
+
+    # Unbounded distance raises ValidationError
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(travel_distance_km=999999.0)
+    assert "between 0 and 200 km" in str(exc.value)
+
+    # Overlong notes raise ValidationError
+    with pytest.raises(pydantic.ValidationError) as exc:
+        server.DeliveryConstraintsIn(notes="a" * 201)
+    assert "must not exceed 200 characters" in str(exc.value)
+
+    # Valid model serializes cleanly
+    model = server.DeliveryConstraintsIn(
+        in_home_available=True,
+        facility_available=False,
+        travel_distance_km=25.0,
+        notes="  Up to 25km  ",
+    )
+    assert model.in_home_available is True
+    assert model.facility_available is False
+    assert model.travel_distance_km == 25.0
+    assert model.notes == "Up to 25km"
+
+
+def test_unprefilled_claim_prefill_and_confirmation_conservative_defaults(monkeypatch):
+    """R3: An unprefilled trainer profile returns conservative false delivery constraints and does not create false positive facts."""
+    import asyncio
+    import server
+    from starlette.requests import Request
+
+    trainer_id = "trainer_unprefilled_r3"
+    trainer_doc = {
+        "id": trainer_id,
+        "name": "Unprefilled Dog Academy",
+        "suburb": "Fitzroy",
+        "published": True,
+        "contact_ready": True,
+        "claim_status": "claimed",
+        "capabilities": {},  # No declared capabilities
+    }
+
+    fake_db = _make_fake_db(trainers=[trainer_doc])
+    monkeypatch.setattr(server, "db", fake_db)
+
+    session_data = server._issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id="claim_ev_unprefilled")
+    claim_token = session_data["token"]
+    req = Request({"type": "http", "headers": [(b"x-trainer-claim-session", claim_token.encode("utf-8"))]})
+
+    # 1. Prefill returns conservative false defaults for delivery_constraints
+    prefill = asyncio.run(
+        server.get_trainer_capabilities_prefill(trainer_id, request=req, x_trainer_claim_session=claim_token)
+    )
+    dc_prefill = prefill["prefilled"]["delivery_constraints"]
+    assert dc_prefill["in_home_available"] is False, "Default in_home_available MUST be False when unprefilled"
+    assert dc_prefill["facility_available"] is False
+    assert dc_prefill["travel_distance_km"] == 0.0
+    assert dc_prefill["notes"] == ""
+
+    # 2. Confirming with default untouched delivery_constraints preserves false in_home_available
+    confirm_res = asyncio.run(
+        server.confirm_trainer_capabilities(
+            trainer_id,
+            server.TrainerCapabilitiesConfirmIn(
+                confirmation_statement=True,
+                specialties=["puppy_training"],
+                service_formats=["in_home"],
+                delivery_constraints=server.DeliveryConstraintsIn(
+                    in_home_available=False,
+                    facility_available=False,
+                    travel_distance_km=0.0,
+                    notes="",
+                ),
+            ),
+            request=req,
+            x_trainer_claim_session=claim_token,
+        )
+    )
+    assert confirm_res["ok"] is True
+    updated_caps = confirm_res["capabilities"]
+    assert updated_caps["delivery_constraints"]["value"]["in_home_available"] is False
+
+    # Projection reflects false in_home_available
+    trainer_doc["capabilities"] = updated_caps
+    proj = build_match_ready_projection(trainer_doc)
+    assert proj["delivery_constraints"]["in_home_available"] is False
+
+
+def test_delivery_constraints_preserves_permitted_prefill_for_correction(monkeypatch):
+    """R3: Existing permitted delivery constraints are preserved exactly in prefill for correction."""
+    import asyncio
+    import server
+    from starlette.requests import Request
+
+    trainer_id = "trainer_permitted_prefill_r3"
+    now_ts = now_iso()
+    permitted_caps = package_trainer_capabilities(
+        specialties=["puppy_training"],
+        service_formats=["in_home"],
+        delivery_constraints={
+            "in_home_available": True,
+            "facility_available": True,
+            "travel_distance_km": 40.0,
+            "notes": "Servicing eastern suburbs",
+        },
+        basis="trainer_declaration",
+        evidence_reference="claim_ref_prev",
+        confirmed_at=now_ts,
+    )
+    trainer_doc = {
+        "id": trainer_id,
+        "name": "Permitted Dog Academy",
+        "suburb": "Camberwell",
+        "published": True,
+        "contact_ready": True,
+        "claim_status": "claimed",
+        "capabilities": permitted_caps,
+    }
+
+    fake_db = _make_fake_db(trainers=[trainer_doc])
+    monkeypatch.setattr(server, "db", fake_db)
+
+    session_data = server._issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id="claim_ev_permitted")
+    claim_token = session_data["token"]
+    req = Request({"type": "http", "headers": [(b"x-trainer-claim-session", claim_token.encode("utf-8"))]})
+
+    # Prefill retrieves exact permitted declaration
+    prefill = asyncio.run(
+        server.get_trainer_capabilities_prefill(trainer_id, request=req, x_trainer_claim_session=claim_token)
+    )
+    dc_prefill = prefill["prefilled"]["delivery_constraints"]
+    assert dc_prefill["in_home_available"] is True
+    assert dc_prefill["facility_available"] is True
+    assert dc_prefill["travel_distance_km"] == 40.0
+    assert dc_prefill["notes"] == "Servicing eastern suburbs"

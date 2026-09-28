@@ -112,7 +112,7 @@ describe("TrainerDetail ownership claim", () => {
         expect(view.container.querySelector("[data-testid='claim-capabilities-step']")).not.toBeNull();
         expect(view.container.textContent).toContain("Step 2: Declare Capabilities");
 
-        // Verify delivery constraints controls are present and editable
+        // Verify delivery constraints controls are present, default to false, and are editable
         const inHomeCheck = view.container.querySelector("[data-testid='claim-delivery-in-home']");
         const facilityCheck = view.container.querySelector("[data-testid='claim-delivery-facility']");
         const distanceInput = view.container.querySelector("[data-testid='claim-delivery-distance']");
@@ -122,7 +122,12 @@ describe("TrainerDetail ownership claim", () => {
         expect(distanceInput).not.toBeNull();
         expect(notesInput).not.toBeNull();
 
+        // R3: Conservative initial state must be false
+        expect(inHomeCheck.checked).toBe(false);
+        expect(facilityCheck.checked).toBe(false);
+
         act(() => {
+            inHomeCheck.click();
             facilityCheck.click();
             changeValue(distanceInput, "25");
             changeValue(notesInput, "Travels up to 25km with travel fee");
@@ -164,6 +169,54 @@ describe("TrainerDetail ownership claim", () => {
 
         expect(view.container.querySelector("[data-testid='claim-success']")).not.toBeNull();
         expect(view.container.querySelector("[data-testid='claim-open-billing']").getAttribute("href")).toContain("claimSession=claim-session-token");
+        view.cleanup();
+    });
+
+    it("preserves conservative false defaults when delivery constraints are left untouched", async () => {
+        api.post
+            .mockResolvedValueOnce({ data: { claim_event_id: "claim_unprefilled", status: "pending_verification", masked_destination: "s***@dogs.com.au" } })
+            .mockResolvedValueOnce({ data: { ok: true, claim_status: "claimed", session: { token: "claim-session-token-unprefilled" } } })
+            .mockResolvedValueOnce({ data: { ok: true, capabilities: {} } });
+        const view = renderDetail();
+        await settle();
+
+        act(() => view.container.querySelector("[data-testid='claim-profile-open']").click());
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-email']"), "owner@dogs.com.au"));
+        await act(async () => view.container.querySelector("[data-testid='claim-start']").click());
+
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-otp']"), "123456"));
+        await act(async () => view.container.querySelector("[data-testid='claim-verify']").click());
+        await settle();
+
+        const inHomeCheck = view.container.querySelector("[data-testid='claim-delivery-in-home']");
+        const facilityCheck = view.container.querySelector("[data-testid='claim-delivery-facility']");
+        expect(inHomeCheck.checked).toBe(false);
+        expect(facilityCheck.checked).toBe(false);
+
+        // Leave delivery checkboxes untouched, accept statement and submit
+        const confirmCheck = view.container.querySelector("[data-testid='claim-confirm-statement']");
+        const confirmBtn = view.container.querySelector("[data-testid='claim-confirm-submit']");
+        act(() => {
+            confirmCheck.click();
+        });
+        await act(async () => {
+            confirmBtn.click();
+        });
+        await settle();
+
+        expect(api.post).toHaveBeenLastCalledWith(
+            "/trainers/trainer_1/capabilities/confirm",
+            expect.objectContaining({
+                confirmation_statement: true,
+                delivery_constraints: {
+                    in_home_available: false,
+                    facility_available: false,
+                    travel_distance_km: 0,
+                    notes: "",
+                },
+            }),
+            expect.objectContaining({ headers: { "X-Trainer-Claim-Session": "claim-session-token-unprefilled" } })
+        );
         view.cleanup();
     });
 

@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
 import uuid
@@ -3821,6 +3822,49 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
     })
 
 
+class DeliveryConstraintsIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    in_home_available: Optional[bool] = None
+    facility_available: Optional[bool] = None
+    travel_distance_km: Optional[float] = None
+    notes: Optional[str] = None
+
+    @field_validator("in_home_available", "facility_available", mode="before")
+    @classmethod
+    def validate_strict_bool(cls, v: Any) -> Optional[bool]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        raise ValueError("Availability flags must be actual booleans (true or false), not strings or numbers.")
+
+    @field_validator("travel_distance_km", mode="before")
+    @classmethod
+    def validate_distance(cls, v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError("travel_distance_km must be a number, not a boolean or string.")
+        val = float(v)
+        if math.isnan(val) or math.isinf(val):
+            raise ValueError("travel_distance_km must be finite.")
+        if val < 0.0 or val > 200.0:
+            raise ValueError("travel_distance_km must be between 0 and 200 km.")
+        return val
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def validate_notes(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("Notes must be a string.")
+        trimmed = v.strip()
+        if len(trimmed) > 200:
+            raise ValueError("Notes must not exceed 200 characters.")
+        return trimmed
+
+
 class TrainerCapabilitiesConfirmIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     specialties: Optional[List[str]] = None
@@ -3829,7 +3873,7 @@ class TrainerCapabilitiesConfirmIn(BaseModel):
     training_philosophy: Optional[str] = None
     serviced_suburbs: Optional[List[str]] = None
     catchment_type: Optional[str] = None
-    delivery_constraints: Optional[Dict[str, Any]] = None
+    delivery_constraints: Optional[DeliveryConstraintsIn] = None
     confirmation_statement: bool = False
     trainer_claim_session: Optional[str] = None
 
@@ -3899,10 +3943,10 @@ async def get_trainer_capabilities_prefill(
             or "specific_suburbs"
         ),
         "delivery_constraints": (
-            (caps.get("delivery_constraints") or {}).get("canonical_value")
-            or trainer.get("delivery_constraints")
-            or {
-                "in_home_available": True,
+            ((caps.get("delivery_constraints") or {}).get("canonical_value") or (caps.get("delivery_constraints") or {}).get("value"))
+            if (caps.get("delivery_constraints") or {}).get("permitted_in_projection")
+            else {
+                "in_home_available": False,
                 "facility_available": False,
                 "travel_distance_km": 0.0,
                 "notes": "",
@@ -3989,6 +4033,12 @@ async def confirm_trainer_capabilities(
     now_ts = now_iso()
     claim_ref = f"claim_confirmation:{claim_session['claim_event_id']}" if claim_session else f"ops_confirmation:{now_ts}"
 
+    dc_dict = (
+        payload.delivery_constraints.model_dump(exclude_unset=True)
+        if hasattr(payload.delivery_constraints, "model_dump")
+        else payload.delivery_constraints
+    )
+
     # Package validated structured capabilities
     confirmed_caps = trainer_quality.package_trainer_capabilities(
         specialties=payload.specialties,
@@ -3997,11 +4047,17 @@ async def confirm_trainer_capabilities(
         training_philosophy=payload.training_philosophy,
         serviced_suburbs=payload.serviced_suburbs,
         catchment_type=payload.catchment_type,
-        delivery_constraints=payload.delivery_constraints,
+        delivery_constraints=dc_dict,
         basis="trainer_declaration",
         evidence_reference=claim_ref,
         confirmed_at=now_ts,
     )
+
+    if payload.delivery_constraints is not None:
+        dc_fact = confirmed_caps.get("delivery_constraints")
+        if dc_fact and not dc_fact.get("validation_result", {}).get("valid", True):
+            reason = dc_fact.get("validation_result", {}).get("reason", "invalid_delivery_constraints")
+            raise HTTPException(status_code=422, detail=f"Invalid delivery_constraints: {reason}")
 
     # R4: Preserve historical audit trail; omit/corrected fields receive invalidation rather than deletion
     existing_caps = trainer.get("capabilities") or {}

@@ -100,7 +100,7 @@ export default function TrainerDetail() {
         serviced_suburbs: "",
         catchment_type: "specific_suburbs",
         delivery_constraints: {
-            in_home_available: true,
+            in_home_available: false,
             facility_available: false,
             travel_distance_km: 0,
             notes: "",
@@ -258,10 +258,10 @@ export default function TrainerDetail() {
                         : (pre.serviced_suburbs || trainer?.suburb || ""),
                     catchment_type: pre.catchment_type || "specific_suburbs",
                     delivery_constraints: {
-                        in_home_available: preDelivery.in_home_available ?? true,
-                        facility_available: preDelivery.facility_available ?? false,
-                        travel_distance_km: preDelivery.travel_distance_km ?? 0,
-                        notes: preDelivery.notes || "",
+                        in_home_available: Boolean(preDelivery.in_home_available),
+                        facility_available: Boolean(preDelivery.facility_available),
+                        travel_distance_km: Math.min(200, Math.max(0, Number(preDelivery.travel_distance_km) || 0)),
+                        notes: typeof preDelivery.notes === "string" ? preDelivery.notes.slice(0, 200) : "",
                     },
                 });
             } catch {
@@ -274,10 +274,10 @@ export default function TrainerDetail() {
                     serviced_suburbs: trainer?.suburb || "",
                     catchment_type: "specific_suburbs",
                     delivery_constraints: {
-                        in_home_available: fallbackDelivery.in_home_available ?? true,
-                        facility_available: fallbackDelivery.facility_available ?? false,
-                        travel_distance_km: fallbackDelivery.travel_distance_km ?? 0,
-                        notes: fallbackDelivery.notes || "",
+                        in_home_available: Boolean(fallbackDelivery.in_home_available),
+                        facility_available: Boolean(fallbackDelivery.facility_available),
+                        travel_distance_km: Math.min(200, Math.max(0, Number(fallbackDelivery.travel_distance_km) || 0)),
+                        notes: typeof fallbackDelivery.notes === "string" ? fallbackDelivery.notes.slice(0, 200) : "",
                     },
                 });
             }
@@ -332,8 +332,8 @@ export default function TrainerDetail() {
                 delivery_constraints: {
                     in_home_available: Boolean(confirmedCaps.delivery_constraints?.in_home_available),
                     facility_available: Boolean(confirmedCaps.delivery_constraints?.facility_available),
-                    travel_distance_km: Number(confirmedCaps.delivery_constraints?.travel_distance_km) || 0,
-                    notes: String(confirmedCaps.delivery_constraints?.notes || "").slice(0, 200),
+                    travel_distance_km: Math.min(200, Math.max(0, Number(confirmedCaps.delivery_constraints?.travel_distance_km) || 0)),
+                    notes: String(confirmedCaps.delivery_constraints?.notes || "").trim().slice(0, 200),
                 },
             }, {
                 headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},

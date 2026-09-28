@@ -982,19 +982,72 @@ def validate_capability_category(category: str, raw_value: Any) -> Dict[str, Any
         return result
 
     if category == "delivery_constraints":
-        if isinstance(raw_value, dict):
-            clean_constraints = {
-                "in_home_available": bool(raw_value.get("in_home_available", True)),
-                "facility_available": bool(raw_value.get("facility_available", False)),
-                "travel_distance_km": float(raw_value.get("travel_distance_km") or 0.0),
-                "notes": str(raw_value.get("notes") or "")[:200],
-            }
-            result["canonical_terms"] = clean_constraints
-            result["valid"] = True
-            result["reason"] = "valid"
-        else:
+        if not isinstance(raw_value, dict):
             result["valid"] = False
             result["reason"] = "invalid_delivery_constraints_format"
+            return result
+
+        # Fail closed on unknown or invalid types
+        raw_in_home = raw_value.get("in_home_available")
+        if raw_in_home is not None:
+            if not isinstance(raw_in_home, bool):
+                result["valid"] = False
+                result["reason"] = "invalid_in_home_available_must_be_boolean"
+                return result
+            in_home = raw_in_home
+        else:
+            in_home = False
+
+        raw_facility = raw_value.get("facility_available")
+        if raw_facility is not None:
+            if not isinstance(raw_facility, bool):
+                result["valid"] = False
+                result["reason"] = "invalid_facility_available_must_be_boolean"
+                return result
+            facility = raw_facility
+        else:
+            facility = False
+
+        raw_dist = raw_value.get("travel_distance_km")
+        if raw_dist is not None:
+            if isinstance(raw_dist, bool) or not isinstance(raw_dist, (int, float)):
+                result["valid"] = False
+                result["reason"] = "invalid_travel_distance_km_type"
+                return result
+            dist = float(raw_dist)
+            if math.isnan(dist) or math.isinf(dist):
+                result["valid"] = False
+                result["reason"] = "invalid_travel_distance_km_non_finite"
+                return result
+            if dist < 0.0 or dist > 200.0:
+                result["valid"] = False
+                result["reason"] = "invalid_travel_distance_km_range"
+                return result
+        else:
+            dist = 0.0
+
+        raw_notes = raw_value.get("notes")
+        if raw_notes is not None:
+            if not isinstance(raw_notes, str):
+                result["valid"] = False
+                result["reason"] = "invalid_notes_must_be_string"
+                return result
+            trimmed_notes = raw_notes.strip()
+            if len(trimmed_notes) > 200:
+                result["valid"] = False
+                result["reason"] = "notes_exceeds_max_length_200"
+                return result
+        else:
+            trimmed_notes = ""
+
+        result["canonical_terms"] = {
+            "in_home_available": in_home,
+            "facility_available": facility,
+            "travel_distance_km": float(dist),
+            "notes": trimmed_notes,
+        }
+        result["valid"] = True
+        result["reason"] = "valid"
         return result
 
     result["valid"] = False
