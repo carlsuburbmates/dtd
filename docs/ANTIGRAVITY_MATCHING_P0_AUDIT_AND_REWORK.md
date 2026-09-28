@@ -2,8 +2,9 @@
 
 **Initial audited commit:** `f4b5f25938f044dbfc257088b147e9fc9b4e5073`
 **Re-audited commit:** `d0098d124e0f4d6062e7e044971a38bf4b9da8cc`
+**Final audited commit:** `ce14f4eeba6c675fce0997385800a8ec543d9ba9`
 **Base:** `e7a990e2a85182b170967bf4dffd6002d27b7aa4`
-**Current classification:** `PARTIAL` — R1 and R2 are accepted; complete R3 before P1 or any environment advancement.
+**Current classification:** `DONE` — P0 acquisition-dependency remediation is accepted. P1 is authorised for local implementation only; matching cutover and every environment action remain blocked.
 
 ## Independently accepted P0 items
 
@@ -63,6 +64,16 @@ Make this a narrow data-contract repair, without changing matching cutover, addi
 - The supplied Playwright desktop and mobile captures were visually inspected. They corroborate the R2 controls but do not change the server-side acceptance result.
 - No provider, deployment, billing, authentication, data or remote-Git mutation was performed by this audit.
 
-## Required Antigravity return — R3 only
+## Final re-audit of `ce14f4e`
 
-Commit only the fail-closed delivery-constraint repair on `feature/matching-implementation`. Return the commit SHA, changed-file list, exact focused/full frontend and backend test results, browser evidence for a no-prefill and an edited-prefill declaration, migration/data effects (expected: none), and confirmation of no external mutations. Codex will re-audit the exact commit before authorising P1.
+### R3 accepted
+
+1. **Fail-closed schema:** direct string boolean, numeric boolean, non-finite, negative and out-of-range distance, and overlong-note cases are rejected before capability persistence. Valid values are canonicalised and reach the match-ready projection.
+2. **Conservative unknown state:** an unprefilled claim presents both delivery options as false and an untouched confirmation cannot create an in-home-positive fact.
+3. **Correction path:** a permitted existing declaration is preserved for trainer review and correction.
+4. **UI evidence:** supplied desktop captures were independently inspected for both the unprefilled and edited-prefill paths. They show the expected unchecked and populated states respectively.
+5. **Regression verification:** on the exact commit, 65 focused backend tests, 284 backend unit tests, 36 frontend tests, and the frontend production build passed. `git diff --check d0098d1..ce14f4e` was clean.
+
+### Acceptance boundary and next authorised package
+
+P0 is an accepted prerequisite only. It does not make the match-ready foundation or matching pipeline complete, does not enable `ENABLE_MATCH_READY_PROJECTION_FILTER`, and does not verify any deployed runtime. Antigravity may now implement **P1 — Contract fixtures and test harness** exactly as specified in `ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`. It must remain local-only and return the exact commit and evidence for a fresh Codex audit before P2.
