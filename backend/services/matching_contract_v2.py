@@ -14,7 +14,11 @@ production scoring formula and real ai.py integration are scheduled for P3.
 
 from __future__ import annotations
 
+import hashlib
 import re
+import secrets
+import time
+from collections import defaultdict
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
@@ -97,6 +101,9 @@ ALLOWED_TOP_LEVEL_REASON_CODES: Set[str] = {
     "needs_clarification",
     "no_qualified_candidates",
     "thin_local_supply",
+    "ambiguous_postcode",
+    "invalid_locality",
+    "unknown_locality",
 }
 
 
@@ -280,8 +287,14 @@ class MatchRequestIn(BaseModel):
     primary_concerns: List[str] = Field(..., min_length=1)
     service_format: str = Field(..., description="Explicit service format preference")
     method_preference: str = Field(..., description="Explicit method preference")
-    behaviour_description: Optional[str] = Field(default="", max_length=MAX_DESCRIPTION_CHARS)
+    behaviour_description: Optional[str] = Field(default="")
     consent: MatchConsentIn
+    policy_version: str = Field(default=DECISION_CONTRACT_VERSION)
+
+    @field_validator("behaviour_description", mode="before")
+    @classmethod
+    def sanitize_description_field(cls, v: Any) -> str:
+        return sanitize_behaviour_description(v)
 
     @field_validator("primary_concerns")
     @classmethod
@@ -307,11 +320,6 @@ class MatchRequestIn(BaseModel):
         if v not in valid_methods:
             raise ValueError(f"Unknown method preference: {v}")
         return v
-
-    @model_validator(mode="after")
-    def sanitize_description_field(self) -> MatchRequestIn:
-        self.behaviour_description = sanitize_behaviour_description(self.behaviour_description)
-        return self
 
 
 class MatchCandidateCard(BaseModel):
@@ -1162,3 +1170,145 @@ def execute_matching_with_adapter(
     except (GeminiAdapterError, ValidationError, ValueError):
         # Fallback wrapper catches declared adapter errors and model schema/contract validation errors
         return run_deterministic_matching(request, candidate_pool, degraded=True, triage_state=triage_state)
+
+
+# ==============================================================================
+# 7. Operational Primitives (Rate Limiting, Context Token, Pre-AI Triage)
+# ==============================================================================
+
+class MatchRateLimiter:
+    """Application-level request limiter for matching requests.
+
+    Governance (Contract v2 Section 2):
+    - 10 match attempts per IP-derived, non-reversible key in 10 minutes (600s).
+    - 30-second burst interval (at most 3 attempts within 30s).
+    - Non-reversible SHA-256 hashed keys. Raw IP is never stored.
+    - Exposes rate-limit events to /ops without personal data.
+    """
+
+    def __init__(
+        self,
+        max_attempts: int = MATCH_ATTEMPT_RATE_LIMIT,
+        window_seconds: int = MATCH_RATE_LIMIT_WINDOW_S,
+        burst_interval_seconds: int = MATCH_RATE_LIMIT_BURST_INTERVAL_S,
+        burst_max_attempts: int = 3,
+        salt: str = "dtd_match_rate_limit_salt_v2",
+    ):
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self.burst_interval_seconds = burst_interval_seconds
+        self.burst_max_attempts = burst_max_attempts
+        self.salt = salt
+        self._history: Dict[str, List[float]] = defaultdict(list)
+
+    def hash_key(self, raw_ip: str) -> str:
+        """Derive a one-way non-reversible key from the client IP address."""
+        clean_ip = (raw_ip or "unknown").strip().lower()
+        return hashlib.sha256(f"{self.salt}:{clean_ip}".encode("utf-8")).hexdigest()
+
+    def check_limit(self, raw_ip: str, now_ts: Optional[float] = None) -> Tuple[bool, Optional[str]]:
+        """Check whether the given IP is within rate limits.
+
+        Returns:
+            (allowed: bool, reason: Optional[str])
+            Reasons: "window_limit_exceeded", "burst_limit_exceeded", or None
+        """
+        now = now_ts or time.time()
+        key = self.hash_key(raw_ip)
+        timestamps = self._history[key]
+
+        # Prune timestamps older than window
+        cutoff = now - self.window_seconds
+        valid_ts = [t for t in timestamps if t >= cutoff]
+        self._history[key] = valid_ts
+
+        # 1. Check window limit (max 10 in 600s)
+        if len(valid_ts) >= self.max_attempts:
+            return False, "window_limit_exceeded"
+
+        # 2. Check burst limit (max 3 in 30s)
+        burst_cutoff = now - self.burst_interval_seconds
+        burst_count = sum(1 for t in valid_ts if t >= burst_cutoff)
+        if burst_count >= self.burst_max_attempts:
+            return False, "burst_limit_exceeded"
+
+        return True, None
+
+    def record_attempt(self, raw_ip: str, now_ts: Optional[float] = None) -> None:
+        """Record a successful match attempt timestamp."""
+        now = now_ts or time.time()
+        key = self.hash_key(raw_ip)
+        self._history[key].append(now)
+
+    def reset(self) -> None:
+        """Clear all rate limit history (useful for testing)."""
+        self._history.clear()
+
+
+match_rate_limiter = MatchRateLimiter()
+
+
+def generate_match_context_token() -> Tuple[str, str]:
+    """Generate an opaque random context token and its SHA-256 hash.
+
+    Returns:
+        (raw_token, token_hash)
+    """
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hash_match_context_token(raw_token)
+    return raw_token, token_hash
+
+
+def hash_match_context_token(raw_token: str) -> str:
+    """Compute deterministic SHA-256 hash of opaque token."""
+    return hashlib.sha256(raw_token.strip().encode("utf-8")).hexdigest()
+
+
+def classify_pre_ai_triage(
+    primary_concerns: List[str],
+    behaviour_description: Optional[str] = None,
+) -> Optional[DecisionState]:
+    """Evaluate pre-AI triage triggers before candidate eligibility.
+
+    Governance (Contract v2 Section 3, DF-024):
+    - Immediate human danger: active attack, child bite emergency -> IMMEDIATE_HUMAN_DANGER.
+    - Urgent animal health: poison, seizure, profuse bleeding -> URGENT_ANIMAL_HEALTH_SUPPORT.
+    - Serious behavioural support: bite history, severe aggression -> SERIOUS_BEHAVIOURAL_SUPPORT.
+    - Unresolved other/unsure concerns -> NEEDS_CLARIFICATION.
+    """
+    clean_desc = sanitize_behaviour_description(behaviour_description or "")
+    lower_desc = clean_desc.lower()
+
+    # Immediate human danger triggers (child bite, active attack, police emergency)
+    danger_triggers = [
+        "child bite", "bitten a child", "bit a child", "active attack",
+        "attacking someone", "emergency hospital", "police emergency",
+    ]
+    if any(t in lower_desc for t in danger_triggers):
+        return DecisionState.IMMEDIATE_HUMAN_DANGER
+
+    # Urgent animal health triggers (poison, seizure, unconscious, profuse bleeding)
+    health_triggers = [
+        "poison", "poisoned", "seizure", "unconscious",
+        "profuse bleeding", "bleeding heavily", "hit by car",
+    ]
+    if any(t in lower_desc for t in health_triggers):
+        return DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT
+
+    # Serious behavioural support triggers
+    serious_triggers = [
+        "severe aggression", "history of bites", "multiple bites",
+        "bites people", "bite history", "directed aggression",
+    ]
+    if any(t in lower_desc for t in serious_triggers) or PrimaryConcern.AGGRESSION.value in primary_concerns:
+        return DecisionState.SERIOUS_BEHAVIOURAL_SUPPORT
+
+    # Other / unsure concerns require clarification
+    has_other_or_unsure = any(
+        c in {PrimaryConcern.OTHER.value, PrimaryConcern.UNSURE.value}
+        for c in primary_concerns
+    )
+    if has_other_or_unsure:
+        return DecisionState.NEEDS_CLARIFICATION
+
+    return None

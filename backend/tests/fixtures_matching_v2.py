@@ -72,7 +72,7 @@ except ImportError:
 # 1. Standard Test Data Builders
 # ==============================================================================
 
-def make_test_trainer_doc(
+def make_test_raw_trainer_doc(
     *,
     trainer_id: str,
     name: str,
@@ -90,20 +90,21 @@ def make_test_trainer_doc(
     claim_status: str = "claimed",
     tier: str = "claimed",
     days_ago: int = 5,
+    confirmed_ts: Optional[str] = None,
+    abn_verified: Optional[bool] = None,
+    abn_status: Optional[str] = None,
     empty_capabilities: bool = False,
 ) -> Dict[str, Any]:
-    """Build a raw trainer document with full provenance and run build_match_ready_projection.
-
-    Distinguishes None (absent facts) from explicit empty lists [] for rigorous fail-closed testing.
-    Uses only canonical delivery fields: in_home_available, facility_available, travel_distance_km, notes.
-    """
-    confirmed_dt = datetime.now(timezone.utc) - timedelta(days=days_ago)
-    confirmed_ts = confirmed_dt.isoformat()
+    """Build a raw trainer document with full provenance before projection."""
+    if confirmed_ts:
+        c_ts = confirmed_ts
+    else:
+        confirmed_dt = datetime.now(timezone.utc) - timedelta(days=days_ago)
+        c_ts = confirmed_dt.isoformat()
 
     if empty_capabilities:
         caps = {}
     else:
-        # Canonical delivery constraint defaults if not explicitly provided
         deliv = delivery_constraints
         if deliv is None:
             deliv = {
@@ -122,7 +123,7 @@ def make_test_trainer_doc(
             catchment_type=catchment_type,
             delivery_constraints=deliv,
             basis="trainer_declaration",
-            confirmed_at=confirmed_ts,
+            confirmed_at=c_ts,
         )
 
     doc = {
@@ -138,16 +139,76 @@ def make_test_trainer_doc(
         "source_url": f"https://example.com/trainers/{trainer_id}",
         "source_evidence_url": f"https://example.com/trainers/{trainer_id}",
     }
+    if abn_verified is not None:
+        doc["abn_verified"] = abn_verified
+    if abn_status is not None:
+        doc["abn_status"] = abn_status
+    return doc
 
-    projection = build_match_ready_projection(doc)
+
+def make_test_trainer_doc(
+    *,
+    trainer_id: str,
+    name: str,
+    suburb: str = "Richmond",
+    region: str = "Greater Melbourne",
+    specialties: Optional[List[str]] = None,
+    service_formats: Optional[List[str]] = None,
+    life_stages: Optional[List[str]] = None,
+    training_philosophy: Optional[str] = None,
+    serviced_suburbs: Optional[List[str]] = None,
+    catchment_type: Optional[str] = "specific_suburbs",
+    delivery_constraints: Optional[Dict[str, Any]] = None,
+    published: bool = True,
+    contact_ready: bool = True,
+    claim_status: str = "claimed",
+    tier: str = "claimed",
+    days_ago: int = 5,
+    confirmed_ts: Optional[str] = None,
+    abn_verified: Optional[bool] = None,
+    abn_status: Optional[str] = None,
+    empty_capabilities: bool = False,
+) -> Dict[str, Any]:
+    """Build a raw trainer document with full provenance and run build_match_ready_projection.
+
+    Distinguishes None (absent facts) from explicit empty lists [] for rigorous fail-closed testing.
+    Uses only canonical delivery fields: in_home_available, facility_available, travel_distance_km, notes.
+    """
+    raw_doc = make_test_raw_trainer_doc(
+        trainer_id=trainer_id,
+        name=name,
+        suburb=suburb,
+        region=region,
+        specialties=specialties,
+        service_formats=service_formats,
+        life_stages=life_stages,
+        training_philosophy=training_philosophy,
+        serviced_suburbs=serviced_suburbs,
+        catchment_type=catchment_type,
+        delivery_constraints=delivery_constraints,
+        published=published,
+        contact_ready=contact_ready,
+        claim_status=claim_status,
+        tier=tier,
+        days_ago=days_ago,
+        confirmed_ts=confirmed_ts,
+        abn_verified=abn_verified,
+        abn_status=abn_status,
+        empty_capabilities=empty_capabilities,
+    )
+
+    projection = build_match_ready_projection(raw_doc)
+    projection["id"] = trainer_id
+    projection["published"] = published
+    projection["claim_status"] = claim_status
     projection["tier"] = tier
     if life_stages is None:
         projection["life_stages"] = None
-    if specialties is None and "specialties" not in caps:
+    if specialties is None and "specialties" not in raw_doc["capabilities"]:
         projection["specialties"] = None
-    if service_formats is None and "service_formats" not in caps:
+    if service_formats is None and "service_formats" not in raw_doc["capabilities"]:
         projection["service_formats"] = None
-    if serviced_suburbs is None and "serviced_suburbs" not in caps:
+    if serviced_suburbs is None and "serviced_suburbs" not in raw_doc["capabilities"]:
         projection["serviced_suburbs"] = None
     return projection
 
