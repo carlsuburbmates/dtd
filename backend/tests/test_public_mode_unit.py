@@ -553,6 +553,8 @@ def test_startup_seeds_only_from_api_when_enabled(monkeypatch):
 
 
 def test_match_gate_default_and_legacy_env_allows(monkeypatch):
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers = _Collection(
         rows=[
             {
@@ -561,8 +563,17 @@ def test_match_gate_default_and_legacy_env_allows(monkeypatch):
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.6,
                 "billing_profile_status": "ready",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )
@@ -669,6 +680,8 @@ def test_intro_gate_default_and_legacy_env_allows(monkeypatch):
 
 
 def test_match_gate_on_allows_existing_behavior(monkeypatch):
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers = _Collection(
         rows=[
             {
@@ -677,8 +690,17 @@ def test_match_gate_on_allows_existing_behavior(monkeypatch):
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.6,
                 "billing_profile_status": "ready",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )
@@ -946,6 +968,8 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
         "active_regions": ["Greater Melbourne"],
     }
     system_state_coll = _Collection(rows=[legacy_row.copy()])
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers_coll = _Collection(
         rows=[
             {
@@ -954,11 +978,20 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.9,
                 "billing_profile_status": "ready",
                 "website": "https://example.com",
                 "phone": "0400000000",
                 "email": "trainer@example.com",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )

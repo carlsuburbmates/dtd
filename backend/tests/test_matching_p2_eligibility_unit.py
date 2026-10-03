@@ -96,12 +96,23 @@ class _MockCollection:
         return SimpleNamespace(inserted_id="mock_id")
 
 
-def _make_dummy_request(ip: str = "127.0.0.1") -> Request:
+def _make_dummy_request(
+    ip: str = "127.0.0.1",
+    method: str = "POST",
+    path: str = "/api/match",
+    query_string: str = "",
+    headers: Dict[str, str] = None,
+) -> Request:
+    raw_headers = [(b"host", b"testserver")]
+    if headers:
+        for k, v in headers.items():
+            raw_headers.append((k.lower().encode(), v.encode()))
     scope = {
         "type": "http",
-        "method": "POST",
-        "path": "/api/match",
-        "headers": [(b"host", b"testserver")],
+        "method": method,
+        "path": path,
+        "query_string": query_string.encode(),
+        "headers": raw_headers,
         "client": (ip, 12345),
     }
     return Request(scope)
@@ -344,6 +355,31 @@ class TestP2ProjectionGating:
         assert proj["match_eligible"] is False
         assert "statutory_abn_revoked" in proj["eligibility_reasons"]
 
+    def test_legacy_request_fails_closed_without_capability_fabrication(self, monkeypatch):
+        """Legacy InstantMatchIn request fails closed when trainer projection fails; never fabricates capabilities."""
+        unqualified_doc = make_test_raw_trainer_doc(
+            trainer_id="t_unqualified",
+            name="Unqualified Trainer",
+            published=True,
+            serviced_suburbs=[],  # Empty / no declared capabilities
+        )
+        fake_db = SimpleNamespace(
+            trainers=_MockCollection([unqualified_doc]),
+            match_events=_MockCollection([]),
+            match_contexts=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        legacy_payload = server.InstantMatchIn(
+            description="basic manners",
+            suburb="Richmond",
+            consent_match_processing=True,
+        )
+        out = asyncio.run(server.instant_match(legacy_payload))
+        assert out["decision_state"] == DecisionState.NO_CONFIRMED_MATCH.value
+        assert len(out["candidates"]) == 0
+        assert len(out["matches"]) == 0
+
 
 # ==============================================================================
 # 5. Deterministic Eligibility & Thin Supply Expansion
@@ -501,9 +537,17 @@ class TestP2PrivacyAndContextLifecycle:
         assert "context_token_hash" in ev
 
     def test_context_token_retrieval_endpoint(self, monkeypatch):
-        """Context retrieval endpoint retrieves sanitised context by raw token."""
+        """Context retrieval endpoint retrieves sanitised context by raw token via header."""
+        trainer = make_test_trainer_doc(
+            trainer_id="t_richmond",
+            name="Richmond Dog Academy",
+            serviced_suburbs=["Richmond"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
+        )
         fake_db = SimpleNamespace(
-            trainers=_MockCollection([]),
+            trainers=_MockCollection([trainer]),
             match_events=_MockCollection([]),
             match_contexts=_MockCollection([]),
         )
@@ -521,24 +565,73 @@ class TestP2PrivacyAndContextLifecycle:
         assert ctx_doc["token_hash"] == hash_match_context_token(raw_token)
         assert raw_token not in str(ctx_doc)
 
-        # Retrieve context via GET /api/match/context
-        ctx_out = asyncio.run(server.get_match_context(token=raw_token))
+        # Retrieve context via GET /api/match/context using X-Match-Context-Token header
+        dummy_req = _make_dummy_request(
+            method="GET",
+            path="/api/match/context",
+            headers={"X-Match-Context-Token": raw_token},
+        )
+        ctx_out = asyncio.run(server.get_match_context(request=dummy_req))
         assert ctx_out["suburb_or_postcode"] == "Richmond"
         assert ctx_out["dog_age_months"] == 18
         assert "behaviour_description" not in ctx_out
 
+    def test_context_token_query_param_strictly_forbidden(self, monkeypatch):
+        """Query parameter tokens (?token=... or ?context_token=...) are rejected with 400."""
+        fake_db = SimpleNamespace(match_contexts=_MockCollection([]))
+        monkeypatch.setattr(server, "db", fake_db)
+
+        # 1. query param 'token'
+        req1 = _make_dummy_request(
+            method="GET",
+            path="/api/match/context",
+            query_string="token=secret_context_token_123",
+        )
+        with pytest.raises(HTTPException) as exc1:
+            asyncio.run(server.get_match_context(request=req1))
+        assert exc1.value.status_code == 400
+        assert "Query parameter authentication is forbidden" in exc1.value.detail
+
+        # 2. query param 'context_token'
+        req2 = _make_dummy_request(
+            method="GET",
+            path="/api/match/context",
+            query_string="context_token=secret_context_token_123",
+        )
+        with pytest.raises(HTTPException) as exc2:
+            asyncio.run(server.get_match_context(request=req2))
+        assert exc2.value.status_code == 400
+        assert "Query parameter authentication is forbidden" in exc2.value.detail
+
+    def test_context_token_missing_header_rejected_with_401(self, monkeypatch):
+        """Missing X-Match-Context-Token header is rejected with 401."""
+        fake_db = SimpleNamespace(match_contexts=_MockCollection([]))
+        monkeypatch.setattr(server, "db", fake_db)
+
+        req = _make_dummy_request(method="GET", path="/api/match/context")
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.get_match_context(request=req))
+        assert exc.value.status_code == 401
+        assert "Missing X-Match-Context-Token header" in exc.value.detail
+
     def test_context_token_invalid_or_expired_rejected(self, monkeypatch):
-        """Context retrieval rejects invalid or expired tokens."""
+        """Context retrieval rejects invalid or expired tokens in headers."""
         fake_db = SimpleNamespace(
             match_contexts=_MockCollection([]),
         )
         monkeypatch.setattr(server, "db", fake_db)
 
+        # Invalid token via header
+        req_invalid = _make_dummy_request(
+            method="GET",
+            path="/api/match/context",
+            headers={"X-Match-Context-Token": "invalid_random_token"},
+        )
         with pytest.raises(HTTPException) as exc1:
-            asyncio.run(server.get_match_context(token="invalid_random_token"))
+            asyncio.run(server.get_match_context(request=req_invalid))
         assert exc1.value.status_code == 404
 
-        # Expired token
+        # Expired token via header
         expired_token, expired_hash = generate_match_context_token()
         expired_ts = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         fake_db.match_contexts.rows.append({
@@ -546,9 +639,99 @@ class TestP2PrivacyAndContextLifecycle:
             "match_id": "m_exp",
             "expires_at": expired_ts,
         })
+        req_expired = _make_dummy_request(
+            method="GET",
+            path="/api/match/context",
+            headers={"X-Match-Context-Token": expired_token},
+        )
         with pytest.raises(HTTPException) as exc2:
-            asyncio.run(server.get_match_context(token=expired_token))
+            asyncio.run(server.get_match_context(request=req_expired))
         assert exc2.value.status_code == 410
+
+    def test_no_context_token_issued_for_non_handoff_states(self, monkeypatch):
+        """No context token is issued or persisted for triage, invalid locality, or empty results."""
+        fake_db = SimpleNamespace(
+            trainers=_MockCollection([]),
+            match_events=_MockCollection([]),
+            match_contexts=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        # 1. Invalid locality
+        req_invalid_loc = make_valid_match_request(suburb_or_postcode="Sydney CBD")
+        out1 = asyncio.run(server.instant_match(req_invalid_loc))
+        assert out1["context_token"] is None
+        assert len(fake_db.match_contexts.inserted) == 0
+
+        # 2. Immediate danger
+        req_danger = make_valid_match_request(
+            behaviour_description="Active dog attack emergency hospital bite"
+        )
+        out2 = asyncio.run(server.instant_match(req_danger))
+        assert out2["context_token"] is None
+        assert len(fake_db.match_contexts.inserted) == 0
+
+        # 3. Urgent animal health
+        req_health = make_valid_match_request(
+            behaviour_description="Puppy swallowed poison and is convulsing"
+        )
+        out3 = asyncio.run(server.instant_match(req_health))
+        assert out3["context_token"] is None
+        assert len(fake_db.match_contexts.inserted) == 0
+
+        # 4. Ambiguous postcode
+        req_ambig = make_valid_match_request(suburb_or_postcode="3121")
+        out4 = asyncio.run(server.instant_match(req_ambig))
+        assert out4["context_token"] is None
+        assert len(fake_db.match_contexts.inserted) == 0
+
+        # 5. No confirmed match (empty candidate pool)
+        req_empty = make_valid_match_request(suburb_or_postcode="Richmond")
+        out5 = asyncio.run(server.instant_match(req_empty))
+        assert out5["context_token"] is None
+        assert len(fake_db.match_contexts.inserted) == 0
+
+    def test_public_response_redacts_match_score_and_tier(self, monkeypatch):
+        """Public candidate and match responses strictly redact raw match_score and commercial tier."""
+        trainer = make_test_trainer_doc(
+            trainer_id="t_richmond",
+            name="Richmond Dog Academy",
+            serviced_suburbs=["Richmond"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
+            tier="premium_partner",
+        )
+        fake_db = SimpleNamespace(
+            trainers=_MockCollection([trainer]),
+            match_events=_MockCollection([]),
+            match_contexts=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        req = make_valid_match_request(
+            suburb_or_postcode="Richmond",
+            dog_age_months=18,
+            primary_concerns=[PrimaryConcern.BASIC_MANNERS.value],
+            service_format=ServiceFormatPreference.IN_HOME.value,
+        )
+        out = asyncio.run(server.instant_match(req))
+
+        assert len(out["candidates"]) >= 1
+        for cand in out["candidates"]:
+            assert "match_score" not in cand
+            assert "tier" not in cand
+
+        assert len(out["matches"]) >= 1
+        for match in out["matches"]:
+            assert "match_score" not in match
+            assert "tier" not in match
+
+        # Internal match_event record DOES record fit scores for protected audit/telemetry
+        assert len(fake_db.match_events.inserted) == 1
+        ev = fake_db.match_events.inserted[0]
+        assert "candidate_fit_scores" in ev
+        assert "t_richmond" in ev["candidate_fit_scores"]
 
 
 # ==============================================================================

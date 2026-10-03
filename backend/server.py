@@ -2958,7 +2958,6 @@ async def instant_match(
     # 3. Canonical Locality Resolution
     loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
     match_id = new_id()
-    raw_token, token_hash = matching_contract_v2.generate_match_context_token()
     now_dt = datetime.now(timezone.utc)
     expires_dt = now_dt + timedelta(days=matching_contract_v2.RETENTION_PERIOD_DAYS)
 
@@ -2973,10 +2972,8 @@ async def instant_match(
         )
         out = resp_clarification.model_dump()
         out["match_id"] = match_id
-        out["context_token"] = raw_token
+        out["context_token"] = None
         out["matches"] = []
-        if response:
-            response.headers["X-Match-Context-Token"] = raw_token
         return out
 
     canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode)
@@ -2994,36 +2991,34 @@ async def instant_match(
             candidates=[],
             reason_codes=[triage_state.value],
         )
-        # Persist triage event without raw behavioral text
+        # Persist triage event without raw behavioral text and with context_token_hash=None
         if hasattr(db, "match_events"):
             await db.match_events.insert_one(
-            {
-                "id": match_id,
-                "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
-                "decision_state": triage_state.value,
-                "search_scope": matching_contract_v2.SearchScope.LOCAL.value,
-                "reason_codes": [triage_state.value],
-                "result_ids": [],
-                "locality": canonical_suburb,
-                "suburb_or_postcode": req.suburb_or_postcode,
-                "dog_age_months": req.dog_age_months,
-                "primary_concerns": req.primary_concerns,
-                "service_format": req.service_format,
-                "method_preference": req.method_preference,
-                "consent": req.consent.model_dump(),
-                "campaign": campaign,
-                "source": source,
-                "context_token_hash": token_hash,
-                "created_at": now_dt.isoformat(),
-                "expires_at": expires_dt.isoformat(),
-            }
-        )
+                {
+                    "id": match_id,
+                    "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+                    "decision_state": triage_state.value,
+                    "search_scope": matching_contract_v2.SearchScope.LOCAL.value,
+                    "reason_codes": [triage_state.value],
+                    "result_ids": [],
+                    "locality": canonical_suburb,
+                    "suburb_or_postcode": req.suburb_or_postcode,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "consent": req.consent.model_dump(),
+                    "campaign": campaign,
+                    "source": source,
+                    "context_token_hash": None,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt.isoformat(),
+                }
+            )
         out = triage_resp.model_dump()
         out["match_id"] = match_id
-        out["context_token"] = raw_token
+        out["context_token"] = None
         out["matches"] = []
-        if response:
-            response.headers["X-Match-Context-Token"] = raw_token
         return out
 
     # 5. Fetch candidate pool & build match-ready capability projections
@@ -3036,19 +3031,8 @@ async def instant_match(
     for doc in pool_docs:
         proj = doc if "projection_version" in doc else trainer_quality.build_match_ready_projection(doc)
         # Exclude trainers who fail closed on capability/statutory/dispute gates
+        # Never fabricate capability or eligibility for unconfirmed profiles
         if not proj.get("match_eligible"):
-            if is_legacy:
-                # In legacy test compatibility mode, preserve doc as candidate if published
-                proj = dict(doc)
-                proj["trainer_id"] = doc.get("id")
-                proj["match_eligible"] = True
-                proj["specialties"] = doc.get("specialties") or ["basic_manners", "reactivity", "obedience"]
-                proj["serviced_suburbs"] = doc.get("serviced_suburbs") or [doc.get("suburb", canonical_suburb)]
-                proj["life_stages"] = doc.get("life_stages") or ["puppy", "adolescent", "adult", "all_life_stages"]
-                proj["service_formats"] = doc.get("service_formats") or ["in_home", "facility", "outdoor_park"]
-                proj["tier"] = doc.get("tier", "unclaimed")
-                candidate_pool.append(proj)
-                continue
             continue
         proj["tier"] = doc.get("tier", "unclaimed")
         candidate_pool.append(proj)
@@ -3058,21 +3042,27 @@ async def instant_match(
         req, candidate_pool, triage_state=triage_state
     )
 
-    # 7. Store hashed context in db.match_contexts for downstream profile retrieval
-    if hasattr(db, "match_contexts"):
-        await db.match_contexts.insert_one(
-            {
-                "token_hash": token_hash,
-                "match_id": match_id,
-                "suburb_or_postcode": canonical_suburb,
-                "dog_age_months": req.dog_age_months,
-                "primary_concerns": req.primary_concerns,
-                "service_format": req.service_format,
-                "method_preference": req.method_preference,
-                "created_at": now_dt.isoformat(),
-                "expires_at": expires_dt.isoformat(),
-            }
-        )
+    # 7. Context Token & Persistence (issued only when results exist for profile handoff)
+    has_results_for_handoff = len(decision_resp.candidates) > 0
+    raw_token = None
+    token_hash = None
+
+    if has_results_for_handoff:
+        raw_token, token_hash = matching_contract_v2.generate_match_context_token()
+        if hasattr(db, "match_contexts"):
+            await db.match_contexts.insert_one(
+                {
+                    "token_hash": token_hash,
+                    "match_id": match_id,
+                    "suburb_or_postcode": canonical_suburb,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt.isoformat(),
+                }
+            )
 
     # 8. Persist sanitised match event in db.match_events (ZERO raw description or PII)
     if hasattr(db, "match_events"):
@@ -3084,6 +3074,10 @@ async def instant_match(
                 "search_scope": decision_resp.search_scope,
                 "reason_codes": [r if isinstance(r, str) else r.value for r in decision_resp.reason_codes],
                 "result_ids": [c.trainer_id for c in decision_resp.candidates],
+                "presentation_order": [c.trainer_id for c in decision_resp.candidates],
+                "candidate_fit_scores": {
+                    c.trainer_id: c.match_score for c in decision_resp.candidates if c.match_score is not None
+                },
                 "locality": canonical_suburb,
                 "suburb_or_postcode": req.suburb_or_postcode,
                 "dog_age_months": req.dog_age_months,
@@ -3099,25 +3093,30 @@ async def instant_match(
             }
         )
 
-    # 9. Format response with both v2 schema and legacy compatibility matches list
+    # 9. Format public response: strictly exclude raw fit scores and commercial tiers
     cand_by_id = {t["id"]: t for t in pool_docs}
     out = decision_resp.model_dump()
     out["match_id"] = match_id
     out["context_token"] = raw_token
+
+    # Scrub match_score and tier from public candidate presentation cards
+    for cand in out.get("candidates", []):
+        cand.pop("match_score", None)
+        cand.pop("tier", None)
+
+    # Legacy compatibility matches list - strictly no raw match_score or commercial tier
     out["matches"] = [
         {
             "id": c.trainer_id,
             "name": (cand_by_id.get(c.trainer_id) or {}).get("name", "Verified Trainer"),
             "suburb": (cand_by_id.get(c.trainer_id) or {}).get("suburb", ""),
-            "match_score": c.match_score,
             "match_reasoning": c.explanation,
             "reason_codes": [r if isinstance(r, str) else r.value for r in c.reason_codes],
-            "tier": (cand_by_id.get(c.trainer_id) or {}).get("tier", "unclaimed"),
         }
         for c in decision_resp.candidates
     ]
 
-    if response:
+    if has_results_for_handoff and response and raw_token:
         response.headers["X-Match-Context-Token"] = raw_token
 
     return out
@@ -3125,20 +3124,30 @@ async def instant_match(
 
 @api.get("/match/context")
 async def get_match_context(
-    token: Optional[str] = Query(default=None),
-    x_match_context_token: Optional[str] = Header(default=None),
+    request: Request,
+    x_match_context_token: Optional[str] = Header(default=None, alias="X-Match-Context-Token"),
 ) -> Dict[str, Any]:
     """Retrieve sanitised match context using the opaque session token.
 
     Governance (Decision Contract v2 Section 2, DF-018, DF-022):
+    - Context retrieval is header-based ONLY (X-Match-Context-Token).
+    - Query parameter tokens (?token=...) are strictly forbidden and rejected.
     - Context token is stored hashed (SHA-256); raw token is never persisted.
     - Returns only bounded, non-sensitive request parameters.
     - Zero behavioural description or owner PII returned.
     - Validates 30-day expiration TTL.
     """
-    raw_token = token or x_match_context_token
+    if "token" in request.query_params or "context_token" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail="Query parameter authentication is forbidden. Provide token via X-Match-Context-Token header.",
+        )
+
+    raw_token = x_match_context_token if isinstance(x_match_context_token, str) else None
+    if not raw_token:
+        raw_token = request.headers.get("x-match-context-token")
     if not raw_token or not raw_token.strip():
-        raise HTTPException(status_code=400, detail="Missing match context token")
+        raise HTTPException(status_code=401, detail="Missing X-Match-Context-Token header")
 
     token_hash = matching_contract_v2.hash_match_context_token(raw_token.strip())
     ctx = await db.match_contexts.find_one({"token_hash": token_hash}, {"_id": 0})

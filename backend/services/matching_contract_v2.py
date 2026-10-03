@@ -323,9 +323,9 @@ class MatchRequestIn(BaseModel):
 
 
 class MatchCandidateCard(BaseModel):
-    """Public candidate presentation card schema (Contract v2 Section 5)."""
+    """Candidate presentation card schema (Contract v2 Section 5 & 6)."""
     trainer_id: str
-    match_score: float = Field(..., ge=0.0, le=1.0)
+    match_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     reason_codes: List[ReasonCode] = Field(..., min_length=1)
     explanation: str
     search_scope: SearchScope = SearchScope.LOCAL
