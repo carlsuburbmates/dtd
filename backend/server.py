@@ -3037,9 +3037,10 @@ async def instant_match(
         proj["tier"] = doc.get("tier", "unclaimed")
         candidate_pool.append(proj)
 
-    # 6. Execute deterministic matching (Contract v2 Section 4 & 5)
-    decision_resp = matching_contract_v2.run_deterministic_matching(
-        req, candidate_pool, triage_state=triage_state
+    # 6. Execute matching with AI adapter & deterministic fallback wrapper (Contract v2 Section 3, 4, 5)
+    ai_adapter = globals().get("matching_ai_adapter") or matching_contract_v2.get_default_ai_adapter()
+    decision_resp = matching_contract_v2.execute_matching_with_adapter(
+        req, candidate_pool, ai_adapter, triage_state=triage_state
     )
 
     # 7. Context Token & Persistence (issued only when results exist for profile handoff)
@@ -3071,6 +3072,7 @@ async def instant_match(
                 "id": match_id,
                 "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
                 "decision_state": decision_resp.decision_state,
+                "degraded": getattr(decision_resp, "degraded", False),
                 "search_scope": decision_resp.search_scope,
                 "reason_codes": [r if isinstance(r, str) else r.value for r in decision_resp.reason_codes],
                 "result_ids": [c.trainer_id for c in decision_resp.candidates],

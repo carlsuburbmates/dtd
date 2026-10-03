@@ -1172,6 +1172,11 @@ def execute_matching_with_adapter(
         return run_deterministic_matching(request, candidate_pool, degraded=True, triage_state=triage_state)
 
 
+def get_default_ai_adapter() -> GeminiStubAdapter:
+    """Return default AI adapter for matching (conforming to Contract v2)."""
+    return GeminiStubAdapter(mode="normal")
+
+
 # ==============================================================================
 # 7. Operational Primitives (Rate Limiting, Context Token, Pre-AI Triage)
 # ==============================================================================
