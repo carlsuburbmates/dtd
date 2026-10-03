@@ -125,3 +125,20 @@ Remove the remaining unsupported owner-facing “certified specialist” clarifi
 ### Return package
 
 Rework only R11–R14 on `feature/matching-implementation`; preserve the accepted P1 work. Return one amended/local commit, clean diff output, focused/full test results and direct regression proof for every point above. No P2, runtime integration, provider, data, deployment, billing, authentication or remote-Git action is authorised.
+
+## Recentered P1 acceptance boundary — supersedes R11–R14 as a P1 return package
+
+The repeated audit loop was caused by applying P2/P3 production acceptance requirements to the M0 fixture baseline. That is not an efficient or correct package boundary.
+
+P1's purpose is limited to a versioned decision table, projection-shaped fixtures, fail-closed **reference** eligibility and a non-runtime adapter/fallback parity seam. It does not deliver the public request schema, persistence/privacy implementation, production output parser, live Gemini client, explanation renderer, owner copy, `/ops` evidence or emergency pathway. Those remain explicitly required in P2–P5/M6 and must not be inferred as accepted from P1.
+
+Accordingly, R11 (strict production field coercion and server-owned policy version), R12 (production explanation rendering/validation), and R14 (public owner copy) are deferred to their owning packages. They are not P1 blockers and are not resolved by this record. R13's two harness defects remain P1 blockers.
+
+### P1-final — only remaining implementation request
+
+1. **Canonical-postcode adapter parity:** carry the canonical locality and each candidate's deterministic local/expanded scope from eligibility into the test adapter. A valid unambiguous postcode (including `3067` → Abbotsford) must produce the same non-degraded state, scope, candidate IDs and reason-code categories as the deterministic reference. Add this fixture/regression.
+2. **Bounded fallback boundary:** the adapter wrapper may catch only declared simulated provider errors and model parse/contract-validation errors. It must not catch arbitrary `Exception`; an injected `RuntimeError` must propagate so a defect is visible to tests and later `/ops` instrumentation.
+
+### P1 acceptance after P1-final
+
+Codex will accept P1/M0 if the exact amended commit: keeps all 16 projection-shaped fixtures and accepted fail-closed gates; passes canonical-suburb and canonical-postcode adapter parity plus declared degradation scenarios; has no runtime imports; and has a clean diff with the focused and full local test evidence. This acceptance authorises **P2 local implementation only**. It does not accept P2/P3/P4/M6 behaviour, enable matching, alter a provider, or advance any environment.

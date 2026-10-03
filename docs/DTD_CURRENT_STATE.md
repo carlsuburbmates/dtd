@@ -242,7 +242,7 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** the commit adds strict consent, required preferences, address/PII sanitisation, fixed concern handling, state-only urgent fixtures, local-eligible expansion and an adapter/fallback seam. It passes 59 focused tests, 343 backend unit tests, 36 frontend tests and the production build. The module remains unimported by the public route or frontend. Direct probes still show numeric/boolean coercion, unsupported free-form explanation claims being accepted, a canonical postcode taking the normal adapter into degraded fallback, and an arbitrary internal exception being silently downgraded to fallback. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
 - **Impact/uncertainty:** the work is a useful non-runtime foundation but cannot yet be a reliable v2 oracle or accept P2. The public owner flow remains the earlier diagnostic flow.
 - **Why deferred:** this audit does not change public behaviour, retained records, AI-provider use or deployment.
-- **Next action:** complete P1 R11–R14 in `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`, return the exact local commit for re-audit, then and only then consider P2.
+- **Next action:** complete P1-final in `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`: canonical-postcode adapter parity and bounded fallback errors only. P1 acceptance then authorises P2 local implementation only; strict runtime schema/privacy, explanation rendering and public copy remain P2/P3/P4 work.
 
 ### DF-022 — Owner matching consent is enforced but not persisted as evidence
 
@@ -258,7 +258,7 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** `backend/services/ai.py` still asks Gemini for a non-empty list of trainer IDs and the live fallback still has the earlier `0.40` baseline. The adapter now raises known simulated provider failures through a fallback wrapper, but its raw-postcode scope comparison turns a valid `3067` local request into degraded fallback, and the wrapper catches arbitrary internal exceptions. Explanation validation remains permissive for unrecognised unsupported claims. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
 - **Impact/uncertainty:** the target response is no longer an open product-policy choice, but neither the reference harness nor the live route yet proves AI/fallback consistency.
 - **Why deferred:** authoring and local reference scaffolding do not authorise a public matching, AI-provider, retention or deployment change. The repair requires accepted P1 evidence followed by the cohesive P2-P4 workflow redesign.
-- **Next action:** complete P1 R11–R14, including canonical-postcode parity and bounded failure semantics; then implement the actual `ai.py` integration only in P3 and verify the same scenarios in sandbox before release.
+- **Next action:** complete P1-final canonical-postcode parity and bounded failure semantics, then implement the actual `ai.py` integration only in P3 and verify the same scenarios in sandbox before release. P1 does not accept the production request schema, parser, explanation renderer or provider client.
 
 ### DF-024 — No urgent-support pathway or verified provider register exists
 
