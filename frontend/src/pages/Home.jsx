@@ -182,23 +182,22 @@ export default function Home() {
                 ? data.candidates
                 : (Array.isArray(data.matches) ? data.matches : []);
 
-            const safeMatches = rawMatches.map((item) => ({
-                ...item,
-                id: String(item?.trainer_id || item?.id || ""),
-                name: typeof item?.name === "string" ? item.name : String(item?.name || "Verified Trainer"),
-                suburb: typeof item?.suburb === "string" ? item.suburb : String(item?.suburb || ""),
-                match_reasoning: typeof item?.explanation === "string"
-                    ? item.explanation
-                    : (typeof item?.match_reasoning === "string"
-                        ? item.match_reasoning
-                        : (typeof item?.match_reasoning?.reasoning === "string"
-                            ? item.match_reasoning.reasoning
-                            : (typeof item?.match_reasoning?.summary === "string"
-                                ? item.match_reasoning.summary
-                                : ""))),
-                reason_codes: Array.isArray(item?.reason_codes) ? item.reason_codes : [],
-                search_scope: item?.search_scope || data.search_scope || "local",
-            }));
+            const safeMatches = rawMatches
+                .filter((item) => item?.name && typeof item.name === "string" && item.name.trim().length > 0)
+                .map((item) => ({
+                    ...item,
+                    id: String(item?.trainer_id || item?.id || ""),
+                    name: item.name.trim(),
+                    suburb: typeof item?.suburb === "string" ? item.suburb : String(item?.locality || item?.suburb || ""),
+                    match_reasoning: typeof item?.explanation === "string"
+                        ? item.explanation
+                        : (typeof item?.match_reasoning === "string"
+                            ? item.match_reasoning
+                            : ""),
+                    reason_codes: Array.isArray(item?.reason_codes) ? item.reason_codes : [],
+                    search_scope: item?.search_scope || data.search_scope || "local",
+                    expanded_disclosure: item?.expanded_disclosure || (item?.search_scope === "expanded" ? "Servicing across Greater Melbourne" : null),
+                }));
             setMatches(safeMatches);
             setMatchId(String(data.match_id || ""));
             setMatchAttempted(true);
@@ -658,7 +657,7 @@ export default function Home() {
                                     <div className="mt-6 pt-4 border-t border-[#E5DFD3]">
                                         <p className="text-xs font-sans text-[#5C6D59] mb-3 font-medium">Free enquiry • Direct contact</p>
                                         <Link
-                                            to={`/t/${m.id}${matchId ? `?match=${encodeURIComponent(matchId)}` : ""}`}
+                                            to={`/t/${m.id}`}
                                             className="btn-primary w-full justify-center"
                                             data-testid={`match-open-${idx + 1}`}
                                             onClick={() => recordConnectClick(m.id, idx + 1)}

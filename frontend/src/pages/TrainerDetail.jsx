@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Mail, Phone, Globe, MapPin, ShieldCheck, ArrowRight, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { extractPublicMonetizationPolicy, resolvePublicMonetizationCopy } from "@/lib/publicPolicy";
@@ -67,9 +67,14 @@ const CATCHMENT_OPTIONS = [
 
 export default function TrainerDetail() {
     const { id } = useParams();
-    const [search] = useSearchParams();
-    const matchId = search.get("match") || null;
-    const initialDesc = search.get("q") || "";
+    const [matchContextToken, setMatchContextToken] = useState(() => {
+        try {
+            return typeof window !== "undefined" ? sessionStorage.getItem("d_match_context_token") || null : null;
+        } catch (_) {
+            return null;
+        }
+    });
+    const [matchContext, setMatchContext] = useState(null);
 
     const [trainer, setTrainer] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -113,7 +118,7 @@ export default function TrainerDetail() {
         user_name: "",
         user_email: "",
         user_phone: "",
-        description: initialDesc,
+        description: "",
         consent_contact_release: false,
         consent_outcome_tracking: false,
     });
@@ -123,6 +128,30 @@ export default function TrainerDetail() {
         } catch (_) {}
         return `intro-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     });
+
+    useEffect(() => {
+        if (!matchContextToken) return;
+        api.get("/match/context", {
+            headers: { "X-Match-Context-Token": matchContextToken },
+        })
+        .then((res) => {
+            setMatchContext(res.data);
+            if (res.data?.primary_concerns?.length > 0) {
+                const concernStr = res.data.primary_concerns.map((c) => String(c).replace(/_/g, " ")).join(", ");
+                setForm((prev) => ({
+                    ...prev,
+                    description: prev.description || `Enquiry regarding ${concernStr} for dog (${res.data.dog_age_months || 12} months).`,
+                }));
+            }
+        })
+        .catch(() => {
+            try {
+                sessionStorage.removeItem("d_match_context_token");
+            } catch (_) {}
+            setMatchContextToken(null);
+            setMatchContext(null);
+        });
+    }, [matchContextToken]);
 
     useEffect(() => {
         api
@@ -161,6 +190,42 @@ export default function TrainerDetail() {
         }
         setBusy(true);
         setConnectError("");
+
+        if (matchContextToken && matchContext) {
+            try {
+                const r = await api.post("/match/follow-up", {
+                    trainer_id: id,
+                    user_name: form.user_name,
+                    user_email: form.user_email,
+                    user_phone: form.user_phone || "",
+                    notes: form.description || "",
+                    consent_contact_release: form.consent_contact_release,
+                }, {
+                    headers: {
+                        "X-Match-Context-Token": matchContextToken,
+                        "Idempotency-Key": introClientToken,
+                    },
+                });
+                setIntroId(r.data.intro_id);
+                setIntroMeta({ deliveryStatus: r.data.delivery_state });
+                setContact({
+                    name: trainer?.name,
+                    email: trainer?.email || "Enquiry dispatched directly to trainer",
+                    phone: trainer?.phone || "",
+                });
+                toast.success("Enquiry sent directly to trainer!");
+            } catch (err) {
+                const message = err?.response?.status === 409
+                    ? "This enquiry could not be repeated safely. Refresh the page and try again."
+                    : (err?.response?.data?.detail || "Couldn't connect. Please try again.");
+                setConnectError(message);
+                toast.error(message);
+            } finally {
+                setBusy(false);
+            }
+            return;
+        }
+
         try {
             const r = await api.post("/intros", {
                 trainer_id: id,
@@ -169,7 +234,6 @@ export default function TrainerDetail() {
                 user_name: form.user_name,
                 user_phone: form.user_phone,
                 suburb: trainer?.suburb,
-                match_id: matchId,
                 client_token: introClientToken,
                 consent_contact_release: form.consent_contact_release,
                 consent_outcome_tracking: form.consent_outcome_tracking,
@@ -420,7 +484,7 @@ export default function TrainerDetail() {
                             {claimStatus === "claimed" ? <span className="pill pill-verified">Identity claimed</span> : null}
                             {claimStatus === "claim_disputed" ? <span className="pill pill-unverified">Ownership under review</span> : null}
                             {trainer.abn_verified ? <span className="pill pill-verified" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
-                            {isPro ? <span className="pill bg-[#1A3A32] !text-[#F5F2EB]">Verified Pro</span> : null}
+                            {isPro && !matchContextToken ? <span className="pill pill-unverified" title="Commercial directory listing">Sponsored</span> : null}
                         </div>
                         <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-2">{trainer.name}</h1>
                     </div>

@@ -3102,22 +3102,48 @@ async def instant_match(
     out["match_id"] = match_id
     out["context_token"] = raw_token
 
-    # Scrub match_score and tier from public candidate presentation cards
-    for cand in out.get("candidates", []):
-        cand.pop("match_score", None)
-        cand.pop("tier", None)
+    # Exclude candidates with missing display names (never use "Verified Trainer")
+    valid_candidates = []
+    valid_matches = []
+    for c in decision_resp.candidates:
+        cand_doc = cand_by_id.get(c.trainer_id) or {}
+        display_name = (cand_doc.get("name") or "").strip()
+        if not display_name:
+            continue  # Exclude candidate without genuine display name
 
-    # Legacy compatibility matches list - strictly no raw match_score or commercial tier
-    out["matches"] = [
-        {
-            "id": c.trainer_id,
-            "name": (cand_by_id.get(c.trainer_id) or {}).get("name", "Verified Trainer"),
-            "suburb": (cand_by_id.get(c.trainer_id) or {}).get("suburb", ""),
-            "match_reasoning": c.explanation,
+        scope_val = c.search_scope.value if hasattr(c.search_scope, "value") else str(c.search_scope)
+        expanded_disclosure = "Servicing across Greater Melbourne" if scope_val == "expanded" else None
+
+        card_public = {
+            "trainer_id": c.trainer_id,
+            "name": display_name,
+            "locality": cand_doc.get("suburb", ""),
+            "service_formats": list(cand_doc.get("service_formats") or []),
+            "explanation": c.explanation,
+            "search_scope": scope_val,
+            "expanded_disclosure": expanded_disclosure,
             "reason_codes": [r if isinstance(r, str) else r.value for r in c.reason_codes],
         }
-        for c in decision_resp.candidates
-    ]
+        valid_candidates.append(card_public)
+        valid_matches.append({
+            "id": c.trainer_id,
+            "name": display_name,
+            "suburb": cand_doc.get("suburb", ""),
+            "service_formats": list(cand_doc.get("service_formats") or []),
+            "match_reasoning": c.explanation,
+            "search_scope": scope_val,
+            "expanded_disclosure": expanded_disclosure,
+            "reason_codes": [r if isinstance(r, str) else r.value for r in c.reason_codes],
+        })
+
+    out["candidates"] = valid_candidates
+    out["matches"] = valid_matches
+
+    if not valid_candidates and decision_resp.candidates:
+        out["decision_state"] = matching_contract_v2.DecisionState.NO_CONFIRMED_MATCH.value
+        out["reason_codes"] = ["no_qualified_candidates"]
+        out["context_token"] = None
+        raw_token = None
 
     if has_results_for_handoff and response and raw_token:
         response.headers["X-Match-Context-Token"] = raw_token
@@ -3206,27 +3232,60 @@ async def create_match_follow_up(
     if not ctx:
         raise HTTPException(status_code=404, detail="Match context not found or invalid")
 
+    # Expiration check
+    expires_at = ctx.get("expires_at")
+    if expires_at:
+        try:
+            exp_dt = datetime.fromisoformat(expires_at)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp_dt:
+                raise HTTPException(status_code=410, detail="Match context has expired.")
+        except (ValueError, TypeError):
+            pass
+
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
     if not trainer:
         raise HTTPException(status_code=404, detail="Trainer not found")
 
-    raw_idem = idempotency_key if isinstance(idempotency_key, str) else None
-    idem = (raw_idem or f"match:{ctx.get('match_id')}:{payload.trainer_id}:{payload.user_email}").strip()
-    existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
+    match_id = str(ctx.get("match_id") or "")
+    if hasattr(db, "match_events") and match_id:
+        match_event = await db.match_events.find_one({"id": match_id}, {"_id": 0, "result_ids": 1})
+        if match_event and "result_ids" in match_event:
+            res_ids = [str(x) for x in (match_event.get("result_ids") or [])]
+            if res_ids and payload.trainer_id not in res_ids:
+                raise HTTPException(status_code=400, detail="Trainer is not in eligible match results.")
+
+    # Idempotency: enforce both client Idempotency-Key and server composite key
+    email_clean = payload.user_email.strip().lower()
+    email_hash = hashlib.sha256(email_clean.encode("utf-8")).hexdigest()[:16]
+    composite_idem = f"match:{match_id}:{payload.trainer_id}:{email_hash}"
+
+    raw_idem = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() else None
+
+    query_filter = (
+        {"$or": [{"idempotency_key": raw_idem}, {"composite_idempotency_key": composite_idem}]}
+        if raw_idem
+        else {"composite_idempotency_key": composite_idem}
+    )
+
+    existing = await db.intros.find_one(query_filter, {"_id": 0})
     if existing:
-        contact_existing = _released_contact_payload(
-            trainer,
-            fallback_name=existing.get("trainer_name"),
-            fallback_suburb=existing.get("suburb"),
-        )
-        return _scrub({**existing, "contact": contact_existing})
+        return {
+            "intro_id": str(existing.get("id")),
+            "match_id": match_id,
+            "trainer_id": str(payload.trainer_id),
+            "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "delivered"),
+            "idempotent": True,
+        }
 
     ip = (request.client.host if request.client else "") or ""
+    intro_id_val = new_id()
     intro = {
-        "id": new_id(),
+        "id": intro_id_val,
         "trainer_id": trainer["id"],
         "trainer_name": trainer.get("name"),
-        "match_id": ctx.get("match_id"),
+        "match_id": match_id,
         "suburb": ctx.get("suburb_or_postcode") or trainer.get("suburb"),
         "dog_age_months": ctx.get("dog_age_months"),
         "primary_concerns": ctx.get("primary_concerns") or [],
@@ -3237,14 +3296,23 @@ async def create_match_follow_up(
         "notes": payload.notes or "",
         "consent_contact_release": True,
         "delivery_status": "delivered",
+        "delivery_state": "delivered",
         "status": "delivered",
-        "idempotency_key": idem,
+        "idempotency_key": raw_idem or composite_idem,
+        "composite_idempotency_key": composite_idem,
         "ip": ip,
         "created_at": now_iso(),
     }
     await db.intros.insert_one(intro.copy())
-    contact = _released_contact_payload(trainer)
-    return _scrub({**intro, "contact": contact})
+
+    # Return strictly permitted follow-up response shape
+    return {
+        "intro_id": str(intro_id_val),
+        "match_id": match_id,
+        "trainer_id": str(payload.trainer_id),
+        "delivery_state": "delivered",
+        "idempotent": False,
+    }
 
 
 @api.post("/match/connect-click")

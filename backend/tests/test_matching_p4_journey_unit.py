@@ -60,6 +60,16 @@ class _MockCollection:
 
     async def find_one(self, query: Dict[str, Any], projection: Dict[str, Any] = None):
         for r in self.rows + self.inserted:
+            if "$or" in query:
+                or_matches = False
+                for branch in query["$or"]:
+                    branch_match = all(r.get(k) == v for k, v in branch.items())
+                    if branch_match:
+                        or_matches = True
+                        break
+                if or_matches:
+                    return dict(r)
+                continue
             match = True
             for k, v in query.items():
                 if r.get(k) != v:
@@ -246,25 +256,33 @@ class TestP4LegacyRejectionAndFollowUp:
         )
         out = asyncio.run(server.create_match_follow_up(payload=payload, request=req))
 
+        # Strict response shape: intro_id, match_id, trainer_id, delivery_state, idempotent
+        assert set(out.keys()) == {"intro_id", "match_id", "trainer_id", "delivery_state", "idempotent"}
         assert out["trainer_id"] == "t_richmond"
         assert out["match_id"] == "match_p4_test"
-        assert out["suburb"] == "Richmond"
-        assert out["dog_age_months"] == 18
-        assert out["primary_concerns"] == ["basic_manners"]
-        assert out["user_name"] == "Jane Doe"
-        assert out["user_email"] == "jane@example.com"
-        assert out["status"] == "delivered"
-        # Zero raw description field
-        assert "description" not in out or out.get("description") is None
+        assert out["delivery_state"] == "delivered"
+        assert out["idempotent"] is False
+        assert isinstance(out["intro_id"], str) and len(out["intro_id"]) > 0
 
-        # Check DB insertion
+        # No token, contact data, raw description, score, or tier in response
+        assert "context_token" not in out
+        assert "token" not in out
+        assert "contact" not in out
+        assert "user_email" not in out
+        assert "description" not in out
+        assert "match_score" not in out
+        assert "tier" not in out
+
+        # Check DB insertion: intro record has match_id, consent, and idempotency keys
         assert len(fake_db.intros.inserted) == 1
         inserted = fake_db.intros.inserted[0]
         assert inserted["match_id"] == "match_p4_test"
-        assert inserted["idempotency_key"] is not None
+        assert inserted["trainer_id"] == "t_richmond"
+        assert inserted["composite_idempotency_key"] is not None
+        assert inserted["consent_contact_release"] is True
 
     def test_follow_up_idempotency_prevents_duplicate_intro(self, monkeypatch):
-        """Repeated follow-up enquiry with same idempotency key returns existing intro."""
+        """Repeated follow-up enquiry with same idempotency key returns existing intro with idempotent=True."""
         raw_token, token_hash = generate_match_context_token()
         ctx_doc = {
             "token_hash": token_hash,
@@ -307,8 +325,56 @@ class TestP4LegacyRejectionAndFollowUp:
         # First call
         out1 = asyncio.run(server.create_match_follow_up(payload=payload, request=req, idempotency_key="client_idem_key_123"))
         assert len(fake_db.intros.inserted) == 1
+        assert out1["idempotent"] is False
 
         # Second call with same idempotency key
         out2 = asyncio.run(server.create_match_follow_up(payload=payload, request=req, idempotency_key="client_idem_key_123"))
         assert len(fake_db.intros.inserted) == 1
-        assert out1["id"] == out2["id"]
+        assert out2["idempotent"] is True
+        assert out1["intro_id"] == out2["intro_id"]
+
+    def test_follow_up_rejects_candidate_not_in_match_results(self, monkeypatch):
+        """Follow-up enquiry fails with 400 if trainer_id is not in match event result_ids."""
+        raw_token, token_hash = generate_match_context_token()
+        ctx_doc = {
+            "token_hash": token_hash,
+            "match_id": "match_p4_test",
+            "suburb_or_postcode": "Richmond",
+            "dog_age_months": 18,
+            "primary_concerns": ["basic_manners"],
+            "service_format": "in_home",
+        }
+        trainer = make_test_trainer_doc(
+            trainer_id="t_other",
+            name="Other Dog Trainer",
+            serviced_suburbs=["Richmond"],
+        )
+        # Match event only has t_richmond in result_ids
+        match_event_doc = {
+            "id": "match_p4_test",
+            "result_ids": ["t_richmond"],
+        }
+        fake_db = SimpleNamespace(
+            match_contexts=_MockCollection([ctx_doc]),
+            trainers=_MockCollection([trainer]),
+            match_events=_MockCollection([match_event_doc]),
+            intros=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        payload = server.MatchFollowUpIn(
+            trainer_id="t_other",
+            user_name="Jane Doe",
+            user_email="jane@example.com",
+            consent_contact_release=True,
+        )
+        req = _make_dummy_request(
+            method="POST",
+            path="/api/match/follow-up",
+            headers={"X-Match-Context-Token": raw_token},
+        )
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.create_match_follow_up(payload=payload, request=req))
+
+        assert exc.value.status_code == 400
+        assert "Trainer is not in eligible match results" in exc.value.detail

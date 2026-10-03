@@ -183,7 +183,8 @@ describe("Home page matching test", () => {
         const profileLink = container.querySelector("a[data-testid='match-open-1']");
         expect(profileLink).not.toBeNull();
         const href = profileLink.getAttribute("href");
-        expect(href).toBe("/t/a11dc29e-43a2-4359-bbff-1de60d0fe1ac?match=test-match-123");
+        expect(href).toBe("/t/a11dc29e-43a2-4359-bbff-1de60d0fe1ac");
+        expect(href).not.toContain("match=");
         expect(href).not.toContain("q=");
         expect(href).not.toContain("kelpie");
 
