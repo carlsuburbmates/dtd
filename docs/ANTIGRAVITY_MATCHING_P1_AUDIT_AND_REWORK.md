@@ -91,3 +91,37 @@ The module also still embeds triage keyword policy and public emergency/urgent-c
 ### Return package
 
 Rework only R7–R10 on `feature/matching-implementation`. Preserve the accepted fixture and fail-closed-gate work. Return one amended/local commit, changed files, clean diff output, focused/full test results and direct test evidence for every case above. No P2, runtime integration, deployment, provider, data, billing, auth or remote-Git action is authorised.
+
+## Re-audit of `3882bd2ecafc286bb1c5b3868e0108014d4792f5`
+
+**Classification:** `PARTIAL` — substantial P1 progress, but P2 remains blocked.
+
+### Accepted improvements
+
+- Mandatory consent is now strict; format and method are required; `other`/`unsure` produce clarification; separation-anxiety matching requires the explicit specialty; and the sanitizer covers the supplied email/phone/URL/address/PO-box cases.
+- P1 now uses explicit triage fixture states instead of static emergency keyword sets and public emergency copy. The thin-supply trigger is correctly based on local eligible count.
+- The returned range is one clean local commit from `ce14f4e`, still unimported by public runtime paths. Independent checks passed: 59 P1 tests, 343 backend unit tests, 36 frontend tests and a production frontend build.
+
+### Remaining rework required
+
+### R11 — close every machine-readable boundary
+
+`dog_age_months="4"` is coerced to `4` and `dog_age_months=True` becomes `1`; a card `match_score="0.9"` and response `degraded="false"` are also coerced. Use strict numeric/boolean types for all contract fields where the schema requires numbers or booleans, including the bounded dog age, score and degraded state. Make `policy_version` server-owned or constrain it to the exact active contract version so model output cannot select an arbitrary policy.
+
+### R12 — make explanation truthfulness structural, not an expanding blacklist
+
+The current checker still accepts unsupported claims such as “has a private two-acre training field” and “has won local awards for excellent results.” The deterministic generator is useful, but model-shaped output is not required to match it. Restrict accepted candidate explanations to deterministic rendering from candidate ID, permitted reason codes, search scope and supplied projected facts (or replace free-text model explanations with structured explanation facts and render them server-side). Add regressions for unsupported facilities, awards/reviews, prices, availability, credentials, outcomes, personality and location claims.
+
+### R13 — repair adapter scope and failure semantics
+
+For a valid `3067` (Abbotsford) request with a trainer declaring `Abbotsford`, deterministic reference returns local recommendations but normal adapter execution falls into degraded fallback. The adapter compares raw postcode text against suburb names when selecting card scope. Pass canonical locality/scopes from deterministic eligibility into the adapter and add postcode parity fixtures.
+
+The fallback wrapper catches `Exception`, so an arbitrary programming error is silently represented as model degradation. Catch only defined provider, parsing and contract-validation errors; unexpected defects must propagate to the test/observability path. Add a regression using an injected unexpected exception.
+
+### R14 — keep P1 state-only copy
+
+Remove the remaining unsupported owner-facing “certified specialist” clarification prompt from the P1 reference module. P1 may assert states and structured reason codes; approved public copy belongs to its later owner-journey and urgent-support packages.
+
+### Return package
+
+Rework only R11–R14 on `feature/matching-implementation`; preserve the accepted P1 work. Return one amended/local commit, clean diff output, focused/full test results and direct regression proof for every point above. No P2, runtime integration, provider, data, deployment, billing, authentication or remote-Git action is authorised.
