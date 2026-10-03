@@ -1377,8 +1377,9 @@ def classify_pre_ai_triage(
 
     # Immediate human danger triggers (child bite, active attack, police emergency)
     danger_triggers = [
-        "child bite", "bitten a child", "bit a child", "active attack",
-        "attacking someone", "emergency hospital", "police emergency",
+        "child bite", "bitten a child", "bit a child", "attacked a child", "attacked child",
+        "child attack", "active attack", "attacking someone", "emergency hospital",
+        "police emergency", "vicious attack", "severe bite to a child",
     ]
     if any(t in lower_desc for t in danger_triggers):
         return DecisionState.IMMEDIATE_HUMAN_DANGER

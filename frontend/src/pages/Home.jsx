@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, ExternalLink } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 const stagger = {
@@ -70,6 +70,9 @@ export default function Home() {
     const [matchId, setMatchId] = useState("");
     const [matches, setMatches] = useState([]);
     const [matchAttempted, setMatchAttempted] = useState(false);
+    const [urgentProviders, setUrgentProviders] = useState([]);
+    const [emergencyNotice, setEmergencyNotice] = useState(null);
+    const [supportContext, setSupportContext] = useState("");
 
     const dogLifeStage = useMemo(() => {
         const age = parseInt(dogAgeMonths, 10);
@@ -200,10 +203,16 @@ export default function Home() {
                 }));
             setMatches(safeMatches);
             setMatchId(String(data.match_id || ""));
+            setUrgentProviders(Array.isArray(data.urgent_providers) ? data.urgent_providers : []);
+            setEmergencyNotice(data.emergency_notice || null);
+            setSupportContext(data.support_context || "");
             setMatchAttempted(true);
         } catch (err) {
             setMatches([]);
             setMatchId("");
+            setUrgentProviders([]);
+            setEmergencyNotice(null);
+            setSupportContext("");
             setMatchAttempted(true);
             const errData = err?.response?.data;
             if (errData?.decision_state) {
@@ -584,19 +593,22 @@ export default function Home() {
                 {publicMatchingEnabled && decisionState === "immediate_human_danger" && (
                     <section className="mt-8 max-w-4xl mx-auto px-6" aria-live="polite" data-testid="triage-emergency">
                         <div className="card-public p-7 bg-rose-50 border-2 border-rose-300 rounded-2xl">
-                            <h3 className="font-serif text-2xl text-rose-950 font-bold">Immediate Safety Notice</h3>
-                            <p className="mt-2 text-rose-900 leading-relaxed text-sm">
+                            <div className="flex items-center gap-3">
+                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-rose-600 text-white font-bold text-sm">!</span>
+                                <h3 className="font-serif text-2xl text-rose-950 font-bold">Immediate Safety Notice</h3>
+                            </div>
+                            <p className="mt-3 text-rose-900 leading-relaxed text-sm">
                                 If there is an active threat of serious harm, dog attack, or a child bite requiring medical attention,
-                                please call <strong>Triple Zero (000)</strong> immediately. DTD cannot provide emergency handling or medical intervention.
+                                please call <strong>Triple Zero (000)</strong> immediately. DTD provides behavioural training matching only and cannot provide emergency handling or medical intervention.
                             </p>
                             <div className="mt-4">
                                 <a
-                                    href="https://www.vic.gov.au/emergency"
+                                    href="https://www.triplezero.vic.gov.au/making-triple-zero-000-call"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center text-rose-900 font-semibold underline hover:text-rose-950 text-sm"
+                                    className="inline-flex items-center text-rose-950 font-semibold underline hover:text-rose-800 text-sm"
                                 >
-                                    Victorian Government Emergency Services <ArrowRight className="w-4 h-4 ml-1" />
+                                    Triple Zero Victoria Emergency Guidance <ExternalLink className="w-4 h-4 ml-1" />
                                 </a>
                             </div>
                         </div>
@@ -606,10 +618,40 @@ export default function Home() {
                 {publicMatchingEnabled && decisionState === "urgent_animal_health_support" && (
                     <section className="mt-8 max-w-4xl mx-auto px-6" aria-live="polite" data-testid="triage-health">
                         <div className="card-public p-7 bg-amber-50 border-2 border-amber-300 rounded-2xl">
-                            <h3 className="font-serif text-2xl text-amber-950 font-bold">Urgent Animal Health Notice</h3>
+                            <h3 className="font-serif text-2xl text-amber-950 font-bold">Urgent Animal Health Support</h3>
                             <p className="mt-2 text-amber-900 leading-relaxed text-sm">
-                                Your request indicates a possible acute physical or medical need. Please contact a qualified veterinarian or an emergency animal hospital immediately. DTD provides behavioural matching only.
+                                Your request indicates a potential acute animal health or medical need. Please contact a qualified veterinarian or an emergency animal hospital immediately. DTD provides behavioural matching only and does not claim Melbourne-wide urgent coverage.
                             </p>
+                            {urgentProviders && urgentProviders.length > 0 && (
+                                <div className="mt-6 space-y-4">
+                                    <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-950">Verified Local Urgent Care Listing</h4>
+                                    {urgentProviders.map((p) => (
+                                        <div key={p.provider_id} className="p-4 bg-white rounded-xl border border-amber-200">
+                                            <div className="font-serif text-lg font-bold text-[#1A3A32]">{p.name}</div>
+                                            <div className="text-xs text-[#5C6D59] mt-1">
+                                                <strong>Stated Hours:</strong> {p.stated_hours}
+                                            </div>
+                                            <div className="text-xs text-[#5C6D59] mt-1">
+                                                <strong>Contact:</strong> <a href={`tel:${p.contact_method.replace(/[^0-9]/g, '')}`} className="underline font-semibold text-[#1A3A32]">{p.contact_method}</a>
+                                            </div>
+                                            <div className="text-xs text-[#5C6D59] mt-1">
+                                                <strong>Service Area:</strong> {Array.isArray(p.service_area) ? p.service_area.slice(0, 4).join(", ") : p.service_area}
+                                            </div>
+                                            <div className="mt-2">
+                                                <a href={p.official_source_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-xs text-[#1A3A32] underline font-medium">
+                                                    Official Provider Page <ExternalLink className="w-3 h-3 ml-1" />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <p className="text-[11px] text-amber-800 italic mt-2">
+                                        Official source basis: verified directly from provider website. Not 24/7. Contact local clinics for after-hours care.
+                                    </p>
+                                </div>
+                            )}
+                            <div className="mt-4 pt-3 border-t border-amber-200 text-xs text-amber-900">
+                                <strong>Veterinary Behaviourists:</strong> No verified veterinary behaviourist listing currently registered with direct official evidence and active VPRBV registration.
+                            </div>
                         </div>
                     </section>
                 )}
@@ -619,7 +661,7 @@ export default function Home() {
                         <div className="card-public p-7 bg-[#F5F2EB] border border-[#E5DFD3] rounded-2xl">
                             <h3 className="font-serif text-2xl text-[#1A3A32]">More Information Needed</h3>
                             <p className="mt-2 text-[#4A615A] leading-relaxed text-sm">
-                                We need a bit more specific information to find a match. Please ensure your suburb is within Greater Melbourne, or describe your dog&apos;s specific needs above.
+                                We need a bit more specific information to find a safe and reliable match. Please ensure your suburb is within Greater Melbourne, or describe your dog&apos;s specific needs above.
                             </p>
                         </div>
                     </section>
@@ -628,6 +670,11 @@ export default function Home() {
                 {/* Match Results display if matching is enabled */}
                 {publicMatchingEnabled && matches.length > 0 && (
                     <section className="mt-12 max-w-5xl mx-auto px-6" aria-live="polite" data-testid="match-results-section">
+                        {supportContext && (
+                            <div className="mb-6 p-4 bg-[#E8EFEA] border border-[#A3B899] rounded-xl text-sm text-[#1A3A32]" data-testid="serious-behavioural-banner">
+                                <strong>Specialist Behavioural Support:</strong> {supportContext}
+                            </div>
+                        )}
                         {decisionState === "limited_local_results" && (
                             <div className="mb-6 p-4 bg-[#F5F2EB] border border-[#E5DFD3] rounded-xl text-sm text-[#4A615A]" data-testid="limited-local-banner">
                                 <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to verified trainers with confirmed service coverage in your area.

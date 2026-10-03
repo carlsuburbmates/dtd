@@ -255,4 +255,90 @@ describe("Home page matching test", () => {
         expect(container.textContent).toContain("No confirmed match yet");
         expect(container.textContent).toContain("Browse directory");
     });
+
+    it("renders urgent_animal_health_support card with verified providers and disclosures", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "",
+                decision_state: "urgent_animal_health_support",
+                candidates: [],
+                matches: [],
+                urgent_providers: [
+                    {
+                        provider_id: "urgent_lost_dogs_home",
+                        name: "The Lost Dogs' Home Veterinary Hospital",
+                        contact_method: "(03) 9329 2755",
+                        stated_hours: "Monday to Friday: 8:00 AM – 7:00 PM; Saturday: 8:00 AM – 4:00 PM (Closed Sundays; not 24/7)",
+                        service_area: ["North Melbourne", "Flemington"],
+                        official_source_url: "https://vet.dogshome.com/",
+                    },
+                ],
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Carlton");
+            changeValue(container.querySelector("#match-dog-age"), "24");
+            container.querySelector("#match-concern-pulling_leash").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        expect(container.querySelector("[data-testid='triage-health']")).not.toBeNull();
+        expect(container.textContent).toContain("Urgent Animal Health Support");
+        expect(container.textContent).toContain("The Lost Dogs' Home Veterinary Hospital");
+        expect(container.textContent).toContain("(03) 9329 2755");
+        expect(container.textContent).toContain("Not 24/7");
+        expect(container.textContent).toContain("No verified veterinary behaviourist listing");
+    });
+
+    it("renders serious_behavioural_support banner when specialist pathway is active", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "match-specialist-1",
+                decision_state: "serious_behavioural_support",
+                support_context: "Specialist pathway active: results restricted to verified trainers with declared aggression and behavioural modification competencies.",
+                candidates: [
+                    {
+                        trainer_id: "t_specialist",
+                        name: "Melbourne Behaviour Specialists",
+                        suburb: "Fitzroy",
+                        service_formats: ["in_home"],
+                        explanation: "Matches declared aggression competencies",
+                        reason_codes: ["capability_concern_match"],
+                    },
+                ],
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Fitzroy");
+            changeValue(container.querySelector("#match-dog-age"), "36");
+            container.querySelector("#match-concern-aggression").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        expect(container.querySelector("[data-testid='serious-behavioural-banner']")).not.toBeNull();
+        expect(container.textContent).toContain("Specialist Behavioural Support");
+        expect(container.textContent).toContain("Melbourne Behaviour Specialists");
+    });
 });

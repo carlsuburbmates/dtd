@@ -66,6 +66,7 @@ from services import stripe_billing
 from services import suburb_catalogue
 from services import suburb_inventory
 from services import matching_contract_v2
+from services import urgent_providers as urgent_providers_service
 from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
 
@@ -3020,6 +3021,27 @@ async def instant_match(
         out["match_id"] = match_id
         out["context_token"] = None
         out["matches"] = []
+        if triage_state == matching_contract_v2.DecisionState.IMMEDIATE_HUMAN_DANGER:
+            out["emergency_notice"] = urgent_providers_service.TRIPLE_ZERO_VICTORIA_NOTICE
+        elif triage_state == matching_contract_v2.DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT:
+            urgent_docs = await urgent_providers_service.get_active_urgent_providers(
+                db, category="urgent_veterinary_care", suburb=canonical_suburb
+            )
+            out["urgent_providers"] = urgent_docs
+            out["coverage_disclosure"] = (
+                "Local urgent veterinary care entries are verified against official provider pages. "
+                "DTD does not claim Melbourne-wide emergency coverage. In an emergency involving human "
+                "safety or active dog attack, call Triple Zero (000)."
+            )
+            out["veterinary_behaviourist_status"] = (
+                "No verified veterinary behaviourist listing currently registered with direct official evidence "
+                "and active VPRBV registration."
+            )
+        elif triage_state == matching_contract_v2.DecisionState.NEEDS_CLARIFICATION:
+            out["clarification_notice"] = (
+                "We need a bit more specific information to find a safe and reliable match. "
+                "Please select specific behavioural concerns from the options above."
+            )
         return out
 
     # 5. Fetch candidate pool & build match-ready capability projections
@@ -3147,6 +3169,12 @@ async def instant_match(
 
     if has_results_for_handoff and response and raw_token:
         response.headers["X-Match-Context-Token"] = raw_token
+
+    if triage_state == matching_contract_v2.DecisionState.SERIOUS_BEHAVIOURAL_SUPPORT:
+        out["support_context"] = (
+            "Specialist pathway active: results restricted to verified trainers with declared "
+            "aggression and behavioural modification competencies."
+        )
 
     return out
 
@@ -3344,6 +3372,60 @@ async def record_match_connect_click(payload: ConnectClickIn) -> Dict[str, Any]:
         actor="user",
     )
     return _scrub(ev)
+
+
+@api.get("/urgent-providers")
+async def get_urgent_providers(
+    category: Optional[str] = Query(default=None),
+    suburb: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """Retrieve verified urgent support providers from official sources."""
+    providers = await urgent_providers_service.get_active_urgent_providers(
+        db, category=category, suburb=suburb
+    )
+    return {
+        "urgent_providers": providers,
+        "disclaimer": (
+            "Local emergency/urgent listings are verified against official provider pages. "
+            "DTD does not claim Melbourne-wide urgent coverage. In an emergency involving human "
+            "safety or active dog attack, call Triple Zero (000)."
+        ),
+        "veterinary_behaviourist_verified_count": 0,
+        "veterinary_behaviourist_status": (
+            "No verified veterinary behaviourist listing currently registered with direct official evidence "
+            "and active VPRBV registration."
+        ),
+        "emergency_notice": urgent_providers_service.TRIPLE_ZERO_VICTORIA_NOTICE,
+    }
+
+
+@api.post("/urgent-providers/correction")
+async def create_urgent_provider_correction(
+    payload: urgent_providers_service.UrgentProviderCorrectionIn,
+) -> Dict[str, Any]:
+    """Submit a public correction request for an urgent provider record."""
+    if not payload.provider_name.strip() or not payload.official_source_url.strip():
+        raise HTTPException(status_code=400, detail="provider_name and official_source_url are required.")
+
+    correction_id = new_id()
+    doc = {
+        "id": correction_id,
+        "provider_id": payload.provider_id,
+        "provider_name": payload.provider_name.strip(),
+        "official_source_url": payload.official_source_url.strip(),
+        "reason": payload.reason,
+        "notes": (payload.notes or "").strip(),
+        "status": "pending_review",
+        "created_at": now_iso(),
+    }
+    if hasattr(db, "urgent_provider_corrections"):
+        await db.urgent_provider_corrections.insert_one(doc)
+
+    return {
+        "status": "received",
+        "request_id": correction_id,
+        "message": "Correction request received for evidence-backed review.",
+    }
 
 
 @api.get("/trainers")
@@ -6178,8 +6260,26 @@ async def _ensure_indexes() -> None:
         await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
         await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
         await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
+        if hasattr(db, "urgent_providers"):
+            await db.urgent_providers.create_index("provider_id", unique=True, sparse=True)
+            await db.urgent_providers.create_index("category")
+            await db.urgent_providers.create_index("freshness_state")
+        if hasattr(db, "urgent_provider_corrections"):
+            await db.urgent_provider_corrections.create_index("id", unique=True, sparse=True)
+            await db.urgent_provider_corrections.create_index([("status", 1), ("created_at", -1)])
     except Exception as exc:
         logger.warning("Startup database index creation non-fatal warning: %s", exc)
+
+
+async def _seed_urgent_providers_if_empty() -> None:
+    """Seed official-source urgent providers if collection is empty."""
+    try:
+        if hasattr(db, "urgent_providers") and await db.urgent_providers.count_documents({}) == 0:
+            for p in urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS:
+                await db.urgent_providers.insert_one(dict(p))
+            logger.info("Canonical startup seeding: seeded %d official urgent provider records", len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS))
+    except Exception as exc:
+        logger.warning("Urgent providers startup seeding warning: %s", exc)
 
 
 @app.on_event("startup")
@@ -6196,6 +6296,7 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
         try:
             await asyncio.wait_for(_seed_if_empty(), timeout=10.0)
             await asyncio.wait_for(_seed_discovery_if_empty(), timeout=10.0)
+            await asyncio.wait_for(_seed_urgent_providers_if_empty(), timeout=10.0)
         except Exception as exc:
             logger.warning("Startup seeding deferred: %s", exc)
     else:
