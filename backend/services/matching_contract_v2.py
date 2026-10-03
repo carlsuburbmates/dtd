@@ -983,6 +983,8 @@ class GeminiStubAdapter:
         *,
         candidate_scopes: Optional[Dict[str, str]] = None,
         canonical_locality: Optional[str] = None,
+        db: Optional[Any] = None,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Simulate calling the Gemini AI model. Raises through adapter boundary on degradation."""
         if self.mode == "timeout":
@@ -1107,9 +1109,10 @@ class GeminiStubAdapter:
 def execute_matching_with_adapter(
     request: MatchRequestIn,
     candidate_pool: List[Dict[str, Any]],
-    adapter: GeminiStubAdapter,
+    adapter: Any,
     *,
     triage_state: Optional[DecisionState] = None,
+    db: Optional[Any] = None,
 ) -> DecisionResponseV2:
     """Execute matching through adapter boundary with deterministic fallback wrapper."""
     # State-level triage check
@@ -1153,14 +1156,25 @@ def execute_matching_with_adapter(
                 candidate_scopes[c.get("trainer_id") or c.get("id")] = SearchScope.EXPANDED.value
 
     try:
-        raw_output = adapter.call_model(
-            request,
-            eligible_pool,
-            search_scope,
-            triage_state=triage_state,
-            candidate_scopes=candidate_scopes,
-            canonical_locality=canonical_suburb,
-        )
+        try:
+            raw_output = adapter.call_model(
+                request,
+                eligible_pool,
+                search_scope,
+                triage_state=triage_state,
+                candidate_scopes=candidate_scopes,
+                canonical_locality=canonical_suburb,
+                db=db,
+            )
+        except TypeError:
+            raw_output = adapter.call_model(
+                request,
+                eligible_pool,
+                search_scope,
+                triage_state=triage_state,
+                candidate_scopes=candidate_scopes,
+                canonical_locality=canonical_suburb,
+            )
         # Parse into closed DecisionResponseV2
         model_resp = DecisionResponseV2(**raw_output)
         # Closed pool and explanation truthfulness validation
@@ -1172,9 +1186,86 @@ def execute_matching_with_adapter(
         return run_deterministic_matching(request, candidate_pool, degraded=True, triage_state=triage_state)
 
 
-def get_default_ai_adapter() -> GeminiStubAdapter:
-    """Return default AI adapter for matching (conforming to Contract v2)."""
-    return GeminiStubAdapter(mode="normal")
+async def execute_matching_with_adapter_async(
+    request: MatchRequestIn,
+    candidate_pool: List[Dict[str, Any]],
+    adapter: Any,
+    *,
+    triage_state: Optional[DecisionState] = None,
+    db: Optional[Any] = None,
+) -> DecisionResponseV2:
+    """Async execution of matching through adapter boundary with deterministic fallback wrapper."""
+    if triage_state in {DecisionState.IMMEDIATE_HUMAN_DANGER, DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT}:
+        return run_deterministic_matching(request, candidate_pool, triage_state=triage_state)
+
+    has_other_or_unsure = any(
+        c in {PrimaryConcern.OTHER.value, PrimaryConcern.UNSURE.value}
+        for c in request.primary_concerns
+    )
+    if has_other_or_unsure:
+        return run_deterministic_matching(request, candidate_pool, triage_state=triage_state)
+
+    loc_res = resolve_canonical_locality(request.suburb_or_postcode)
+    canonical_suburb = loc_res.get("canonical_name", request.suburb_or_postcode)
+
+    local_eligible = [
+        c for c in candidate_pool
+        if check_candidate_eligibility(c, request, search_scope=SearchScope.LOCAL.value, triage_state=triage_state)[0]
+    ]
+
+    search_scope = SearchScope.LOCAL
+    eligible_pool = list(local_eligible)
+    candidate_scopes: Dict[str, str] = {
+        (c.get("trainer_id") or c.get("id")): SearchScope.LOCAL.value
+        for c in local_eligible
+    }
+    if len(local_eligible) < MAX_RECOMMENDED_CANDIDATES:
+        expanded_eligible = [
+            c for c in candidate_pool
+            if c not in local_eligible and check_candidate_eligibility(c, request, search_scope=SearchScope.EXPANDED.value, triage_state=triage_state)[0]
+        ]
+        if expanded_eligible:
+            search_scope = SearchScope.EXPANDED
+            eligible_pool.extend(expanded_eligible)
+            for c in expanded_eligible:
+                candidate_scopes[c.get("trainer_id") or c.get("id")] = SearchScope.EXPANDED.value
+
+    try:
+        if hasattr(adapter, "call_model_async") and callable(adapter.call_model_async):
+            raw_output = await adapter.call_model_async(
+                request,
+                eligible_pool,
+                search_scope,
+                triage_state=triage_state,
+                candidate_scopes=candidate_scopes,
+                canonical_locality=canonical_suburb,
+                db=db,
+            )
+        else:
+            raw_output = adapter.call_model(
+                request,
+                eligible_pool,
+                search_scope,
+                triage_state=triage_state,
+                candidate_scopes=candidate_scopes,
+                canonical_locality=canonical_suburb,
+                db=db,
+            )
+        model_resp = DecisionResponseV2(**raw_output)
+        cand_map = {c.get("trainer_id") or c.get("id"): c for c in eligible_pool}
+        model_resp.validate_against_eligible_pool(cand_map)
+        return model_resp
+    except (GeminiAdapterError, ValidationError, ValueError):
+        return run_deterministic_matching(request, candidate_pool, degraded=True, triage_state=triage_state)
+
+
+def get_default_ai_adapter() -> Any:
+    """Return default production AI adapter for matching (GeminiMatchingAdapter)."""
+    try:
+        from services.ai import GeminiMatchingAdapter
+    except ImportError:
+        from backend.services.ai import GeminiMatchingAdapter
+    return GeminiMatchingAdapter()
 
 
 # ==============================================================================

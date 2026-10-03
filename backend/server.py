@@ -69,6 +69,8 @@ from services import matching_contract_v2
 from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
 
+matching_ai_adapter: Optional[Any] = None
+
 try:
     from bson import ObjectId
 except Exception:  # noqa: BLE001
@@ -3038,8 +3040,8 @@ async def instant_match(
 
     # 6. Execute matching with AI adapter & deterministic fallback wrapper (Contract v2 Section 3, 4, 5)
     ai_adapter = globals().get("matching_ai_adapter") or matching_contract_v2.get_default_ai_adapter()
-    decision_resp = matching_contract_v2.execute_matching_with_adapter(
-        req, candidate_pool, ai_adapter, triage_state=triage_state
+    decision_resp = await matching_contract_v2.execute_matching_with_adapter_async(
+        req, candidate_pool, ai_adapter, triage_state=triage_state, db=db
     )
 
     # 7. Context Token & Persistence (issued only when results exist for profile handoff)

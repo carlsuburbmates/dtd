@@ -43,6 +43,7 @@ from services.matching_contract_v2 import (
     ReasonCode,
     SearchScope,
     ServiceFormatPreference,
+    GeminiStubAdapter,
     classify_pre_ai_triage,
     generate_match_context_token,
     hash_match_context_token,
@@ -456,6 +457,7 @@ class TestP2EligibilityAndExpansion:
             match_contexts=_MockCollection([]),
         )
         monkeypatch.setattr(server, "db", fake_db)
+        monkeypatch.setattr(server, "matching_ai_adapter", GeminiStubAdapter(mode="normal"))
 
         req = make_valid_match_request(
             suburb_or_postcode="Richmond",

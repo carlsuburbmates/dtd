@@ -186,6 +186,9 @@ async def record_degradation_event(
     message: str,
     operation: str,
     db: Optional[Any] = None,
+    latency_ms: Optional[float] = None,
+    decision_state: Optional[str] = None,
+    policy_version: Optional[str] = "v2",
 ) -> Dict[str, Any]:
     """Record a sanitized degradation event without prompts, source content, or secrets.
 
@@ -202,6 +205,9 @@ async def record_degradation_event(
         "operation": operation,
         "fallback_used": True,
         "recovered": True,
+        "latency_ms": latency_ms,
+        "decision_state": decision_state,
+        "policy_version": policy_version,
     }
 
     _degradation_events.append(event)
@@ -1065,3 +1071,369 @@ async def generate_seo_copy(
             db=db,
         )
         return fallback
+
+
+# ---------- Constrained Gemini Matching Adapter (Package P3) ----------
+
+MATCHING_SYSTEM_INSTRUCTION = (
+    "You are DTD’s constrained fit assessor. Assess fit only among the supplied, already eligible trainer candidates. "
+    "You are not a safety triage service and must not give veterinary, medical, legal, behavioural-treatment, handling, "
+    "or emergency advice. Use only the supplied structured fields and sanitised owner signals. Do not infer, invent, "
+    "embellish, or use commercial status. Never claim availability, credentials, outcomes, personality traits, diagnoses, "
+    "guarantees, rankings, reviews, or facts not present in the input. Return JSON only. Every trainer_id must be from "
+    "the supplied candidate list. Return a semantic_fit from 0.00 to 1.00 and only approved factual reason codes. "
+    "Do not write public-facing prose. The application renders explanations from validated reason codes and permitted facts."
+)
+
+
+def build_gemini_matching_input(
+    request: Any,
+    eligible_candidates: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Construct constrained allow-list input payload for Gemini matching."""
+    try:
+        from services.matching_contract_v2 import sanitize_behaviour_description
+    except ImportError:
+        from backend.services.matching_contract_v2 import sanitize_behaviour_description
+
+    age_months = getattr(request, "dog_age_months", 12)
+    if age_months < 6:
+        dog_age_category = "puppy"
+    elif age_months <= 18:
+        dog_age_category = "adolescent"
+    elif age_months <= 83:
+        dog_age_category = "adult"
+    else:
+        dog_age_category = "senior"
+
+    raw_desc = getattr(request, "behaviour_description", "") or ""
+    sanitised_desc = sanitize_behaviour_description(raw_desc)
+
+    owner_signals = {
+        "dog_age_category": dog_age_category,
+        "primary_concerns": list(getattr(request, "primary_concerns", [])),
+        "service_format": str(getattr(request, "service_format", "any")),
+        "method_preference": str(getattr(request, "method_preference", "no_preference")),
+        "behaviour_description": sanitised_desc,
+    }
+
+    candidates_input = []
+    for cand in eligible_candidates:
+        cid = str(cand.get("trainer_id") or cand.get("id"))
+        raw_dc = cand.get("delivery_constraints")
+        if isinstance(raw_dc, dict):
+            dc_items = [
+                f"{k}:{v}"
+                for k, v in sorted(raw_dc.items())
+                if v is not None and k in ("in_home_available", "facility_available", "travel_distance_km")
+            ]
+        elif isinstance(raw_dc, list):
+            dc_items = [str(x) for x in raw_dc]
+        else:
+            dc_items = []
+
+        candidates_input.append({
+            "trainer_id": cid,
+            "specialties": list(cand.get("specialties") or []),
+            "service_formats": list(cand.get("service_formats") or []),
+            "life_stages": list(cand.get("life_stages") or []),
+            "training_philosophy": cand.get("training_philosophy") or None,
+            "catchment_type": str(cand.get("catchment_type") or "specific_suburbs"),
+            "serviced_suburbs": list(cand.get("serviced_suburbs") or []),
+            "delivery_constraints": dc_items,
+        })
+
+    return {
+        "contract_version": "v2",
+        "owner": owner_signals,
+        "candidates": candidates_input,
+    }
+
+
+class GeminiMatchingAdapter:
+    """Production typed async matching adapter using configured Google GenAI/Vertex client.
+
+    Governance (Contract v2 Section 5, DF-019, DF-023, DF-026):
+    - System instruction restricts model to constrained fit assessor.
+    - Input allow-list: contract_version, owner (dog_age_category, primary_concerns, service_format,
+      method_preference, sanitised description), and candidates (trainer_id, specialties, service_formats,
+      life_stages, training_philosophy, catchment_type, serviced_suburbs, delivery_constraints).
+    - NEVER sends commercial tier, sponsorship, pricing, bios, reviews, URLs, acquisition evidence,
+      contact fields, raw trainer documents, or unprojected candidates.
+    - Validates candidate IDs against eligible pool, validates semantic_fit range, validates reason codes.
+    - Server renders public explanation deterministically from permitted facts.
+    - 5.0s timeout enforced.
+    - Raises typed exceptions (GeminiTimeoutError, GeminiRateLimitError, GeminiUnavailableError, ValidationError).
+    - Records sanitised degradation events (provider/model, error_type, latency_ms, fallback_used, decision_state, policy_version).
+    """
+
+    def __init__(
+        self,
+        client: Optional[Any] = None,
+        model: Optional[str] = None,
+        timeout_s: Optional[float] = None,
+        db: Optional[Any] = None,
+    ):
+        self.client = client if client is not None else get_gemini_client()
+        self.model = model or GEMINI_MODEL
+        self.timeout_s = timeout_s if timeout_s is not None else GEMINI_TIMEOUT_S
+        self.db = db
+
+    async def call_model_async(
+        self,
+        request: Any,
+        eligible_candidates: List[Dict[str, Any]],
+        search_scope: Any = "local",
+        triage_state: Optional[Any] = None,
+        *,
+        candidate_scopes: Optional[Dict[str, str]] = None,
+        canonical_locality: Optional[str] = None,
+        db: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Execute constrained fit assessment through Gemini or raise typed degradation error."""
+        import time
+        from pydantic import ValidationError
+
+        try:
+            from services.matching_contract_v2 import (
+                GeminiTimeoutError,
+                GeminiRateLimitError,
+                GeminiUnavailableError,
+                DecisionState,
+                SearchScope,
+                QUALIFICATION_THRESHOLD,
+                MAX_RECOMMENDED_CANDIDATES,
+                apply_fair_presentation,
+                compute_deterministic_fit,
+            )
+        except ImportError:
+            from backend.services.matching_contract_v2 import (
+                GeminiTimeoutError,
+                GeminiRateLimitError,
+                GeminiUnavailableError,
+                DecisionState,
+                SearchScope,
+                QUALIFICATION_THRESHOLD,
+                MAX_RECOMMENDED_CANDIDATES,
+                apply_fair_presentation,
+                compute_deterministic_fit,
+            )
+
+        target_db = db or self.db
+        start_t = time.perf_counter()
+        scope_val = search_scope.value if hasattr(search_scope, "value") else str(search_scope)
+
+        if self.client is None:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            await record_degradation_event(
+                event_type="unavailable_service",
+                error_code="UNAVAILABLE_UNCONFIGURED",
+                message="Gemini client is unconfigured or unavailable; deterministic fallback engaged.",
+                operation="matching",
+                latency_ms=latency_ms,
+                decision_state="degraded_fallback",
+                policy_version="v2",
+                db=target_db,
+            )
+            raise GeminiUnavailableError("Gemini client is unconfigured or unavailable")
+
+        if not eligible_candidates:
+            return {
+                "decision_state": DecisionState.NO_CONFIRMED_MATCH.value,
+                "candidates": [],
+                "reason_codes": ["no_qualified_candidates"],
+                "search_scope": scope_val,
+            }
+
+        input_payload = build_gemini_matching_input(request, eligible_candidates)
+        config = _generate_content_config(
+            response_mime_type="application/json",
+            system_instruction=MATCHING_SYSTEM_INSTRUCTION,
+            temperature=0.1,
+        )
+
+        try:
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model,
+                    contents=f"Evaluate fit for these candidates:\n\n{json.dumps(input_payload, ensure_ascii=False)}",
+                    config=config,
+                ),
+                timeout=self.timeout_s,
+            )
+        except asyncio.TimeoutError:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            await record_degradation_event(
+                event_type="timeout",
+                error_code="TIMEOUT",
+                message=f"Gemini matching timed out after {self.timeout_s}s; deterministic fallback engaged.",
+                operation="matching",
+                latency_ms=latency_ms,
+                decision_state="degraded_fallback",
+                policy_version="v2",
+                db=target_db,
+            )
+            raise GeminiTimeoutError(f"Gemini matching timed out after {self.timeout_s}s")
+        except Exception as err:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            err_str = str(err)
+            err_lower = err_str.lower()
+            if "429" in err_str or "quota" in err_lower or "resource_exhausted" in err_lower:
+                await record_degradation_event(
+                    event_type="rate_limit",
+                    error_code="RATE_LIMIT_429",
+                    message="Gemini matching rate limited; deterministic fallback engaged.",
+                    operation="matching",
+                    latency_ms=latency_ms,
+                    decision_state="degraded_fallback",
+                    policy_version="v2",
+                    db=target_db,
+                )
+                raise GeminiRateLimitError(f"Gemini API quota exceeded (HTTP 429): {err_str}")
+            else:
+                await record_degradation_event(
+                    event_type="unavailable_service",
+                    error_code="SERVICE_UNAVAILABLE",
+                    message=f"Gemini matching unavailable ({type(err).__name__}); deterministic fallback engaged.",
+                    operation="matching",
+                    latency_ms=latency_ms,
+                    decision_state="degraded_fallback",
+                    policy_version="v2",
+                    db=target_db,
+                )
+                raise GeminiUnavailableError(f"Gemini matching service unavailable: {err_str}")
+
+        raw_text = getattr(response, "text", "") or ""
+        parsed = _extract_json(raw_text)
+        if not isinstance(parsed, dict) or "candidates" not in parsed or not isinstance(parsed["candidates"], list):
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            await record_degradation_event(
+                event_type="malformed_output",
+                error_code="MALFORMED_OUTPUT",
+                message="Gemini matching produced malformed or non-JSON output; deterministic fallback engaged.",
+                operation="matching",
+                latency_ms=latency_ms,
+                decision_state="degraded_fallback",
+                policy_version="v2",
+                db=target_db,
+            )
+            raise ValueError("Model returned malformed or non-JSON output")
+
+        eligible_map = {str(c.get("trainer_id") or c.get("id")): c for c in eligible_candidates}
+        approved_codes = {
+            "capability_concern_match",
+            "life_stage_match",
+            "format_match",
+            "method_preference_match",
+            "service_area_match",
+            "expanded_service_area",
+            "serious_behavioural_support",
+        }
+
+        cards_data = []
+        for item in parsed["candidates"]:
+            if not isinstance(item, dict):
+                raise ValueError("Candidate entry is not a dictionary")
+            cid = str(item.get("trainer_id") or "")
+            if cid not in eligible_map:
+                raise ValueError(f"Model returned unauthorized candidate ID not in eligible pool: {cid}")
+
+            cand_doc = eligible_map[cid]
+            fit_raw = item.get("semantic_fit")
+            if not isinstance(fit_raw, (int, float)):
+                raise ValueError(f"Invalid semantic_fit type for {cid}: {fit_raw}")
+            fit_score = round(float(fit_raw), 4)
+            if not (0.0 <= fit_score <= 1.0):
+                raise ValueError(f"semantic_fit out of bounds [0.0, 1.0]: {fit_score}")
+
+            raw_codes = item.get("reason_codes") or []
+            if not isinstance(raw_codes, list):
+                raise ValueError("reason_codes must be a list")
+            val_codes = [c for c in raw_codes if str(c) in approved_codes]
+            if not val_codes:
+                val_codes = ["capability_concern_match"]
+
+            cand_scope = candidate_scopes.get(cid, scope_val) if candidate_scopes else scope_val
+
+            # Server renders explanation deterministically from permitted facts
+            _, _, explanation = compute_deterministic_fit(
+                cand_doc, request, search_scope=cand_scope, triage_state=triage_state
+            )
+
+            if fit_score >= QUALIFICATION_THRESHOLD:
+                cards_data.append({
+                    "trainer_id": cid,
+                    "match_score": fit_score,
+                    "reason_codes": val_codes,
+                    "explanation": explanation,
+                    "search_scope": cand_scope,
+                    "tier": cand_doc.get("tier", "unclaimed"),
+                    "policy_penalty": cand_doc.get("policy_penalty", 0.0),
+                })
+
+        presented = apply_fair_presentation(cards_data, max_results=MAX_RECOMMENDED_CANDIDATES)
+
+        if not presented:
+            return {
+                "decision_state": DecisionState.NO_CONFIRMED_MATCH.value,
+                "candidates": [],
+                "reason_codes": ["no_qualified_candidates"],
+                "search_scope": scope_val,
+            }
+
+        any_expanded = any(p.get("search_scope") == SearchScope.EXPANDED.value for p in presented)
+        dec_state = (
+            DecisionState.LIMITED_LOCAL_RESULTS.value
+            if any_expanded
+            else DecisionState.RECOMMENDATIONS.value
+        )
+
+        final_cards = [
+            {
+                "trainer_id": p["trainer_id"],
+                "match_score": p["match_score"],
+                "reason_codes": p["reason_codes"],
+                "explanation": p["explanation"],
+                "search_scope": p["search_scope"],
+            }
+            for p in presented
+        ]
+
+        return {
+            "decision_state": dec_state,
+            "candidates": final_cards,
+            "reason_codes": final_cards[0]["reason_codes"] if final_cards else [],
+            "search_scope": scope_val,
+        }
+
+    def call_model(
+        self,
+        request: Any,
+        eligible_candidates: List[Dict[str, Any]],
+        search_scope: Any = "local",
+        triage_state: Optional[Any] = None,
+        *,
+        candidate_scopes: Optional[Dict[str, str]] = None,
+        canonical_locality: Optional[str] = None,
+        db: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Synchronous wrapper for offline/sync testing."""
+        import concurrent.futures
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(self.call_model_async(
+                        request, eligible_candidates, search_scope, triage_state,
+                        candidate_scopes=candidate_scopes, canonical_locality=canonical_locality, db=db
+                    ))
+                )
+                return future.result()
+        else:
+            return asyncio.run(self.call_model_async(
+                request, eligible_candidates, search_scope, triage_state,
+                candidate_scopes=candidate_scopes, canonical_locality=canonical_locality, db=db
+            ))
