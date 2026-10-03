@@ -404,6 +404,16 @@ class IntroIn(BaseModel):
     consent_outcome_tracking: bool = False
 
 
+class MatchFollowUpIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str
+    user_name: str = Field(min_length=1, max_length=120)
+    user_email: EmailStr
+    user_phone: Optional[str] = None
+    notes: Optional[str] = Field(default="", max_length=800)
+    consent_contact_release: bool = False
+
+
 class ConversionIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     intro_id: str
@@ -2933,27 +2943,16 @@ async def instant_match(
 
     # 2. Contract normalization and strict consent check
     if isinstance(payload, InstantMatchIn):
-        if not payload.consent_match_processing:
-            raise HTTPException(status_code=400, detail="Consent required to process match request.")
-        req = matching_contract_v2.MatchRequestIn(
-            suburb_or_postcode=payload.suburb or "Carlton",
-            dog_age_months=12,
-            primary_concerns=[matching_contract_v2.PrimaryConcern.BASIC_MANNERS.value],
-            service_format=matching_contract_v2.ServiceFormatPreference.ANY.value,
-            method_preference=matching_contract_v2.MethodPreference.NO_PREFERENCE.value,
-            behaviour_description=payload.description,
-            consent=matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
+        raise HTTPException(
+            status_code=400,
+            detail="Legacy two-field match requests are deprecated and rejected. Ordinary matching requires a structured MatchRequestIn with dog_age_months, primary_concerns, service_format, method_preference, and explicit consent.",
         )
-        campaign = (payload.campaign or "").strip()
-        source = (payload.source or "").strip()
-        is_legacy = True
-    else:
-        req = payload
-        if not (req.consent.match_processing and req.consent.terms):
-            raise HTTPException(status_code=400, detail="Consent required to process match request.")
-        campaign = getattr(req, "campaign", "") or ""
-        source = getattr(req, "source", "") or ""
-        is_legacy = False
+    req = payload
+    if not (req.consent.match_processing and req.consent.terms):
+        raise HTTPException(status_code=400, detail="Consent required to process match request.")
+    campaign = getattr(req, "campaign", "") or ""
+    source = getattr(req, "source", "") or ""
+    is_legacy = False
 
     # 3. Canonical Locality Resolution
     loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
@@ -3170,6 +3169,80 @@ async def get_match_context(
         "created_at": ctx.get("created_at"),
     }
 
+
+@api.post("/match/follow-up")
+async def create_match_follow_up(
+    payload: MatchFollowUpIn,
+    request: Request,
+    x_match_context_token: Optional[str] = Header(default=None, alias="X-Match-Context-Token"),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+) -> Dict[str, Any]:
+    """Context-authenticated follow-up enquiry submission (Contract v2 Section 2, DF-018, DF-022).
+
+    - Context retrieval is header-based ONLY (X-Match-Context-Token).
+    - Query parameter tokens (?token=...) are strictly forbidden.
+    - Requires consent_contact_release.
+    - Links enquiry to match context without leaking raw behavioural text.
+    - Idempotent via Idempotency-Key or match_id + trainer_id + user_email.
+    """
+    if "token" in request.query_params or "context_token" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail="Query parameter authentication is forbidden. Provide token via X-Match-Context-Token header.",
+        )
+    raw_token = x_match_context_token if isinstance(x_match_context_token, str) else None
+    if not raw_token:
+        raw_token = request.headers.get("x-match-context-token")
+    if not raw_token or not raw_token.strip():
+        raise HTTPException(status_code=401, detail="Missing X-Match-Context-Token header")
+
+    if not payload.consent_contact_release:
+        raise HTTPException(status_code=400, detail="Consent required for contact release.")
+
+    token_hash = matching_contract_v2.hash_match_context_token(raw_token.strip())
+    ctx = await db.match_contexts.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Match context not found or invalid")
+
+    trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    raw_idem = idempotency_key if isinstance(idempotency_key, str) else None
+    idem = (raw_idem or f"match:{ctx.get('match_id')}:{payload.trainer_id}:{payload.user_email}").strip()
+    existing = await db.intros.find_one({"idempotency_key": idem}, {"_id": 0})
+    if existing:
+        contact_existing = _released_contact_payload(
+            trainer,
+            fallback_name=existing.get("trainer_name"),
+            fallback_suburb=existing.get("suburb"),
+        )
+        return _scrub({**existing, "contact": contact_existing})
+
+    ip = (request.client.host if request.client else "") or ""
+    intro = {
+        "id": new_id(),
+        "trainer_id": trainer["id"],
+        "trainer_name": trainer.get("name"),
+        "match_id": ctx.get("match_id"),
+        "suburb": ctx.get("suburb_or_postcode") or trainer.get("suburb"),
+        "dog_age_months": ctx.get("dog_age_months"),
+        "primary_concerns": ctx.get("primary_concerns") or [],
+        "service_format": ctx.get("service_format"),
+        "user_name": payload.user_name,
+        "user_email": payload.user_email,
+        "user_phone": payload.user_phone or "",
+        "notes": payload.notes or "",
+        "consent_contact_release": True,
+        "delivery_status": "delivered",
+        "status": "delivered",
+        "idempotency_key": idem,
+        "ip": ip,
+        "created_at": now_iso(),
+    }
+    await db.intros.insert_one(intro.copy())
+    contact = _released_contact_payload(trainer)
+    return _scrub({**intro, "contact": contact})
 
 
 @api.post("/match/connect-click")

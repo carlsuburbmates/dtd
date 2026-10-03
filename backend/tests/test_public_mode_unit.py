@@ -594,10 +594,14 @@ def test_match_gate_default_and_legacy_env_allows(monkeypatch):
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     out = asyncio.run(server.instant_match(payload))
     assert out["matches"][0]["id"] == "t_1"
@@ -720,10 +724,14 @@ def test_match_gate_on_allows_existing_behavior(monkeypatch):
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     out = asyncio.run(server.instant_match(payload))
     assert out["matches"][0]["id"] == "t_1"
@@ -1040,10 +1048,14 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     match_out = asyncio.run(server.instant_match(payload))
     assert match_out["matches"][0]["id"] == "t_1"

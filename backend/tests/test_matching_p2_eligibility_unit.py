@@ -355,16 +355,18 @@ class TestP2ProjectionGating:
         assert proj["match_eligible"] is False
         assert "statutory_abn_revoked" in proj["eligibility_reasons"]
 
-    def test_legacy_request_fails_closed_without_capability_fabrication(self, monkeypatch):
-        """Legacy InstantMatchIn request fails closed when trainer projection fails; never fabricates capabilities."""
-        unqualified_doc = make_test_raw_trainer_doc(
-            trainer_id="t_unqualified",
-            name="Unqualified Trainer",
-            published=True,
-            serviced_suburbs=[],  # Empty / no declared capabilities
+    def test_legacy_request_rejected_with_400_and_cannot_create_match_or_token(self, monkeypatch):
+        """Legacy InstantMatchIn request is rejected with 400 and cannot create match, event, or context token."""
+        trainer = make_test_trainer_doc(
+            trainer_id="t_richmond",
+            name="Richmond Dog Academy",
+            serviced_suburbs=["Richmond"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
         )
         fake_db = SimpleNamespace(
-            trainers=_MockCollection([unqualified_doc]),
+            trainers=_MockCollection([trainer]),
             match_events=_MockCollection([]),
             match_contexts=_MockCollection([]),
         )
@@ -375,10 +377,14 @@ class TestP2ProjectionGating:
             suburb="Richmond",
             consent_match_processing=True,
         )
-        out = asyncio.run(server.instant_match(legacy_payload))
-        assert out["decision_state"] == DecisionState.NO_CONFIRMED_MATCH.value
-        assert len(out["candidates"]) == 0
-        assert len(out["matches"]) == 0
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.instant_match(legacy_payload))
+
+        assert exc.value.status_code == 400
+        assert "Legacy two-field match requests are deprecated and rejected" in exc.value.detail
+        # Zero match events or context tokens persisted
+        assert len(fake_db.match_events.inserted) == 0
+        assert len(fake_db.match_contexts.inserted) == 0
 
 
 # ==============================================================================

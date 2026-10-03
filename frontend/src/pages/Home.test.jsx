@@ -68,6 +68,7 @@ describe("Home page matching test", () => {
                 suburbs: ["Richmond"],
             },
         });
+        sessionStorage.clear();
     });
 
     afterEach(() => {
@@ -86,7 +87,7 @@ describe("Home page matching test", () => {
         expect(links.every((link) => !link.hasAttribute("target"))).toBe(true);
     });
 
-    it("renders match results when post /match succeeds", async () => {
+    it("renders match results with structured questionnaire, stores context token, and preserves URL privacy", async () => {
         const fullServerTrainerPayload = {
             id: "a11dc29e-43a2-4359-bbff-1de60d0fe1ac",
             name: "Northside Recall School",
@@ -116,12 +117,17 @@ describe("Home page matching test", () => {
             published: true,
             contact_ready: true,
             placement: "featured",
-            match_reasoning: "Deterministic keyword match (0 topic overlaps detected) for owner enquiry.",
+            match_reasoning: "Deterministic capability match for owner enquiry.",
+            explanation: "Deterministic capability match for owner enquiry.",
         };
 
         const mockMatchResponse = {
             data: {
                 match_id: "test-match-123",
+                context_token: "ctx_token_secret_123",
+                decision_state: "recommendations",
+                search_scope: "local",
+                candidates: [fullServerTrainerPayload],
                 matches: [fullServerTrainerPayload],
             },
         };
@@ -131,19 +137,26 @@ describe("Home page matching test", () => {
             root.render(<Home />);
         });
 
-        const textarea = container.querySelector("#match-description");
-        expect(textarea).not.toBeNull();
-
-        act(() => {
-            changeValue(textarea, "8-month kelpie, reactivity and lead pulling on walks");
-        });
-
+        const suburbInput = container.querySelector("#match-suburb");
+        const ageInput = container.querySelector("#match-dog-age");
+        const descInput = container.querySelector("#match-description");
+        const concernBtn = container.querySelector("#match-concern-basic_manners");
+        const consentCheckbox = container.querySelector("#match-consent");
         const form = container.querySelector("form[data-testid='owner-match-form']");
+
+        expect(suburbInput).not.toBeNull();
+        expect(ageInput).not.toBeNull();
+        expect(descInput).not.toBeNull();
+        expect(concernBtn).not.toBeNull();
+        expect(consentCheckbox).not.toBeNull();
         expect(form).not.toBeNull();
 
-        const checkbox = form.querySelector("input[type='checkbox']");
         act(() => {
-            checkbox.click();
+            changeValue(suburbInput, "Richmond");
+            changeValue(ageInput, "12");
+            changeValue(descInput, "8-month kelpie pulling on leash and basic manners");
+            concernBtn.click();
+            consentCheckbox.click();
         });
 
         await act(async () => {
@@ -151,10 +164,94 @@ describe("Home page matching test", () => {
         });
 
         expect(api.post).toHaveBeenCalledWith("/match", expect.objectContaining({
-            description: "8-month kelpie, reactivity and lead pulling on walks",
-            consent_match_processing: true,
+            suburb_or_postcode: "Richmond",
+            dog_age_months: 12,
+            primary_concerns: ["basic_manners"],
+            service_format: "any",
+            method_preference: "no_preference",
+            behaviour_description: "8-month kelpie pulling on leash and basic manners",
+            consent: expect.objectContaining({
+                match_processing: true,
+                terms: true,
+            }),
         }));
+
         expect(container.textContent).toContain("Northside Recall School");
-        expect(container.textContent).toContain("Deterministic keyword match");
+        expect(container.textContent).toContain("Deterministic capability match");
+
+        // URL Privacy Invariant: profile link does NOT carry ?q= or description
+        const profileLink = container.querySelector("a[data-testid='match-open-1']");
+        expect(profileLink).not.toBeNull();
+        const href = profileLink.getAttribute("href");
+        expect(href).toBe("/t/a11dc29e-43a2-4359-bbff-1de60d0fe1ac?match=test-match-123");
+        expect(href).not.toContain("q=");
+        expect(href).not.toContain("kelpie");
+
+        // Context token stored in sessionStorage only
+        expect(sessionStorage.getItem("d_match_context_token")).toBe("ctx_token_secret_123");
+    });
+
+    it("renders immediate_human_danger emergency card when triage detects severe risk", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "",
+                decision_state: "immediate_human_danger",
+                candidates: [],
+                matches: [],
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Carlton");
+            changeValue(container.querySelector("#match-dog-age"), "24");
+            container.querySelector("#match-concern-aggression").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        expect(container.querySelector("[data-testid='triage-emergency']")).not.toBeNull();
+        expect(container.textContent).toContain("Immediate Safety Notice");
+        expect(container.textContent).toContain("Triple Zero (000)");
+    });
+
+    it("renders transparent no_confirmed_match card when zero candidates qualify", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "empty-match-999",
+                decision_state: "no_confirmed_match",
+                candidates: [],
+                matches: [],
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Werribee");
+            changeValue(container.querySelector("#match-dog-age"), "14");
+            container.querySelector("#match-concern-recall").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        expect(container.querySelector("[data-testid='match-empty']")).not.toBeNull();
+        expect(container.textContent).toContain("No confirmed match yet");
+        expect(container.textContent).toContain("Browse directory");
     });
 });

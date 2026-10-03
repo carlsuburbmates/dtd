@@ -16,6 +16,34 @@ import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import OwnerWaitlistForm from "@/components/OwnerWaitlistForm";
 
+const CANONICAL_CONCERNS = [
+    { id: "basic_manners", label: "Basic Manners" },
+    { id: "pulling_leash", label: "Leash Pulling" },
+    { id: "reactivity", label: "Reactivity" },
+    { id: "aggression", label: "Aggression" },
+    { id: "separation_anxiety", label: "Separation Anxiety" },
+    { id: "barking", label: "Excessive Barking" },
+    { id: "recall", label: "Recall" },
+    { id: "socialisation", label: "Socialisation" },
+    { id: "puppy_prep", label: "Puppy Prep" },
+    { id: "other", label: "Other" },
+    { id: "unsure", label: "Unsure / Need Assessment" },
+];
+
+const SERVICE_FORMATS = [
+    { id: "any", label: "Any / No preference" },
+    { id: "in_home", label: "In-home" },
+    { id: "facility_or_field", label: "Facility / Field" },
+    { id: "group_class", label: "Group class" },
+    { id: "online_coaching", label: "Online coaching" },
+];
+
+const METHOD_PREFERENCES = [
+    { id: "no_preference", label: "No preference" },
+    { id: "positive_reinforcement_only", label: "Positive reinforcement only" },
+    { id: "balanced", label: "Balanced training" },
+];
+
 export default function Home() {
     const { scrollY } = useScroll();
     const [search] = useSearchParams();
@@ -23,14 +51,34 @@ export default function Home() {
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
     const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(true);
     const [matchSuburbs, setMatchSuburbs] = useState([]);
+
+    // Structured questionnaire fields (Contract v2 Section 2)
+    const [suburbOrPostcode, setSuburbOrPostcode] = useState("");
+    const [dogAgeMonths, setDogAgeMonths] = useState("");
+    const [selectedConcerns, setSelectedConcerns] = useState([]);
+    const [serviceFormat, setServiceFormat] = useState("any");
+    const [methodPreference, setMethodPreference] = useState("no_preference");
     const [matchDescription, setMatchDescription] = useState("");
-    const [matchSuburb, setMatchSuburb] = useState("");
-    const [matchConsent, setMatchConsent] = useState(false);
+    const [matchConsentTerms, setMatchConsentTerms] = useState(false);
+    const [consentFollowUp, setConsentFollowUp] = useState(false);
+
+    // Decision state & results
+    const [decisionState, setDecisionState] = useState(null);
+    const [searchScope, setSearchScope] = useState("local");
     const [matchBusy, setMatchBusy] = useState(false);
     const [matchError, setMatchError] = useState("");
     const [matchId, setMatchId] = useState("");
     const [matches, setMatches] = useState([]);
     const [matchAttempted, setMatchAttempted] = useState(false);
+
+    const dogLifeStage = useMemo(() => {
+        const age = parseInt(dogAgeMonths, 10);
+        if (isNaN(age) || age < 0) return null;
+        if (age < 6) return "Puppy (<6 mos)";
+        if (age <= 18) return "Adolescent (6–18 mos)";
+        if (age <= 83) return "Adult (19–83 mos)";
+        return "Senior (84+ mos)";
+    }, [dogAgeMonths]);
 
     const attribution = useMemo(
         () => ({
@@ -66,48 +114,103 @@ export default function Home() {
         };
     }, []);
 
+    const toggleConcern = (cid) => {
+        setSelectedConcerns((prev) =>
+            prev.includes(cid) ? prev.filter((item) => item !== cid) : [...prev, cid]
+        );
+    };
+
     const runMatch = async (e) => {
         e?.preventDefault();
-        if (matchDescription.trim().length < 3) {
-            setMatchError("Please describe your dog's issue in a bit more detail.");
+        if (!suburbOrPostcode.trim()) {
+            setMatchError("Please enter your suburb or postcode in Greater Melbourne.");
             return;
         }
-        if (!matchConsent) {
-            setMatchError("Consent is required to process your request.");
+        const ageVal = parseInt(dogAgeMonths, 10);
+        if (isNaN(ageVal) || ageVal < 0 || ageVal > 360) {
+            setMatchError("Please enter your dog's age in months (0 to 360).");
             return;
         }
+        if (selectedConcerns.length === 0) {
+            setMatchError("Please select at least one primary concern.");
+            return;
+        }
+        const requiresDesc = selectedConcerns.includes("other") || selectedConcerns.includes("unsure");
+        if (requiresDesc && matchDescription.trim().length < 3) {
+            setMatchError("Please provide a short description for 'Other' or 'Unsure' concerns.");
+            return;
+        }
+        if (!matchConsentTerms) {
+            setMatchError("Consent to matching and terms is required.");
+            return;
+        }
+
         setMatchBusy(true);
         setMatchError("");
+        setDecisionState(null);
+
         try {
-            const r = await api.post("/match", {
-                description: matchDescription.trim(),
-                suburb: matchSuburb.trim() || undefined,
-                consent_match_processing: true,
+            const payload = {
+                suburb_or_postcode: suburbOrPostcode.trim(),
+                dog_age_months: ageVal,
+                primary_concerns: selectedConcerns,
+                service_format: serviceFormat,
+                method_preference: methodPreference,
+                behaviour_description: matchDescription.trim(),
+                consent: {
+                    match_processing: true,
+                    terms: true,
+                    follow_up: Boolean(consentFollowUp),
+                },
                 campaign: attribution.campaign,
                 source: attribution.source,
-            });
-            const rawMatches = Array.isArray(r?.data?.matches) ? r.data.matches : [];
+            };
+            const r = await api.post("/match", payload);
+            const data = r?.data || {};
+            const state = data.decision_state || (Array.isArray(data.candidates) && data.candidates.length > 0 ? "recommendations" : "no_confirmed_match");
+            setDecisionState(state);
+            setSearchScope(data.search_scope || "local");
+
+            // Context token lifecycle: Store in sessionStorage ONLY (DF-018, DF-022)
+            if (data.context_token) {
+                try {
+                    sessionStorage.setItem("d_match_context_token", data.context_token);
+                } catch (_) {}
+            }
+
+            const rawMatches = Array.isArray(data.candidates) && data.candidates.length > 0
+                ? data.candidates
+                : (Array.isArray(data.matches) ? data.matches : []);
+
             const safeMatches = rawMatches.map((item) => ({
                 ...item,
-                id: String(item?.id || ""),
+                id: String(item?.trainer_id || item?.id || ""),
                 name: typeof item?.name === "string" ? item.name : String(item?.name || "Verified Trainer"),
                 suburb: typeof item?.suburb === "string" ? item.suburb : String(item?.suburb || ""),
-                match_reasoning: typeof item?.match_reasoning === "string"
-                    ? item.match_reasoning
-                    : (typeof item?.match_reasoning?.reasoning === "string"
-                        ? item.match_reasoning.reasoning
-                        : (typeof item?.match_reasoning?.summary === "string"
-                            ? item.match_reasoning.summary
-                            : "")),
+                match_reasoning: typeof item?.explanation === "string"
+                    ? item.explanation
+                    : (typeof item?.match_reasoning === "string"
+                        ? item.match_reasoning
+                        : (typeof item?.match_reasoning?.reasoning === "string"
+                            ? item.match_reasoning.reasoning
+                            : (typeof item?.match_reasoning?.summary === "string"
+                                ? item.match_reasoning.summary
+                                : ""))),
+                reason_codes: Array.isArray(item?.reason_codes) ? item.reason_codes : [],
+                search_scope: item?.search_scope || data.search_scope || "local",
             }));
             setMatches(safeMatches);
-            setMatchId(String(r?.data?.match_id || ""));
+            setMatchId(String(data.match_id || ""));
             setMatchAttempted(true);
         } catch (err) {
             setMatches([]);
             setMatchId("");
             setMatchAttempted(true);
-            setMatchError(typeof err?.response?.data?.detail === "string" ? err.response.data.detail : "Could not run matching right now.");
+            const errData = err?.response?.data;
+            if (errData?.decision_state) {
+                setDecisionState(errData.decision_state);
+            }
+            setMatchError(typeof errData?.detail === "string" ? errData.detail : "Could not run matching right now.");
         } finally {
             setMatchBusy(false);
         }
@@ -264,36 +367,204 @@ export default function Home() {
                         </p>
                         <div className="mt-6">
                             {publicMatchingEnabled ? (
-                                <form onSubmit={runMatch} className="space-y-4 max-w-md" data-testid="owner-match-form">
-                                    <div className="relative">
+                                <form onSubmit={runMatch} className="space-y-5 max-w-xl" data-testid="owner-match-form">
+                                    {/* 1. Suburb or Postcode */}
+                                    <div>
+                                        <label htmlFor="match-suburb" className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider mb-1.5">
+                                            Suburb or Postcode <span className="text-rose-600">*</span>
+                                        </label>
+                                        <input
+                                            id="match-suburb"
+                                            data-testid="match-suburb"
+                                            className="w-full bg-white border border-[#E5DFD3] rounded-xl p-3.5 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all shadow-sm"
+                                            placeholder="e.g. Richmond or 3121"
+                                            value={suburbOrPostcode}
+                                            onChange={(e) => setSuburbOrPostcode(e.target.value)}
+                                            list="home-suburbs"
+                                            required
+                                        />
+                                        <datalist id="home-suburbs">
+                                            {matchSuburbs.map((s) => (
+                                                <option key={s} value={s} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+
+                                    {/* 2. Dog Age & Life Stage */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label htmlFor="match-dog-age" className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider">
+                                                Dog&apos;s Age (Months) <span className="text-rose-600">*</span>
+                                            </label>
+                                            {dogLifeStage && (
+                                                <span className="text-xs font-medium text-[#1A3A32] bg-[#E8EFEA] px-2.5 py-0.5 rounded-full" data-testid="dog-lifestage-badge">
+                                                    {dogLifeStage}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <input
+                                            id="match-dog-age"
+                                            data-testid="match-dog-age"
+                                            type="number"
+                                            min="0"
+                                            max="360"
+                                            className="w-full bg-white border border-[#E5DFD3] rounded-xl p-3.5 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all shadow-sm"
+                                            placeholder="e.g. 8 for 8 months, 24 for 2 years"
+                                            value={dogAgeMonths}
+                                            onChange={(e) => setDogAgeMonths(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* 3. Primary Concerns */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider mb-1.5">
+                                            Primary Concern(s) <span className="text-rose-600">*</span>
+                                        </label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {CANONICAL_CONCERNS.map((c) => {
+                                                const checked = selectedConcerns.includes(c.id);
+                                                return (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        id={`match-concern-${c.id}`}
+                                                        data-testid={`match-concern-${c.id}`}
+                                                        onClick={() => toggleConcern(c.id)}
+                                                        className={`text-left text-xs font-medium px-3 py-2.5 rounded-lg border transition-all ${
+                                                            checked
+                                                                ? "bg-[#1A3A32] text-white border-[#1A3A32] shadow-sm"
+                                                                : "bg-white text-[#4A615A] border-[#E5DFD3] hover:border-[#1A3A32]/40"
+                                                        }`}
+                                                        aria-pressed={checked}
+                                                    >
+                                                        {c.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 4. Service Format */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider mb-1.5">
+                                            Service Format <span className="text-rose-600">*</span>
+                                        </label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {SERVICE_FORMATS.map((f) => {
+                                                const selected = serviceFormat === f.id;
+                                                return (
+                                                    <button
+                                                        key={f.id}
+                                                        type="button"
+                                                        data-testid={`match-format-${f.id}`}
+                                                        onClick={() => setServiceFormat(f.id)}
+                                                        className={`text-left text-xs font-medium px-3 py-2 rounded-lg border transition-all ${
+                                                            selected
+                                                                ? "bg-[#1A3A32] text-white border-[#1A3A32]"
+                                                                : "bg-white text-[#4A615A] border-[#E5DFD3] hover:border-[#1A3A32]/40"
+                                                        }`}
+                                                    >
+                                                        {f.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 5. Method Preference */}
+                                    <div>
+                                        <label className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider mb-1.5">
+                                            Method Preference <span className="text-rose-600">*</span>
+                                        </label>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            {METHOD_PREFERENCES.map((m) => {
+                                                const selected = methodPreference === m.id;
+                                                return (
+                                                    <button
+                                                        key={m.id}
+                                                        type="button"
+                                                        data-testid={`match-method-${m.id}`}
+                                                        onClick={() => setMethodPreference(m.id)}
+                                                        className={`text-left text-xs font-medium px-3 py-2 rounded-lg border transition-all ${
+                                                            selected
+                                                                ? "bg-[#1A3A32] text-white border-[#1A3A32]"
+                                                                : "bg-white text-[#4A615A] border-[#E5DFD3] hover:border-[#1A3A32]/40"
+                                                        }`}
+                                                    >
+                                                        {m.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 6. Behaviour Description */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label htmlFor="match-description" className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider">
+                                                Notes / Context {(selectedConcerns.includes("other") || selectedConcerns.includes("unsure")) ? <span className="text-rose-600">* (required for Other/Unsure)</span> : <span className="text-[#5C6D59] font-normal normal-case">(optional)</span>}
+                                            </label>
+                                            <span className="text-xs text-[#5C6D59]" data-testid="desc-char-count">
+                                                {matchDescription.length} / 800
+                                            </span>
+                                        </div>
                                         <textarea
                                             id="match-description"
                                             data-testid="match-description"
-                                            className="w-full bg-white border border-[#E5DFD3] rounded-xl p-4 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all min-h-[120px] shadow-sm resize-none"
-                                            placeholder="e.g. 8-month kelpie, lead pulling and reactivity on walks..."
+                                            maxLength={800}
+                                            className="w-full bg-white border border-[#E5DFD3] rounded-xl p-3.5 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all min-h-[90px] shadow-sm resize-none"
+                                            placeholder="Tell us what you're working through. Please do not include phone numbers, email addresses or home street addresses."
                                             value={matchDescription}
                                             onChange={(e) => setMatchDescription(e.target.value)}
                                         />
                                     </div>
-                                    <input
-                                        id="match-suburb"
-                                        data-testid="match-suburb"
-                                        className="w-full bg-white border border-[#E5DFD3] rounded-xl p-4 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all shadow-sm"
-                                        placeholder="Suburb (optional)"
-                                        value={matchSuburb}
-                                        onChange={(e) => setMatchSuburb(e.target.value)}
-                                        list="home-suburbs"
-                                    />
-                                    <label className="flex items-start gap-3 text-sm text-[#4A615A] cursor-pointer group pt-2">
-                                        <div className="relative flex items-center justify-center mt-0.5">
-                                            <input type="checkbox" checked={matchConsent} onChange={(e) => setMatchConsent(e.target.checked)} className="peer h-5 w-5 appearance-none rounded border border-[#C2C9C6] checked:bg-[#1A3A32] checked:border-[#1A3A32] transition-colors cursor-pointer" />
-                                            <Sparkles className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
+
+                                    {/* 7. Consents */}
+                                    <div className="space-y-2 pt-1">
+                                        <label className="flex items-start gap-3 text-sm text-[#4A615A] cursor-pointer group">
+                                            <div className="relative flex items-center justify-center mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    id="match-consent"
+                                                    data-testid="match-consent"
+                                                    checked={matchConsentTerms}
+                                                    onChange={(e) => setMatchConsentTerms(e.target.checked)}
+                                                    className="peer h-5 w-5 appearance-none rounded border border-[#C2C9C6] checked:bg-[#1A3A32] checked:border-[#1A3A32] transition-colors cursor-pointer"
+                                                    required
+                                                />
+                                                <Sparkles className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
+                                            </div>
+                                            <span className="group-hover:text-[#1A3A32] transition-colors text-xs leading-relaxed">
+                                                I agree to the Terms of Service and consent to processing this request for matching. <span className="text-rose-600">*</span>
+                                            </span>
+                                        </label>
+                                        <label className="flex items-start gap-3 text-sm text-[#4A615A] cursor-pointer group">
+                                            <div className="relative flex items-center justify-center mt-0.5">
+                                                <input
+                                                    type="checkbox"
+                                                    id="match-follow-up"
+                                                    data-testid="match-follow-up"
+                                                    checked={consentFollowUp}
+                                                    onChange={(e) => setConsentFollowUp(e.target.checked)}
+                                                    className="peer h-5 w-5 appearance-none rounded border border-[#C2C9C6] checked:bg-[#1A3A32] checked:border-[#1A3A32] transition-colors cursor-pointer"
+                                                />
+                                                <Sparkles className="absolute w-3 h-3 text-white opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity" />
+                                            </div>
+                                            <span className="group-hover:text-[#1A3A32] transition-colors text-xs leading-relaxed">
+                                                Keep me updated on this match request (optional follow-up notifications).
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    {matchError && (
+                                        <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200 mt-2" data-testid="match-error-banner" role="alert">
+                                            {matchError}
                                         </div>
-                                        <span className="group-hover:text-[#1A3A32] transition-colors">I consent to processing this request for matching.</span>
-                                    </label>
-                                    {matchError && <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200 mt-2">{matchError}</div>}
-                                    <button type="submit" className="btn-primary w-full justify-center py-3.5 mt-4" disabled={matchBusy}>
-                                        {matchBusy ? "Matching..." : "Find matches"}
+                                    )}
+
+                                    <button type="submit" className="btn-primary w-full justify-center py-3.5 mt-2" disabled={matchBusy} data-testid="find-matches-button">
+                                        {matchBusy ? "Evaluating matches..." : "Find matches"}
                                     </button>
                                 </form>
                             ) : (
@@ -310,13 +581,75 @@ export default function Home() {
                     </motion.div>
                 </section>
 
+                {/* Triage / Emergency Decision States */}
+                {publicMatchingEnabled && decisionState === "immediate_human_danger" && (
+                    <section className="mt-8 max-w-4xl mx-auto px-6" aria-live="polite" data-testid="triage-emergency">
+                        <div className="card-public p-7 bg-rose-50 border-2 border-rose-300 rounded-2xl">
+                            <h3 className="font-serif text-2xl text-rose-950 font-bold">Immediate Safety Notice</h3>
+                            <p className="mt-2 text-rose-900 leading-relaxed text-sm">
+                                If there is an active threat of serious harm, dog attack, or a child bite requiring medical attention,
+                                please call <strong>Triple Zero (000)</strong> immediately. DTD cannot provide emergency handling or medical intervention.
+                            </p>
+                            <div className="mt-4">
+                                <a
+                                    href="https://www.vic.gov.au/emergency"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center text-rose-900 font-semibold underline hover:text-rose-950 text-sm"
+                                >
+                                    Victorian Government Emergency Services <ArrowRight className="w-4 h-4 ml-1" />
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+                )}
+
+                {publicMatchingEnabled && decisionState === "urgent_animal_health_support" && (
+                    <section className="mt-8 max-w-4xl mx-auto px-6" aria-live="polite" data-testid="triage-health">
+                        <div className="card-public p-7 bg-amber-50 border-2 border-amber-300 rounded-2xl">
+                            <h3 className="font-serif text-2xl text-amber-950 font-bold">Urgent Animal Health Notice</h3>
+                            <p className="mt-2 text-amber-900 leading-relaxed text-sm">
+                                Your request indicates a possible acute physical or medical need. Please contact a qualified veterinarian or an emergency animal hospital immediately. DTD provides behavioural matching only.
+                            </p>
+                        </div>
+                    </section>
+                )}
+
+                {publicMatchingEnabled && decisionState === "needs_clarification" && (
+                    <section className="mt-8 max-w-4xl mx-auto px-6" aria-live="polite" data-testid="match-clarification">
+                        <div className="card-public p-7 bg-[#F5F2EB] border border-[#E5DFD3] rounded-2xl">
+                            <h3 className="font-serif text-2xl text-[#1A3A32]">More Information Needed</h3>
+                            <p className="mt-2 text-[#4A615A] leading-relaxed text-sm">
+                                We need a bit more specific information to find a match. Please ensure your suburb is within Greater Melbourne, or describe your dog&apos;s specific needs above.
+                            </p>
+                        </div>
+                    </section>
+                )}
+
                 {/* Match Results display if matching is enabled */}
                 {publicMatchingEnabled && matches.length > 0 && (
-                    <section className="mt-12 max-w-5xl mx-auto px-6">
+                    <section className="mt-12 max-w-5xl mx-auto px-6" aria-live="polite" data-testid="match-results-section">
+                        {decisionState === "limited_local_results" && (
+                            <div className="mb-6 p-4 bg-[#F5F2EB] border border-[#E5DFD3] rounded-xl text-sm text-[#4A615A]" data-testid="limited-local-banner">
+                                <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to verified trainers with confirmed service coverage in your area.
+                            </div>
+                        )}
+                        {decisionState === "degraded_recommendations" && (
+                            <div className="mb-6 p-4 bg-[#F5F2EB] border border-[#E5DFD3] rounded-xl text-sm text-[#4A615A]" data-testid="degraded-banner">
+                                <strong>Standard Quality Baseline:</strong> Due to a temporary AI provider limit, matches were evaluated using our deterministic quality baseline.
+                            </div>
+                        )}
                         <div className="grid md:grid-cols-3 gap-6">
                             {matches.map((m, idx) => (
-                                <article key={m.id || `match-${idx}`} className="card-public p-6 bg-white">
-                                    <div className="small-caps text-[#5C6D59]">Rank {idx + 1}</div>
+                                <article key={m.id || `match-${idx}`} className="card-public p-6 bg-white" data-testid={`match-card-${idx + 1}`}>
+                                    <div className="flex justify-between items-center">
+                                        <span className="small-caps text-[#5C6D59]">Rank {idx + 1}</span>
+                                        {(m.search_scope === "expanded" || searchScope === "expanded") && (
+                                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#E8EFEA] text-[#1A3A32]" data-testid="expanded-scope-badge">
+                                                Expanded Area
+                                            </span>
+                                        )}
+                                    </div>
                                     <h3 className="font-serif text-2xl text-[#1A3A32] mt-2">{m.name}</h3>
                                     <p className="text-sm text-[#4A615A] mt-1">{m.suburb}</p>
                                     <p className="text-sm text-[#4A615A] mt-4 line-clamp-4 leading-relaxed">
@@ -325,7 +658,7 @@ export default function Home() {
                                     <div className="mt-6 pt-4 border-t border-[#E5DFD3]">
                                         <p className="text-xs font-sans text-[#5C6D59] mb-3 font-medium">Free enquiry • Direct contact</p>
                                         <Link
-                                            to={`/t/${m.id}?${new URLSearchParams({ match: matchId, q: matchDescription }).toString()}`}
+                                            to={`/t/${m.id}${matchId ? `?match=${encodeURIComponent(matchId)}` : ""}`}
                                             className="btn-primary w-full justify-center"
                                             data-testid={`match-open-${idx + 1}`}
                                             onClick={() => recordConnectClick(m.id, idx + 1)}
@@ -338,12 +671,19 @@ export default function Home() {
                         </div>
                     </section>
                 )}
-                {publicMatchingEnabled && matchAttempted && !matchError && matches.length === 0 && (
+
+                {publicMatchingEnabled && matchAttempted && !matchError && matches.length === 0 && (decisionState === "no_confirmed_match" || decisionState === "degraded_no_confirmed_match" || !decisionState) && (
                     <section className="mt-12 max-w-3xl mx-auto px-6" aria-live="polite" data-testid="match-empty">
                         <div className="card-public p-7 bg-white">
-                            <h2 className="font-serif text-3xl text-[#1A3A32]">No exact match yet</h2>
-                            <p className="mt-3 text-[#4A615A]">Try a broader description or browse the directory by suburb and specialty.</p>
-                            <Link to={`/trainers${matchSuburb ? `?suburb=${encodeURIComponent(matchSuburb)}` : ""}`} className="btn-primary mt-5">Browse trainers</Link>
+                            <h2 className="font-serif text-3xl text-[#1A3A32]">No confirmed match yet</h2>
+                            <p className="mt-3 text-[#4A615A] leading-relaxed">
+                                Based on current verified capability records, we could not confirm a trainer meeting all your specific requirements. You can browse all verified trainers in our directory or try adjusting your search criteria.
+                            </p>
+                            <div className="mt-5">
+                                <Link to={`/trainers${suburbOrPostcode ? `?suburb=${encodeURIComponent(suburbOrPostcode)}` : ""}`} className="btn-primary">
+                                    Browse directory
+                                </Link>
+                            </div>
                         </div>
                     </section>
                 )}
