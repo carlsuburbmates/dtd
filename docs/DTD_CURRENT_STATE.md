@@ -236,13 +236,13 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** resolving hierarchy and routes is public product/UX work, outside this read-only audit.
 - **Next action:** define one owner entry path for live matching, give it a truthful direct navigation/CTA target, remove or replace the stale waitlist link, and verify desktop/mobile keyboard journeys from navigation through match form, result state and profile handoff.
 
-### DF-021 — Owner-match interface contract is authored; implementation remains open
+### DF-021 — Owner-match interface contract is authored; P1 harness is partially implemented
 
-- **Observed/status:** 27 September 2026 — partial; the versioned implementation contract is authored, but the public workflow does not yet implement it.
-- **Evidence:** `docs/specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md` now defines the v2 fields, consent/retention evidence, triage/decision states, API response, privacy boundary, fit and presentation rules. `Home.jsx`, `/match`, profile handoff and their tests still implement the earlier free-text diagnostic flow.
-- **Impact/uncertainty:** implementation can now be audited against one interface authority, but existing pages and tests remain capable of drifting until the staged matching work is completed.
-- **Why deferred:** authoring the contract does not change public behaviour, retained records, AI-provider use or deployment.
-- **Next action:** implement P1 through P4 in `ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`, then verify the owner journey and sandbox evidence against Decision Contract v2.
+- **Observed/status:** 3 October 2026 — partial; the v2 contract is authored and commit `d42b552` adds non-runtime policy scaffolding, fixtures and tests, but P1 is not accepted.
+- **Evidence:** the commit adds `matching_contract_v2.py`, fixture data and 34 focused tests; 318 backend unit tests and the frontend production build also passed. The module is not imported by the public route or frontend. However, its response model accepts invented decision states/top-level reason codes and unsupported guaranteed-outcome copy; its reference eligibility accepts absent life-stage and declared-service-area facts when a profile suburb happens to match. The fixture builder also converts explicit empty facts to defaults. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
+- **Impact/uncertainty:** the work is a useful non-runtime foundation but cannot be a reliable v2 oracle until it fails closed and executes genuine adapter/fallback parity. The public owner flow remains the earlier diagnostic flow.
+- **Why deferred:** this audit does not change public behaviour, retained records, AI-provider use or deployment.
+- **Next action:** complete P1 R1–R6 in `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`, return the exact local commit for re-audit, then and only then consider P2.
 
 ### DF-022 — Owner matching consent is enforced but not persisted as evidence
 
@@ -252,13 +252,13 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** the audit does not change consent language, stored owner data, retention or production records.
 - **Next action:** define the matching-consent record and retention contract, persist only the required sanitised evidence with new match events, apply any migration/remediation decision separately, and test consent rejection, persisted consent evidence and expiry/cleanup behaviour in sandbox.
 
-### DF-023 — Weak-evidence contract is authored; legacy AI/fallback implementation remains open
+### DF-023 — Weak-evidence contract is authored; P1 parity evidence remains unaccepted
 
-- **Observed/status:** 27 September 2026 — partial; Decision Contract v2 resolves the owner-visible states, but code remains legacy.
-- **Evidence:** Decision Contract v2 selects `needs_clarification`, disclosed `limited_local_results`, `no_confirmed_match` and deterministic degraded equivalents. `backend/services/ai.py` still asks Gemini for a non-empty list of trainer IDs and the fallback still gives candidates a `0.40` baseline where there are no topic overlaps. No executable parity suite yet exists.
-- **Impact/uncertainty:** the target response is no longer an open product-policy choice; the live route still cannot be represented as implementing it.
-- **Why deferred:** authoring the operating model does not authorise a public matching, AI-provider, retention or deployment change. The repair requires the cohesive P1-P4 owner-flow and API redesign.
-- **Next action:** implement the Decision Contract fixture/harness, deterministic eligibility, AI/fallback schema and owner states in P1-P4; add same-fixture AI/fallback and sandbox evidence before release.
+- **Observed/status:** 3 October 2026 — partial; Decision Contract v2 resolves the target states and `d42b552` adds a nominal local parity suite, but it is not accepted as executable parity evidence.
+- **Evidence:** `backend/services/ai.py` still asks Gemini for a non-empty list of trainer IDs and the live fallback still has the earlier `0.40` baseline. In the new test suite, the Gemini result is hand-written and compared only by state/first candidate; timeout, quota and malformed-output tests call the fallback without invoking an adapter/error path. The new response schema is open at key boundaries. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
+- **Impact/uncertainty:** the target response is no longer an open product-policy choice, but neither the reference harness nor the live route yet proves AI/fallback consistency.
+- **Why deferred:** authoring and local reference scaffolding do not authorise a public matching, AI-provider, retention or deployment change. The repair requires accepted P1 evidence followed by the cohesive P2-P4 workflow redesign.
+- **Next action:** complete P1 R1–R6, including adapter-invoked fixture parity; then implement the actual `ai.py` integration only in P3 and verify the same scenarios in sandbox before release.
 
 ### DF-024 — No urgent-support pathway or verified provider register exists
 
