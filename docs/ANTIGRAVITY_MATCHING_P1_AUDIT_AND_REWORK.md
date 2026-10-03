@@ -56,3 +56,38 @@ These are implementation directions, not new owner-decision requests.
 4. **Fixture supply:** use isolated, purpose-built candidate pools per scenario. Do not inflate a shared pool with duplicate-like trainers merely to suppress the documented thin-local-supply branch.
 5. **`limited_local_results`:** use it only when fewer than three local eligible candidates caused expansion and at least one expanded candidate is presented. If one or two local candidates qualify and no expanded candidate does, use `recommendations` with the actual count; do not claim an expanded search result.
 6. **PII sanitisation:** remove email addresses, phone numbers, URLs and address-like data before model use or storage; do not retain redaction-marker tokens in the matching payload. Normalize remaining whitespace. Tests should prove the sensitive value and marker are both absent.
+
+## Re-audit of `b0b9d6bf1a13f330c9a5bd76ece3d4aea6dada0a`
+
+**Classification:** `PARTIAL` — P1 remains unaccepted; do not begin P2.
+
+### Accepted improvements
+
+- The range from `ce14f4e` is one local commit and `git diff --check ce14f4e..b0b9d6b` is clean.
+- The response state/scope and card reason-code enums are now closed. Explicit empty life-stage and declared-service-area facts are testable, and the reference local eligibility gate no longer treats a profile suburb as service coverage.
+- The fixture builder now preserves explicit empty values, uses the P0 delivery-constraint keys, and the scenario pools are isolated.
+- Independent verification passed: 50 P1 tests, 334 backend unit tests, 36 frontend tests and the frontend production build. The new module remains unimported by runtime paths.
+
+### Remaining rework required
+
+### R7 — enforce the input/privacy contract rather than relying on coercion
+
+Direct probes show `MatchConsentIn(match_processing="yes", terms="true")` is accepted as both booleans, and a request omitting `service_format` and `method_preference` is silently assigned `any` and `no_preference`. Contract v2 requires explicit boolean consent and explicit format/method choices. Use strict input types and remove those defaults. The sanitizer also leaves `12 Smith Street, Richmond` intact despite the contract requiring address-like data to be stripped before model/storage use. Define and test a bounded address-redaction rule.
+
+### R8 — finish concern/clarification policy
+
+The mapping still permits `fear_anxiety` alone to qualify a `separation_anxiety` request, contrary to the prior direction. Make separation-anxiety support explicit. Also, an `other` request with a sufficiently long description currently becomes `no_confirmed_match`, not `needs_clarification`, because its mapping is empty. Until a request has an explicit canonical concern, it must remain in clarification; free text cannot choose a specialty mapping.
+
+### R9 — make factual-explanation validation constructive and complete
+
+The validator accepts unsupported statements such as “This trainer has twenty years experience and is available today.” It checks only selected words, so it cannot establish that an arbitrary model sentence contains only supplied facts. Replace the partial keyword screen with a structured allowed-fact/explanation-template mechanism: the candidate ID, reason codes and permitted projected facts select the rendered statement. Test unsupported availability, experience, accreditation, location, outcome and personality claims. Remove the reference engine's unsupported "verified expertise" wording.
+
+### R10 — make parity a genuine adapter test and retain P1 scope
+
+Normal-mode `GeminiStubAdapter` simply calls the deterministic reference engine, so its parity assertion is tautological. Its degradation modes likewise call fallback directly rather than exercising a provider-like failure through one adapter boundary. Produce a contract-shaped stub response independently, validate it against the deterministic eligible-pool/fact rules, and route raised timeout/rate-limit/unavailable/malformed exceptions through the one fallback wrapper.
+
+The module also still embeds triage keyword policy and public emergency/urgent-care copy. P1 may retain state fixtures, but must not establish production triage policy or public safety copy; move that material out of the P1 reference until P2/M6. Finally, expansion must be triggered by fewer than three **local eligible** candidates, as Contract v2 specifies, rather than fewer than three locally scored candidates.
+
+### Return package
+
+Rework only R7–R10 on `feature/matching-implementation`. Preserve the accepted fixture and fail-closed-gate work. Return one amended/local commit, changed files, clean diff output, focused/full test results and direct test evidence for every case above. No P2, runtime integration, deployment, provider, data, billing, auth or remote-Git action is authorised.
