@@ -45,3 +45,14 @@ The new module already contains full triage, scoring, presentation and public sa
 ## Return package
 
 Rework only P1 on `feature/matching-implementation`. Preserve the useful fixture foundation; do not delete it wholesale and do not start P2. Return one exact commit, changed files, `git diff --check`, focused/full test results, and a concise mapping of R1–R6 to tests. Codex will then perform a new independent audit before authorising P2.
+
+## Resolution of Antigravity's stated assumptions
+
+These are implementation directions, not new owner-decision requests.
+
+1. **Heuristic weights:** do not treat the proposed `0.40/0.15/0.15/0.15/0.15` split as accepted policy. P1 may test a reference response, but must not establish a production scoring formula. P3 will define one versioned, evidence-backed deterministic fallback table and its boundary fixtures before runtime integration.
+2. **Concern-to-specialty mapping:** do not use a broad default mapping for `other` or `unsure`, and do not let general `fear_anxiety` stand in for the explicit `separation_anxiety` specialty. Where a request cannot resolve to a documented canonical concern, return `needs_clarification`; it must not qualify a generic trainer through a speculative mapping. P3 owns the complete versioned table, with one-to-one and permitted alternative mappings explicitly tested.
+3. **Safety keywords:** P1 must not introduce production triage keyword policy or public safety copy. Keep state-level fixtures only. P2/M6 will implement the conservative deterministic classifier, approved copy and urgent-directory evidence together; substring lists alone are not sufficient safety policy.
+4. **Fixture supply:** use isolated, purpose-built candidate pools per scenario. Do not inflate a shared pool with duplicate-like trainers merely to suppress the documented thin-local-supply branch.
+5. **`limited_local_results`:** use it only when fewer than three local eligible candidates caused expansion and at least one expanded candidate is presented. If one or two local candidates qualify and no expanded candidate does, use `recommendations` with the actual count; do not claim an expanded search result.
+6. **PII sanitisation:** remove email addresses, phone numbers, URLs and address-like data before model use or storage; do not retain redaction-marker tokens in the matching payload. Normalize remaining whitespace. Tests should prove the sensitive value and marker are both absent.
