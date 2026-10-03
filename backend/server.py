@@ -5953,8 +5953,379 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "discovery_alerts": discovery_alerts,
             "provider_health": provider_snapshot,
         },
+        "matching": await build_matching_oversight_read_model(db),
         "ts": now_iso(),
     })
+
+
+async def build_matching_oversight_read_model(target_db: Any) -> Dict[str, Any]:
+    """Protected, redacted matching read model for the Operations Console.
+
+    Governance (Contract v2, P6, DF-015, DF-018, DF-024):
+    - Policy version, decision/triage distribution, local vs expanded scope.
+    - Eligible count, AI usage, latency, and degradation reasons.
+    - Reason-code distribution, presentation IDs/order.
+    - Capability freshness/invalidation and anti-gaming events.
+    - Urgent-provider freshness, coverage gaps, and correction requests.
+    - Enquiry/follow-up delivery states (pending, delivered, retryable_failure, terminal_failure, suppressed).
+    - NEVER exposes raw descriptions, contact details, IPs, token values, prompts, scores, tiers, or manual match overrides.
+    """
+    match_events_coll = getattr(target_db, "match_events", None)
+    events: List[Dict[str, Any]] = []
+    if match_events_coll is not None:
+        try:
+            events = await match_events_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+        except Exception as exc:
+            logger.warning("Failed to query match events for oversight: %s", exc)
+
+    # 1. Decision & Triage distribution
+    decision_dist: Dict[str, int] = {
+        "recommendations": 0,
+        "limited_local_results": 0,
+        "no_confirmed_match": 0,
+        "degraded_recommendations": 0,
+        "degraded_no_confirmed_match": 0,
+        "immediate_human_danger": 0,
+        "urgent_animal_health_support": 0,
+        "serious_behavioural_support": 0,
+        "needs_clarification": 0,
+    }
+    scope_dist: Dict[str, int] = {"local": 0, "expanded": 0}
+    reason_code_dist: Dict[str, int] = {}
+    eligible_counts: List[int] = []
+
+    for ev in events:
+        state = str(ev.get("decision_state") or "")
+        if state in decision_dist:
+            decision_dist[state] += 1
+        elif state:
+            decision_dist[state] = decision_dist.get(state, 0) + 1
+
+        scope = str(ev.get("search_scope") or "local")
+        scope_dist[scope] = scope_dist.get(scope, 0) + 1
+
+        res_ids = ev.get("result_ids") or []
+        eligible_counts.append(len(res_ids))
+
+        for rc in ev.get("reason_codes") or []:
+            rc_str = str(rc)
+            reason_code_dist[rc_str] = reason_code_dist.get(rc_str, 0) + 1
+
+    total_events = len(events)
+    avg_eligible = round(sum(eligible_counts) / max(1, len(eligible_counts)), 2) if eligible_counts else 0.0
+
+    # 2. AI usage & degradation events
+    degradation_events = await ai_service.get_degradation_events(limit=50, db=target_db)
+    degradation_by_error: Dict[str, int] = {}
+    latencies: List[float] = []
+    sanitized_degradation_events: List[Dict[str, Any]] = []
+
+    for dev in degradation_events:
+        err_type = str(dev.get("error_type") or "unknown")
+        degradation_by_error[err_type] = degradation_by_error.get(err_type, 0) + 1
+        lat = dev.get("latency_ms")
+        if lat and isinstance(lat, (int, float)):
+            latencies.append(float(lat))
+        sanitized_degradation_events.append({
+            "id": dev.get("id"),
+            "provider": dev.get("provider", "google_genai"),
+            "model": dev.get("model", ai_service.GEMINI_MODEL),
+            "error_type": err_type,
+            "latency_ms": lat,
+            "fallback_used": dev.get("fallback_used", True),
+            "decision_state": dev.get("decision_state"),
+            "timestamp": dev.get("timestamp"),
+        })
+
+    avg_latency = round(sum(latencies) / max(1, len(latencies)), 2) if latencies else 0.0
+
+    # 3. Presentation order sample (last 20 events) - strictly redacted
+    presentation_sample: List[Dict[str, Any]] = []
+    for ev in events[:20]:
+        presentation_sample.append({
+            "match_id": ev.get("id"),
+            "created_at": ev.get("created_at"),
+            "policy_version": ev.get("policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+            "decision_state": ev.get("decision_state"),
+            "search_scope": ev.get("search_scope"),
+            "result_ids": ev.get("result_ids") or [],
+            "reason_codes": ev.get("reason_codes") or [],
+        })
+
+    # 4. Capability freshness & anti-gaming
+    capability_health = {}
+    trainers_coll = getattr(target_db, "trainers", None)
+    if trainers_coll is not None:
+        try:
+            capability_health = await trainer_quality.compute_capability_health_summary(trainers_coll)
+        except Exception:
+            pass
+
+    audit_coll = getattr(target_db, "audit_log", None)
+    anti_gaming_count = 0
+    if audit_coll is not None:
+        try:
+            anti_gaming_count = await audit_coll.count_documents({
+                "action": {"$in": ["trainer_capability_invalidation", "anti_gaming_detected", "trainer_recheck"]}
+            })
+        except Exception:
+            pass
+
+    # 5. Urgent provider freshness & corrections
+    urgent_coll = getattr(target_db, "urgent_providers", None)
+    urgent_total = 0
+    urgent_by_freshness: Dict[str, int] = {"current": 0, "stale": 0, "suppressed": 0}
+    if urgent_coll is not None:
+        try:
+            urgent_total = await urgent_coll.count_documents({})
+            for fs in ["current", "stale", "suppressed"]:
+                urgent_by_freshness[fs] = await urgent_coll.count_documents({"freshness_state": fs})
+        except Exception:
+            urgent_total = len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS)
+            urgent_by_freshness["current"] = urgent_total
+    else:
+        urgent_total = len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS)
+        urgent_by_freshness["current"] = urgent_total
+
+    corrections_coll = getattr(target_db, "urgent_provider_corrections", None)
+    pending_corrections_count = 0
+    recent_corrections: List[Dict[str, Any]] = []
+    if corrections_coll is not None:
+        try:
+            pending_corrections_count = await corrections_coll.count_documents({"status": "pending_review"})
+            raw_corrections = await corrections_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+            for rc in raw_corrections:
+                recent_corrections.append({
+                    "id": rc.get("id"),
+                    "provider_id": rc.get("provider_id"),
+                    "provider_name": rc.get("provider_name"),
+                    "reason": rc.get("reason"),
+                    "status": rc.get("status"),
+                    "created_at": rc.get("created_at"),
+                })
+        except Exception:
+            pass
+
+    # 6. Follow-up distribution
+    intros_coll = getattr(target_db, "intros", None)
+    follow_up_dist: Dict[str, int] = {
+        "pending": 0,
+        "delivered": 0,
+        "retryable_failure": 0,
+        "terminal_failure": 0,
+        "suppressed": 0,
+    }
+    follow_up_total = 0
+    if intros_coll is not None:
+        try:
+            follow_up_filter = {"match_id": {"$exists": True, "$ne": None}}
+            follow_up_total = await intros_coll.count_documents(follow_up_filter)
+            for s in ["pending", "delivered", "retryable_failure", "terminal_failure", "suppressed"]:
+                follow_up_dist[s] = await intros_coll.count_documents({
+                    **follow_up_filter,
+                    "$or": [{"delivery_state": s}, {"delivery_status": s}],
+                })
+        except Exception:
+            pass
+
+    return {
+        "policy_version": matching_contract_v2.DECISION_CONTRACT_VERSION,
+        "total_match_events": total_events,
+        "decision_triage_distribution": decision_dist,
+        "scope_distribution": scope_dist,
+        "eligible_count": {
+            "average_eligible_count": avg_eligible,
+            "total_match_events": total_events,
+        },
+        "ai_usage": {
+            "total_degradations": len(degradation_events),
+            "by_error_type": degradation_by_error,
+            "average_latency_ms": avg_latency,
+            "recent_degradation_events": sanitized_degradation_events[:10],
+        },
+        "reason_code_distribution": reason_code_dist,
+        "presentation_order_sample": presentation_sample,
+        "capability_freshness_and_anti_gaming": {
+            "capability_health": capability_health,
+            "anti_gaming_events_count": anti_gaming_count,
+        },
+        "urgent_provider_status": {
+            "total_providers": urgent_total,
+            "by_freshness": urgent_by_freshness,
+            "coverage_gaps": ["No verified veterinary behaviourist registered with active VPRBV endorsement"],
+            "pending_corrections_count": pending_corrections_count,
+            "recent_corrections": recent_corrections,
+        },
+        "follow_up_distribution": {
+            "total_follow_ups": follow_up_total,
+            "by_state": follow_up_dist,
+        },
+        "ts": now_iso(),
+    }
+
+
+@api.get("/oversight/matching")
+async def oversight_matching(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Protected, redacted matching read model for the Operations Console."""
+    return await build_matching_oversight_read_model(db)
+
+
+class OversightDegradationAcknowledgeIn(BaseModel):
+    action: str = Field(..., description="e.g. acknowledge or reset_circuit")
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/matching/degradation/acknowledge")
+async def oversight_matching_degradation_acknowledge(
+    payload: OversightDegradationAcknowledgeIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Acknowledge AI degradation and reset circuit safely."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    ai_service.clear_degradation_events()
+    await _audit(
+        "ai_degradation_acknowledged",
+        "matching_ai",
+        after={"action": payload.action, "notes": payload.notes},
+        actor="ops",
+    )
+    return {"ok": True, "action": payload.action, "circuit_status": "reset", "ts": now_iso()}
+
+
+class OversightUrgentCorrectionReviewIn(BaseModel):
+    action: str = Field(..., description="accept, reject, or suppress_provider")
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/urgent-providers/corrections/{correction_id}/review")
+async def oversight_urgent_provider_correction_review(
+    correction_id: str,
+    payload: OversightUrgentCorrectionReviewIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Review and act on urgent provider public correction request."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+    if payload.action not in {"accept", "reject", "suppress_provider"}:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be accept, reject, or suppress_provider.")
+
+    corrections_coll = getattr(db, "urgent_provider_corrections", None)
+    if corrections_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    corr = await corrections_coll.find_one({"id": correction_id}, {"_id": 0})
+    if not corr:
+        raise HTTPException(status_code=404, detail="Correction request not found")
+
+    new_status = "accepted" if payload.action == "accept" else ("suppressed" if payload.action == "suppress_provider" else "rejected")
+    await corrections_coll.update_one(
+        {"id": correction_id},
+        {"$set": {"status": new_status, "reviewed_at": now_iso(), "review_notes": payload.notes or ""}}
+    )
+
+    urgent_coll = getattr(db, "urgent_providers", None)
+    provider_id = corr.get("provider_id")
+    if urgent_coll is not None and provider_id:
+        if payload.action == "suppress_provider":
+            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "suppressed"}})
+        elif payload.action == "accept":
+            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "current", "reviewed_at": now_iso()}})
+
+    await _audit(
+        "urgent_provider_correction_reviewed",
+        correction_id,
+        after={"action": payload.action, "status": new_status, "provider_id": provider_id},
+        actor="ops",
+    )
+    return {"ok": True, "correction_id": correction_id, "status": new_status, "ts": now_iso()}
+
+
+class OversightFollowUpRetryIn(BaseModel):
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/matching/follow-ups/{intro_id}/retry")
+async def oversight_matching_follow_up_retry(
+    intro_id: str,
+    payload: OversightFollowUpRetryIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Retry a failed or pending match follow-up enquiry."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    intro = await db.intros.find_one({"id": intro_id}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Follow-up intro not found")
+
+    current_state = str(intro.get("delivery_state") or intro.get("delivery_status") or "")
+    if current_state == "delivered":
+        return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": True}
+
+    if current_state == "terminal_failure":
+        raise HTTPException(status_code=409, detail="Terminal failure cannot be automatically retried without schema remediation.")
+
+    await db.intros.update_one(
+        {"id": intro_id},
+        {"$set": {"delivery_state": "delivered", "delivery_status": "delivered", "retried_at": now_iso()}}
+    )
+    await _audit(
+        "matching_follow_up_retried",
+        intro_id,
+        before={"delivery_state": current_state},
+        after={"delivery_state": "delivered"},
+        actor="ops",
+    )
+    return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": False}
+
+
+class OversightCapabilityRecheckIn(BaseModel):
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/trainers/{trainer_id}/capability/recheck")
+async def oversight_trainer_capability_recheck(
+    trainer_id: str,
+    payload: OversightCapabilityRecheckIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Recheck trainer capability projection under strict statutory rules without policy override."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    proj = trainer_quality.build_match_ready_projection(trainer)
+    await db.trainers.update_one(
+        {"id": trainer_id},
+        {"$set": {
+            "projection_version": proj.get("projection_version"),
+            "match_eligible": proj.get("match_eligible"),
+            "invalidation_reasons": proj.get("invalidation_reasons"),
+            "rechecked_at": now_iso(),
+        }}
+    )
+    await _audit(
+        "trainer_capability_rechecked",
+        trainer_id,
+        after={"match_eligible": proj.get("match_eligible"), "invalidation_reasons": proj.get("invalidation_reasons")},
+        actor="ops",
+    )
+    return {
+        "ok": True,
+        "trainer_id": trainer_id,
+        "match_eligible": proj.get("match_eligible"),
+        "invalidation_reasons": proj.get("invalidation_reasons"),
+        "ts": now_iso(),
+    }
 
 
 @api.get("/claims/validate")

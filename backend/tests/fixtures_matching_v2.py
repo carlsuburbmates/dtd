@@ -200,6 +200,7 @@ def make_test_trainer_doc(
     projection = build_match_ready_projection(raw_doc)
     projection["id"] = trainer_id
     projection["published"] = published
+    projection["region"] = region
     projection["claim_status"] = claim_status
     projection["tier"] = tier
     if life_stages is None:
