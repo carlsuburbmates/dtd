@@ -1229,7 +1229,10 @@ class GeminiMatchingAdapter:
                 compute_deterministic_fit,
             )
 
-        target_db = db or self.db
+        # PyMongo/Motor database objects deliberately reject truth-value
+        # evaluation. An explicitly supplied request database is valid even
+        # though ``bool(database)`` raises NotImplementedError.
+        target_db = db if db is not None else self.db
         start_t = time.perf_counter()
         scope_val = search_scope.value if hasattr(search_scope, "value") else str(search_scope)
 

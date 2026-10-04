@@ -285,7 +285,7 @@ class TestP4LegacyRejectionAndFollowUp:
         assert set(out.keys()) == {"intro_id", "match_id", "trainer_id", "delivery_state", "idempotent"}
         assert out["trainer_id"] == "t_richmond"
         assert out["match_id"] == "match_p4_test"
-        assert out["delivery_state"] == "delivered"
+        assert out["delivery_state"] == "retryable_failure"
         assert out["idempotent"] is False
         assert isinstance(out["intro_id"], str) and len(out["intro_id"]) > 0
 

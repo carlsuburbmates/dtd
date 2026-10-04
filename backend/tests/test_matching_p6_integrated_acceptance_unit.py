@@ -587,10 +587,11 @@ class TestMatchingRoadmapScenarios1To16:
             path="/api/match/follow-up",
             headers={"X-Match-Context-Token": raw_token, "Idempotency-Key": "key_s12"},
         )
-        # First call -> delivery_state=delivered, idempotent=False
+        # No real provider is configured in this unit fixture, so dispatch is
+        # truthfully retryable rather than falsely reported as delivered.
         r1 = asyncio.run(server.create_match_follow_up(payload=payload, request=req, idempotency_key="key_s12"))
         assert r1["idempotent"] is False
-        assert r1["delivery_state"] == "delivered"
+        assert r1["delivery_state"] == "retryable_failure"
 
         # Replay with same key -> idempotent=True, same intro_id
         r2 = asyncio.run(server.create_match_follow_up(payload=payload, request=req, idempotency_key="key_s12"))

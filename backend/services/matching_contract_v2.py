@@ -1155,6 +1155,17 @@ def execute_matching_with_adapter(
             for c in expanded_eligible:
                 candidate_scopes[c.get("trainer_id") or c.get("id")] = SearchScope.EXPANDED.value
 
+    # An empty permitted pool is an eligibility evidence outcome, not an AI
+    # degradation. Do not call Gemini (or its fallback wrapper) where no
+    # candidate can lawfully be considered.
+    if not eligible_pool:
+        return run_deterministic_matching(
+            request,
+            candidate_pool,
+            degraded=False,
+            triage_state=triage_state,
+        )
+
     try:
         try:
             raw_output = adapter.call_model(
@@ -1229,6 +1240,16 @@ async def execute_matching_with_adapter_async(
             eligible_pool.extend(expanded_eligible)
             for c in expanded_eligible:
                 candidate_scopes[c.get("trainer_id") or c.get("id")] = SearchScope.EXPANDED.value
+
+    # Empty eligibility is deterministic evidence, not a Gemini outage. This
+    # must mirror the synchronous adapter boundary above.
+    if not eligible_pool:
+        return run_deterministic_matching(
+            request,
+            candidate_pool,
+            degraded=False,
+            triage_state=triage_state,
+        )
 
     try:
         if hasattr(adapter, "call_model_async") and callable(adapter.call_model_async):

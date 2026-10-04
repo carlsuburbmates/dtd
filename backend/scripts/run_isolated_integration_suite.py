@@ -49,6 +49,25 @@ def _require_local_mongo(uri: str) -> None:
 
 def _fixture_trainer() -> Dict[str, object]:
     now = datetime.now(timezone.utc).isoformat()
+    # This disposable fixture must use the same confirmed, structured facts as
+    # a matchable trainer. Legacy descriptive fields alone are deliberately
+    # insufficient for v2 matching.
+    repo_path = str(REPO_ROOT)
+    if repo_path not in sys.path:
+        sys.path.insert(0, repo_path)
+    from backend.services.trainer_quality import package_trainer_capabilities
+    capabilities = package_trainer_capabilities(
+        specialties=["puppy_training", "leash_reactivity"],
+        service_formats=["in_home"],
+        life_stages=["puppy", "adolescent"],
+        training_philosophy="positive_reinforcement_force_free",
+        serviced_suburbs=["Fitzroy", "Carlton"],
+        catchment_type="specific_suburbs",
+        delivery_constraints={"in_home_available": True, "facility_available": False, "travel_distance_km": 20},
+        basis="trainer_declaration",
+        evidence_reference="isolated_integration_fixture",
+        confirmed_at=now,
+    )
     return {
         "id": "integration-fixture-trainer",
         "slug": "integration-fixture-dog-training",
@@ -56,6 +75,7 @@ def _fixture_trainer() -> Dict[str, object]:
         "suburb": "Fitzroy",
         "region": "Greater Melbourne",
         "published": True,
+        "contact_ready": True,
         "verification_status": "verified",
         "abn_verified": True,
         "claim_status": "unclaimed",
@@ -66,6 +86,7 @@ def _fixture_trainer() -> Dict[str, object]:
         "service_formats": ["in_home"],
         "serviced_suburbs": ["Fitzroy", "Carlton"],
         "training_philosophy": "Force-free",
+        "capabilities": capabilities,
         "bio": "Test-only verified fixture for puppy and reactive-dog matching in Fitzroy.",
         "website": "https://example.test/integration-fixture",
         "phone": "0400000000",
