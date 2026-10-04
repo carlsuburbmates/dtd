@@ -33,6 +33,7 @@ async def main():
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
     print(f"SPA Server running on http://127.0.0.1:{PORT}")
+    print("Notice: Rendering mocked visual evidence fixture verified from canonical provider record.")
 
     base_url = f"http://127.0.0.1:{PORT}"
 
@@ -81,16 +82,28 @@ async def main():
                             "candidates": [],
                             "reason_codes": ["urgent_animal_health_support"],
                             "search_scope": "local",
+                            # Canonical mocked evidence fixture (Refinement 6 / MP-003)
                             "urgent_providers": [
                                 {
-                                    "provider_id": "lost_dogs_home_vet_clinic",
-                                    "name": "The Lost Dogs' Home Vet Clinic (North Melbourne)",
-                                    "category": "urgent_vet",
-                                    "stated_hours": "Monday to Friday: 8:00 AM – 7:00 PM; Saturday: 8:00 AM – 4:00 PM (Closed Sundays and Public Holidays; not a 24/7 hospital)",
-                                    "contact_method": "(03) 9329 2755",
-                                    "service_area": ["North Melbourne", "Flemington", "Parkville", "Kensington"],
-                                    "official_source_url": "https://dogshome.com/vet-clinic/",
-                                    "official_source_basis": "Direct verification from Lost Dogs' Home official site",
+                                    "provider_id": "urgent_care_lost_dogs_home_north_melbourne",
+                                    "name": "The Lost Dogs' Home Veterinary Hospital",
+                                    "category": "urgent_veterinary_care",
+                                    "stated_hours": "Monday to Friday: 8:10 am – 7:00 pm; Saturday: 9:00 am – 4:00 pm (Closed Sundays and Public Holidays; not a 24/7 hospital)",
+                                    "contact_method": "(03) 8379 4498",
+                                    "service_area": [
+                                        "North Melbourne",
+                                        "Flemington",
+                                        "Kensington",
+                                        "Melbourne",
+                                        "Parkville",
+                                        "Carlton",
+                                        "West Melbourne",
+                                    ],
+                                    "official_source_url": "https://vet.dogshome.com/",
+                                    "official_source_basis": "official_provider",
+                                    "source_basis": "official_provider",
+                                    "freshness_state": "current",
+                                    "last_verified_at": "2026-10-04T12:00:00Z",
                                     "is_active": True,
                                 }
                             ],

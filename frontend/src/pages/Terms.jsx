@@ -15,7 +15,7 @@ export default function Terms() {
                 </h1>
                 <div className="card-public p-6 mt-8 text-[#4A615A] space-y-3">
                     <p>Dog Trainers Directory is an independent discovery and matching platform for dog trainers across Greater Melbourne.</p>
-                    <p>Dog owners can freely browse verified trainer listings, use diagnostic matching, and contact trainers directly with zero fees.</p>
+                    <p>Dog owners can freely browse trainer listings, use diagnostic matching, and contact trainers directly with zero fees.</p>
                     <p>{monetizationCopy.termsTrainerPricing}</p>
                     <h2 className="font-serif text-2xl text-[#1A3A32] pt-4">Trainer subscription terms</h2>
                     <p>Pro provides higher directory visibility and can show a supplied website and booking link. Suburb Sponsorship provides one of two sponsored positions for a named served suburb. Melbourne-Wide provides one of five citywide sponsored positions. Paid status does not override behavioural or service fit in diagnostic matching.</p>

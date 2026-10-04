@@ -100,24 +100,40 @@ class _ComprehensiveMockCollection:
             return len(filtered)
         return len(items)
 
+    def _match_doc(self, doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
+        for k, v in query.items():
+            if k == "$or":
+                if not any(self._match_doc(doc, branch) for branch in v):
+                    return False
+            elif isinstance(v, dict):
+                val = doc.get(k)
+                if "$in" in v:
+                    if val not in v["$in"]:
+                        return False
+                if "$lt" in v:
+                    if val is None or val >= v["$lt"]:
+                        return False
+                if "$exists" in v:
+                    exists = k in doc and doc[k] is not None
+                    if exists != v["$exists"]:
+                        return False
+            else:
+                if doc.get(k) != v:
+                    return False
+        return True
+
+    async def find_one_and_update(self, query: Dict[str, Any], update: Dict[str, Any], return_document: bool = True):
+        for r in self.rows + self.inserted:
+            if not self._match_doc(r, query):
+                continue
+            if "$set" in update:
+                r.update(update["$set"])
+            return dict(r)
+        return None
+
     async def find_one(self, query: Dict[str, Any], projection: Dict[str, Any] = None):
         for r in self.rows + self.inserted:
-            if "$or" in query:
-                or_matches = False
-                for branch in query["$or"]:
-                    branch_match = all(r.get(k) == v for k, v in branch.items())
-                    if branch_match:
-                        or_matches = True
-                        break
-                if or_matches:
-                    return dict(r)
-                continue
-            match = True
-            for k, v in query.items():
-                if r.get(k) != v:
-                    match = False
-                    break
-            if match:
+            if self._match_doc(r, query):
                 return dict(r)
         return None
 
@@ -129,7 +145,7 @@ class _ComprehensiveMockCollection:
     async def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False):
         target = None
         for r in self.rows + self.inserted:
-            if all(r.get(k) == v for k, v in query.items()):
+            if self._match_doc(r, query):
                 target = r
                 break
         if target and "$set" in update:
@@ -650,15 +666,17 @@ class TestMatchingRoadmapScenarios1To16:
         submit_res = asyncio.run(server.create_urgent_provider_correction(corr_in))
         corr_id = submit_res["request_id"]
 
-        # 2. Operator reviews and accepts correction
+        # 2. Operator reviews and accepts correction with bounded evidence
         review_in = server.OversightUrgentCorrectionReviewIn(
             action="accept",
             confirmed=True,
             verified_official_source=True,
             official_source_url="https://vet.dogshome.com/",
+            evidence_reference="Official Vet Clinic Website Contact Page",
+            reviewed_field_values={"contact_method": "(03) 8379 4498"},
             notes="Verified against official website",
         )
-        rev_res = asyncio.run(server.oversight_urgent_provider_correction_review(corr_id, review_in))
+        rev_res = asyncio.run(server.oversight_urgent_provider_correction_review(corr_id, review_in, request=_make_dummy_request()))
         assert rev_res["ok"] is True
         assert rev_res["status"] == "accepted"
         assert len(fake_db.audit_log.inserted) == 1
@@ -704,9 +722,13 @@ class TestMatchingRoadmapScenarios1To16:
         assert deg_res["ok"] is True
         assert deg_res["circuit_status"] == "reset"
 
-        # Control 2: Follow-up retry
+        # Control 2: Follow-up retry with mocked successful provider acceptance
+        async def _mock_notify(*args, **kwargs):
+            return {"trainer_notification_status": "sent"}
+        monkeypatch.setattr(server.notifications_service, "notify_trainer_new_intro", _mock_notify)
+
         retry_res = asyncio.run(server.oversight_matching_follow_up_retry(
-            "intro_ops_test", server.OversightFollowUpRetryIn(confirmed=True)
+            "intro_ops_test", server.OversightFollowUpRetryIn(confirmed=True), request=_make_dummy_request()
         ))
         assert retry_res["ok"] is True
         assert retry_res["delivery_state"] == "delivered"

@@ -20,7 +20,7 @@ function TrainerCard({ trainer }) {
         <article className="card-public bg-white p-6 flex flex-col" data-testid="directory-trainer-card">
             <div className="flex flex-wrap items-center gap-2 text-xs text-[#5C6D59]">
                 <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{trainer.suburb || "Greater Melbourne"}</span>
-                {trainer.verification_status === "verified" ? <span className="pill pill-verified"><ShieldCheck className="h-3 w-3" />Reviewed listing</span> : null}
+                {trainer.abn_verified ? <span className="pill pill-verified" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
                 {claimStatus === "claimed" ? <span className="pill pill-verified">Identity claimed</span> : null}
                 {claimStatus === "claim_disputed" ? <span className="pill pill-unverified">Ownership under review</span> : null}
                 {isPro ? <span className="pill bg-[#1A3A32] !text-[#F5F2EB]">Pro storefront</span> : null}

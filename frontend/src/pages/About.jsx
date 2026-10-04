@@ -16,7 +16,7 @@ export default function About() {
                                 Building a trusted local trainer network
                             </h1>
                             <p className="mt-5 text-lg text-[#4A615A] max-w-3xl leading-relaxed">
-                                DTD connects dog owners across Greater Melbourne with verified, independent dog trainers. Browse verified local profiles, run diagnostic matching tailored to your dog's behavioural needs, or claim your trainer listing.
+                                DTD connects dog owners across Greater Melbourne with independent dog trainers. Browse local trainer listings, run diagnostic matching tailored to your dog's behavioural needs, or claim your trainer listing.
                             </p>
                         </div>
                         <PublicArt variant="network" />
@@ -26,7 +26,7 @@ export default function About() {
                 <div className="grid md:grid-cols-2 gap-5 mt-8 section-shell">
                     <article className="card-public p-6">
                         <h2 className="font-serif text-3xl text-[#1A3A32]">For trainers</h2>
-                        <p className="mt-2 text-[#4A615A]">Claim your free listing, verify your credentials, and receive direct owner enquiries without intro fees.</p>
+                        <p className="mt-2 text-[#4A615A]">Claim your free listing, declare your active capabilities, and receive direct owner enquiries without intro fees.</p>
                         <Link to="/trainers" data-testid="about-trainer-cta" className="btn-primary mt-5 inline-flex">Claim or list profile</Link>
                     </article>
                     <article className="card-public p-6">
@@ -39,9 +39,9 @@ export default function About() {
                 <div className="grid md:grid-cols-2 gap-5 mt-5">
                     <article className="card-public p-6">
                         <div className="small-caps">Why supply quality matters</div>
-                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Verified profiles only</h2>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Quality directory listings</h2>
                         <p className="mt-2 text-[#4A615A]">
-                            Every trainer profile is checked for quality before it appears. The directory grows by expanding verified coverage, not by accepting unreviewed listings.
+                            Every trainer profile is structured before it appears. The directory grows by expanding local coverage with transparent method disclosures, not by automated scraping.
                         </p>
                     </article>
                     <article className="card-public p-6">

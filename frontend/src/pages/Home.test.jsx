@@ -178,7 +178,7 @@ describe("Home page matching test", () => {
 
         expect(container.textContent).toContain("Northside Recall School");
         expect(container.textContent).toContain("Deterministic capability match");
-        expect(container.textContent).toContain("from our reviewed local directory");
+        expect(container.textContent).toContain("from our Melbourne directory");
         expect(container.textContent).not.toContain("vetted network");
 
         // URL Privacy Invariant: profile link does NOT carry ?q= or description
@@ -304,12 +304,47 @@ describe("Home page matching test", () => {
         expect(container.textContent).toContain("No verified veterinary behaviourist listing");
     });
 
+    it("renders no-local-urgent-coverage notice when urgent_providers is empty", async () => {
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "",
+                decision_state: "urgent_animal_health_support",
+                candidates: [],
+                matches: [],
+                urgent_providers: [],
+                coverage_state: "no_local_coverage",
+                coverage_notice: "DTD has no current local listing for this area.",
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Werribee");
+            changeValue(container.querySelector("#match-dog-age"), "24");
+            container.querySelector("#match-concern-pulling_leash").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        expect(container.querySelector("[data-testid='no-local-urgent-coverage']")).not.toBeNull();
+        expect(container.textContent).toContain("DTD has no current local listing for this area.");
+        expect(container.textContent).toContain("Please contact your nearest veterinary clinic");
+    });
+
     it("renders serious_behavioural_support banner when specialist pathway is active", async () => {
         api.post.mockResolvedValueOnce({
             data: {
                 match_id: "match-specialist-1",
                 decision_state: "serious_behavioural_support",
-                support_context: "Specialist pathway active: results restricted to verified trainers with declared aggression and behavioural modification competencies.",
+                support_context: "Specialist pathway active: results restricted to trainers with declared aggression and behavioural modification competencies.",
                 candidates: [
                     {
                         trainer_id: "t_specialist",

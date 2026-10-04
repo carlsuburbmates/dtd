@@ -660,7 +660,7 @@ def test_intro_gate_default_and_legacy_env_allows(monkeypatch):
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
@@ -767,7 +767,7 @@ def test_intro_gate_on_allows_existing_success_behavior(monkeypatch):
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
@@ -1071,7 +1071,7 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)

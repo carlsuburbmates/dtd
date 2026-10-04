@@ -9,7 +9,7 @@ const TIERS = [
         name: "Free Core Listing",
         price: "$0",
         cadence: "forever",
-        description: "Essential directory listing for verified Melbourne dog trainers.",
+        description: "Essential directory listing for Melbourne dog trainers.",
         highlight: false,
         features: [
             "Claim and manage your business profile",

@@ -2959,43 +2959,24 @@ async def instant_match(
     source = getattr(req, "source", "") or ""
     is_legacy = False
 
-    # 3. Canonical Locality Resolution
-    loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
+    # 3. Pre-AI Emergency Triage (evaluated first so emergency/urgent requests are never blocked by locality syntax)
     match_id = new_id()
     now_dt = datetime.now(timezone.utc)
     expires_dt = now_dt + timedelta(days=matching_contract_v2.RETENTION_PERIOD_DAYS)
 
-    if not loc_res["valid"]:
-        raw_reason = loc_res.get("reason", "invalid_locality")
-        reason = "ambiguous_postcode" if raw_reason == "ambiguous_postcode" else "invalid_locality"
-        resp_clarification = matching_contract_v2.DecisionResponseV2(
-            decision_state=matching_contract_v2.DecisionState.NEEDS_CLARIFICATION,
-            search_scope=matching_contract_v2.SearchScope.LOCAL,
-            candidates=[],
-            reason_codes=[matching_contract_v2.DecisionState.NEEDS_CLARIFICATION.value, reason],
-        )
-        out = resp_clarification.model_dump()
-        out["match_id"] = match_id
-        out["context_token"] = None
-        out["matches"] = []
-        return out
-
-    canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode)
-
-    # 4. Pre-AI Triage
     triage_state = matching_contract_v2.classify_pre_ai_triage(req.primary_concerns, req.behaviour_description)
     if triage_state in {
         matching_contract_v2.DecisionState.IMMEDIATE_HUMAN_DANGER,
         matching_contract_v2.DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT,
-        matching_contract_v2.DecisionState.NEEDS_CLARIFICATION,
     }:
+        loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
+        canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode) if loc_res.get("valid") else req.suburb_or_postcode
         triage_resp = matching_contract_v2.DecisionResponseV2(
             decision_state=triage_state,
             search_scope=matching_contract_v2.SearchScope.LOCAL,
             candidates=[],
             reason_codes=[triage_state.value],
         )
-        # Persist triage event without raw behavioral text and with context_token_hash=None
         if hasattr(db, "match_events"):
             await db.match_events.insert_one(
                 {
@@ -3030,6 +3011,12 @@ async def instant_match(
                 db, category="urgent_veterinary_care", suburb=canonical_suburb
             )
             out["urgent_providers"] = urgent_docs
+            out["coverage_state"] = "local_coverage" if urgent_docs else "no_local_coverage"
+            out["coverage_notice"] = (
+                "DTD has no current local listing for this area."
+                if not urgent_docs
+                else None
+            )
             out["coverage_disclosure"] = (
                 "Local urgent veterinary care entries are verified against official provider pages. "
                 "DTD does not claim Melbourne-wide emergency coverage. In an emergency involving human "
@@ -3039,11 +3026,66 @@ async def instant_match(
                 "No verified veterinary behaviourist listing currently registered with direct official evidence "
                 "and active VPRBV registration."
             )
-        elif triage_state == matching_contract_v2.DecisionState.NEEDS_CLARIFICATION:
-            out["clarification_notice"] = (
-                "We need a bit more specific information to find a safe and reliable match. "
-                "Please select specific behavioural concerns from the options above."
+        return out
+
+    # 4. Canonical Locality Resolution (for standard matchmaking)
+    loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
+    if not loc_res["valid"]:
+        raw_reason = loc_res.get("reason", "invalid_locality")
+        reason = "ambiguous_postcode" if raw_reason == "ambiguous_postcode" else "invalid_locality"
+        resp_clarification = matching_contract_v2.DecisionResponseV2(
+            decision_state=matching_contract_v2.DecisionState.NEEDS_CLARIFICATION,
+            search_scope=matching_contract_v2.SearchScope.LOCAL,
+            candidates=[],
+            reason_codes=[matching_contract_v2.DecisionState.NEEDS_CLARIFICATION.value, reason],
+        )
+        out = resp_clarification.model_dump()
+        out["match_id"] = match_id
+        out["context_token"] = None
+        out["matches"] = []
+        return out
+
+    canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode)
+
+    # 5. Non-emergency clarification triage (e.g. other/unsure concerns)
+    if triage_state == matching_contract_v2.DecisionState.NEEDS_CLARIFICATION:
+        triage_resp = matching_contract_v2.DecisionResponseV2(
+            decision_state=triage_state,
+            search_scope=matching_contract_v2.SearchScope.LOCAL,
+            candidates=[],
+            reason_codes=[triage_state.value],
+        )
+        if hasattr(db, "match_events"):
+            await db.match_events.insert_one(
+                {
+                    "id": match_id,
+                    "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+                    "decision_state": triage_state.value,
+                    "search_scope": matching_contract_v2.SearchScope.LOCAL.value,
+                    "reason_codes": [triage_state.value],
+                    "result_ids": [],
+                    "locality": canonical_suburb,
+                    "suburb_or_postcode": req.suburb_or_postcode,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "consent": req.consent.model_dump(),
+                    "campaign": campaign,
+                    "source": source,
+                    "context_token_hash": None,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt.isoformat(),
+                }
             )
+        out = triage_resp.model_dump()
+        out["match_id"] = match_id
+        out["context_token"] = None
+        out["matches"] = []
+        out["clarification_notice"] = (
+            "We need a bit more specific information to find a safe and reliable match. "
+            "Please select specific behavioural concerns from the options above."
+        )
         return out
 
     # 5. Fetch candidate pool & build match-ready capability projections
@@ -3177,7 +3219,7 @@ async def instant_match(
 
     if triage_state == matching_contract_v2.DecisionState.SERIOUS_BEHAVIOURAL_SUPPORT:
         out["support_context"] = (
-            "Specialist pathway active: results restricted to verified trainers with declared "
+            "Specialist pathway active: results restricted to trainers with declared "
             "aggression and behavioural modification competencies."
         )
 
@@ -3229,6 +3271,80 @@ async def get_match_context(
         "method_preference": ctx.get("method_preference"),
         "created_at": ctx.get("created_at"),
     }
+
+
+def map_notification_delivery_state(
+    initial_delivery_state: str,
+    notif_meta: Optional[Dict[str, Any]],
+) -> Tuple[str, Dict[str, Any]]:
+    """Map notification dispatch outcome to truthful delivery state.
+
+    Governance Invariants (AGENTS.md, M5, M8, MP-002R):
+    - 'delivered' requires actual provider acceptance (status == 'sent').
+    - Missing provider configuration (no_resend_api_key) is strictly 'retryable_failure' (never 'delivered').
+    - Transport error, network timeout, HTTP 5xx is 'retryable_failure'.
+    - Missing recipient email or terminal 4xx is 'terminal_failure'.
+    - Anti-gaming / fraud / duplicate detection is 'suppressed'.
+    """
+    if initial_delivery_state == "suppressed":
+        return "suppressed", {
+            "delivery_state": "suppressed",
+            "delivery_status": "suppressed",
+            "status": "suppressed",
+            "delivery_reason": "fraud_or_duplicate_suppression",
+            "delivery_attempts": 0,
+            "delivery_last_attempt_at": now_iso(),
+        }
+
+    if initial_delivery_state == "terminal_failure":
+        return "terminal_failure", {
+            "delivery_state": "terminal_failure",
+            "delivery_status": "terminal_failure",
+            "status": "terminal_failure",
+            "delivery_reason": "missing_recipient_email",
+            "delivery_attempts": 0,
+            "delivery_last_attempt_at": now_iso(),
+        }
+
+    meta = notif_meta or {}
+    st = meta.get("trainer_notification_status")
+    reason = meta.get("trainer_notification_reason") or ""
+    err = meta.get("trainer_notification_error") or ""
+    attempts = int(meta.get("trainer_notification_attempts") or 0)
+
+    if st == "sent":
+        final_state = "delivered"
+        final_reason = "provider_accepted"
+    elif st == "suppressed":
+        final_state = "suppressed"
+        final_reason = "fraud_or_duplicate_suppression"
+    elif st == "skipped" and reason == "missing_email":
+        final_state = "terminal_failure"
+        final_reason = "missing_email"
+    elif st == "skipped" and reason == "no_resend_api_key":
+        final_state = "retryable_failure"
+        final_reason = "no_resend_api_key"
+    elif st == "failed":
+        if "http_4" in str(err) and "429" not in str(err):
+            final_state = "terminal_failure"
+            final_reason = str(err)
+        else:
+            final_state = "retryable_failure"
+            final_reason = str(err or "transport_failure")
+    else:
+        final_state = "retryable_failure"
+        final_reason = str(reason or err or "unknown_dispatch_state")
+
+    fields = {
+        "delivery_state": final_state,
+        "delivery_status": final_state,
+        "status": final_state,
+        "delivery_reason": final_reason,
+        "delivery_attempts": attempts,
+        "delivery_last_attempt_at": now_iso(),
+        **meta,
+    }
+    return final_state, fields
 
 
 @api.post("/match/follow-up")
@@ -3308,7 +3424,7 @@ async def create_match_follow_up(
             "intro_id": str(existing.get("id")),
             "match_id": match_id,
             "trainer_id": str(payload.trainer_id),
-            "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "delivered"),
+            "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
             "idempotent": True,
         }
 
@@ -3358,45 +3474,38 @@ async def create_match_follow_up(
         "ip": ip,
         "created_at": now_iso(),
     }
-    await db.intros.insert_one(intro.copy())
+
+    # MP-002S: Concurrency-safe insert with deterministic DuplicateKeyError recovery
+    try:
+        await db.intros.insert_one(intro.copy())
+    except DuplicateKeyError:
+        existing = await db.intros.find_one(query_filter, {"_id": 0})
+        if existing:
+            return {
+                "intro_id": str(existing.get("id")),
+                "match_id": match_id,
+                "trainer_id": str(payload.trainer_id),
+                "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
+                "idempotent": True,
+            }
+        raise
 
     final_delivery_state = initial_delivery_state
     if initial_delivery_state not in {"terminal_failure", "suppressed"}:
         try:
             notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
-            if notif_meta:
-                st = notif_meta.get("trainer_notification_status")
-                if st == "sent":
-                    final_delivery_state = "delivered"
-                elif st == "suppressed":
-                    final_delivery_state = "suppressed"
-                elif st == "skipped" and notif_meta.get("trainer_notification_reason") == "missing_email":
-                    final_delivery_state = "terminal_failure"
-                elif st == "skipped" and notif_meta.get("trainer_notification_reason") == "no_resend_api_key":
-                    final_delivery_state = "delivered"
-                else:
-                    final_delivery_state = "retryable_failure"
-
-                update_fields = {
-                    "delivery_state": final_delivery_state,
-                    "delivery_status": final_delivery_state,
-                    "status": final_delivery_state,
-                    **notif_meta,
-                }
-                await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
-        except Exception:
+            final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, notif_meta)
+            await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+        except Exception as exc:
             logger.exception("Trainer follow-up notification dispatch failed for intro_id=%s", intro_id_val)
-            final_delivery_state = "retryable_failure"
-            await db.intros.update_one(
-                {"id": intro_id_val},
-                {"$set": {"delivery_state": "retryable_failure", "delivery_status": "retryable_failure", "status": "retryable_failure"}},
-            )
-    elif initial_delivery_state == "suppressed":
-        # Record suppressed notification event
-        try:
-            await notifications_service.notify_trainer_new_intro(db, trainer, intro)
-        except Exception:
-            pass
+            final_delivery_state, update_fields = map_notification_delivery_state("pending", {
+                "trainer_notification_status": "failed",
+                "trainer_notification_error": str(exc)[:200],
+            })
+            await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+    else:
+        final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, None)
+        await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
 
     await _audit(
         "match_follow_up",
@@ -3457,6 +3566,8 @@ async def get_urgent_providers(
     )
     return {
         "urgent_providers": providers,
+        "coverage_state": "local_coverage" if providers else "no_local_coverage",
+        "coverage_notice": "DTD has no current local listing for this area." if not providers else None,
         "disclaimer": (
             "Local emergency/urgent listings are verified against official provider pages. "
             "DTD does not claim Melbourne-wide urgent coverage. In an emergency involving human "
@@ -3589,11 +3700,19 @@ async def create_intro(
 
     ip = (request.client.host if request.client else "") or ""
 
-    # Anti-gaming evaluation. Always record; mark suppressed if suspicious.
+    # Anti-gaming evaluation.
     fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email or "")
-    delivery_status = fraud.get("delivery_status") or "delivered"
     fraud_status = fraud.get("fraud_status") or "clear"
     fraud_reasons = fraud.get("reasons") or []
+    fraud_delivery = fraud.get("delivery_status") or "pending"
+
+    trainer_email = (trainer.get("billing_email") or trainer.get("email") or "").strip()
+    if not trainer_email:
+        initial_delivery_state = "terminal_failure"
+    elif fraud_status == "suppressed" or fraud_delivery == "suppressed":
+        initial_delivery_state = "suppressed"
+    else:
+        initial_delivery_state = "pending"
 
     intro = {
         "id": new_id(),
@@ -3607,8 +3726,9 @@ async def create_intro(
         "suburb": trainer.get("suburb"),
         "consent_contact_release": True,
         "consent_outcome_tracking": True,
-        "delivery_status": delivery_status,
-        "status": delivery_status,
+        "delivery_state": initial_delivery_state,
+        "delivery_status": initial_delivery_state,
+        "status": initial_delivery_state,
         "fraud_status": fraud_status,
         "fraud_reasons": fraud_reasons,
         "ip": ip,
@@ -3633,26 +3753,39 @@ async def create_intro(
                 )
                 return _scrub({**existing, "contact": contact_existing})
         raise
+
+    final_delivery_state = initial_delivery_state
+    if initial_delivery_state not in {"terminal_failure", "suppressed"}:
+        try:
+            notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+            final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, notif_meta)
+            await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+            intro.update(update_fields)
+        except Exception as exc:
+            logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
+            final_delivery_state, update_fields = map_notification_delivery_state("pending", {
+                "trainer_notification_status": "failed",
+                "trainer_notification_error": str(exc)[:200],
+            })
+            await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+            intro.update(update_fields)
+    else:
+        final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, None)
+        await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+        intro.update(update_fields)
+
     await _audit(
         "intro",
         trainer["id"],
         after={
             "intro_id": intro["id"],
-            "delivery_status": delivery_status,
+            "delivery_state": final_delivery_state,
+            "delivery_status": final_delivery_state,
             "fraud_status": fraud_status,
             "reasons": fraud_reasons,
         },
         actor="user",
     )
-
-    # Notify trainer about the new intro; never block owner experience.
-    try:
-        notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
-        if notif_meta:
-            await db.intros.update_one({"id": intro["id"]}, {"$set": notif_meta})
-            intro.update(notif_meta)
-    except Exception:  # noqa: BLE001
-        logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
 
     contact = _released_contact_payload(trainer)
     return _scrub({**intro, "contact": contact})
@@ -6140,21 +6273,36 @@ async def build_matching_oversight_read_model(target_db: Any) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # 5. Urgent provider freshness & corrections
+    # 5. Urgent provider freshness & coverage (MP-003T: dynamic recomputation)
     urgent_coll = getattr(target_db, "urgent_providers", None)
-    urgent_total = 0
     urgent_by_freshness: Dict[str, int] = {"current": 0, "stale": 0, "suppressed": 0}
+    urgent_total = 0
+    covered_localities: set[str] = set()
+
+    urgent_docs: List[Dict[str, Any]] = []
     if urgent_coll is not None:
         try:
-            urgent_total = await urgent_coll.count_documents({})
-            for fs in ["current", "stale", "suppressed"]:
-                urgent_by_freshness[fs] = await urgent_coll.count_documents({"freshness_state": fs})
+            urgent_docs = await urgent_coll.find({}, {"_id": 0}).to_list(100)
         except Exception:
-            urgent_total = len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS)
-            urgent_by_freshness["current"] = urgent_total
-    else:
-        urgent_total = len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS)
-        urgent_by_freshness["current"] = urgent_total
+            urgent_docs = []
+
+    if not urgent_docs:
+        urgent_docs = [dict(p) for p in urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS]
+
+    urgent_total = len(urgent_docs)
+    for doc in urgent_docs:
+        st, is_fresh = urgent_providers_service.compute_urgent_provider_freshness(doc)
+        eff_st = st.value if isinstance(st, urgent_providers_service.FreshnessState) else str(st)
+        if eff_st in urgent_by_freshness:
+            urgent_by_freshness[eff_st] += 1
+        else:
+            urgent_by_freshness["stale"] += 1
+
+        if is_fresh and eff_st == "current":
+            for loc in doc.get("service_area", []):
+                covered_localities.add(str(loc).strip().lower())
+
+    coverage_gaps_count = max(0, 100 - len(covered_localities))
 
     corrections_coll = getattr(target_db, "urgent_provider_corrections", None)
     pending_corrections_count = 0
@@ -6221,7 +6369,15 @@ async def build_matching_oversight_read_model(target_db: Any) -> Dict[str, Any]:
         "urgent_provider_status": {
             "total_providers": urgent_total,
             "by_freshness": urgent_by_freshness,
-            "coverage_gaps": ["No verified veterinary behaviourist registered with active VPRBV endorsement"],
+            "current_records": urgent_by_freshness.get("current", 0),
+            "stale_records": urgent_by_freshness.get("stale", 0),
+            "suppressed_records": urgent_by_freshness.get("suppressed", 0),
+            "coverage_gaps": [
+                "No verified veterinary behaviourist registered with active VPRBV endorsement",
+                "Local urgent veterinary care coverage currently limited to Inner North Melbourne; outer regions unserved",
+            ],
+            "coverage_gaps_count": coverage_gaps_count,
+            "has_local_coverage": len(covered_localities) > 0,
             "pending_corrections_count": pending_corrections_count,
             "recent_corrections": recent_corrections,
         },
@@ -6269,6 +6425,8 @@ class OversightUrgentCorrectionReviewIn(BaseModel):
     confirmed: bool = Field(..., description="Must be explicitly confirmed")
     official_source_url: Optional[str] = Field(default=None, description="Documented first-party official URL verifying provider facts")
     verified_official_source: bool = Field(default=False, description="Operator certification of verified first-party official source")
+    evidence_reference: Optional[str] = Field(default=None, description="Recorded section/page citation on official provider site")
+    reviewed_field_values: Optional[Dict[str, Any]] = Field(default=None, description="Exact verified field values e.g. contact_method, stated_hours")
     notes: Optional[str] = None
 
 
@@ -6276,9 +6434,10 @@ class OversightUrgentCorrectionReviewIn(BaseModel):
 async def oversight_urgent_provider_correction_review(
     correction_id: str,
     payload: OversightUrgentCorrectionReviewIn,
+    request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Review and act on urgent provider public correction request."""
+    """Review and act on urgent provider public correction request with bounded recorded evidence."""
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
     if payload.action not in {"accept", "reject", "suppress_provider"}:
@@ -6292,7 +6451,9 @@ async def oversight_urgent_provider_correction_review(
     if not corr:
         raise HTTPException(status_code=404, detail="Correction request not found")
 
-    # MP-003: Require documented official-source verification before any accept / current / unsuppress action
+    operator_identity = f"ops:{_client_ip(request)}"
+    reviewed_ts = now_iso()
+
     verified_official_url = ""
     if payload.action == "accept":
         verified_official_url = (payload.official_source_url or corr.get("official_source_url") or "").strip()
@@ -6301,11 +6462,61 @@ async def oversight_urgent_provider_correction_review(
                 status_code=400,
                 detail="Cannot accept correction or mark provider current without verified official source URL and explicit operator verification.",
             )
+
+        # Refinement 2: Bounded recorded evidence model
+        if not payload.evidence_reference or len(payload.evidence_reference.strip()) < 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Recorded evidence reference is required (e.g. section, page, or document citation on official site).",
+            )
+        if not payload.reviewed_field_values or not isinstance(payload.reviewed_field_values, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="Exact checked fields (reviewed_field_values) must be provided with verified values.",
+            )
+
+        # Approved provider-domain relationship check
         clean_url = verified_official_url.lower()
         if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
             raise HTTPException(status_code=400, detail="Invalid official source URL scheme.")
-        if any(agg in clean_url for agg in ["facebook.com", "instagram.com", "yellowpages", "truelocal", "google.com/maps"]):
-            raise HTTPException(status_code=400, detail="Social media and aggregator links are not permitted official sources.")
+
+        parsed = urlparse(verified_official_url)
+        domain = parsed.netloc.lower()
+
+        # Reject aggregators, social media, shorteners, search grounding/maps, and generic blog platforms
+        disallowed_aggregators = [
+            "facebook.com", "instagram.com", "yellowpages", "truelocal", "google.com/maps",
+            "goo.gl", "yelp.com", "womo.com.au", "twitter.com", "x.com", "tiktok.com",
+            "linkedin.com", "wordpress.com", "wixsite.com", "blogspot.com", "medium.com",
+            "bit.ly", "tinyurl.com"
+        ]
+        if any(agg in domain or agg in clean_url for agg in disallowed_aggregators):
+            raise HTTPException(status_code=400, detail="Aggregators, social media, directory blogs, and maps links are not permitted official sources.")
+
+        # Approved domain relationship:
+        provider_id = corr.get("provider_id") or ""
+        provider_name = (corr.get("provider_name") or "").lower()
+
+        is_approved_domain = False
+        if "lost_dogs_home" in provider_id or "lost dogs" in provider_name:
+            if domain == "dogshome.com" or domain.endswith(".dogshome.com"):
+                is_approved_domain = True
+        elif domain.endswith(".gov.au") or domain.endswith(".edu.au"):
+            is_approved_domain = True
+        elif provider_id:
+            urgent_coll = getattr(db, "urgent_providers", None)
+            if urgent_coll is not None:
+                existing_prov = await urgent_coll.find_one({"provider_id": provider_id}, {"_id": 0})
+                if existing_prov and existing_prov.get("official_source_url"):
+                    registered_domain = urlparse(existing_prov["official_source_url"]).netloc.lower()
+                    if domain == registered_domain or domain.endswith(f".{registered_domain}"):
+                        is_approved_domain = True
+
+        if not is_approved_domain:
+            raise HTTPException(
+                status_code=400,
+                detail=f"URL domain '{domain}' does not have an approved first-party provider relationship for {provider_id or provider_name}.",
+            )
 
     new_status = "accepted" if payload.action == "accept" else ("suppressed" if payload.action == "suppress_provider" else "rejected")
     await corrections_coll.update_one(
@@ -6313,10 +6524,13 @@ async def oversight_urgent_provider_correction_review(
         {
             "$set": {
                 "status": new_status,
-                "reviewed_at": now_iso(),
+                "reviewed_at": reviewed_ts,
+                "reviewed_by": operator_identity,
                 "review_notes": payload.notes or "",
                 "verified_official_source": payload.verified_official_source,
                 "verified_official_url": verified_official_url,
+                "evidence_reference": payload.evidence_reference,
+                "reviewed_field_values": payload.reviewed_field_values,
             }
         },
     )
@@ -6327,26 +6541,39 @@ async def oversight_urgent_provider_correction_review(
         if payload.action == "suppress_provider":
             await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "suppressed"}})
         elif payload.action == "accept":
-            await urgent_coll.update_one(
-                {"provider_id": provider_id},
-                {
-                    "$set": {
-                        "freshness_state": "current",
-                        "official_source_url": verified_official_url,
-                        "last_verified_at": now_iso(),
-                        "verified_by": "ops",
-                        "verification_notes": payload.notes or "",
-                    }
-                },
-            )
+            update_provider_doc = {
+                "freshness_state": "current",
+                "official_source_url": verified_official_url,
+                "last_verified_at": reviewed_ts,
+                "verified_by": operator_identity,
+                "evidence_reference": payload.evidence_reference,
+                "reviewed_field_values": payload.reviewed_field_values,
+                "verification_notes": payload.notes or "",
+            }
+            if payload.reviewed_field_values:
+                for k in ["contact_method", "stated_hours", "service_area", "name"]:
+                    if k in payload.reviewed_field_values:
+                        update_provider_doc[k] = payload.reviewed_field_values[k]
+
+            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": update_provider_doc})
 
     await _audit(
         "urgent_provider_correction_reviewed",
         correction_id,
-        after={"action": payload.action, "status": new_status, "provider_id": provider_id, "verified_official_url": verified_official_url},
+        after={
+            "action": payload.action,
+            "status": new_status,
+            "provider_id": provider_id,
+            "verified_official_url": verified_official_url,
+            "evidence_reference": payload.evidence_reference,
+            "operator": operator_identity,
+        },
         actor="ops",
     )
-    return {"ok": True, "correction_id": correction_id, "status": new_status, "ts": now_iso()}
+    return {"ok": True, "correction_id": correction_id, "status": new_status, "ts": reviewed_ts}
+
+
+RETRY_LEASE_SECONDS = 300
 
 
 class OversightFollowUpRetryIn(BaseModel):
@@ -6358,9 +6585,10 @@ class OversightFollowUpRetryIn(BaseModel):
 async def oversight_matching_follow_up_retry(
     intro_id: str,
     payload: OversightFollowUpRetryIn,
+    request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Retry a failed or pending match follow-up enquiry."""
+    """Retry a failed or pending match follow-up enquiry with atomic lease claim and crash recovery."""
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
 
@@ -6378,36 +6606,66 @@ async def oversight_matching_follow_up_retry(
     if current_state == "suppressed":
         raise HTTPException(status_code=409, detail="Suppressed follow-up cannot be automatically retried without manual fraud clearance.")
 
+    now_dt = datetime.now(timezone.utc)
+    lease_cutoff = (now_dt - timedelta(seconds=RETRY_LEASE_SECONDS)).isoformat()
+
+    # MP-002S: Atomic compare-and-set claim with recovery lease
+    claimed = await db.intros.find_one_and_update(
+        {
+            "id": intro_id,
+            "$or": [
+                {"delivery_state": {"$in": ["retryable_failure", "pending"]}},
+                {"delivery_status": {"$in": ["retryable_failure", "pending"]}},
+                {
+                    "delivery_state": "in_progress",
+                    "$or": [
+                        {"retry_claimed_at": {"$lt": lease_cutoff}},
+                        {"retry_claimed_at": {"$exists": False}},
+                    ],
+                },
+            ],
+        },
+        {
+            "$set": {
+                "delivery_state": "in_progress",
+                "delivery_status": "in_progress",
+                "status": "in_progress",
+                "retry_claimed_at": now_dt.isoformat(),
+                "retry_claimed_by": f"ops:{_client_ip(request)}",
+            }
+        },
+        return_document=True,
+    )
+
+    if not claimed:
+        refreshed = await db.intros.find_one({"id": intro_id}, {"_id": 0}) or {}
+        st = str(refreshed.get("delivery_state") or refreshed.get("delivery_status") or "")
+        if st == "delivered":
+            return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": True}
+        if st == "in_progress":
+            raise HTTPException(status_code=409, detail="Retry already in progress by another worker (lease active).")
+        raise HTTPException(status_code=409, detail=f"Cannot retry follow-up in state: {st}")
+
     trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
     if not trainer:
+        await db.intros.update_one({"id": intro_id}, {"$set": {"delivery_state": "terminal_failure", "delivery_status": "terminal_failure"}})
         raise HTTPException(status_code=404, detail="Trainer not found")
 
-    # MP-002: Real idempotent dispatch via notification service
     try:
         notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
-        st = (notif_meta or {}).get("trainer_notification_status")
-        if st == "sent":
-            new_state = "delivered"
-        elif st == "suppressed":
-            new_state = "suppressed"
-        elif st == "skipped" and (notif_meta or {}).get("trainer_notification_reason") == "missing_email":
-            new_state = "terminal_failure"
-        elif st == "skipped" and (notif_meta or {}).get("trainer_notification_reason") == "no_resend_api_key":
-            new_state = "delivered"
-        else:
-            new_state = "retryable_failure"
-    except Exception:
+        new_state, update_fields = map_notification_delivery_state("pending", notif_meta)
+    except Exception as exc:
         logger.exception("Retry dispatch failed for intro_id=%s", intro_id)
-        new_state = "retryable_failure"
-        notif_meta = {"trainer_notification_status": "failed", "error": "exception_during_retry"}
+        new_state, update_fields = map_notification_delivery_state("pending", {
+            "trainer_notification_status": "failed",
+            "trainer_notification_error": str(exc)[:200],
+        })
 
     update_doc = {
-        "delivery_state": new_state,
-        "delivery_status": new_state,
-        "status": new_state,
-        "retried_at": now_iso(),
+        **update_fields,
+        "retried_at": now_dt.isoformat(),
         "retry_notes": payload.notes or "",
-        **(notif_meta or {}),
+        "retry_claimed_at": None,
     }
     await db.intros.update_one({"id": intro_id}, {"$set": update_doc})
 
@@ -6707,6 +6965,7 @@ async def _ensure_indexes() -> None:
         await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
         await db.intros.create_index("ip")
         await db.intros.create_index("idempotency_key", unique=True, sparse=True)
+        await db.intros.create_index("composite_idempotency_key", unique=True, sparse=True)
         await db.intros.create_index("stripe_invoice_id", sparse=True)
         await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
         await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])

@@ -18,7 +18,7 @@ export default function HowItWorks() {
                             Find the right trainer, <span className="text-accent italic">faster.</span>
                         </h1>
                         <p className="text-dtd-content text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
-                            Dog Trainers Directory removes the guesswork from finding professional help. Browse verified trainers, compare methods, and reach out directly.
+                            Dog Trainers Directory removes the guesswork from finding professional help. Browse trainer listings, compare declared methods, and reach out directly.
                         </p>
                     </div>
                 </section>
@@ -44,7 +44,7 @@ export default function HowItWorks() {
                             <div className="small-caps text-dtd-content/70 mb-2">Step 02</div>
                             <h2 className="font-serif text-2xl text-dtd-heading mb-3">Review Profiles</h2>
                             <p className="text-dtd-content leading-relaxed">
-                                Every trainer is manually verified. View their qualifications, methods, and pricing structures transparently before you commit.
+                                View declared specialties, methods, service areas, and pricing structures transparently before you commit.
                             </p>
                         </article>
 

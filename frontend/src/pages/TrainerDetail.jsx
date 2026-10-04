@@ -472,19 +472,10 @@ export default function TrainerDetail() {
                     <div>
                         <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-[#5C6D59]">
                             <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {trainer.suburb || "Greater Melbourne"}</span>
-                            {trainer.catchment_type ? <span>· {trainer.catchment_type}</span> : null}
-                            {trainer.verification_status === "verified" && (
-                                <span className="pill pill-verified ml-2">
-                                    <ShieldCheck className="h-3 w-3" /> Verified
-                                </span>
-                            )}
-                            {trainer.verification_status === "unverified" && (
-                                <span className="pill pill-unverified ml-2">Listed</span>
-                            )}
-                            {claimStatus === "claimed" ? <span className="pill pill-verified">Identity claimed</span> : null}
-                            {claimStatus === "claim_disputed" ? <span className="pill pill-unverified">Ownership under review</span> : null}
-                            {trainer.abn_verified ? <span className="pill pill-verified" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
-                            {isPro && !matchContextToken ? <span className="pill pill-unverified" title="Commercial directory listing">Sponsored</span> : null}
+                            {trainer.abn_verified ? <span className="pill pill-verified ml-2" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
+                            {claimStatus === "claimed" ? <span className="pill pill-verified ml-2">Identity claimed</span> : null}
+                            {claimStatus === "claim_disputed" ? <span className="pill pill-unverified ml-2">Ownership under review</span> : null}
+                            {isPro && !matchContextToken ? <span className="pill pill-unverified ml-2" title="Commercial directory listing">Sponsored</span> : null}
                         </div>
                         <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-2">{trainer.name}</h1>
                     </div>

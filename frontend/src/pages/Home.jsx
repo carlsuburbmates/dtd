@@ -376,7 +376,7 @@ export default function Home() {
                         </h2>
                         <p className="text-[#4A615A] leading-relaxed font-light text-lg max-w-md">
                             {publicMatchingEnabled
-                                ? "Describe your issue and get up to three ranked trainer matches from our reviewed local directory."
+                                ? "Describe your issue and get up to three ranked trainer matches from our Melbourne directory."
                                 : (publicLaunchPhase === "service_unavailable"
                                     ? "Matching services are currently unavailable while configuration is verified. Please leave your details to register interest."
                                     : "Register your interest so DTD can understand where trainer coverage is needed most in Melbourne.")}
@@ -635,7 +635,7 @@ export default function Home() {
                             <p className="mt-2 text-amber-900 leading-relaxed text-sm">
                                 Your request indicates a potential acute animal health or medical need. Please contact a qualified veterinarian or an emergency animal hospital immediately. DTD provides behavioural matching only and does not claim Melbourne-wide urgent coverage.
                             </p>
-                            {urgentProviders && urgentProviders.length > 0 && (
+                            {urgentProviders && urgentProviders.length > 0 ? (
                                 <div className="mt-6 space-y-4">
                                     <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-950">Official-Source Urgent Care Listing</h4>
                                     {urgentProviders.map((p) => (
@@ -659,6 +659,13 @@ export default function Home() {
                                     ))}
                                     <p className="text-[11px] text-amber-800 italic mt-2">
                                         Official source basis: verified directly from provider website. Not 24/7. Contact local clinics for after-hours care.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="mt-6 p-4 bg-white/80 rounded-xl border border-amber-200" data-testid="no-local-urgent-coverage">
+                                    <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-950">Local Area Listing</h4>
+                                    <p className="text-xs text-amber-900 mt-1">
+                                        DTD has no current local listing for this area. Please contact your nearest veterinary clinic or local emergency animal hospital directly.
                                     </p>
                                 </div>
                             )}
@@ -690,7 +697,7 @@ export default function Home() {
                         )}
                         {decisionState === "limited_local_results" && (
                             <div className="mb-6 p-4 bg-[#F5F2EB] border border-[#E5DFD3] rounded-xl text-sm text-[#4A615A]" data-testid="limited-local-banner">
-                                <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to reviewed trainers with confirmed service coverage in your area.
+                                <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to trainers with confirmed service coverage in your area.
                             </div>
                         )}
                         {decisionState === "degraded_recommendations" && (
@@ -736,7 +743,7 @@ export default function Home() {
                         <div className="card-public p-7 bg-white">
                             <h2 className="font-serif text-3xl text-[#1A3A32]">No confirmed match yet</h2>
                             <p className="mt-3 text-[#4A615A] leading-relaxed">
-                                Based on current verified capability records, we could not confirm a trainer meeting all your specific requirements. You can browse all listed trainers in our directory or try adjusting your search criteria.
+                                Based on current capability records, we could not confirm a trainer meeting all your specific requirements. You can browse all listed trainers in our directory or try adjusting your search criteria.
                             </p>
                             <div className="mt-5">
                                 <Link to={`/trainers${suburbOrPostcode ? `?suburb=${encodeURIComponent(suburbOrPostcode)}` : ""}`} className="btn-primary">
@@ -759,7 +766,7 @@ export default function Home() {
                             viewport={{ once: true, margin: "-80px" }}
                         >
                             {[
-                                { label: "Clearer profiles", desc: "Every trainer is reviewed before appearing in the directory." },
+                                { label: "Clearer profiles", desc: "Structured trainer listings with declared methods and service areas." },
                                 { label: "Local relevance", desc: "Greater Melbourne focus. Coverage that makes suburb-level sense." },
                                 { label: "No fake guarantees", desc: "We don't promise outcomes, leads, or bookings. Only honesty." },
                                 { label: "Built for better decisions", desc: "Enough information to choose a trainer with confidence." },

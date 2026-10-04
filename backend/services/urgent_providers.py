@@ -157,22 +157,36 @@ async def get_active_urgent_providers(
     category: Optional[str] = None,
     suburb: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve active urgent providers from DB or static fallback with freshness verification."""
+    """Retrieve active urgent providers from DB or static fallback with freshness verification.
+
+    Governance Invariants (AGENTS.md, M6, MP-003R):
+    - When a suburb/locality is provided, return ONLY providers whose service_area
+      explicitly covers that locality.
+    - If no coverage exists for the requested locality, return an empty list [].
+    - Never return unrelated providers or fall back to returning North Melbourne
+      when an unserved locality (e.g. Werribee) is queried.
+    """
     cat_str = category.strip() if isinstance(category, str) and category.strip() else None
     sub_str = suburb.strip() if isinstance(suburb, str) and suburb.strip() else None
 
-    if hasattr(db, "urgent_providers"):
-        query: Dict[str, Any] = {"freshness_state": FreshnessState.CURRENT.value}
-        if cat_str:
-            query["category"] = cat_str
-        if sub_str:
-            query["$or"] = [
-                {"service_area": sub_str},
-                {"service_area": {"$regex": f"^{sub_str}$", "$options": "i"}},
-            ]
-        cursor = db.urgent_providers.find(query, {"_id": 0})
-        docs = await cursor.to_list(100)
-        if docs:
+    has_db = hasattr(db, "urgent_providers")
+    if has_db:
+        try:
+            total_db = await db.urgent_providers.count_documents({})
+        except Exception:
+            total_db = 0
+
+        if total_db > 0:
+            query: Dict[str, Any] = {"freshness_state": FreshnessState.CURRENT.value}
+            if cat_str:
+                query["category"] = cat_str
+            if sub_str:
+                query["$or"] = [
+                    {"service_area": sub_str},
+                    {"service_area": {"$regex": f"^{sub_str}$", "$options": "i"}},
+                ]
+            cursor = db.urgent_providers.find(query, {"_id": 0})
+            docs = await cursor.to_list(100)
             fresh_docs = []
             for d in docs:
                 state, is_fresh = compute_urgent_provider_freshness(d)
@@ -187,8 +201,7 @@ async def get_active_urgent_providers(
         matched = [
             p for p in static_docs
             if any(s.strip().lower() == norm_suburb for s in p.get("service_area", []))
-            or "north melbourne" in norm_suburb  # broad local inner north match
         ]
-        if matched:
-            return matched
+        return matched
+
     return static_docs
