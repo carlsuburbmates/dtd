@@ -117,7 +117,7 @@ export function PublicFooter() {
                             Dog Trainers Directory
                         </p>
                         <p className="mt-1 text-sm text-[#6A7973]">
-                            Reviewed trainers for Melbourne
+                            Melbourne dog trainer directory
                         </p>
                         <Link to="/submit" className="btn-primary btn-primary-sm mt-5 inline-flex">
                             Apply

@@ -1210,28 +1210,57 @@ class TestMP003T_OpsReadModelFreshnessRecheck:
 # ==============================================================================
 
 class TestMP005R_PublicCopyNeutrality:
-    """Refinement 1: Public trust copy neutrality - no universal unsupported verified/reviewed claims."""
+    """Refinement 1 & MP-005R / DF-016: Public trust copy neutrality.
+
+    Verifies that all visitor-facing routes and shared public components use strictly
+    factual, evidence-bounded language, without universal claims of review, selection,
+    verification, qualification, safety, availability, or recommendation.
+    """
 
     def test_frontend_public_pages_do_not_contain_universal_verified_or_reviewed_claims(self):
-        frontend_src = Path(__file__).resolve().parents[2] / "frontend" / "src" / "pages"
-        pages_to_check = ["Home.jsx", "About.jsx", "HowItWorks.jsx", "Trust.jsx", "Terms.jsx", "FAQ.jsx"]
+        repo_root = Path(__file__).resolve().parents[2]
+        frontend_src = repo_root / "frontend" / "src"
+        pages_dir = frontend_src / "pages"
+        components_dir = frontend_src / "components"
 
         disallowed_phrases = [
             "verified trainers",
             "every trainer is reviewed",
             "reviewed local directory",
             "reviewed trainers",
+            "reviewed before a profile appears",
+            "reviewed and selected",
+            "careful review",
+            "browse reviewed",
+            "reviewed trainers for melbourne",
             "verified local profiles",
             "verified profiles only",
             "verified, independent dog trainers",
             "verified dog trainers",
             "every trainer is manually verified",
+            "selected based on experience",
+            "vetted network",
+            "vetted trainers",
         ]
 
-        for page in pages_to_check:
-            page_path = frontend_src / page
-            if not page_path.exists():
+        # Scan all visitor-facing pages (exclude internal /ops and test files)
+        visitor_facing_files: List[Path] = []
+        for p in sorted(pages_dir.glob("*.jsx")):
+            if p.name == "Ops.jsx" or ".test." in p.name:
                 continue
-            content = page_path.read_text(encoding="utf-8").lower()
+            visitor_facing_files.append(p)
+
+        # Scan all shared public components (exclude test files and ui primitives)
+        for c in sorted(components_dir.glob("*.jsx")):
+            if ".test." in c.name:
+                continue
+            visitor_facing_files.append(c)
+
+        assert len(visitor_facing_files) >= 15, f"Expected at least 15 visitor-facing files, found {len(visitor_facing_files)}"
+
+        for file_path in visitor_facing_files:
+            content = file_path.read_text(encoding="utf-8").lower()
             for phrase in disallowed_phrases:
-                assert phrase not in content, f"Disallowed phrase '{phrase}' found in {page}"
+                assert phrase not in content, (
+                    f"Disallowed phrase '{phrase}' found in {file_path.relative_to(frontend_src)}"
+                )

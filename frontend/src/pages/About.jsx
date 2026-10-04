@@ -46,9 +46,9 @@ export default function About() {
                     </article>
                     <article className="card-public p-6">
                         <div className="small-caps">How it operates</div>
-                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Quiet systems, careful review</h2>
+                        <h2 className="font-serif text-2xl text-[#1A3A32] mt-2">Quiet directory operations</h2>
                         <p className="mt-2 text-[#4A615A]">
-                            Routine checks happen in the background. If something needs attention, it is reviewed before a profile appears. No manual matching, no cluttered admin experience.
+                            Automated consistency checks happen in the background. Submissions provide structured business details and declared service areas before appearing. No manual matching, no cluttered admin experience.
                         </p>
                     </article>
                 </div>

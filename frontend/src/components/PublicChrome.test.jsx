@@ -30,3 +30,15 @@ it("exposes a query-free education handoff in desktop navigation, mobile navigat
     act(() => root.unmount());
     element.remove();
 });
+
+it("renders neutral directory descriptor without universal review or selection claims", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const root = createRoot(element);
+    act(() => root.render(<PublicFooter />));
+    expect(element.textContent).toContain("Melbourne dog trainer directory");
+    expect(element.textContent).not.toContain("Reviewed trainers");
+    expect(element.textContent).not.toContain("Selected trainers");
+    act(() => root.unmount());
+    element.remove();
+});

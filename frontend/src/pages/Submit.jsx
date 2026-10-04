@@ -192,7 +192,7 @@ export default function Submit() {
                             Join the <span className="text-accent italic">directory.</span>
                         </h1>
                         <p className="text-dtd-content text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
-                            We are currently accepting applications for our initial Melbourne rollout. Profiles are reviewed and selected based on experience, public proof, and alignment with our standards.
+                            We are currently accepting applications for our initial Melbourne rollout. Create a listing with declared service areas, specialties, and business verification details.
                         </p>
                     </div>
                 </section>
@@ -204,8 +204,8 @@ export default function Submit() {
                             <p className="text-sm text-dtd-content leading-relaxed">Business basics, service categories, and one public proof link are enough to start cleanly.</p>
                         </article>
                         <article className="card-public p-6 bg-white border border-dtd-border rounded-[1.5rem] hover:shadow-md transition-shadow">
-                            <div className="small-caps text-dtd-content/70 mb-3">How review works</div>
-                            <p className="text-sm text-dtd-content leading-relaxed">Profiles are checked before wider public visibility. The point is quality control, not volume.</p>
+                            <div className="small-caps text-dtd-content/70 mb-3">Listing checks</div>
+                            <p className="text-sm text-dtd-content leading-relaxed">Listing details and business identity are checked before publication. The point is structured directory quality, not volume.</p>
                         </article>
                         <article className="card-public p-6 bg-white border border-dtd-border rounded-[1.5rem] hover:shadow-md transition-shadow">
                             <div className="small-caps text-dtd-content/70 mb-3">Commercial terms</div>

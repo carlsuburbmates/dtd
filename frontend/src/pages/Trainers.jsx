@@ -77,7 +77,7 @@ export default function Trainers() {
                 <section className="max-w-4xl">
                     <div className="small-caps">Greater Melbourne directory</div>
                     <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">Find a dog trainer who fits</h1>
-                    <p className="mt-5 text-lg text-[#4A615A] max-w-2xl">Browse reviewed trainer profiles by suburb and specialty, then make a free enquiry when you are ready.</p>
+                    <p className="mt-5 text-lg text-[#4A615A] max-w-2xl">Browse dog trainer profiles by suburb and specialty, then make a free enquiry when you are ready.</p>
                     <Link to="/submit" className="mt-5 inline-flex text-sm font-medium text-[#9B4F31] underline underline-offset-4" data-testid="trainers-cta-submit">Are you a trainer? Add or claim your profile</Link>
                 </section>
                 <section className="card-public bg-white p-5 mt-10" aria-label="Directory filters">
