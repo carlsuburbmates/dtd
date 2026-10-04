@@ -1,7 +1,7 @@
 # Owner-to-Trainer Matching Pipeline Completion Roadmap
 
 **Purpose:** the execution checklist and post-completion verification basis for the owner-to-trainer matching pipeline.
-**Status:** active roadmap; all work packages are `OPEN` unless independently evidenced otherwise.
+**Status:** active roadmap; package status is set only by independent evidence and may be `DONE`, `PARTIAL`, `OPEN`, `NOT_VERIFIED`, `REGRESSED` or `SUPERSEDED`.
 **Scope:** matching only. This does not replace DTD-wide release work, commercial activation, credential/provider recovery, or production approval gates.
 **Authority:** executes, but does not amend, `DTD_TARGETED_MATCHING_PIPELINE_STATE.md`, `specs/MATCHING_AND_RANKING.md`, `specs/ACQUISITION_AND_INGESTION.md`, `specs/OPS_AND_OBSERVABILITY.md`, the invariants, and CDR-018 through CDR-024.
 
@@ -26,15 +26,15 @@ For every status change, append a short evidence entry beneath the package conta
 
 | ID | Work package | Current status | Completion dependency | Related findings |
 | --- | --- | --- | --- | --- |
-| M0 | Decision contract and fixture baseline | `PARTIAL` — Contract v2 is authored; fixture/harness implementation remains open | None | DF-018, DF-019, DF-021, DF-022, DF-023 |
-| M1 | Trainer declaration and capability projection | `OPEN` | M0 | DF-014, DF-026 |
-| M2 | Owner questionnaire, privacy and accessible states | `OPEN` | M0 | DF-015, DF-018, DF-021, DF-022 |
-| M3 | Eligibility, geography and presentation | `OPEN` | M0, M1 | DF-014, DF-019, DF-023, DF-026 |
-| M4 | AI fit and deterministic fallback | `OPEN` | M0, M1, M3 | DF-023 |
-| M5 | Results, enquiry and follow-up | `OPEN` | M0, M2, M3, M4 | DF-015, DF-016, DF-017, DF-020 |
-| M6 | Urgent-support directory and triage | `OPEN` | M0, M2 | DF-024 |
+| M0 | Decision contract and fixture baseline | `DONE` — local contract/fixture baseline accepted; later package acceptance remains independent | None | DF-018, DF-019, DF-021, DF-022, DF-023 |
+| M1 | Trainer declaration and capability projection | `PARTIAL` — declaration/projection exists; current-match freshness and sandbox migration evidence remain open | M0 | DF-014, DF-026 |
+| M2 | Owner questionnaire, privacy and accessible states | `PARTIAL` — structured form and header-token handoff exist; token lifecycle and config-outage safety remain open | M0 | DF-015, DF-018, DF-021, DF-022 |
+| M3 | Eligibility, geography and presentation | `PARTIAL` — deterministic path exists; stored-projection freshness bypass prevents acceptance | M0, M1 | DF-014, DF-019, DF-023, DF-026 |
+| M4 | AI fit and deterministic fallback | `PARTIAL` — real adapter/mock failure tests exist; provider and sandbox parity are unverified | M0, M1, M3 | DF-023 |
+| M5 | Results, enquiry and follow-up | `PARTIAL` — clean result/profile path exists; actual matched-enquiry delivery and direct-intro boundary remain open | M0, M2, M3, M4 | DF-015, DF-016, DF-017, DF-020 |
+| M6 | Urgent-support directory and triage | `PARTIAL` — state machine exists; official-record accuracy and evidence-based reactivation remain open | M0, M2 | DF-024 |
 | M7 | Optional Maps/Places discovery | `OPEN` (conditional) | M6 | DF-025 |
-| M8 | `/ops`, records and anti-gaming | `OPEN` | M1–M6 | DF-017, DF-022–DF-026 |
+| M8 | `/ops`, records and anti-gaming | `PARTIAL` — protected redacted read model exists; false retry/delivery transition prevents acceptance | M1–M6 | DF-017, DF-022–DF-026 |
 | M9 | Integrated sandbox and independent audit | `OPEN` | M0–M6, M8; M7 if enabled | DF-014–DF-026 where matching-relevant |
 | M10 | Separate production promotion | `OPEN` | M9 and owner authority | Separate release gates |
 
@@ -78,7 +78,7 @@ M1–M6 + M8 Operations and observability
 
 ### M0 — Versioned decision contract and fixture baseline
 
-**Status:** `PARTIAL` — Contract v2 is authored; fixtures and the executable parity harness remain open.
+**Status:** `DONE` — local contract/fixture baseline accepted; downstream workflow and sandbox obligations remain separate.
 **Depends on:** none
 **Closes:** DF-021 in part; defines the repair scope for DF-018, DF-019, DF-022 and DF-023.
 
@@ -92,9 +92,11 @@ Create a versioned fixture set with expected eligibility, fit and presentation o
 
 **Evidence entry — 27 September 2026:** contract authority committed as `b4ce0c0` (`docs/specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md`) and the staged Antigravity implementation handoff committed as `b4ce0c0` (`docs/ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`). Documentation cross-references were reviewed; `f8792f6` remediates one Markdown whitespace finding. No fixture, executable parity harness, code, provider or deployment evidence exists yet; M0 remains `PARTIAL`.
 
+**Evidence entry — 4 October 2026:** P1 baseline was independently accepted at `5161a2bfc14514b3525f313ae361c4c580b8f847`. The cumulative P2-P6 implementation at `a167478592136bd4e0385f2c6dee3d0377c76222` contains versioned fixtures, the adapter boundary and focused parity tests. Codex reran 145 matching tests successfully and reviewed the complete changed path. M0 is `DONE` as a local baseline only; it does not establish sandbox or provider readiness. See `MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md`.
+
 ### M1 — Trainer capability declaration and match-ready projection
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0
 **Closes:** DF-026; establishes the matching prerequisite for DF-014.
 
@@ -106,9 +108,11 @@ Materialise or deterministically derive a match-ready projection with field-leve
 
 **Required evidence:** migration/backfill plan and idempotent sandbox run; trainer-flow tests; acquisition/refresh/correction/suppression invalidation tests; projection query/index evidence; sanitised `/ops` evidence.
 
+**Evidence entry — 4 October 2026:** `a167478` includes structured declaration and match-ready projection integration. Audit found `/match` trusts a stored record when it already has `projection_version`, bypassing the projection function's fresh capability/invalidation evaluation. M1 remains `PARTIAL` until the runtime re-evaluates current eligibility and the required sandbox migration/record evidence exists.
+
 ### M2 — Owner questionnaire, consent, privacy and accessible decision states
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0
 **Closes:** DF-015, DF-018, DF-021 and DF-022 in part; supports DF-020.
 
@@ -120,9 +124,11 @@ Persist only minimised, sanitised match data plus consent version/time and reten
 
 **Required evidence:** frontend interaction/accessibility tests; API validation and abuse-control tests; persistence and cleanup/expiry tests; URL/log/privacy regression checks; sandbox owner journey evidence.
 
+**Evidence entry — 4 October 2026:** `a167478` implements the contract questionnaire, bounded description, consent, clean `/t/:id` links and header-only context retrieval. Audit found that a new non-handoff match does not clear a previous session token, and `/config` failure still defaults to live matching. M2 remains `PARTIAL`.
+
 ### M3 — Deterministic eligibility, geographic search and fair presentation
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0 and M1
 **Closes:** DF-019; depends on the DF-014 acquisition authority repair and supports DF-023 and DF-026.
 
@@ -134,9 +140,11 @@ Apply deterministic presentation after fit. Where Decision Contract v2 selects a
 
 **Required evidence:** gate-by-gate unit tests; geography and thin-supply fixtures; `0.05` boundary tests; candidate-pool inspection proving paid/marketing/Google data exclusion; API/UI expanded-scope and Decision-Contract-selected weak-evidence response tests.
 
+**Evidence entry — 4 October 2026:** `a167478` implements deterministic gating, local-first expansion and `0.05` presentation tests. The stored-projection bypass recorded under M1 can admit stale or invalidated capability facts, so M3 remains `PARTIAL`.
+
 ### M4 — AI-assisted fit, explanation and deterministic fallback
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0, M1 and M3
 **Closes:** DF-023.
 
@@ -148,9 +156,11 @@ Build a deterministic fallback using exactly the same input projection, decision
 
 **Required evidence:** prompt/input allow-list; output-schema validation; provider-failure simulation; parity report over fixtures; reason/explanation truthfulness review; latency and degraded-event `/ops` evidence.
 
+**Evidence entry — 4 October 2026:** `a167478` replaces the default stub with `GeminiMatchingAdapter`, with constrained input, JSON validation, 5-second timeout and mocked fallback/degradation tests. No configured provider or same-fixture sandbox Gemini/fallback parity evidence was performed. M4 remains `PARTIAL`.
+
 ### M5 — Results, protected enquiry and outcome/follow-up lifecycle
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0, M2, M3 and M4
 **Closes:** DF-015, DF-016, DF-017 and DF-020 in part.
 
@@ -162,9 +172,11 @@ Protect the match context server-side. Release only minimum relevant information
 
 **Required evidence:** browser journeys; profile/enquiry API and persistence tests; notification failure/retry/idempotency tests; trainer payload minimisation review; `/ops` lifecycle evidence.
 
+**Evidence entry — 4 October 2026:** `a167478` removes the prior URL description/match query flow and uses header-based protected context for the profile path. Audit found matched follow-ups are stored and returned as `delivered` without notification dispatch, while `/intros` still accepts client `match_id`. M5 remains `PARTIAL`.
+
 ### M6 — Urgent-support directory and deterministic triage
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M0 and M2
 **Closes:** DF-024.
 
@@ -175,6 +187,8 @@ Create the separate urgent-provider record type and its official-source provenan
 **Completion rule:** every urgent path is reachable before ordinary matching, safe when AI is unavailable, truthful about coverage and provider availability, and independently observable without presenting DTD as a clinical or emergency service.
 
 **Required evidence:** triage fixtures for all approved states; directory sourcing/provenance tests; stale/provider-correction tests; public-page mobile/desktop journeys; fallback routing tests; `/ops` coverage and freshness evidence.
+
+**Evidence entry — 4 October 2026:** `a167478` implements four deterministic triage states and isolated urgent-provider records. Current official-source review found the static Lost Dogs' Home telephone and hours are inaccurate, and correction acceptance can restore `current` status without verified official evidence. M6 remains `PARTIAL`.
 
 ### M7 — Optional Google Maps/Places urgent-support discovery surface
 
@@ -192,7 +206,7 @@ Google content must be visibly attributed and distinct from DTD directory facts.
 
 ### M8 — Matching operations, audit records and anti-gaming controls
 
-**Status:** `OPEN`
+**Status:** `PARTIAL`
 **Depends on:** M1 through M6
 **Closes:** the `/ops` and record-evidence portions of DF-017 and DF-022 through DF-026.
 
@@ -203,6 +217,8 @@ Provide only bounded recovery actions with authentication, confirmation, idempot
 **Completion rule:** scripted operator scenarios prove that, without raw owner descriptions, an authorised operator can identify the affected record, policy/evidence reason, current state and bounded next action for: a stale trainer capability, model degradation, urgent-provider correction and failed follow-up. The same scenarios prove that `/ops` cannot silently override matching policy.
 
 **Required evidence:** record schema and redaction tests; `/ops` role/auth checks; the four scripted operator scenarios; anti-gaming exception fixtures; operator workflows for degraded model, stale capability, provider correction and follow-up retry; audit-event inspection; privacy review.
+
+**Evidence entry — 4 October 2026:** `a167478` supplies protected redacted read models and authenticated confirmation-gated recovery endpoints. The follow-up recovery endpoint changes state to `delivered` without dispatching a notification, and urgent-provider correction acceptance can reactivate a record without source verification. M8 remains `PARTIAL`.
 
 ### M9 — Integrated fixture, sandbox and independent-audit acceptance
 

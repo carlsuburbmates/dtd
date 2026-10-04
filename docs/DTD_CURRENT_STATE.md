@@ -190,16 +190,16 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
-- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline.
-- **Evidence:** `frontend/src/pages/Home.jsx` links a match result to `/t/:id` with both the opaque match identifier and the owner's free-text description in a `q` query parameter. `frontend/src/pages/TrainerDetail.jsx` reads that parameter. The submitted description can therefore enter browser history, referrer handling and copied URLs.
-- **Impact/uncertainty:** behavioural information is unnecessarily exposed outside the match request/persistence boundary. The code establishes the exposure; this audit did not submit real owner data to test the live path.
-- **Why deferred:** the safe repair needs an end-to-end match-context design that preserves match → profile → enquiry without a public description parameter, plus tamper/foreign-match handling tests.
-- **Next action:** retain only safe opaque match context in the browser, keep description server-side with the match record, test privacy and authorisation failure paths, then verify the full journey in sandbox before release. Matching roadmap M2/M5/M9 own the connected privacy and end-to-end evidence.
+- **Observed/status:** 4 October 2026 — partially remediated in local implementation; sandbox verification remains open.
+- **Evidence:** `a167478` now links results to clean `/t/:id` routes and obtains context only with the `X-Match-Context-Token` header; the former query-description route is absent. Independent audit found a new non-handoff match leaves an older session token in browser storage, and direct `/intros` still accepts client-supplied `match_id` outside the protected context flow.
+- **Impact/uncertainty:** the original URL disclosure is repaired in local code, but stale context and arbitrary direct attribution leave the protected-handoff boundary incomplete. No live owner data or sandbox runtime was inspected.
+- **Why deferred:** repairs require a small owner-journey/code change and fresh negative privacy tests; this audit made no source changes.
+- **Next action:** clear context at every new matching submission, reject/ignore direct `match_id`, add regressions and complete the sandbox owner-profile-enquiry journey. Matching roadmap M2/M5/M9 own the remaining work.
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
-- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during the Phase 0 roadmap rebaseline.
-- **Evidence:** `frontend/src/pages/TrainerDetail.jsx` labels paid Pro status as `Verified Pro`. The matching homepage calls results a "vetted network" and says every trainer is reviewed; `HowItWorks.jsx` and `Trust.jsx` describe every listing as manually or strictly verified. Public pages also claim universal checks of credentials, insurance, affiliations, continuing education or ethical practices, while the current acquisition/trust authority documents support bounded source, ABR and review evidence rather than those universal claims.
+- **Observed/status:** 4 October 2026 — partially remediated in local implementation; broader matching trust copy remains open.
+- **Evidence:** `a167478` removes the observed `Verified Pro` label from matching results and the P4 visual smoke test asserts it is absent. The matching homepage still calls the candidate set a "vetted network" and the urgent card calls its provider entry "Verified", while the evidence model supports only field-specific declared/reviewed/official-source facts.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
 - **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release. Matching roadmap M5/M9 own the result/profile handoff portion of this correction.
@@ -214,19 +214,19 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-018 — Public matching input lacks bounded, literal request handling
 
-- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner–trainer matching contextualisation. No live traffic, provider or data mutation was performed.
-- **Evidence:** `InstantMatchIn.description` accepts only a minimum length, with no maximum, and `/match` persists that value then includes it in the AI prompt. The same public endpoint has no application-level request throttle in the reviewed route/service path. Its optional suburb value is interpolated directly into a MongoDB regular expression, unlike the directory filter path which uses `re.escape`; it is neither bounded nor validated against the canonical locality catalogue. The intro anti-fraud limit applies only after an owner proceeds to an introduction, not to matching requests.
-- **Impact/uncertainty:** a public caller can submit unnecessarily large or repeated matching requests, increasing provider/load exposure and retaining excessive free text. Regex metacharacters can also make a purported suburb filter behave as a pattern rather than an exact locality. An external edge control may exist, but it is not established by this repository evidence.
-- **Why deferred:** this contextualisation pass does not alter public validation, retention, rate limits, provider spend or production behaviour.
-- **Next action:** enforce a server-side description ceiling consistent with the enquiry contract, validate suburb input against the canonical catalogue or escape it before querying, add a bounded abuse-control limit before AI invocation, and cover oversized, metacharacter, unknown-suburb, duplicate and provider-degraded requests in unit and sandbox tests. Establish the matching-request retention period before changing stored-record cleanup.
+- **Observed/status:** 4 October 2026 — local code repair is present; sandbox acceptance remains open.
+- **Evidence:** `a167478` rejects the legacy two-field request, requires the structured v2 request/consent, bounds behaviour text, canonicalises locality before candidate work and applies an application-level matching rate limiter. The independent audit reran 145 focused matching tests successfully. The current repository evidence does not establish deployed rate-limit, retention-cleanup or sandbox behaviour.
+- **Impact/uncertainty:** the previously observed unbounded/public-route defect is no longer present in reviewed local code. Runtime enforcement and record lifecycle remain unverified outside local tests.
+- **Why deferred:** no sandbox or production mutation was authorised by this audit.
+- **Next action:** exercise malformed, oversized, unknown-locality, consent and rate-limit cases against a disposable sandbox dataset; inspect expiry/cleanup records before closure. Matching roadmap M2/M9 own the remaining evidence.
 
 ### DF-019 — Broader matching fallback is not disclosed to the owner
 
-- **Observed/status:** 26 September 2026 — open; repository and local owner-journey evidence confirmed. No external mutation was performed.
-- **Evidence:** when `/match` finds no trainer in the owner-supplied suburb, `backend/server.py` silently re-queries all eligible Greater Melbourne trainers. Its response contains only `match_id` and `matches`; `Home.jsx` renders the result cards without a search-scope or fallback indicator. This conflicts with the matching specification, which requires catchment expansion to remain visible and never imply local presence.
-- **Impact/uncertainty:** an owner can reasonably believe a result is local to their requested suburb when the platform has broadened the search area. The trainer-card suburb reduces the risk but does not explain why the local request changed scope.
-- **Why deferred:** this audit does not change public matching behaviour, copy or the API contract.
-- **Next action:** return an explicit applied-search scope and fallback reason from the matching API; show an owner-facing message when results come from broader Greater Melbourne coverage; add exact-suburb, expanded-scope and no-result tests across API and UI.
+- **Observed/status:** 4 October 2026 — local code repair is present; sandbox acceptance remains open.
+- **Evidence:** `a167478` evaluates local eligibility first, expands only below the configured local threshold and returns an explicit search scope. Owner cards include a Greater Melbourne disclosure and the UI renders an expanded-search banner. Focused deterministic geography tests passed locally.
+- **Impact/uncertainty:** the former silent-expansion path is repaired in local code. No developer-sandbox journey or persisted-record inspection has independently proven the real deployed flow.
+- **Why deferred:** this audit made no sandbox deployment or data mutation.
+- **Next action:** verify exact-local, expanded and no-confirmed-match journeys against a disposable sandbox dataset; then close this finding only if the record and UI evidence agree. Matching roadmap M3/M9 own the remaining evidence.
 
 ### DF-020 — Live owner matching is not a coherent public navigation path
 
