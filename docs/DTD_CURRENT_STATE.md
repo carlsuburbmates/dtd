@@ -198,11 +198,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
-- **Observed/status:** 5 October 2026 — partially remediated in local candidate `1cdd88d`; one shared public-art verification claim remains open.
-- **Evidence:** `1cdd88d` removed the observed review/selection claims from `PublicChrome`, `Trainers`, `About` and `Submit`, and dynamically scans direct public page/component files. However `PublicArt` still renders "Verified rollout" on `/about`; the new prohibited-phrase list does not detect it. See `MATCHING_PIPELINE_1CDD88D_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Observed/status:** 5 October 2026 — local remediation accepted in candidate `7dd99fa`; developer-sandbox rendering remains unverified.
+- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
-- **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
-- **Next action:** neutralise `PublicArt`'s remaining verified-rollout claim and close the test blind spot, then independently re-audit before sandbox advancement.
+- **Why deferred:** this audit has not checked the rendered developer-sandbox routes for the accepted local commit.
+- **Next action:** verify the public-route copy during M9 developer-sandbox acceptance; close only with deployed-rendering evidence.
 
 ### DF-017 — Failed owner follow-ups cannot retry
 
@@ -238,11 +238,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `8e03f6c`.
-- **Evidence:** the public owner route uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The latest audit accepts the local stale-context/config, delivery and urgent-locality repairs, but retains the public-trust-copy blocker.
+- **Observed/status:** 5 October 2026 — `PARTIAL` in locally accepted candidate `7dd99fa`.
+- **Evidence:** the public owner route uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The local audit accepts stale-context/config, delivery, urgent-locality and public-trust-copy repairs. Sandbox acceptance remains open.
 - **Impact/uncertainty:** the v2 workflow is no longer merely authored, but local tests and mocked screens do not prove the deployed owner journey, safe provider behavior or persisted redaction.
 - **Why deferred:** no developer-sandbox deployment or provider activation was authorised.
-- **Next action:** close the narrow `8e03f6c` copy/test finding, then run the M2/M5/M9 disposable-sandbox workflow. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Next action:** run the M2/M5/M9 disposable-sandbox workflow against `7dd99fa`. See `MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
 
 ### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 
