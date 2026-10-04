@@ -1241,6 +1241,7 @@ class TestMP005R_PublicCopyNeutrality:
             "selected based on experience",
             "vetted network",
             "vetted trainers",
+            "verified rollout",
         ]
 
         # Scan all visitor-facing pages (exclude internal /ops and test files)

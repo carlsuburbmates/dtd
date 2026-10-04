@@ -100,7 +100,7 @@ function PricingArtwork() {
 
 const VARIANT_COPY = {
     network: {
-        eyebrow: "Verified rollout",
+        eyebrow: "Initial Melbourne rollout",
         title: "Real local coverage over generic listings",
         detail: "A quieter, more selective public surface for owners and trainers in Greater Melbourne.",
         artwork: <NetworkArtwork />,
