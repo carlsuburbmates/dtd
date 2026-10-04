@@ -178,6 +178,8 @@ describe("Home page matching test", () => {
 
         expect(container.textContent).toContain("Northside Recall School");
         expect(container.textContent).toContain("Deterministic capability match");
+        expect(container.textContent).toContain("from our reviewed local directory");
+        expect(container.textContent).not.toContain("vetted network");
 
         // URL Privacy Invariant: profile link does NOT carry ?q= or description
         const profileLink = container.querySelector("a[data-testid='match-open-1']");
@@ -267,8 +269,8 @@ describe("Home page matching test", () => {
                     {
                         provider_id: "urgent_lost_dogs_home",
                         name: "The Lost Dogs' Home Veterinary Hospital",
-                        contact_method: "(03) 9329 2755",
-                        stated_hours: "Monday to Friday: 8:00 AM – 7:00 PM; Saturday: 8:00 AM – 4:00 PM (Closed Sundays; not 24/7)",
+                        contact_method: "(03) 8379 4498",
+                        stated_hours: "Monday to Friday: 8:10 am – 7:00 pm; Saturday: 9:00 am – 4:00 pm (Closed Sundays and Public Holidays; not a 24/7 hospital)",
                         service_area: ["North Melbourne", "Flemington"],
                         official_source_url: "https://vet.dogshome.com/",
                     },
@@ -296,8 +298,9 @@ describe("Home page matching test", () => {
         expect(container.querySelector("[data-testid='triage-health']")).not.toBeNull();
         expect(container.textContent).toContain("Urgent Animal Health Support");
         expect(container.textContent).toContain("The Lost Dogs' Home Veterinary Hospital");
-        expect(container.textContent).toContain("(03) 9329 2755");
+        expect(container.textContent).toContain("(03) 8379 4498");
         expect(container.textContent).toContain("Not 24/7");
+        expect(container.textContent).toContain("Official-Source Urgent Care Listing");
         expect(container.textContent).toContain("No verified veterinary behaviourist listing");
     });
 
@@ -340,5 +343,56 @@ describe("Home page matching test", () => {
         expect(container.querySelector("[data-testid='serious-behavioural-banner']")).not.toBeNull();
         expect(container.textContent).toContain("Specialist Behavioural Support");
         expect(container.textContent).toContain("Melbourne Behaviour Specialists");
+    });
+
+    it("clears old context token when a new match submission occurs even if new match returns no token (MP-004)", async () => {
+        sessionStorage.setItem("d_match_context_token", "stale_prior_match_token_999");
+        expect(sessionStorage.getItem("d_match_context_token")).toBe("stale_prior_match_token_999");
+
+        api.post.mockResolvedValueOnce({
+            data: {
+                match_id: "new-empty-match",
+                decision_state: "no_confirmed_match",
+                candidates: [],
+                matches: [],
+            },
+        });
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        act(() => {
+            changeValue(container.querySelector("#match-suburb"), "Werribee");
+            changeValue(container.querySelector("#match-dog-age"), "14");
+            container.querySelector("#match-concern-recall").click();
+            container.querySelector("#match-consent").click();
+        });
+
+        await act(async () => {
+            container.querySelector("form[data-testid='owner-match-form']").dispatchEvent(
+                new Event("submit", { bubbles: true, cancelable: true })
+            );
+        });
+
+        // The stale context token MUST be cleared because new match had no handoff token
+        expect(sessionStorage.getItem("d_match_context_token")).toBeNull();
+    });
+
+    it("fails closed and renders truthful service notice when /config request fails (MP-005)", async () => {
+        api.get.mockRejectedValueOnce(new Error("Network / config outage"));
+
+        await act(async () => {
+            root.render(<Home />);
+        });
+
+        // Match form should NOT be rendered when config fails
+        expect(container.querySelector("form[data-testid='owner-match-form']")).toBeNull();
+
+        // Service unavailable banner and waitlist should be rendered
+        expect(container.querySelector("[data-testid='service-unavailable-notice']")).not.toBeNull();
+        expect(container.textContent).toContain("Trainer matching configuration is temporarily unavailable");
+        expect(container.textContent).toContain("Service Notice");
+        expect(container.textContent).toContain("Waitlist");
     });
 });

@@ -6,8 +6,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.async_api import async_playwright
 
-ARTIFACT_DIR = "/Users/carlg/.gemini/antigravity-ide/brain/97d6f866-04ef-4bf9-a96c-9b4c0bcb5596"
-FRONTEND_BUILD_DIR = "/Users/carlg/Documents/AI-Coding/dtd/frontend/build"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+ARTIFACT_DIR = os.getenv("ARTIFACT_DIR", str(REPO_ROOT / ".test_artifacts"))
+FRONTEND_BUILD_DIR = os.getenv("FRONTEND_BUILD_DIR", str(REPO_ROOT / "frontend" / "build"))
 PORT = 3012
 
 class SPAHandler(SimpleHTTPRequestHandler):
@@ -146,7 +147,7 @@ async def main():
         await page.click('[data-testid="match-concern-puppy_prep"]')
         await page.check("#match-consent")
         await page.click('[data-testid="find-matches-button"]')
-        
+
         results_sec = page.locator('[data-testid="match-results-section"]')
         await results_sec.wait_for(timeout=10000)
         await results_sec.scroll_into_view_if_needed()
@@ -166,7 +167,7 @@ async def main():
         print("Triggering Immediate Human Danger route...")
         await page.fill("#match-description", "Dog bite attack in progress right now")
         await page.click('[data-testid="find-matches-button"]')
-        
+
         danger_sec = page.locator('[data-testid="triage-emergency"]')
         await danger_sec.wait_for(timeout=10000)
         await danger_sec.scroll_into_view_if_needed()
@@ -179,7 +180,7 @@ async def main():
         print("Triggering Urgent Animal Health Support route...")
         await page.fill("#match-description", "Dog swallowed rat poison and is having severe seizures")
         await page.click('[data-testid="find-matches-button"]')
-        
+
         health_sec = page.locator('[data-testid="triage-health"]')
         await health_sec.wait_for(timeout=10000)
         await health_sec.scroll_into_view_if_needed()
@@ -217,7 +218,7 @@ async def main():
         await page_m.click('[data-testid="match-concern-puppy_prep"]')
         await page_m.check("#match-consent")
         await page_m.click('[data-testid="find-matches-button"]')
-        
+
         m_results = page_m.locator('[data-testid="match-results-section"]')
         await m_results.wait_for(timeout=10000)
         await m_results.scroll_into_view_if_needed()

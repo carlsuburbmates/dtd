@@ -654,6 +654,8 @@ class TestMatchingRoadmapScenarios1To16:
         review_in = server.OversightUrgentCorrectionReviewIn(
             action="accept",
             confirmed=True,
+            verified_official_source=True,
+            official_source_url="https://vet.dogshome.com/",
             notes="Verified against official website",
         )
         rev_res = asyncio.run(server.oversight_urgent_provider_correction_review(corr_id, review_in))
@@ -683,6 +685,7 @@ class TestMatchingRoadmapScenarios1To16:
                 {
                     "id": "intro_ops_test",
                     "match_id": "match_ops_test",
+                    "trainer_id": "t_recheck",
                     "delivery_state": "retryable_failure",
                     "status": "retryable_failure",
                 },

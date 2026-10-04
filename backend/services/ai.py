@@ -654,7 +654,12 @@ def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[st
     tokens = [tok for tok in set(q.split()) if len(tok) > 3]
     scored: List[Dict[str, Any]] = []
     for t in trainers:
-        proj = t if "projection_version" in t else build_match_ready_projection(t)
+        # MP-001: Source documents with capabilities/declarations must always be projected fresh
+        proj = (
+            build_match_ready_projection(t)
+            if ("capabilities" in t or "trainer_declared_at" in t or "projection_version" not in t)
+            else t
+        )
         if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
             continue
 
@@ -854,7 +859,12 @@ async def match_trainers(
     candidate_ids: Set[str] = set()
     diagnostics_by_id: Dict[str, Dict[str, Any]] = {}
     for t in trainers:
-        proj = t if "projection_version" in t else build_match_ready_projection(t)
+        # MP-001: Source documents with capabilities/declarations must always be projected fresh
+        proj = (
+            build_match_ready_projection(t)
+            if ("capabilities" in t or "trainer_declared_at" in t or "projection_version" not in t)
+            else t
+        )
         if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
             continue
         t_id = str(proj.get("trainer_id") or t.get("id") or "")

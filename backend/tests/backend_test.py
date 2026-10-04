@@ -162,7 +162,6 @@ class TestIntrosConversions:
             "user_email": "TEST_user@example.com",
             "user_name": "TEST_User",
             "user_phone": "0411222333",
-            "match_id": match_id,
             "consent_contact_release": True,
             "consent_outcome_tracking": True,
         }

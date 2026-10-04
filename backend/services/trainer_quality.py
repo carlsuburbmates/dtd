@@ -1256,7 +1256,7 @@ def build_match_ready_projection(
 
     # 3. Gate: Statutory ABN status
     abn_status = str(trainer_doc.get("abn_status") or "").lower()
-    if trainer_doc.get("abn_verified") is False and abn_status in {"cancelled", "inactive", "deregistered"}:
+    if abn_status in {"cancelled", "inactive", "deregistered"} or (trainer_doc.get("abn_verified") is False and abn_status):
         is_eligible = False
         reasons.append("statutory_abn_revoked")
 

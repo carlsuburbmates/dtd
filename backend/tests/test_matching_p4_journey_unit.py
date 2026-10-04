@@ -83,6 +83,31 @@ class _MockCollection:
         self.inserted.append(dict(doc))
         return SimpleNamespace(inserted_id="mock_id")
 
+    async def count_documents(self, query: Dict[str, Any] = None):
+        items = self.rows + self.inserted
+        if query:
+            filtered = []
+            for r in items:
+                match = True
+                for k, v in query.items():
+                    if r.get(k) != v:
+                        match = False
+                        break
+                if match:
+                    filtered.append(r)
+            return len(filtered)
+        return len(items)
+
+    async def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False):
+        target = None
+        for r in self.rows + self.inserted:
+            if all(r.get(k) == v for k, v in query.items()):
+                target = r
+                break
+        if target and "$set" in update:
+            target.update(update["$set"])
+        return SimpleNamespace(modified_count=1 if target else 0)
+
 
 def _make_dummy_request(
     ip: str = "127.0.0.1",

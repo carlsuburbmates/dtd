@@ -135,6 +135,9 @@ def make_test_raw_trainer_doc(
         "contact_ready": contact_ready,
         "claim_status": claim_status,
         "tier": tier,
+        "email": f"{trainer_id}@example.com",
+        "billing_email": f"{trainer_id}@example.com",
+        "phone": "0412345678",
         "capabilities": caps,
         "source_url": f"https://example.com/trainers/{trainer_id}",
         "source_evidence_url": f"https://example.com/trainers/{trainer_id}",
@@ -203,6 +206,18 @@ def make_test_trainer_doc(
     projection["region"] = region
     projection["claim_status"] = claim_status
     projection["tier"] = tier
+    # Preserve source provenance and capability facts for query-time freshness re-evaluation (MP-001)
+    projection["capabilities"] = raw_doc.get("capabilities", {})
+    projection["contact_ready"] = contact_ready
+    projection["email"] = raw_doc.get("email")
+    projection["billing_email"] = raw_doc.get("billing_email")
+    projection["phone"] = raw_doc.get("phone")
+    projection["source_url"] = raw_doc.get("source_url")
+    projection["source_evidence_url"] = raw_doc.get("source_evidence_url")
+    if abn_verified is not None:
+        projection["abn_verified"] = abn_verified
+    if abn_status is not None:
+        projection["abn_status"] = abn_status
     if life_stages is None:
         projection["life_stages"] = None
     if specialties is None and "specialties" not in raw_doc["capabilities"]:

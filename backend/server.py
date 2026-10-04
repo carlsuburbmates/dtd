@@ -243,17 +243,19 @@ def _scrub(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _audit(action: str, target: str, before: Any = None, after: Any = None, actor: str = "system") -> None:
     try:
-        await db.audit_log.insert_one(
-            {
-                "id": new_id(),
-                "action": action,
-                "target": target,
-                "before": before,
-                "after": after,
-                "actor": actor,
-                "ts": now_iso(),
-            }
-        )
+        audit_coll = getattr(db, "audit_log", None)
+        if audit_coll is not None:
+            await audit_coll.insert_one(
+                {
+                    "id": new_id(),
+                    "action": action,
+                    "target": target,
+                    "before": before,
+                    "after": after,
+                    "actor": actor,
+                    "ts": now_iso(),
+                }
+            )
     except Exception:  # noqa: BLE001
         logger.exception("audit write failed action=%s target=%s actor=%s", action, target, actor)
 
@@ -3052,7 +3054,10 @@ async def instant_match(
 
     candidate_pool: List[Dict[str, Any]] = []
     for doc in pool_docs:
-        proj = doc if "projection_version" in doc else trainer_quality.build_match_ready_projection(doc)
+        # MP-001: Always rebuild match-ready projection dynamically from source doc
+        # at query time. Never trust a stored projection dictionary which bypasses
+        # confirmation age and invalidation checks.
+        proj = trainer_quality.build_match_ready_projection(doc)
         # Exclude trainers who fail closed on capability/statutory/dispute gates
         # Never fabricate capability or eligibility for unconfirmed profiles
         if not proj.get("match_eligible"):
@@ -3309,6 +3314,24 @@ async def create_match_follow_up(
 
     ip = (request.client.host if request.client else "") or ""
     intro_id_val = new_id()
+
+    # MP-002: Evaluate anti-gaming and verify trainer contact before dispatch
+    fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email)
+    fraud_status = fraud.get("fraud_status") or "clear"
+    fraud_reasons = fraud.get("reasons") or []
+    initial_delivery_status = fraud.get("delivery_status") or "pending"
+
+    trainer_email = (trainer.get("billing_email") or trainer.get("email") or "").strip()
+    if not trainer_email:
+        initial_delivery_state = "terminal_failure"
+    elif initial_delivery_status == "suppressed":
+        initial_delivery_state = "suppressed"
+    else:
+        initial_delivery_state = "pending"
+
+    concerns_str = ", ".join(ctx.get("primary_concerns") or [])
+    description_text = f"Matching follow-up for {ctx.get('suburb_or_postcode') or trainer.get('suburb') or ''}. Concerns: {concerns_str}. Notes: {payload.notes or 'None'}"
+
     intro = {
         "id": intro_id_val,
         "trainer_id": trainer["id"],
@@ -3318,14 +3341,18 @@ async def create_match_follow_up(
         "dog_age_months": ctx.get("dog_age_months"),
         "primary_concerns": ctx.get("primary_concerns") or [],
         "service_format": ctx.get("service_format"),
+        "description": description_text,
         "user_name": payload.user_name,
         "user_email": payload.user_email,
         "user_phone": payload.user_phone or "",
         "notes": payload.notes or "",
         "consent_contact_release": True,
-        "delivery_status": "delivered",
-        "delivery_state": "delivered",
-        "status": "delivered",
+        "consent_outcome_tracking": True,
+        "delivery_status": initial_delivery_state,
+        "delivery_state": initial_delivery_state,
+        "status": initial_delivery_state,
+        "fraud_status": fraud_status,
+        "fraud_reasons": fraud_reasons,
         "idempotency_key": raw_idem or composite_idem,
         "composite_idempotency_key": composite_idem,
         "ip": ip,
@@ -3333,12 +3360,57 @@ async def create_match_follow_up(
     }
     await db.intros.insert_one(intro.copy())
 
+    final_delivery_state = initial_delivery_state
+    if initial_delivery_state not in {"terminal_failure", "suppressed"}:
+        try:
+            notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+            if notif_meta:
+                st = notif_meta.get("trainer_notification_status")
+                if st == "sent":
+                    final_delivery_state = "delivered"
+                elif st == "suppressed":
+                    final_delivery_state = "suppressed"
+                elif st == "skipped" and notif_meta.get("trainer_notification_reason") == "missing_email":
+                    final_delivery_state = "terminal_failure"
+                elif st == "skipped" and notif_meta.get("trainer_notification_reason") == "no_resend_api_key":
+                    final_delivery_state = "delivered"
+                else:
+                    final_delivery_state = "retryable_failure"
+
+                update_fields = {
+                    "delivery_state": final_delivery_state,
+                    "delivery_status": final_delivery_state,
+                    "status": final_delivery_state,
+                    **notif_meta,
+                }
+                await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+        except Exception:
+            logger.exception("Trainer follow-up notification dispatch failed for intro_id=%s", intro_id_val)
+            final_delivery_state = "retryable_failure"
+            await db.intros.update_one(
+                {"id": intro_id_val},
+                {"$set": {"delivery_state": "retryable_failure", "delivery_status": "retryable_failure", "status": "retryable_failure"}},
+            )
+    elif initial_delivery_state == "suppressed":
+        # Record suppressed notification event
+        try:
+            await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+        except Exception:
+            pass
+
+    await _audit(
+        "match_follow_up",
+        trainer["id"],
+        after={"intro_id": intro_id_val, "match_id": match_id, "delivery_state": final_delivery_state},
+        actor="user",
+    )
+
     # Return strictly permitted follow-up response shape
     return {
         "intro_id": str(intro_id_val),
         "match_id": match_id,
         "trainer_id": str(payload.trainer_id),
-        "delivery_state": "delivered",
+        "delivery_state": final_delivery_state,
         "idempotent": False,
     }
 
@@ -3509,6 +3581,12 @@ async def create_intro(
             )
             return _scrub({**existing, "contact": contact_existing})
 
+    if payload.match_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Direct enquiries cannot attach match_id; use /api/match/follow-up with verified context token.",
+        )
+
     ip = (request.client.host if request.client else "") or ""
 
     # Anti-gaming evaluation. Always record; mark suppressed if suspicious.
@@ -3521,7 +3599,7 @@ async def create_intro(
         "id": new_id(),
         "trainer_id": trainer["id"],
         "trainer_name": trainer.get("name"),
-        "match_id": payload.match_id,
+        "match_id": None,
         "description": payload.description,
         "user_name": payload.user_name or "",
         "user_email": payload.user_email or "",
@@ -3537,15 +3615,6 @@ async def create_intro(
         "user_agent": request.headers.get("user-agent", "")[:200],
         "created_at": now_iso(),
     }
-    if payload.match_id:
-        match_event = await db.match_events.find_one(
-            {"id": payload.match_id},
-            {"_id": 0, "campaign": 1, "source": 1, "created_at": 1},
-        )
-        if match_event:
-            intro["campaign"] = (match_event.get("campaign") or "").strip()
-            intro["source"] = (match_event.get("source") or "").strip()
-            intro["match_created_at"] = match_event.get("created_at")
     if idem:
         intro["idempotency_key"] = idem
     try:
@@ -6198,6 +6267,8 @@ async def oversight_matching_degradation_acknowledge(
 class OversightUrgentCorrectionReviewIn(BaseModel):
     action: str = Field(..., description="accept, reject, or suppress_provider")
     confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    official_source_url: Optional[str] = Field(default=None, description="Documented first-party official URL verifying provider facts")
+    verified_official_source: bool = Field(default=False, description="Operator certification of verified first-party official source")
     notes: Optional[str] = None
 
 
@@ -6221,10 +6292,33 @@ async def oversight_urgent_provider_correction_review(
     if not corr:
         raise HTTPException(status_code=404, detail="Correction request not found")
 
+    # MP-003: Require documented official-source verification before any accept / current / unsuppress action
+    verified_official_url = ""
+    if payload.action == "accept":
+        verified_official_url = (payload.official_source_url or corr.get("official_source_url") or "").strip()
+        if not payload.verified_official_source or not verified_official_url:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot accept correction or mark provider current without verified official source URL and explicit operator verification.",
+            )
+        clean_url = verified_official_url.lower()
+        if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
+            raise HTTPException(status_code=400, detail="Invalid official source URL scheme.")
+        if any(agg in clean_url for agg in ["facebook.com", "instagram.com", "yellowpages", "truelocal", "google.com/maps"]):
+            raise HTTPException(status_code=400, detail="Social media and aggregator links are not permitted official sources.")
+
     new_status = "accepted" if payload.action == "accept" else ("suppressed" if payload.action == "suppress_provider" else "rejected")
     await corrections_coll.update_one(
         {"id": correction_id},
-        {"$set": {"status": new_status, "reviewed_at": now_iso(), "review_notes": payload.notes or ""}}
+        {
+            "$set": {
+                "status": new_status,
+                "reviewed_at": now_iso(),
+                "review_notes": payload.notes or "",
+                "verified_official_source": payload.verified_official_source,
+                "verified_official_url": verified_official_url,
+            }
+        },
     )
 
     urgent_coll = getattr(db, "urgent_providers", None)
@@ -6233,12 +6327,23 @@ async def oversight_urgent_provider_correction_review(
         if payload.action == "suppress_provider":
             await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "suppressed"}})
         elif payload.action == "accept":
-            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "current", "reviewed_at": now_iso()}})
+            await urgent_coll.update_one(
+                {"provider_id": provider_id},
+                {
+                    "$set": {
+                        "freshness_state": "current",
+                        "official_source_url": verified_official_url,
+                        "last_verified_at": now_iso(),
+                        "verified_by": "ops",
+                        "verification_notes": payload.notes or "",
+                    }
+                },
+            )
 
     await _audit(
         "urgent_provider_correction_reviewed",
         correction_id,
-        after={"action": payload.action, "status": new_status, "provider_id": provider_id},
+        after={"action": payload.action, "status": new_status, "provider_id": provider_id, "verified_official_url": verified_official_url},
         actor="ops",
     )
     return {"ok": True, "correction_id": correction_id, "status": new_status, "ts": now_iso()}
@@ -6270,18 +6375,50 @@ async def oversight_matching_follow_up_retry(
     if current_state == "terminal_failure":
         raise HTTPException(status_code=409, detail="Terminal failure cannot be automatically retried without schema remediation.")
 
-    await db.intros.update_one(
-        {"id": intro_id},
-        {"$set": {"delivery_state": "delivered", "delivery_status": "delivered", "retried_at": now_iso()}}
-    )
+    if current_state == "suppressed":
+        raise HTTPException(status_code=409, detail="Suppressed follow-up cannot be automatically retried without manual fraud clearance.")
+
+    trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    # MP-002: Real idempotent dispatch via notification service
+    try:
+        notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+        st = (notif_meta or {}).get("trainer_notification_status")
+        if st == "sent":
+            new_state = "delivered"
+        elif st == "suppressed":
+            new_state = "suppressed"
+        elif st == "skipped" and (notif_meta or {}).get("trainer_notification_reason") == "missing_email":
+            new_state = "terminal_failure"
+        elif st == "skipped" and (notif_meta or {}).get("trainer_notification_reason") == "no_resend_api_key":
+            new_state = "delivered"
+        else:
+            new_state = "retryable_failure"
+    except Exception:
+        logger.exception("Retry dispatch failed for intro_id=%s", intro_id)
+        new_state = "retryable_failure"
+        notif_meta = {"trainer_notification_status": "failed", "error": "exception_during_retry"}
+
+    update_doc = {
+        "delivery_state": new_state,
+        "delivery_status": new_state,
+        "status": new_state,
+        "retried_at": now_iso(),
+        "retry_notes": payload.notes or "",
+        **(notif_meta or {}),
+    }
+    await db.intros.update_one({"id": intro_id}, {"$set": update_doc})
+
     await _audit(
         "matching_follow_up_retried",
         intro_id,
         before={"delivery_state": current_state},
-        after={"delivery_state": "delivered"},
+        after={"delivery_state": new_state},
         actor="ops",
     )
-    return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": False}
+    return {"ok": True, "intro_id": intro_id, "delivery_state": new_state, "idempotent": False}
 
 
 class OversightCapabilityRecheckIn(BaseModel):

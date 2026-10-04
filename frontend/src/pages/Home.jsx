@@ -99,17 +99,17 @@ export default function Home() {
             .then((r) => {
                 if (!active) return;
                 const config = r?.data || {};
-                setPublicMatchingEnabled(Boolean(config.public_matching_enabled ?? true));
-                setPublicLaunchPhase(String(config.public_launch_phase || "live_matching"));
-                setTrainerOnboardingOpen(Boolean(config.trainer_onboarding_open ?? true));
+                setPublicMatchingEnabled(Boolean(config.public_matching_enabled ?? false));
+                setPublicLaunchPhase(String(config.public_launch_phase || "supply_first"));
+                setTrainerOnboardingOpen(Boolean(config.trainer_onboarding_open ?? false));
                 const suburbs = Array.isArray(config.suburbs) ? config.suburbs : [];
                 setMatchSuburbs(suburbs);
             })
             .catch(() => {
                 if (!active) return;
-                setPublicMatchingEnabled(true);
-                setPublicLaunchPhase("live_matching");
-                setTrainerOnboardingOpen(true);
+                setPublicMatchingEnabled(false);
+                setPublicLaunchPhase("service_unavailable");
+                setTrainerOnboardingOpen(false);
                 setMatchSuburbs([]);
             });
         return () => {
@@ -151,6 +151,9 @@ export default function Home() {
         setMatchBusy(true);
         setMatchError("");
         setDecisionState(null);
+        try {
+            sessionStorage.removeItem("d_match_context_token");
+        } catch (_) {}
 
         try {
             const payload = {
@@ -208,6 +211,9 @@ export default function Home() {
             setSupportContext(data.support_context || "");
             setMatchAttempted(true);
         } catch (err) {
+            try {
+                sessionStorage.removeItem("d_match_context_token");
+            } catch (_) {}
             setMatches([]);
             setMatchId("");
             setUrgentProviders([]);
@@ -366,12 +372,14 @@ export default function Home() {
                     >
                         <div className="small-caps text-[#5C6D59]">{publicMatchingEnabled ? "For owners" : "For dog owners"}</div>
                         <h2 className="text-4xl font-serif text-[#1A3A32]">
-                            {publicMatchingEnabled ? "Find trainers" : "Register interest"}
+                            {publicMatchingEnabled ? "Find trainers" : (publicLaunchPhase === "service_unavailable" ? "Service Notice" : "Register interest")}
                         </h2>
                         <p className="text-[#4A615A] leading-relaxed font-light text-lg max-w-md">
                             {publicMatchingEnabled
-                                ? "Describe your issue and get up to three ranked trainer matches from our vetted network."
-                                : "Register your interest so DTD can understand where trainer coverage is needed most in Melbourne."}
+                                ? "Describe your issue and get up to three ranked trainer matches from our reviewed local directory."
+                                : (publicLaunchPhase === "service_unavailable"
+                                    ? "Matching services are currently unavailable while configuration is verified. Please leave your details to register interest."
+                                    : "Register your interest so DTD can understand where trainer coverage is needed most in Melbourne.")}
                         </p>
                         <div className="mt-6">
                             {publicMatchingEnabled ? (
@@ -577,6 +585,11 @@ export default function Home() {
                                 </form>
                             ) : (
                                 <div className="max-w-md p-6 bg-white border border-[#E5DFD3] rounded-2xl shadow-sm">
+                                    {publicLaunchPhase === "service_unavailable" && (
+                                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed" data-testid="service-unavailable-notice">
+                                            Trainer matching configuration is temporarily unavailable. You can register your interest below, and our team will notify you when coverage is confirmed.
+                                        </div>
+                                    )}
                                     <OwnerWaitlistForm
                                         attribution={attribution}
                                         formTestId="home-owner-waitlist-form"
@@ -624,7 +637,7 @@ export default function Home() {
                             </p>
                             {urgentProviders && urgentProviders.length > 0 && (
                                 <div className="mt-6 space-y-4">
-                                    <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-950">Verified Local Urgent Care Listing</h4>
+                                    <h4 className="text-xs uppercase tracking-wider font-semibold text-amber-950">Official-Source Urgent Care Listing</h4>
                                     {urgentProviders.map((p) => (
                                         <div key={p.provider_id} className="p-4 bg-white rounded-xl border border-amber-200">
                                             <div className="font-serif text-lg font-bold text-[#1A3A32]">{p.name}</div>
@@ -677,7 +690,7 @@ export default function Home() {
                         )}
                         {decisionState === "limited_local_results" && (
                             <div className="mb-6 p-4 bg-[#F5F2EB] border border-[#E5DFD3] rounded-xl text-sm text-[#4A615A]" data-testid="limited-local-banner">
-                                <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to verified trainers with confirmed service coverage in your area.
+                                <strong>Expanded Search:</strong> Fewer than three local matches were found directly in {suburbOrPostcode || "your suburb"}. We have expanded the search to reviewed trainers with confirmed service coverage in your area.
                             </div>
                         )}
                         {decisionState === "degraded_recommendations" && (
@@ -723,7 +736,7 @@ export default function Home() {
                         <div className="card-public p-7 bg-white">
                             <h2 className="font-serif text-3xl text-[#1A3A32]">No confirmed match yet</h2>
                             <p className="mt-3 text-[#4A615A] leading-relaxed">
-                                Based on current verified capability records, we could not confirm a trainer meeting all your specific requirements. You can browse all verified trainers in our directory or try adjusting your search criteria.
+                                Based on current verified capability records, we could not confirm a trainer meeting all your specific requirements. You can browse all listed trainers in our directory or try adjusting your search criteria.
                             </p>
                             <div className="mt-5">
                                 <Link to={`/trainers${suburbOrPostcode ? `?suburb=${encodeURIComponent(suburbOrPostcode)}` : ""}`} className="btn-primary">

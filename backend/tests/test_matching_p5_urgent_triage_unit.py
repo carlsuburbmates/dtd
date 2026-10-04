@@ -181,7 +181,7 @@ class TestP5UrgentSupportAndTriage:
         assert len(out["urgent_providers"]) > 0
         prov = out["urgent_providers"][0]
         assert prov["name"] == "The Lost Dogs' Home Veterinary Hospital"
-        assert "(03) 9329 2755" in prov["contact_method"]
+        assert "(03) 8379 4498" in prov["contact_method"]
         assert "not a 24/7" in prov["stated_hours"].lower() or "not 24/7" in prov["stated_hours"].lower()
         # Coverage disclosure truthfulness: does NOT claim Melbourne-wide
         assert "does not claim Melbourne-wide" in out["coverage_disclosure"]

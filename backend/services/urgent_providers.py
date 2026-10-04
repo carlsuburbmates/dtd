@@ -65,7 +65,7 @@ class UrgentProviderCorrectionIn(BaseModel):
 
 
 # Official-source seeded records verified against provider's official web page
-# U-Vet Werribee is excluded (closed in 2022).
+# U-Vet Werribee is excluded (permanently closed on 24 December 2022).
 # No veterinary behaviourists are currently verified against VPRBV register with official direct evidence.
 OFFICIAL_STATIC_URGENT_PROVIDERS: List[Dict[str, Any]] = [
     {
@@ -73,7 +73,7 @@ OFFICIAL_STATIC_URGENT_PROVIDERS: List[Dict[str, Any]] = [
         "category": UrgentProviderCategory.URGENT_VETERINARY_CARE.value,
         "name": "The Lost Dogs' Home Veterinary Hospital",
         "official_source_url": "https://vet.dogshome.com/",
-        "contact_method": "(03) 9329 2755",
+        "contact_method": "(03) 8379 4498",
         "service_area": [
             "North Melbourne",
             "Flemington",
@@ -83,8 +83,9 @@ OFFICIAL_STATIC_URGENT_PROVIDERS: List[Dict[str, Any]] = [
             "Carlton",
             "West Melbourne",
         ],
-        "stated_hours": "Monday to Friday: 8:00 AM – 7:00 PM; Saturday: 8:00 AM – 4:00 PM (Closed Sundays and Public Holidays; not a 24/7 hospital)",
-        "retrieved_at": "2026-10-03T00:00:00Z",
+        "stated_hours": "Monday to Friday: 8:10 am – 7:00 pm; Saturday: 9:00 am – 4:00 pm (Closed Sundays and Public Holidays; not a 24/7 hospital)",
+        "retrieved_at": "2026-10-04T12:00:00Z",
+        "last_verified_at": "2026-10-04T12:00:00Z",
         "freshness_state": FreshnessState.CURRENT.value,
         "correction_path": "/urgent-providers/correction",
         "source_basis": SourceBasis.OFFICIAL_PROVIDER.value,
@@ -100,6 +101,38 @@ TRIPLE_ZERO_VICTORIA_NOTICE = {
 }
 
 
+def compute_urgent_provider_freshness(
+    provider: Dict[str, Any],
+    *,
+    as_of: Optional[datetime] = None,
+    max_age_days: int = 90,
+) -> tuple[FreshnessState, bool]:
+    """Compute deterministic freshness state of an urgent provider record.
+
+    Governance Invariants (AGENTS.md Rule 6A, M6, MP-003):
+    - Suppressed providers fail closed immediately.
+    - Records without retrieved_at or last_verified_at fail closed as STALE.
+    - Records older than max_age_days (90 days) fail closed as STALE.
+    - Only independently checked official-source records within max_age_days are CURRENT.
+    """
+    if str(provider.get("freshness_state") or "").lower() == FreshnessState.SUPPRESSED.value:
+        return FreshnessState.SUPPRESSED, False
+
+    ref_ts_str = str(provider.get("last_verified_at") or provider.get("retrieved_at") or "")
+    if not ref_ts_str:
+        return FreshnessState.STALE, False
+
+    try:
+        ref_dt = datetime.fromisoformat(ref_ts_str.replace("Z", "+00:00"))
+        now_dt = as_of or datetime.now(timezone.utc)
+        age_days = (now_dt - ref_dt).total_seconds() / 86400.0
+        if age_days > max_age_days:
+            return FreshnessState.STALE, False
+        return FreshnessState.CURRENT, True
+    except Exception:
+        return FreshnessState.STALE, False
+
+
 def get_static_urgent_providers(
     category: Optional[str] = None,
     freshness: Optional[str] = FreshnessState.CURRENT.value,
@@ -109,9 +142,13 @@ def get_static_urgent_providers(
     for p in OFFICIAL_STATIC_URGENT_PROVIDERS:
         if category and p.get("category") != category:
             continue
-        if freshness and p.get("freshness_state") != freshness:
+        state, is_fresh = compute_urgent_provider_freshness(p)
+        effective_state = state.value if isinstance(state, FreshnessState) else str(state)
+        if freshness and effective_state != freshness:
             continue
-        results.append(dict(p))
+        out_doc = dict(p)
+        out_doc["freshness_state"] = effective_state
+        results.append(out_doc)
     return results
 
 
@@ -120,7 +157,7 @@ async def get_active_urgent_providers(
     category: Optional[str] = None,
     suburb: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve active urgent providers from DB or static fallback."""
+    """Retrieve active urgent providers from DB or static fallback with freshness verification."""
     cat_str = category.strip() if isinstance(category, str) and category.strip() else None
     sub_str = suburb.strip() if isinstance(suburb, str) and suburb.strip() else None
 
@@ -136,18 +173,22 @@ async def get_active_urgent_providers(
         cursor = db.urgent_providers.find(query, {"_id": 0})
         docs = await cursor.to_list(100)
         if docs:
-            return docs
+            fresh_docs = []
+            for d in docs:
+                state, is_fresh = compute_urgent_provider_freshness(d)
+                if is_fresh and state == FreshnessState.CURRENT:
+                    fresh_docs.append(dict(d))
+            return fresh_docs
 
     # Fallback to static records if DB empty or unseeded
     static_docs = get_static_urgent_providers(category=cat_str, freshness=FreshnessState.CURRENT.value)
     if sub_str:
         norm_suburb = sub_str.lower()
-        static_docs = [
+        matched = [
             p for p in static_docs
             if any(s.strip().lower() == norm_suburb for s in p.get("service_area", []))
             or "north melbourne" in norm_suburb  # broad local inner north match
         ]
-        if not static_docs:
-            # Return available records anyway if none in specific suburb, with explicit note
-            static_docs = get_static_urgent_providers(category=cat_str, freshness=FreshnessState.CURRENT.value)
+        if matched:
+            return matched
     return static_docs
