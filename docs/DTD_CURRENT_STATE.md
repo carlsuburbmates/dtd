@@ -190,27 +190,27 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
-- **Observed/status:** 4 October 2026 — partially remediated in local implementation; sandbox verification remains open.
-- **Evidence:** `a167478` now links results to clean `/t/:id` routes and obtains context only with the `X-Match-Context-Token` header; the former query-description route is absent. Independent audit found a new non-handoff match leaves an older session token in browser storage, and direct `/intros` still accepts client-supplied `match_id` outside the protected context flow.
-- **Impact/uncertainty:** the original URL disclosure is repaired in local code, but stale context and arbitrary direct attribution leave the protected-handoff boundary incomplete. No live owner data or sandbox runtime was inspected.
-- **Why deferred:** repairs require a small owner-journey/code change and fresh negative privacy tests; this audit made no source changes.
-- **Next action:** clear context at every new matching submission, reject/ignore direct `match_id`, add regressions and complete the sandbox owner-profile-enquiry journey. Matching roadmap M2/M5/M9 own the remaining work.
+- **Observed/status:** 5 October 2026 — local candidate `c7afb07` repairs the observed stale-token and arbitrary-direct-attribution paths; developer-sandbox verification remains open.
+- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Impact/uncertainty:** no raw behavioural description is observed in result/profile URLs in this local path. The exact deployed request, persisted record and browser session lifecycle have not been inspected in the developer sandbox.
+- **Why deferred:** this audit does not deploy, query live owner data or change production retention.
+- **Next action:** verify the full owner result-to-profile-to-enquiry journey and persisted redaction with disposable sandbox data before closure. Matching roadmap M2/M5/M9 own the remaining evidence.
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
-- **Observed/status:** 4 October 2026 — partially remediated in local implementation; broader matching trust copy remains open.
-- **Evidence:** `a167478` removes the observed `Verified Pro` label from matching results and the P4 visual smoke test asserts it is absent. The matching homepage still calls the candidate set a "vetted network" and the urgent card calls its provider entry "Verified", while the evidence model supports only field-specific declared/reviewed/official-source facts.
+- **Observed/status:** 5 October 2026 — partially remediated in local candidate `c7afb07`; broader public trust copy remains open.
+- **Evidence:** the matching homepage removes the observed "vetted network" language and labels urgent listings as official-source. However `About`, `HowItWorks`, `Trust` and `Terms` still promise universal verified/manual checks of credentials, insurance or affiliations. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
 - **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release. Matching roadmap M5/M9 own the result/profile handoff portion of this correction.
 
 ### DF-017 — Failed owner follow-ups cannot retry
 
-- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner–trainer matching contextualisation. No provider or production mutation was performed.
-- **Evidence:** `backend/services/automation.py` records both HTTP and transport failures as `t7_hire_check` outreach events. On later runs it skips an introduction whenever any event of that kind exists, irrespective of status. `backend/server.py` also creates a unique `(intro_id, kind)` index, so a second event cannot be inserted for the same follow-up. The focused email test covers successful delivery payload construction but does not cover failed-then-retry behaviour.
-- **Impact/uncertainty:** an owner whose T+7 follow-up fails receives no automated retry or alternative recovery path. The failure can remain visible through message/Operations evidence, but the loop cannot resolve it itself; current repository evidence does not establish the number of production records affected.
-- **Why deferred:** this contextualisation pass does not change owner communications, production data, provider configuration or scheduling.
-- **Next action:** make the follow-up lifecycle distinguish pending, retryable failure, delivered and terminal suppression states; add bounded backoff and a clear Operations recovery action; preserve no-duplicate delivery after success; add failure-to-retry unit coverage and sandbox verification with a simulated provider failure before any production promotion.
+- **Observed/status:** 5 October 2026 — partially implemented in local candidate `c7afb07`; its failure semantics and concurrency protection remain open.
+- **Evidence:** the matched follow-up and protected retry now call the notification service. However a `no_resend_api_key` result is mapped to `delivered`, and neither matched submission nor retry atomically claims work before dispatch. Different concurrent client keys can still create/send duplicate matched intros; concurrent operator retries can dispatch twice.
+- **Impact/uncertainty:** the implementation is materially improved, but can still mislead owners/operators about non-delivery or create duplicate communication. No configured safe provider or sandbox record was inspected.
+- **Why deferred:** the required repair changes notification lifecycle behavior and must remain local until independently re-audited.
+- **Next action:** implement one shared truthful delivery-state mapper, atomic duplicate/retry protection and negative/concurrency tests; then complete safe-provider sandbox evidence. Matching roadmap M5/M8/M9 own the remaining work.
 
 ### DF-018 — Public matching input lacks bounded, literal request handling
 
@@ -236,37 +236,37 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** resolving hierarchy and routes is public product/UX work, outside this read-only audit.
 - **Next action:** define one owner entry path for live matching, give it a truthful direct navigation/CTA target, remove or replace the stale waitlist link, and verify desktop/mobile keyboard journeys from navigation through match form, result state and profile handoff.
 
-### DF-021 — Owner-match interface contract is authored; P1 harness is partially implemented
+### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 4 October 2026 — partial; rework commit `3882bd2` closes most prior P1 gaps but P1 remains unaccepted.
-- **Evidence:** the commit adds strict consent, required preferences, address/PII sanitisation, fixed concern handling, state-only urgent fixtures, local-eligible expansion and an adapter/fallback seam. It passes 59 focused tests, 343 backend unit tests, 36 frontend tests and the production build. The module remains unimported by the public route or frontend. Direct probes still show numeric/boolean coercion, unsupported free-form explanation claims being accepted, a canonical postcode taking the normal adapter into degraded fallback, and an arbitrary internal exception being silently downgraded to fallback. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
-- **Impact/uncertainty:** the work is a useful non-runtime foundation but cannot yet be a reliable v2 oracle or accept P2. The public owner flow remains the earlier diagnostic flow.
-- **Why deferred:** this audit does not change public behaviour, retained records, AI-provider use or deployment.
-- **Next action:** complete P1-final in `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`: canonical-postcode adapter parity and bounded fallback errors only. P1 acceptance then authorises P2 local implementation only; strict runtime schema/privacy, explanation rendering and public copy remain P2/P3/P4 work.
+- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `c7afb07`.
+- **Evidence:** the public owner route now uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The current re-audit accepts the local stale-context/config repairs but identifies unresolved delivery, urgent-locality and trust-copy requirements.
+- **Impact/uncertainty:** the v2 workflow is no longer merely authored, but local tests and mocked screens do not prove the deployed owner journey, safe provider behavior or persisted redaction.
+- **Why deferred:** no developer-sandbox deployment or provider activation was authorised.
+- **Next action:** close the narrow `c7afb07` audit findings, then run the M2/M5/M9 disposable-sandbox workflow. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 
-### DF-022 — Owner matching consent is enforced but not persisted as evidence
+### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 
-- **Observed/status:** 26 September 2026 — open; repository evidence confirmed during owner-journey audit.
-- **Evidence:** `/match` rejects a request unless `consent_match_processing` is true, but the persisted `match_events` record stores the description, suburb, campaign, source, result IDs and timestamp without the consent value, consent time, policy/version reference or retention deadline. The later protected enquiry correctly persists its separate contact-release and outcome-tracking consents, demonstrating the distinction.
-- **Impact/uncertainty:** DTD can enforce consent at request time but cannot later evidence which matching-consent terms applied to a retained behavioural description. This is a records/accountability gap; the audit did not query production records or assess applicable legal retention obligations.
-- **Why deferred:** the audit does not change consent language, stored owner data, retention or production records.
-- **Next action:** define the matching-consent record and retention contract, persist only the required sanitised evidence with new match events, apply any migration/remediation decision separately, and test consent rejection, persisted consent evidence and expiry/cleanup behaviour in sandbox.
+- **Observed/status:** 5 October 2026 — local code repair present; `PARTIAL` pending sandbox evidence.
+- **Evidence:** the v2 match request requires matching/terms consent, and local `match_events` records include the consent object, policy version, created time and expiry while omitting the raw behavioural description. The protected enquiry separately records contact-release/outcome consent.
+- **Impact/uncertainty:** the former local evidence gap is repaired in the candidate code. No deployed records, expiry job or applicable retention compliance assessment has been independently verified.
+- **Why deferred:** this audit did not access or mutate sandbox/production owner records.
+- **Next action:** inspect consent, expiry and redaction records in the M9 disposable-sandbox scenario; close only when API, persistence and cleanup agree.
 
-### DF-023 — Weak-evidence contract is authored; P1 parity evidence remains unaccepted
+### DF-023 — AI/fallback contract has local coverage; safe-provider parity remains open
 
-- **Observed/status:** 4 October 2026 — partial; `3882bd2` introduces a real test-only adapter seam but does not yet prove reliable parity for all canonical input forms.
-- **Evidence:** `backend/services/ai.py` still asks Gemini for a non-empty list of trainer IDs and the live fallback still has the earlier `0.40` baseline. The adapter now raises known simulated provider failures through a fallback wrapper, but its raw-postcode scope comparison turns a valid `3067` local request into degraded fallback, and the wrapper catches arbitrary internal exceptions. Explanation validation remains permissive for unrecognised unsupported claims. See `ANTIGRAVITY_MATCHING_P1_AUDIT_AND_REWORK.md`.
-- **Impact/uncertainty:** the target response is no longer an open product-policy choice, but neither the reference harness nor the live route yet proves AI/fallback consistency.
-- **Why deferred:** authoring and local reference scaffolding do not authorise a public matching, AI-provider, retention or deployment change. The repair requires accepted P1 evidence followed by the cohesive P2-P4 workflow redesign.
-- **Next action:** complete P1-final canonical-postcode parity and bounded failure semantics, then implement the actual `ai.py` integration only in P3 and verify the same scenarios in sandbox before release. P1 does not accept the production request schema, parser, explanation renderer or provider client.
+- **Observed/status:** 5 October 2026 — `PARTIAL`.
+- **Evidence:** the current local route calls the v2 matching adapter/fallback boundary after deterministic eligibility. Fixture and fallback tests pass locally, while the active completion criteria still require a configured safe Gemini path and same-fixture parity in a disposable developer sandbox.
+- **Impact/uncertainty:** the former legacy-only characterisation is stale. Local mock parity does not establish a configured model's behavior, provider credentials, degraded-route lifecycle or production safety.
+- **Why deferred:** activating or exercising a real provider remains outside this local audit.
+- **Next action:** after local findings close, run and independently inspect the required M4/M9 safe-Gemini parity scenario; do not mark the model path accepted from mocks alone.
 
-### DF-024 — No urgent-support pathway or verified provider register exists
+### DF-024 — Urgent-support pathway exists locally but cannot yet make locality/verification claims safely
 
-- **Observed/status:** 26 September 2026 — open; owner-directed urgent-support route is now part of the matching-system target.
-- **Evidence:** the current `/match` request accepts only free-text description, optional suburb and matching consent. It routes every accepted request into the ordinary published-trainer pool and has no urgent-support states, provider-record type, official-source coverage register, dedicated public page, provider freshness check or safe AI response contract. Preliminary official-provider research confirms that emergency and extended-hours veterinary support is a distinct, location- and hours-sensitive service category; it does not establish DTD-wide coverage.
-- **Impact/uncertainty:** owners with an urgent concern have no purpose-built route and could receive an ordinary trainer shortlist instead of current contact information. Without a source-backed register, DTD cannot safely claim Melbourne-wide emergency coverage or provider availability.
-- **Why deferred:** creating this pathway requires new public safety content, provider-data sourcing and refresh controls, AI route constraints, UI/API/persistence/`/ops` changes and sandbox verification. This research did not create or publish provider records, contact providers or alter matching behaviour.
-- **Next action:** execute the urgent-support execution plan in `specs/MATCHING_AND_RANKING.md`: define approved states and copy, create the lawful official-source provider register and coverage matrix, implement AI/fallback routing fixtures, then deliver and verify the dedicated pathway in sandbox before any public release.
+- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `c7afb07`; no sandbox or production acceptance.
+- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. The separate official-source provider record is present and the static Lost Dogs' Home facts were corrected. The re-audit found that an unmatched suburb such as Werribee falls back to the North Melbourne listing; correction acceptance rests on operator assertion rather than captured official-source evidence; and `/ops` can count stale records as current.
+- **Impact/uncertainty:** the pathway is no longer absent, but local coverage can be overstated and provider records can be reactivated without sufficient evidence. It remains unsafe to claim Greater Melbourne emergency coverage or deployed current availability.
+- **Why deferred:** the narrow fixes require no provider activation or public-source ingestion, but must be independently re-audited before sandbox deployment.
+- **Next action:** return empty/no-local-coverage when coverage is absent, capture and validate bounded first-party evidence before `current`, compute `/ops` freshness from live check dates, correct the visual fixture, then run M6/M9 sandbox scenarios. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 
 ### DF-025 — Bounded Maps/Places urgent-support exception is not implemented or verified
 
@@ -276,10 +276,10 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** the owner changed the governing direction, not the public product or provider configuration. A compliant implementation needs a separate isolated UI/API design, product-specific terms and cost review, safety/privacy contract, degraded route and sandbox verification.
 - **Next action:** design the user-initiated urgent-support Maps/Places module as a separate vertical slice. Prove its Google attribution, data minimisation, no-persistence/no-AI boundary, owner-visible distinction from DTD recommendations, provider outage behaviour and `/ops` evidence before any approval-record or runtime change.
 
-### DF-026 — Match-ready projection foundation is not yet accepted for matching cutover
+### DF-026 — Match-ready projection is active locally but not accepted for cutover
 
-- **Observed/status:** 28 September 2026 — P0 acquisition-dependency remediation is `DONE` after independent audit of `f4b5f25938f044dbfc257088b147e9fc9b4e5073`, `d0098d124e0f4d6062e7e044971a38bf4b9da8cc`, and `ce14f4eeba6c675fce0997385800a8ec543d9ba9`. DF-026 remains open: active matching is still the earlier diagnostic flow because `ENABLE_MATCH_READY_PROJECTION_FILTER` evaluates false by default.
-- **Evidence:** P0 removed the manual ingestion mutation route; trainer-bound the capability prefill read; covers `source_evidence_url` refresh invalidation; made scheduler/Ops wording evidence-based; exposed editable delivery constraints; and now rejects malformed delivery facts before persistence. A no-prefill claim defaults conservatively and permitted declared facts remain available for correction. The final exact commit passed 65 focused backend tests, 284 backend unit tests, 36 frontend tests, the frontend production build, diff check, and desktop visual inspection of unprefilled and edited-prefill states. See `ANTIGRAVITY_MATCHING_P0_AUDIT_AND_REWORK.md`.
-- **Impact/uncertainty:** this makes the acquisition dependency safe enough for the next matching package; it does not establish strict eligibility consumption, full trainer-declaration coverage, safe public matching, live scheduler configuration, or any deployment evidence.
-- **Why deferred:** the remaining work belongs to the staged matching pipeline, beginning with contract fixtures and parity evidence.
-- **Next action:** implement P1 in `ANTIGRAVITY_MATCHING_PIPELINE_IMPLEMENTATION_HANDOFF.md`, then return its exact local commit for Codex audit before P2. Keep match-ready projection cutover disabled until the later matching packages and sandbox evidence are accepted.
+- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `c7afb07`; M1/M3/M9 remain unaccepted.
+- **Evidence:** the active `/match` path now rebuilds `build_match_ready_projection()` from each trainer source document at query time, closing the prior stored-projection freshness bypass. The re-audit reran its stale-confirmation and statutory-revocation fixtures successfully. Trainer lifecycle completeness, bounded query-plan evidence, declared-capacity coverage and disposable-sandbox proof remain outstanding.
+- **Impact/uncertainty:** the specific stale projection bypass is repaired locally. It does not prove that all real trainer records contain authoritative capability facts or that deployed matching uses the intended state safely.
+- **Why deferred:** no sandbox deployment, source-data mutation or production inspection was authorised.
+- **Next action:** complete remaining M1/M3 criteria and M9 sandbox acceptance; do not treat this local candidate as a public cutover approval. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.

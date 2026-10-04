@@ -4,7 +4,7 @@
 
 **Authority order:** `AGENTS.md` → invariants → CDR-018 through CDR-024 → [Decision Contract v2](specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md) → active matching specifications → [completion roadmap](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) → current-state findings. The Decision Contract controls the initial fit/presentation rules where an older planning document describes a later, outcome-enabled model.
 
-**Current implementation baseline:** cumulative local implementation `a167478592136bd4e0385f2c6dee3d0377c76222`; P1 reference baseline `5161a2bfc14514b3525f313ae361c4c580b8f847`; independent audit record [here](MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md). This document does not change product policy or authorise deployment, provider activation, billing, authentication, data mutation, or production release.
+**Current implementation candidate:** `c7afb0752267332c0f4be30b1bd092ab89c63fb7`, following cumulative local implementation `a167478592136bd4e0385f2c6dee3d0377c76222`; P1 reference baseline `5161a2bfc14514b3525f313ae361c4c580b8f847`. `c7afb07` is not accepted for sandbox advancement: see the [follow-up independent audit](MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md) and the original [P2-P6 audit](MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md). This document does not change product policy or authorise deployment, provider activation, billing, authentication, data mutation, or production release.
 
 ## How a package becomes `DONE`
 
