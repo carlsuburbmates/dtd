@@ -5,6 +5,8 @@
 **Scope:** matching only. This does not replace DTD-wide release work, commercial activation, credential/provider recovery, or production approval gates.
 **Authority:** executes, but does not amend, `DTD_TARGETED_MATCHING_PIPELINE_STATE.md`, `specs/MATCHING_AND_RANKING.md`, `specs/ACQUISITION_AND_INGESTION.md`, `specs/OPS_AND_OBSERVABILITY.md`, the invariants, and CDR-018 through CDR-024.
 
+**Completion criteria:** [MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md](MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md) is the mandatory item-by-item acceptance companion. It converts every remaining package into auditable implementation, negative-case, data/automation, `/ops`, sandbox and independent-review checks. It does not change a locked product decision.
+
 ## How to use this roadmap
 
 Each work package is a complete workflow, not a coding task. Its status can be:
