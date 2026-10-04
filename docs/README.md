@@ -15,6 +15,8 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 
 ## Authority map
 
+The active cross-project execution sequence is [DTD Full Project Completion Plan](DTD_FULL_PROJECT_COMPLETION_PLAN.md). It coordinates the detailed matching, acquisition, website, automation, Ops, sandbox and production contracts; it does not replace their locked decisions.
+
 | Document | What it answers | When to read it |
 | --- | --- | --- |
 | [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) | What code, tests, deployment and captured runtime evidence show now | Before changing or reporting the product |
