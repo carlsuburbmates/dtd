@@ -2,7 +2,7 @@
 
 **Candidate:** `7dd99fa832b1d78d2bd05e722b814e755d4df45b` on `feature/matching-implementation` (parent `1cdd88d`).
 
-**Decision:** `DONE` locally for MP-005R / DF-016 copy remediation. The candidate is eligible for developer-sandbox acceptance; this decision is not a sandbox or production acceptance.
+**Decision:** `DONE` locally for MP-005R / DF-016 copy remediation, but `PARTIAL` for developer-sandbox advancement. The mandatory isolated release preflight subsequently exposed seven integration failures; this decision is not a sandbox or production acceptance.
 
 ## Evidence independently checked
 
@@ -20,3 +20,5 @@ MP-005R's local requirement is now met: known unsupported universal review, sele
 ## Boundary
 
 This acceptance does not establish that the developer sandbox serves this exact commit or that its rendered public pages, owner journey, persistence, provider handling and `/ops` records satisfy M2/M5/M6/M9. Those require the separate disposable-sandbox verification matrix.
+
+The required isolated release preflight also fails at `7dd99fa` (523 passed, 7 failed). Six failures retain pre-v2 request/delivery assumptions; one shows that an empty eligible pool is sent to an unavailable model, producing `degraded_no_confirmed_match` where the contract requires deterministic `no_confirmed_match`. Sandbox deployment is blocked pending the narrow reconciliation recorded in DF-027.
