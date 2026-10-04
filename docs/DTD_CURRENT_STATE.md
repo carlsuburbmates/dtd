@@ -198,11 +198,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
-- **Observed/status:** 5 October 2026 — partially remediated in local candidate `8e03f6c`; broader public trust copy remains open.
-- **Evidence:** the matching homepage removes the observed "vetted network" language and labels urgent listings as official-source. `8e03f6c` repaired several public statements, but `PublicChrome`, `Trainers`, `About` and `Submit` still make universal review/selection claims; its regression test omitted shared public components and those pages. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Observed/status:** 5 October 2026 — partially remediated in local candidate `1cdd88d`; one shared public-art verification claim remains open.
+- **Evidence:** `1cdd88d` removed the observed review/selection claims from `PublicChrome`, `Trainers`, `About` and `Submit`, and dynamically scans direct public page/component files. However `PublicArt` still renders "Verified rollout" on `/about`; the new prohibited-phrase list does not detect it. See `MATCHING_PIPELINE_1CDD88D_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
-- **Next action:** neutralise the remaining public claims and add regression coverage for all public routes/components, then independently re-audit before sandbox advancement.
+- **Next action:** neutralise `PublicArt`'s remaining verified-rollout claim and close the test blind spot, then independently re-audit before sandbox advancement.
 
 ### DF-017 — Failed owner follow-ups cannot retry
 
