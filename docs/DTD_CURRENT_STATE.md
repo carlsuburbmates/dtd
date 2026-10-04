@@ -198,19 +198,19 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
-- **Observed/status:** 5 October 2026 — partially remediated in local candidate `c7afb07`; broader public trust copy remains open.
-- **Evidence:** the matching homepage removes the observed "vetted network" language and labels urgent listings as official-source. However `About`, `HowItWorks`, `Trust` and `Terms` still promise universal verified/manual checks of credentials, insurance or affiliations. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Observed/status:** 5 October 2026 — partially remediated in local candidate `8e03f6c`; broader public trust copy remains open.
+- **Evidence:** the matching homepage removes the observed "vetted network" language and labels urgent listings as official-source. `8e03f6c` repaired several public statements, but `PublicChrome`, `Trainers`, `About` and `Submit` still make universal review/selection claims; its regression test omitted shared public components and those pages. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** implementation must first establish a clear taxonomy separating listing review, ABR evidence, claim/ownership state and paid tier; it must correct UI/copy without expanding DTD into an unsupported verification product.
-- **Next action:** remove `Verified Pro`, define evidence-backed public labels and reason states, update Trust/How It Works/FAQ/About copy, and add focused rendering/copy tests before public release. Matching roadmap M5/M9 own the result/profile handoff portion of this correction.
+- **Next action:** neutralise the remaining public claims and add regression coverage for all public routes/components, then independently re-audit before sandbox advancement.
 
 ### DF-017 — Failed owner follow-ups cannot retry
 
-- **Observed/status:** 5 October 2026 — partially implemented in local candidate `c7afb07`; its failure semantics and concurrency protection remain open.
-- **Evidence:** the matched follow-up and protected retry now call the notification service. However a `no_resend_api_key` result is mapped to `delivered`, and neither matched submission nor retry atomically claims work before dispatch. Different concurrent client keys can still create/send duplicate matched intros; concurrent operator retries can dispatch twice.
+- **Observed/status:** 5 October 2026 — repaired locally in candidate `8e03f6c`; developer-sandbox/provider verification remains open.
+- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** the implementation is materially improved, but can still mislead owners/operators about non-delivery or create duplicate communication. No configured safe provider or sandbox record was inspected.
-- **Why deferred:** the required repair changes notification lifecycle behavior and must remain local until independently re-audited.
-- **Next action:** implement one shared truthful delivery-state mapper, atomic duplicate/retry protection and negative/concurrency tests; then complete safe-provider sandbox evidence. Matching roadmap M5/M8/M9 own the remaining work.
+- **Why deferred:** no safe-provider or sandbox record was inspected in this local audit.
+- **Next action:** complete safe-provider sandbox evidence for delivery and retry lifecycle. Matching roadmap M5/M8/M9 own the remaining work.
 
 ### DF-018 — Public matching input lacks bounded, literal request handling
 
@@ -238,11 +238,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `c7afb07`.
-- **Evidence:** the public owner route now uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The current re-audit accepts the local stale-context/config repairs but identifies unresolved delivery, urgent-locality and trust-copy requirements.
+- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `8e03f6c`.
+- **Evidence:** the public owner route uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The latest audit accepts the local stale-context/config, delivery and urgent-locality repairs, but retains the public-trust-copy blocker.
 - **Impact/uncertainty:** the v2 workflow is no longer merely authored, but local tests and mocked screens do not prove the deployed owner journey, safe provider behavior or persisted redaction.
 - **Why deferred:** no developer-sandbox deployment or provider activation was authorised.
-- **Next action:** close the narrow `c7afb07` audit findings, then run the M2/M5/M9 disposable-sandbox workflow. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Next action:** close the narrow `8e03f6c` copy/test finding, then run the M2/M5/M9 disposable-sandbox workflow. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 
 ### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 
@@ -260,13 +260,13 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** activating or exercising a real provider remains outside this local audit.
 - **Next action:** after local findings close, run and independently inspect the required M4/M9 safe-Gemini parity scenario; do not mark the model path accepted from mocks alone.
 
-### DF-024 — Urgent-support pathway exists locally but cannot yet make locality/verification claims safely
+### DF-024 — Urgent-support pathway exists locally but is not sandbox-accepted
 
-- **Observed/status:** 5 October 2026 — `PARTIAL` in local candidate `c7afb07`; no sandbox or production acceptance.
-- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. The separate official-source provider record is present and the static Lost Dogs' Home facts were corrected. The re-audit found that an unmatched suburb such as Werribee falls back to the North Melbourne listing; correction acceptance rests on operator assertion rather than captured official-source evidence; and `/ops` can count stale records as current.
-- **Impact/uncertainty:** the pathway is no longer absent, but local coverage can be overstated and provider records can be reactivated without sufficient evidence. It remains unsafe to claim Greater Melbourne emergency coverage or deployed current availability.
-- **Why deferred:** the narrow fixes require no provider activation or public-source ingestion, but must be independently re-audited before sandbox deployment.
-- **Next action:** return empty/no-local-coverage when coverage is absent, capture and validate bounded first-party evidence before `current`, compute `/ops` freshness from live check dates, correct the visual fixture, then run M6/M9 sandbox scenarios. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Observed/status:** 5 October 2026 — local defect repair accepted in candidate `8e03f6c`; no sandbox or production acceptance.
+- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Impact/uncertainty:** local responses no longer imply local coverage when none is configured. This does not evidence a current or comprehensive provider directory, safe live contact information, or deployed behaviour.
+- **Why deferred:** this audit did not deploy, query live provider data or perform a live urgent-provider contact/availability check.
+- **Next action:** after the narrow copy/test rework is accepted, run M6/M9 disposable-sandbox scenarios with authorised, sanitised provider evidence. Do not make Greater Melbourne or availability claims until that evidence exists.
 
 ### DF-025 — Bounded Maps/Places urgent-support exception is not implemented or verified
 
