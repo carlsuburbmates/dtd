@@ -150,19 +150,19 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-009 — Frontend dependency vulnerability backlog
 
-- **Observed/status:** 24 September 2026 — open; no automatic dependency rewrite applied.
-- **Evidence:** `npm audit --omit=dev` initially reported 51 production dependency advisories: two critical, 27 high, 11 moderate and 11 low. Direct browser-runtime upgrades moved `axios` to 1.20.0 and `react-router-dom`/`react-router` to 7.18.4; the full frontend test/build gate passed and the local result is now 48 advisories (two critical, 24 high, 11 moderate and 11 low). `react-scripts` and `remark-mdx-frontmatter` remain direct high-severity toolchain dependencies; the critical findings (`shell-quote`, `websocket-driver`) are transitive beneath the `react-scripts` development-server chain. GitHub's default-branch security banner reports a broader 186-advisory inventory, which includes a different dependency scope and must not be conflated with the local production-only result.
+- **Observed/status:** 5 October 2026 — open; fresh local dependency audit completed, no automatic dependency rewrite applied.
+- **Evidence:** `frontend/package-lock.json` is current, and `npm audit --omit=dev` now reports 89 advisories (two critical, 73 high, nine moderate and five low). Direct high-severity paths include `react-scripts` 5.0.1, `postcss`, `tailwindcss` and `remark-mdx-frontmatter`; the critical findings remain transitive below the legacy `react-scripts` development-server chain. The current `frontend` production test/build gate passes, but that does not reduce the audit count.
 - **Impact/uncertainty:** the remaining critical findings are not included in the deployed browser bundle, but they remain a CI/developer-machine risk because the build tool is currently declared as a production dependency. Some other advisories are build-tool or transitive-only; current evidence does not prove every reachable runtime path. Applying `npm audit fix --force` would introduce major-version changes without product regression review.
 - **Why deferred:** the next fixes require a deliberate `react-scripts` toolchain migration and resolution of the pre-existing `date-fns` 4 / `react-day-picker` 8 peer conflict. A forced resolver run would hide rather than resolve that compatibility issue.
 - **Next action:** move the build toolchain to a supported dependency model, resolve the date-picker peer constraint, then continue package upgrades in bounded batches with build, test and live-acceptance evidence.
 
 ### DF-010 — GitHub Actions runtime and runner-image deprecation
 
-- **Observed/status:** 25 September 2026 — open; current verification passed.
-- **Evidence:** the successful PR #10 `Verify` runs reported that `actions/checkout@v4`, `actions/setup-node@v4` and `actions/setup-python@v5` still target Node.js 20 and are currently being forced to run on Node.js 24. GitHub also warned that `ubuntu-latest` will migrate to Ubuntu 26 on 19 October 2026.
-- **Impact/uncertainty:** this is not a current application or release failure, but an unaddressed workflow compatibility risk. A future GitHub runner/runtime change could make CI fail independently of a product change.
-- **Why deferred:** the currently approved release verification passed; changing CI action/runtime versions needs a bounded workflow update and a fresh remote verification run.
-- **Next action:** update the workflow actions/runtime expectations to supported releases before the announced runner transition, then confirm the full remote verification run remains green.
+- **Observed/status:** 5 October 2026 — repository configuration remediated; remote re-verification remains open.
+- **Evidence:** the current `.github/workflows/verify.yml` uses `actions/checkout@v7`, `actions/setup-node@v7` and `actions/setup-python@v7`. It retains an explicit Node 20 target and `ubuntu-latest`. No new remote workflow run has been triggered from this local sandbox branch, so GitHub-hosted runner compatibility is not yet independently proven.
+- **Impact/uncertainty:** the obsolete-action finding is no longer present in current repository configuration. A remote runner/image change can still affect CI until a fresh GitHub run succeeds.
+- **Why deferred:** pushing a branch and triggering remote CI is external mutation and remains outside the developer-sandbox deployment authority exercised here.
+- **Next action:** push an audited commit when authorised, then record the exact successful remote Verify run and any current runner warnings.
 
 ### DF-011 — Frontend configuration fallback and public route metadata gaps
 

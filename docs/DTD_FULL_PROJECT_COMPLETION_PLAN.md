@@ -54,7 +54,8 @@ This is a working completion ledger, not a claim that every repository statement
 | DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
 | DF-006 | 1, 6 | PARTIAL | Local isolated suite and one live matching cycle pass; expand to browser/API/automation/recovery acceptance in CI. |
-| DF-009, DF-010 | 1 | OPEN | Supported frontend toolchain/dependency remediation plus green remote workflow on the current runner image. |
+| DF-009 | 1 | OPEN | Fresh local audit reports 89 advisories; migrate from the legacy frontend toolchain and remediate in tested batches. |
+| DF-010 | 1 | PARTIAL | Current workflow uses v7 actions; a fresh remote Verify run is still required when branch push authority is exercised. |
 | DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
 | DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |
 | DF-014 | 2 | PARTIAL | Read-only production corpus audit before any production promotion. |
