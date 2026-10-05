@@ -14,7 +14,7 @@
 ## Live refresh — 5 October 2026
 
 - The developer sandbox now serves Cloud Run revision `dtd-api-dev-00012-bpc` at 100% traffic using the dedicated runtime service account `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`; `/api/health` returned an available database. The default Compute service account is no longer the Cloud Run runtime identity.
-- Deployment, runtime-IAM provisioning and scheduler provisioning are split into separate idempotent scripts. The enabled scheduler uses that dedicated identity and the canonical regional Cloud Run OIDC audience. Configuration is verified; a controlled scheduler execution is still required before automation is accepted.
+- Deployment, runtime-IAM provisioning and scheduler provisioning are split into separate idempotent scripts. The enabled scheduler uses that dedicated identity, canonical regional Cloud Run OIDC audience and `application/json` payload. A manual scheduler dry-run returned HTTP 200 on 5 October, created a zero-mutation `ingestion_runs` record, and that disposable record was deleted. Real acquisition processing remains unaccepted until a namespaced approved-source run is designed.
 - `scripts/run_sandbox_matching_acceptance.sh` completed twice against the live sandbox. Each run inserted a unique confirmed-capability test trainer, received it from `/api/match`, found its sanitised event in protected matching Ops, then removed the trainer, event, context and test-created fallback record. The deleted trainer endpoint returned 404. This is a narrow API/Ops acceptance, not a completed owner UI, enquiry, retention or automation acceptance.
 
 ## Product and deployment

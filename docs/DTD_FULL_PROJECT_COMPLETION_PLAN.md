@@ -5,7 +5,7 @@
 ## Current verified baseline
 
 - Developer sandbox: `dogtrainersdirectory-dev`, Cloud Run `dtd-api-dev-00012-bpc`, 100% traffic, `/api/health` database available.
-- The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject and audience now match the dedicated sandbox runtime identity and canonical Cloud Run URL; an actual scheduled ingestion execution remains unaccepted.
+- The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject, canonical regional audience and JSON content type now match the service contract. A real Cloud Scheduler dry-run returned HTTP 200, wrote a zero-mutation run record, and that record was deleted; a real acquisition run remains intentionally unaccepted.
 - Sandbox runtime now uses `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`, with only Vertex AI User and Secret Manager accessor roles required by the current runtime. The prior default Compute identity is no longer attached to Cloud Run runtime traffic (DF-013 resolved for sandbox).
 - Matching local release gate passes: `1d0acb4`, 530 isolated backend tests; the runner creates a UUID-named loopback database and deletes it in `finally`.
 - The first live, disposable matching acceptance passed twice: a unique declared-capability trainer was returned by `/api/match`, a sanitised match event appeared in protected matching Ops, and the trainer/event/context/fallback event were deleted and then confirmed absent from the public trainer endpoint. The remaining M9 matrix, rendered owner UI, profile/enquiry lifecycle and retention expiry are still unaccepted.
@@ -40,7 +40,7 @@ DTD is not complete until every applicable item below is independently evidenced
 
 1. Expand the passing disposable acceptance runner into the full M9 matrix: validation, safety triage, exact/expanded/no-match, AI degradation, context, profile and enquiry state; keep each run self-cleaning and public-absence checked.
 2. Repair and visually verify the owner web journey (DF-003, DF-011, DF-020) from navigation through mobile questionnaire, error/degraded states, results and profile handoff.
-3. Execute a controlled, non-production scheduler/ingestion proof with namespaced source data or a no-mutation dry-run mode; inspect the resulting run/audit record and cleanup.
+3. Design a namespaced, approved-source ingestion acceptance run and rerun. The scheduler transport dry-run is complete; do not use a real business source until its acquisition authority, expected record disposition and cleanup plan are explicit.
 4. Complete the remaining DF work in the cross-project ledger below, beginning with CI/dependency and privacy/safety acceptance blockers.
 
 ## Cross-project finding ledger

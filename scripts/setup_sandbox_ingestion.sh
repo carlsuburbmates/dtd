@@ -53,6 +53,7 @@ main() {
       --time-zone="Australia/Melbourne" \
       --uri="${JOB_URI}" \
       --http-method=POST \
+      --update-headers="Content-Type=application/json" \
       --oidc-service-account-email="${SERVICE_ACCOUNT}" \
       --oidc-token-audience="${SERVICE_URL}"
   else
@@ -64,6 +65,7 @@ main() {
       --time-zone="Australia/Melbourne" \
       --uri="${JOB_URI}" \
       --http-method=POST \
+      --headers="Content-Type=application/json" \
       --oidc-service-account-email="${SERVICE_ACCOUNT}" \
       --oidc-token-audience="${SERVICE_URL}"
   fi
