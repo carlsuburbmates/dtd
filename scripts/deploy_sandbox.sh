@@ -8,7 +8,13 @@ set -euo pipefail
 PROJECT_ID="dogtrainersdirectory-dev"
 REGION="australia-southeast1"
 SERVICE_NAME="dtd-api-dev"
-SERVICE_ACCOUNT="625222421634-compute@developer.gserviceaccount.com"
+# The runtime identity is deliberately separate from the project default
+# Compute Engine service account. Provision it with
+# `bash scripts/setup_sandbox_runtime_identity.sh` before deploying.
+SERVICE_ACCOUNT="dtd-api-dev-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
+# Cloud Run's regional service URL is stable for this sandbox service. It is
+# also the exact OIDC audience configured on the scheduler job.
+SERVICE_URL="https://${SERVICE_NAME}-625222421634.${REGION}.run.app"
 
 validate_health_response() {
   HEALTH_RESPONSE="$1" python3 - <<'PY'
@@ -48,7 +54,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --source backend \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",AUTONOMY_LOOP_OWNER=none,PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500,VERTEXAI_PROJECT=${PROJECT_ID},VERTEXAI_LOCATION=${REGION},CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT=${SERVICE_ACCOUNT},CLOUD_SCHEDULER_OIDC_AUDIENCE=https://dtd-api-dev-x2kdoaemtq-ts.a.run.app \
+  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",AUTONOMY_LOOP_OWNER=none,PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500,VERTEXAI_PROJECT=${PROJECT_ID},VERTEXAI_LOCATION=${REGION},CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT=${SERVICE_ACCOUNT},CLOUD_SCHEDULER_OIDC_AUDIENCE=${SERVICE_URL} \
   --set-secrets MONGO_URL=dtd-mongo-url:latest,ADMIN_PASS=dtd-admin-pass:latest,TRAINER_ACTION_TOKEN_SECRET=dtd-trainer-action-token-secret:latest,STRIPE_SECRET_KEY=dtd-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=dtd-stripe-webhook-secret:latest,RESEND_API_KEY=dtd-resend-api-key:latest,ABR_GUID=dtd-abr-guid:latest,SENTRY_DSN=dtd-sentry-dsn:latest \
   --cpu 1 \
   --memory 1Gi \
@@ -58,24 +64,19 @@ gcloud run deploy "${SERVICE_NAME}" \
 
 # 3. Post-deployment verification
 echo "📡 [3/3] Verifying deployed endpoint..."
-SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
-if [ -z "${SERVICE_URL}" ]; then
+DEPLOYED_SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
+if [ -z "${DEPLOYED_SERVICE_URL}" ]; then
   echo "Sandbox Cloud Run service returned no URL" >&2
   exit 1
 fi
-echo "Sandbox URL: ${SERVICE_URL}"
+echo "Sandbox URL: ${DEPLOYED_SERVICE_URL}"
 
-HEALTH_RESPONSE=$(curl --fail --silent --show-error --location --max-time 15 "${SERVICE_URL}/api/health")
+HEALTH_RESPONSE=$(curl --fail --silent --show-error --location --max-time 15 "${DEPLOYED_SERVICE_URL}/api/health")
 validate_health_response "${HEALTH_RESPONSE}"
 echo "✅ Sandbox health verified: API is healthy and its database is available."
 
-# 4. Ingestion Infrastructure & Scheduler Setup
-if [ -f "$(dirname "${BASH_SOURCE[0]}")/setup_sandbox_ingestion.sh" ]; then
-  echo "🤖 [4/4] Provisioning sandbox Vertex AI IAM and batch ingestion scheduler..."
-  bash "$(dirname "${BASH_SOURCE[0]}")/setup_sandbox_ingestion.sh"
-fi
-
-echo "🎉 Sandbox deployment, verification, and ingestion setup complete!"
+echo "🎉 Sandbox API deployment and health verification complete."
+echo "ℹ️ Scheduler and IAM bootstrap are intentionally separate: bash scripts/setup_sandbox_ingestion.sh"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

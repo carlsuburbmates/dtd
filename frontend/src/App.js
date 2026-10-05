@@ -55,7 +55,7 @@ function AnimatedRoutes() {
                 <Route path="/terms" element={<PageTransition><Terms /></PageTransition>} />
                 <Route path="/ops" element={<PageTransition><Ops /></PageTransition>} />
                 {/* Legacy routes — redirect to home (the product surface) */}
-                <Route path="/match" element={<Navigate to="/" replace />} />
+                <Route path="/match" element={<Navigate to="/#owner-interest" replace />} />
                 <Route path="/admin" element={<Navigate to="/" replace />} />
                 <Route path="/admin/dashboard" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

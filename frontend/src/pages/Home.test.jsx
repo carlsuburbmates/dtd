@@ -7,6 +7,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 jest.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
     useSearchParams: () => [new URLSearchParams(), jest.fn()],
+    useLocation: () => ({ hash: "" }),
 }), { virtual: true });
 
 jest.mock("framer-motion", () => {
@@ -85,6 +86,13 @@ describe("Home page matching test", () => {
         ]));
         expect(links).toHaveLength(2);
         expect(links.every((link) => !link.hasAttribute("target"))).toBe(true);
+    });
+
+    it("makes the owner hero CTA lead directly to guided matching", async () => {
+        await act(async () => { root.render(<Home />); });
+        const cta = container.querySelector("[data-testid='hero-owner-cta']");
+        expect(cta?.getAttribute("href")).toBe("/#owner-interest");
+        expect(cta?.textContent).toContain("Find a trainer for your dog");
     });
 
     it("renders match results with structured questionnaire, stores context token, and preserves URL privacy", async () => {

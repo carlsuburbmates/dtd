@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ArrowRight, Sparkles, ExternalLink } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
@@ -46,6 +46,7 @@ const METHOD_PREFERENCES = [
 
 export default function Home() {
     const { scrollY } = useScroll();
+    const location = useLocation();
     const [search] = useSearchParams();
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
@@ -116,6 +117,13 @@ export default function Home() {
             active = false;
         };
     }, []);
+
+    useEffect(() => {
+        if (location.hash !== "#owner-interest") return;
+        const target = document.getElementById("owner-interest");
+        if (!target) return;
+        requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }, [location.hash]);
 
     const toggleConcern = (cid) => {
         setSelectedConcerns((prev) =>
@@ -300,7 +308,7 @@ export default function Home() {
                                 </motion.div>
                             )}
                             <motion.div whileTap={{ scale: 0.97 }}>
-                                <Link to="/trainers" className="inline-flex items-center justify-center text-base px-8 py-4 w-full sm:w-auto rounded-full border border-white/40 text-white hover:bg-white/10 transition-colors" data-testid="hero-owner-cta">Find local trainers</Link>
+                                <Link to="/#owner-interest" className="inline-flex items-center justify-center text-base px-8 py-4 w-full sm:w-auto rounded-full border border-white/40 text-white hover:bg-white/10 transition-colors" data-testid="hero-owner-cta">Find a trainer for your dog</Link>
                             </motion.div>
                         </motion.div>
                         <motion.div

@@ -6,7 +6,7 @@ import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 
 const NAV = [
     { to: "/trainers", label: "Find a trainer", testid: "nav-trainers" },
-    { to: "/how-it-works", label: "For owners", testid: "nav-how" },
+    { to: "/#owner-interest", label: "Guided matching", testid: "nav-how" },
     { to: FIRST_LEASH_URL, label: "The First Leash", testid: "nav-first-leash", external: true },
     { to: "/trust", label: "Trust & Standards", testid: "nav-trust" },
     { to: "/contact", label: "Support", testid: "nav-support" },
@@ -14,7 +14,7 @@ const NAV = [
 
 function isActive(item, pathname) {
     if (item.to === "/trainers") return pathname === "/trainers" || pathname === "/submit";
-    if (item.to === "/how-it-works") return pathname === "/how-it-works";
+    if (item.to === "/#owner-interest") return pathname === "/";
     return pathname === item.to;
 }
 
@@ -134,7 +134,7 @@ export function PublicFooter() {
                     <div>
                         <div className="small-caps">Owners</div>
                         <div className="mt-3 grid gap-2 text-sm text-[#4A615A]">
-                            <Link to="/how-it-works#owner-guide-waitlist" data-testid="footer-waitlist" className="footer-link">Waitlist</Link>
+                            <Link to="/#owner-interest" data-testid="footer-waitlist" className="footer-link">Guided matching</Link>
                             <a href={FIRST_LEASH_URL} data-testid="footer-first-leash" className="footer-link">The First Leash</a>
                             <Link to="/faq" data-testid="footer-faq" className="footer-link">FAQ</Link>
                         </div>

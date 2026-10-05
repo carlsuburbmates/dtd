@@ -42,3 +42,15 @@ it("renders neutral directory descriptor without universal review or selection c
     act(() => root.unmount());
     element.remove();
 });
+
+it("provides a direct owner matching route in navigation and footer", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const root = createRoot(element);
+    act(() => root.render(<><PublicHeader /><PublicFooter /></>));
+    expect(element.querySelector('[data-testid="nav-how"]')?.getAttribute("href")).toBe("/#owner-interest");
+    expect(element.querySelector('[data-testid="footer-waitlist"]')?.getAttribute("href")).toBe("/#owner-interest");
+    expect(element.textContent).toContain("Guided matching");
+    act(() => root.unmount());
+    element.remove();
+});

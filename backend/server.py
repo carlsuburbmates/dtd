@@ -2524,6 +2524,7 @@ class TrainerIngestJobRequest(BaseModel):
     source_urls: Optional[List[str]] = Field(default=None, description="Optional custom source URLs to ingest.")
     batch_size: Optional[int] = Field(default=10, description="Max batch candidates to process.")
     run_guardian: Optional[bool] = Field(default=True, description="Whether to run Supervisory Guardian after ingestion.")
+    dry_run: bool = Field(default=False, description="Verify authenticated scheduler delivery without fetching, mutating trainer data, or running the guardian.")
 
 
 async def _execute_trainer_ingest_pipeline(
@@ -2537,10 +2538,39 @@ async def _execute_trainer_ingest_pipeline(
     source_urls = payload.source_urls if payload else None
     batch_size = payload.batch_size if payload and payload.batch_size else 10
     run_guardian = payload.run_guardian if payload and payload.run_guardian is not None else True
+    dry_run = bool(payload.dry_run) if payload else False
     run_id = f"ingest_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
     started_at = datetime.now(timezone.utc).isoformat()
 
     try:
+        # A scheduler dry run proves the real OIDC delivery path and produces a
+        # bounded Ops record without silently crawling seed URLs, changing
+        # trainer records, or invoking providers. It is intentionally explicit
+        # so the normal daily scheduler cannot become a no-op by accident.
+        if dry_run:
+            completed_at = datetime.now(timezone.utc).isoformat()
+            result = {
+                "id": run_id,
+                "ok": True,
+                "dry_run": True,
+                "trigger": trigger,
+                "executed_at": started_at,
+                "completed_at": completed_at,
+                "ingestion": {
+                    "ok": True,
+                    "dry_run": True,
+                    "total_resolved": 0,
+                    "total_processed": 0,
+                    "reason_codes": ["scheduler_delivery_verified_no_mutation"],
+                },
+                "guardian": None,
+            }
+            if db is not None:
+                ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+                if ingestion_runs_coll is not None:
+                    await ingestion_runs_coll.insert_one(dict(result))
+            return result
+
         # 1. Run Engine 1: Batch Ingestion Orchestrator
         ingestion_summary = await ingestion_manager.run_batch_ingestion_pipeline(
             source_urls=source_urls,

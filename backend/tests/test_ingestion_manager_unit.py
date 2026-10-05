@@ -299,6 +299,34 @@ def test_trainer_ingest_endpoint_executes_with_valid_oidc(monkeypatch):
         assert "executed_at" in res
 
 
+def test_trainer_ingest_dry_run_proves_scheduler_delivery_without_ingestion(monkeypatch):
+    import server
+    mock_db = _MockDB()
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT", "scheduler@dtd.test")
+    monkeypatch.setenv("CLOUD_SCHEDULER_OIDC_AUDIENCE", "https://dtd-api.test")
+    monkeypatch.setattr(
+        server.google_id_token,
+        "verify_oauth2_token",
+        lambda token, request, audience: {"email": "scheduler@dtd.test", "email_verified": True, "aud": audience},
+    )
+    with patch.object(server, "db", mock_db), \
+         patch("services.ingestion_manager.run_batch_ingestion_pipeline", new=AsyncMock()) as ingest, \
+         patch("services.pipeline_guardian.audit_corpus_integrity", new=AsyncMock()) as guardian:
+        result = asyncio.run(
+            server.run_trainer_ingest_job(
+                payload=server.TrainerIngestJobRequest(dry_run=True),
+                authorization="Bearer valid-token",
+            )
+        )
+    assert result["ok"] is True
+    assert result["dry_run"] is True
+    assert result["ingestion"]["total_processed"] == 0
+    assert result["guardian"] is None
+    assert len(mock_db.ingestion_runs.rows) == 1
+    ingest.assert_not_awaited()
+    guardian.assert_not_awaited()
+
+
 def test_record_ingestion_failure_invalidates_capabilities_on_source_evidence_url():
     """P0 Item 5: Verifies that source-refresh invalidation recognizes source_evidence_url."""
     from services.trainer_quality import (

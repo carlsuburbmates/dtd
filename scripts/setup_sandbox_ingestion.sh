@@ -8,11 +8,22 @@ set -euo pipefail
 
 PROJECT_ID="dogtrainersdirectory-dev"
 REGION="australia-southeast1"
-SERVICE_ACCOUNT="625222421634-compute@developer.gserviceaccount.com"
+# This identity must first be provisioned by setup_sandbox_runtime_identity.sh.
+# Keep scheduler invocation and application runtime on the same narrowly scoped
+# identity so the application can validate its OIDC audience deterministically.
+SERVICE_ACCOUNT="dtd-api-dev-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 SERVICE_NAME="dtd-api-dev"
 SCHEDULER_JOB_NAME="dtd-trainer-ingest-cron"
+# Use the same canonical Cloud Run audience that the deployed service enforces.
+# `status.url` can retain a legacy service URL after a service migration.
+SERVICE_URL="https://${SERVICE_NAME}-625222421634.${REGION}.run.app"
 
 main() {
+  if ! gcloud iam service-accounts describe "${SERVICE_ACCOUNT}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    echo "Missing required sandbox runtime identity ${SERVICE_ACCOUNT}. Run scripts/setup_sandbox_runtime_identity.sh first." >&2
+    exit 1
+  fi
+
   echo "🚀 [1/3] Enabling Vertex AI and Cloud Scheduler APIs in ${PROJECT_ID}..."
   gcloud services enable aiplatform.googleapis.com cloudscheduler.googleapis.com --project="${PROJECT_ID}"
   echo "✅ APIs enabled."
@@ -25,9 +36,8 @@ main() {
   echo "✅ Vertex AI User IAM role bound."
 
   echo "⏰ [3/3] Provisioning Cloud Scheduler job for batch ingestion..."
-  SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)" || true)
-  if [ -z "${SERVICE_URL}" ]; then
-    echo "⚠️ Warning: Sandbox Cloud Run service ${SERVICE_NAME} returned no URL. Cloud Scheduler will need to be configured after deployment." >&2
+  if ! gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" >/dev/null 2>&1; then
+    echo "⚠️ Warning: Sandbox Cloud Run service ${SERVICE_NAME} does not exist. Cloud Scheduler will need to be configured after deployment." >&2
     return 0
   fi
 

@@ -4,11 +4,11 @@
 
 ## Current verified baseline
 
-- Developer sandbox: `dogtrainersdirectory-dev`, Cloud Run `dtd-api-dev-00007-p8j`, 100% traffic, `/api/health` database available.
-- The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne and calls the authenticated internal ingestion endpoint.
-- Sandbox runtime has Vertex AI User access. It still uses the default Compute service account; DF-013 remains open until replaced with a dedicated least-privilege runtime identity.
+- Developer sandbox: `dogtrainersdirectory-dev`, Cloud Run `dtd-api-dev-00012-bpc`, 100% traffic, `/api/health` database available.
+- The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject and audience now match the dedicated sandbox runtime identity and canonical Cloud Run URL; an actual scheduled ingestion execution remains unaccepted.
+- Sandbox runtime now uses `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`, with only Vertex AI User and Secret Manager accessor roles required by the current runtime. The prior default Compute identity is no longer attached to Cloud Run runtime traffic (DF-013 resolved for sandbox).
 - Matching local release gate passes: `1d0acb4`, 530 isolated backend tests; the runner creates a UUID-named loopback database and deletes it in `finally`.
-- Matching remains sandbox-unaccepted until its disposable live matrix, records, UI and `/ops` evidence pass.
+- The first live, disposable matching acceptance passed twice: a unique declared-capability trainer was returned by `/api/match`, a sanitised match event appeared in protected matching Ops, and the trainer/event/context/fallback event were deleted and then confirmed absent from the public trainer endpoint. The remaining M9 matrix, rendered owner UI, profile/enquiry lifecycle and retention expiry are still unaccepted.
 
 ## Completion rule
 
@@ -19,7 +19,7 @@ DTD is not complete until every applicable item below is independently evidenced
 | Phase | Scope and work | Exit evidence |
 | --- | --- | --- |
 | 0 | Establish one current-state register; reconcile stale matching records, current sandbox revision, scheduler/IAM and code branch. | This document, current-state entries and a clean exact commit map agree. |
-| 1 | Release safety: dedicated sandbox runtime identity, least privilege, provider recovery registry, Cloud Build/Actions modernisation, dependency remediation plan, repeatable safe deploy with no hidden scheduler/IAM mutation. | Sandbox deploy/recovery drill, remote CI, dependency evidence, no use of default runtime identity. |
+| 1 | Release safety: dedicated sandbox runtime identity, least privilege, provider recovery registry, Cloud Build/Actions modernisation, dependency remediation plan, repeatable safe deploy with no hidden scheduler/IAM mutation. | Sandbox deploy/recovery drill, remote CI, dependency evidence, no use of default runtime identity. **Runtime identity and deployment/scheduler split are complete; CI, dependency and recovery work remains.** |
 | 2 | Trainer supply and acquisition: match-ready declaration/onboarding, claim/correction/suppression lifecycle, lawful source evidence, scheduler observability, capacity freshness and query/index proof. | Disposable ingestion run and rerun; trainer declaration→projection→correction→exclusion journey; `/ops` evidence. |
 | 3 | Owner website: one mobile-first owner entry route, accessible structured questionnaire, config failure state, truthful public copy, navigation/header/metadata/SEO repair, profile and enquiry handoff. | Desktop/mobile browser paths, keyboard/accessibility checks, failure states, rendered metadata and no private URL content. |
 | 4 | Matching and safety: deterministic eligibility, paid-neutral AI/fallback parity, exact 0.05 presentation, thin-supply disclosure, urgent routes/provider freshness, notification retry and anti-gaming. | All M0–M6/M8 fixtures plus sandbox responses/records and truthful `/ops` states. |
@@ -38,7 +38,26 @@ DTD is not complete until every applicable item below is independently evidenced
 
 ## Immediate active sequence
 
-1. Build the disposable sandbox acceptance harness with explicit create/read/cleanup verification and `/ops` correlation.
-2. Run the matching M9 matrix against revision `00007-p8j`; repair every observed UI/API/persistence/automation discrepancy.
-3. Replace the sandbox default Compute runtime identity and split deploy from scheduler/IAM setup.
-4. Reconcile every DF-001 through DF-027 item into phases 1–7, remove stale findings only with new evidence, and execute highest-risk blockers first.
+1. Expand the passing disposable acceptance runner into the full M9 matrix: validation, safety triage, exact/expanded/no-match, AI degradation, context, profile and enquiry state; keep each run self-cleaning and public-absence checked.
+2. Repair and visually verify the owner web journey (DF-003, DF-011, DF-020) from navigation through mobile questionnaire, error/degraded states, results and profile handoff.
+3. Execute a controlled, non-production scheduler/ingestion proof with namespaced source data or a no-mutation dry-run mode; inspect the resulting run/audit record and cleanup.
+4. Complete the remaining DF work in the cross-project ledger below, beginning with CI/dependency and privacy/safety acceptance blockers.
+
+## Cross-project finding ledger
+
+This is a working completion ledger, not a claim that every repository statement has been freshly audited. `DONE` has direct 5 October evidence; `PARTIAL` means code or a bounded sandbox segment works but the full workflow is not accepted; `OPEN` needs implementation or acceptance evidence.
+
+| Finding(s) | Phase | State | Completion evidence still required |
+| --- | --- | --- | --- |
+| DF-001, DF-007 | 1, 7 | OPEN | Retire/confirm obsolete release-hosting surfaces after an owner-approved production inventory; do not change DNS or production hosting during sandbox work. |
+| DF-003, DF-011, DF-020 | 3 | OPEN | One owner-first navigation route, fail-closed config state, labels/live regions/catalogue suggestions and route metadata; desktop/mobile keyboard/browser evidence. |
+| DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
+| DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
+| DF-006 | 1, 6 | PARTIAL | Local isolated suite and one live matching cycle pass; expand to browser/API/automation/recovery acceptance in CI. |
+| DF-009, DF-010 | 1 | OPEN | Supported frontend toolchain/dependency remediation plus green remote workflow on the current runner image. |
+| DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
+| DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |
+| DF-014 | 2 | PARTIAL | Read-only production corpus audit before any production promotion. |
+| DF-015 through DF-019, DF-021 through DF-023, DF-026, DF-027 | 4, 6 | PARTIAL | Full M0–M9 sandbox matrix, retained-record/expiry proof, UI acceptance and AI/fallback parity; the basic live match/record/Ops/cleanup cycle and local suite pass. |
+| DF-024, DF-025 | 4 | OPEN | Verified urgent-provider data freshness/correction lifecycle, safety UI, and decision on the constrained Maps/Places emergency-discovery exception before implementation. |
+| DF-017 | 5, 6 | PARTIAL | Provider-safe notification failure/retry test that cannot send to a real trainer, with Ops and idempotency evidence. |

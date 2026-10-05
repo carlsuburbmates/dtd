@@ -11,6 +11,12 @@
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
 
+## Live refresh — 5 October 2026
+
+- The developer sandbox now serves Cloud Run revision `dtd-api-dev-00012-bpc` at 100% traffic using the dedicated runtime service account `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`; `/api/health` returned an available database. The default Compute service account is no longer the Cloud Run runtime identity.
+- Deployment, runtime-IAM provisioning and scheduler provisioning are split into separate idempotent scripts. The enabled scheduler uses that dedicated identity and the canonical regional Cloud Run OIDC audience. Configuration is verified; a controlled scheduler execution is still required before automation is accepted.
+- `scripts/run_sandbox_matching_acceptance.sh` completed twice against the live sandbox. Each run inserted a unique confirmed-capability test trainer, received it from `/api/match`, found its sanitised event in protected matching Ops, then removed the trainer, event, context and test-created fallback record. The deleted trainer endpoint returned 404. This is a narrow API/Ops acceptance, not a completed owner UI, enquiry, retention or automation acceptance.
+
 ## Product and deployment
 
 - The main directory frontend and Cloud Run API are publicly reachable. On 24 September 2026, the API was recovered from a revision blocked by unavailable Sentry configuration, then moved through a zero-traffic Direct VPC canary to revision `dtd-api-00029-7cx`, which had 100% traffic when rechecked on 25 September. Public health, configuration, trainer-read and Scheduler checks passed before and after the shift; startup logs confirm Sentry initialisation in `production` on the current service.
@@ -172,14 +178,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Repair:** the build identity now has `roles/storage.objectViewer` on only `run-sources-gen-lang-client-0028123502-australia-southeast1`, `roles/artifactregistry.writer` on only `cloud-run-source-deploy` in `australia-southeast1`, and `roles/logging.logWriter` at project level for build logs. It has not received runtime-service, Secret Manager or broad project roles.
 - **Impact/uncertainty:** without these narrow operational permissions, source releases could fail; the successful image build, ready canary and 100% promotion prove the repair for this release path. This does not expand runtime access.
 - **Next action:** retain this record as release-identity evidence and re-check the scoped bindings if the source-build identity or deployment path changes.
-
-### DF-013 — Sandbox runtime uses the default Compute service account
-
-- **Observed/status:** 26 September 2026 — open; sandbox-only exposure, no production evidence affected.
-- **Evidence:** `scripts/deploy_sandbox.sh` explicitly deploys `dtd-api-dev` as `625222421634-compute@developer.gserviceaccount.com`. The preceding sandbox record states that this default Compute identity has Secret Manager access alongside Artifact Registry, Cloud Storage and logging roles. A fresh authenticated IAM read could not be performed because the local Google Cloud login has expired; the current script and committed 25 September evidence are sufficient to establish the configuration pattern, not its unchanged live state.
-- **Impact/uncertainty:** the sandbox is project- and database-isolated from production, but its runtime identity combines application secret access with build/deployment-adjacent permissions. That increases the blast radius of a sandbox runtime compromise and conflicts with DTD's separate, least-privileged runtime-versus-management identity rule. This finding does not indicate access to production secrets or data.
-- **Why deferred:** repairing it requires authenticated Google Cloud IAM changes, a new sandbox runtime service account, secret-level grants, a safe sandbox redeploy and live health verification. The local GCP session is currently unauthenticated; no IAM or deployment mutation was attempted.
-- **Next action:** after reauthentication, create a dedicated `dtd-api-dev` runtime service account with only its necessary sandbox secret access, redeploy `dtd-api-dev` through the corrected script, verify health and confirm the default Compute identity no longer serves runtime traffic.
 
 ### DF-014 — Reverification loop grants public state from AI confidence
 
