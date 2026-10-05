@@ -50,7 +50,7 @@ This is a working completion ledger, not a claim that every repository statement
 | Finding(s) | Phase | State | Completion evidence still required |
 | --- | --- | --- | --- |
 | DF-001, DF-007 | 1, 7 | OPEN | Retire/confirm obsolete release-hosting surfaces after an owner-approved production inventory; do not change DNS or production hosting during sandbox work. |
-| DF-003, DF-011, DF-020 | 3 | OPEN | One owner-first navigation route, fail-closed config state, labels/live regions/catalogue suggestions and route metadata; desktop/mobile keyboard/browser evidence. |
+| DF-003, DF-011, DF-020 | 3 | PARTIAL | Local owner navigation now targets guided matching, config fails closed, inputs/results are labelled/announced, and client-side route metadata is set. A deployed frontend plus desktop/mobile keyboard/browser evidence is still required. |
 | DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
 | DF-006 | 1, 6 | PARTIAL | Local isolated suite and one live matching cycle pass; expand to browser/API/automation/recovery acceptance in CI. |
