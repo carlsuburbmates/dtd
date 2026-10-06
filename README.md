@@ -50,8 +50,10 @@ Backend:
 python3 backend/scripts/run_isolated_integration_suite.py
 ```
 
-This is the maintained full backend command. It starts a local API with a
-disposable loopback-only MongoDB database and removes that database afterwards.
+This is the maintained full backend command. It starts a local API and a
+disposable loopback-only MongoDB instance, then removes the entire temporary
+database directory afterwards. Pass `--mongo-url` only to use an existing
+loopback MongoDB service.
 It never uses the production canonical trainer seed or external providers.
 
 Frontend:

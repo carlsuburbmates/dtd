@@ -45,7 +45,7 @@ export default function CampaignLanding() {
                     The First Leash
                 </h1>
                 <p className="text-[#4A615A] mt-5 max-w-2xl text-lg">
-                    A calm, practical start for life with a new dog, plus suburb-based waitlist updates while the directory grows.
+                    A calm, practical start for life with a new dog, plus a direct route to guided trainer matching when you need support.
                 </p>
 
                 <section className="card-public p-7 mt-8" data-testid="lp-campaign-card">
@@ -55,8 +55,8 @@ export default function CampaignLanding() {
                     </div>
                     <ul className="mt-4 space-y-2 text-sm text-[#4A615A]">
                         <li>• Seven simple guides for the early weeks at home</li>
-                        <li>• Owner demand capture by suburb and problem type</li>
-                        <li>• Trust-first trainer verification before introductions</li>
+                        <li>• Guided matching based on confirmed trainer capability details</li>
+                        <li>• Clear trainer profiles and direct enquiry when a fit is available</li>
                     </ul>
                     <div className="mt-6 flex flex-wrap gap-3">
                         <a href={FIRST_LEASH_URL} className="btn-accent" data-testid="lp-first-leash">Open The First Leash</a>
@@ -64,8 +64,8 @@ export default function CampaignLanding() {
                             See how DTD works
                             <ArrowRight className="h-4 w-4" />
                         </Link>
-                        <Link to={`/how-it-works${ownerGuideSearch}#owner-guide-waitlist`} className="btn-ghost" data-testid="lp-how-it-works">
-                            Jump to waitlist
+                        <Link to={`/${ownerGuideSearch}#owner-interest`} className="btn-ghost" data-testid="lp-how-it-works">
+                            Start guided matching
                         </Link>
                     </div>
                 </section>

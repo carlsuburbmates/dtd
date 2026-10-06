@@ -240,6 +240,10 @@ class TestP4LegacyRejectionAndFollowUp:
 
     def test_follow_up_creates_intro_linked_to_match_context(self, monkeypatch):
         """Follow-up creates intro linked to match context with zero raw behavioural description."""
+        # This test asserts the no-provider retry path. Make that condition
+        # explicit so a developer's local sandbox secret cannot turn it into
+        # a simulated provider-accepted path under pytest.
+        monkeypatch.delenv("RESEND_API_KEY", raising=False)
         raw_token, token_hash = generate_match_context_token()
         ctx_doc = {
             "token_hash": token_hash,

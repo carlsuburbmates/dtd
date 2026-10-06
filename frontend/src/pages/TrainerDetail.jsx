@@ -82,6 +82,7 @@ export default function TrainerDetail() {
     const [introId, setIntroId] = useState(null);
     const [introMeta, setIntroMeta] = useState(null);
     const [connectError, setConnectError] = useState("");
+    const [connectNotice, setConnectNotice] = useState("");
     const [busy, setBusy] = useState(false);
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(true);
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("live_matching");
@@ -169,7 +170,7 @@ export default function TrainerDetail() {
                 setPublicMatchingEnabled(Boolean(config.public_matching_enabled ?? true));
                 setPublicLaunchPhase(String(config.public_launch_phase || "live_matching"));
                 setPublicEmphasis(String(config.public_emphasis || "live_matching"));
-                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(config)));
+                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(config)) || {});
             })
             .catch(() => setPublicMatchingEnabled(true));
     }, []);
@@ -190,6 +191,7 @@ export default function TrainerDetail() {
         }
         setBusy(true);
         setConnectError("");
+        setConnectNotice("");
 
         if (matchContextToken && matchContext) {
             try {
@@ -207,7 +209,18 @@ export default function TrainerDetail() {
                     },
                 });
                 setIntroId(r.data.intro_id);
-                setIntroMeta({ deliveryStatus: r.data.delivery_state });
+                const deliveryState = String(r.data.delivery_state || "");
+                setIntroMeta({ deliveryStatus: deliveryState });
+                if (deliveryState !== "delivered") {
+                    const message = deliveryState === "terminal_failure"
+                        ? "We could not deliver this enquiry because no confirmed trainer email is available. No message was sent."
+                        : deliveryState === "suppressed"
+                            ? "This enquiry was not delivered automatically. No message was sent."
+                            : "We received the enquiry but have not confirmed delivery to the trainer. Please do not submit it again.";
+                    setConnectNotice(message);
+                    toast.error(message);
+                    return;
+                }
                 setContact({
                     name: trainer?.name,
                     email: trainer?.email || "Enquiry dispatched directly to trainer",
@@ -587,13 +600,14 @@ export default function TrainerDetail() {
                         </div>
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <span className="text-xs font-mono text-[#5C6D59]">
-                                {monetizationCopy.trainerDetailConnectPricing}
+                                {monetizationCopy?.trainerDetailConnectPricing || ""}
                             </span>
                             <button type="submit" disabled={busy} data-testid="connect-submit" className="btn-accent">
                                 {busy ? "Connecting…" : <>Connect <ArrowRight className="h-4 w-4" /></>}
                             </button>
                         </div>
                         {connectError ? <p className="mt-4 text-sm text-[#8B2020]" role="alert" data-testid="connect-error">{connectError}</p> : null}
+                        {connectNotice ? <p className="mt-4 text-sm text-[#715A20]" role="status" data-testid="connect-notice">{connectNotice}</p> : null}
                     </form>
                     )
                 ) : (

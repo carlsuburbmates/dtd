@@ -297,6 +297,35 @@ class TestGeminiMatchingAdapterExecution:
         with pytest.raises(ValueError) as exc:
             asyncio.run(adapter.call_model_async(req, cands))
         assert "malformed" in str(exc.value).lower()
+        latest = asyncio.run(ai.get_degradation_events(limit=1))[0]
+        assert latest["error_type"] == "malformed_output"
+        assert latest["error_code"] == "MALFORMED_OUTPUT"
+
+    def test_matching_request_disables_automatic_function_calling_and_bounds_output(self):
+        captured = {}
+
+        async def valid_generate(*args, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text=json.dumps({
+                "candidates": [{
+                    "trainer_id": "t_01",
+                    "semantic_fit": 0.88,
+                    "reason_codes": ["capability_concern_match"],
+                }],
+            }))
+
+        mock_client = SimpleNamespace(aio=SimpleNamespace(models=SimpleNamespace(generate_content=valid_generate)))
+        adapter = ai.GeminiMatchingAdapter(client=mock_client)
+        asyncio.run(adapter.call_model_async(_make_request(), [_make_candidate("t_01")]))
+
+        config = captured["config"]
+        dumped = config.model_dump(by_alias=False) if hasattr(config, "model_dump") else config
+        automatic = dumped["automatic_function_calling"]
+        thinking = dumped["thinking_config"]
+        assert automatic["disable"] is True
+        assert thinking["thinking_budget"] == 0
+        assert dumped["max_output_tokens"] == 512
+        assert dumped["response_schema"] == ai.MATCHING_RESPONSE_SCHEMA
 
     def test_closed_pool_validation_rejects_hallucinated_candidate(self):
         async def hallucinated_cand_generate(*args, **kwargs):

@@ -186,7 +186,7 @@ describe("Home page matching test", () => {
 
         expect(container.textContent).toContain("Northside Recall School");
         expect(container.textContent).toContain("Deterministic capability match");
-        expect(container.textContent).toContain("from our Melbourne directory");
+        expect(container.textContent).toContain("meet the matching rules for your request");
         expect(container.textContent).not.toContain("vetted network");
 
         // URL Privacy Invariant: profile link does NOT carry ?q= or description

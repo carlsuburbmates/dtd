@@ -37,8 +37,11 @@ try:
 except ImportError:
     from backend.services.trainer_quality import build_match_ready_projection  # type: ignore
 
-# Configuration contract from DTD Google Ecosystem Migration Spec
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+# The default must be a current Vertex model that is available in the
+# sandbox's Australian region. Deployments still set this explicitly so a
+# provider-model change is visible in the Cloud Run configuration and can be
+# independently accepted before it reaches production.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_TIMEOUT_S = float(os.environ.get("GEMINI_TIMEOUT_S", "5.0"))
 MAX_DEGRADATION_EVENTS = 100
 ENABLE_MATCH_READY_PROJECTION_FILTER = (
@@ -1095,6 +1098,55 @@ MATCHING_SYSTEM_INSTRUCTION = (
     "Do not write public-facing prose. The application renders explanations from validated reason codes and permitted facts."
 )
 
+# The live matcher needs only a short, bounded JSON assessment.  Constraining
+# the shape prevents explanatory prose from consuming its five-second budget
+# and lets the server retain ownership of public wording and presentation.
+MATCHING_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "required": ["candidates"],
+    "properties": {
+        "candidates": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "required": ["trainer_id", "semantic_fit", "reason_codes"],
+                "properties": {
+                    "trainer_id": {"type": "STRING"},
+                    "semantic_fit": {"type": "NUMBER", "minimum": 0, "maximum": 1},
+                    "reason_codes": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+            },
+        },
+    },
+}
+
+
+def _matching_generation_config() -> Any:
+    """Return a low-latency, structured configuration for the constrained matcher.
+
+    This endpoint passes no tools, so automatic function calling has no product
+    role.  Explicitly disabling it removes avoidable SDK work.  Zero thinking
+    budget is intentional: the model ranks an already eligible pool and the
+    deterministic layer owns all safety, eligibility and public explanation.
+    """
+    kwargs: Dict[str, Any] = {
+        "response_mime_type": "application/json",
+        "response_schema": MATCHING_RESPONSE_SCHEMA,
+        "system_instruction": MATCHING_SYSTEM_INSTRUCTION,
+        "temperature": 0.1,
+        "candidate_count": 1,
+        "max_output_tokens": 512,
+    }
+    try:
+        from google.genai import types
+    except ModuleNotFoundError:
+        kwargs["automatic_function_calling"] = {"disable": True}
+        kwargs["thinking_config"] = {"thinking_budget": 0}
+    else:
+        kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+    return _generate_content_config(**kwargs)
+
 
 def build_gemini_matching_input(
     request: Any,
@@ -1189,6 +1241,29 @@ class GeminiMatchingAdapter:
         self.timeout_s = timeout_s if timeout_s is not None else GEMINI_TIMEOUT_S
         self.db = db
 
+    async def _raise_malformed_output(
+        self,
+        *,
+        detail: str,
+        start_t: float,
+        target_db: Optional[Any],
+    ) -> None:
+        """Persist one sanitised operational signal for rejected model output."""
+        import time
+
+        latency_ms = (time.perf_counter() - start_t) * 1000.0
+        await record_degradation_event(
+            event_type="malformed_output",
+            error_code="MALFORMED_OUTPUT",
+            message="Gemini matching produced malformed or invalid schema output; deterministic fallback engaged.",
+            operation="matching",
+            latency_ms=latency_ms,
+            decision_state="degraded_fallback",
+            policy_version="v2",
+            db=target_db,
+        )
+        raise ValueError(detail)
+
     async def call_model_async(
         self,
         request: Any,
@@ -1259,11 +1334,7 @@ class GeminiMatchingAdapter:
             }
 
         input_payload = build_gemini_matching_input(request, eligible_candidates)
-        config = _generate_content_config(
-            response_mime_type="application/json",
-            system_instruction=MATCHING_SYSTEM_INSTRUCTION,
-            temperature=0.1,
-        )
+        config = _matching_generation_config()
 
         try:
             response = await asyncio.wait_for(
@@ -1319,18 +1390,11 @@ class GeminiMatchingAdapter:
         raw_text = getattr(response, "text", "") or ""
         parsed = _extract_json(raw_text)
         if not isinstance(parsed, dict) or "candidates" not in parsed or not isinstance(parsed["candidates"], list):
-            latency_ms = (time.perf_counter() - start_t) * 1000.0
-            await record_degradation_event(
-                event_type="malformed_output",
-                error_code="MALFORMED_OUTPUT",
-                message="Gemini matching produced malformed or non-JSON output; deterministic fallback engaged.",
-                operation="matching",
-                latency_ms=latency_ms,
-                decision_state="degraded_fallback",
-                policy_version="v2",
-                db=target_db,
+            await self._raise_malformed_output(
+                detail="Model returned malformed or non-JSON output",
+                start_t=start_t,
+                target_db=target_db,
             )
-            raise ValueError("Model returned malformed or non-JSON output")
 
         eligible_map = {str(c.get("trainer_id") or c.get("id")): c for c in eligible_candidates}
         approved_codes = {
@@ -1346,22 +1410,42 @@ class GeminiMatchingAdapter:
         cards_data = []
         for item in parsed["candidates"]:
             if not isinstance(item, dict):
-                raise ValueError("Candidate entry is not a dictionary")
+                await self._raise_malformed_output(
+                    detail="Candidate entry is not a dictionary",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
             cid = str(item.get("trainer_id") or "")
             if cid not in eligible_map:
-                raise ValueError(f"Model returned unauthorized candidate ID not in eligible pool: {cid}")
+                await self._raise_malformed_output(
+                    detail="Model returned unauthorized candidate ID not in eligible pool",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
 
             cand_doc = eligible_map[cid]
             fit_raw = item.get("semantic_fit")
             if not isinstance(fit_raw, (int, float)):
-                raise ValueError(f"Invalid semantic_fit type for {cid}: {fit_raw}")
+                await self._raise_malformed_output(
+                    detail="Model returned an invalid semantic fit type",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
             fit_score = round(float(fit_raw), 4)
             if not (0.0 <= fit_score <= 1.0):
-                raise ValueError(f"semantic_fit out of bounds [0.0, 1.0]: {fit_score}")
+                await self._raise_malformed_output(
+                    detail="semantic_fit out of bounds [0.0, 1.0]",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
 
             raw_codes = item.get("reason_codes") or []
             if not isinstance(raw_codes, list):
-                raise ValueError("reason_codes must be a list")
+                await self._raise_malformed_output(
+                    detail="Model returned invalid reason codes",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
             val_codes = [c for c in raw_codes if str(c) in approved_codes]
             if not val_codes:
                 val_codes = ["capability_concern_match"]

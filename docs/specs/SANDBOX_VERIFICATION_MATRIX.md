@@ -82,6 +82,7 @@ Any modification touching the following 7 core functional areas must satisfy its
 - [ ] **Fair Presentation:** Paid tier cannot change eligibility or raw fit. Tests cover the exact `0.05` boundary, stable non-commercial ties, fewer than three suitable candidates and disclosed expansion only when fewer than three trainers pass the local eligibility gates.
 - [ ] **Urgent Support Boundaries:** Approved urgent routes use versioned copy and official-source provider facts with freshness/correction handling. If the optional Maps/Places surface is enabled, test attribution, user initiation, session-only data handling, no AI/ranking input, no DTD-provider persistence and a truthful provider-outage route.
 - [ ] **Ops and Follow-up Evidence:** `/ops` exposes sanitised decision, degradation, provider freshness, capability invalidation and follow-up retry/terminal states without private owner data.
+- [ ] **Retention and Cleanup:** Matching context and event expiry fields are BSON dates, each collection has its TTL index, a forced-expiry context rejects access, and every UUID-namespaced acceptance fixture is removed from persistence and public routes after the run.
 
 ---
 
@@ -102,14 +103,14 @@ Before a delegated implementation can reach the developer sandbox, remote review
    - Antigravity works locally and does not push, open/merge a PR, deploy, mutate provider state or enable a gated feature.
    - Run `python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py`
    - Run `node scripts/check_prelaunch_release_gate.js`
-   - Run `.venv/bin/python backend/scripts/run_isolated_integration_suite.py` (315 passing tests).
+   - Run `.venv/bin/python backend/scripts/run_isolated_integration_suite.py` (the current suite count is reported by pytest; it starts and removes its own disposable loopback MongoDB instance).
 2. **Step 2: Independent Codex audit**
    - Codex reviews the exact commit/diff and Antigravity evidence handoff.
    - Codex re-tests the affected workflow end to end, including adjacent persistence, notification/fallback, `/ops`, privacy/security and documentation contracts.
    - A `PARTIAL`, `OPEN`, `REGRESSED` or `NOT_VERIFIED` material result returns the package to implementation. It cannot be pushed or deployed.
 3. **Step 3: Live Sandbox Execution**
    - Execute `bash scripts/deploy_sandbox.sh`.
-   - Verify `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app/api/health` returns HTTP 200 with `database: "available"`.
+   - Resolve the current developer service URL from `gcloud run services describe dtd-api-dev --project dogtrainersdirectory-dev --region australia-southeast1`; verify its `/api/health` returns HTTP 200 with `database: "available"`. Do not reuse a revision-specific generated hostname from an older deployment record.
    - Test the relevant domain checklist above on the live sandbox service.
 4. **Step 4: Remote review and CI**
    - Commit changes cleanly and push to GitHub.

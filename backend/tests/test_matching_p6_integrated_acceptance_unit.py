@@ -554,6 +554,10 @@ class TestMatchingRoadmapScenarios1To16:
     # Scenario 12: Follow-up delivery, retryable failure & idempotent replay
     # --------------------------------------------------------------------------
     def test_scenario_12_follow_up_delivery_and_idempotent_replay(self, monkeypatch):
+        # This fixture exercises the no-provider retry path. Explicitly clear
+        # local credentials so a developer sandbox secret cannot make the
+        # unit test claim a simulated delivery.
+        monkeypatch.delenv("RESEND_API_KEY", raising=False)
         raw_token, token_hash = matching_contract_v2.generate_match_context_token()
         ctx_doc = {
             "token_hash": token_hash,

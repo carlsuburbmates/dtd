@@ -1,4 +1,22 @@
-import { buildAttributionSearch, getAdminPass, setAdminPass } from "./api";
+import { buildAttributionSearch, getAdminPass, resolveBackendUrl, setAdminPass } from "./api";
+
+describe("backend origin selection", () => {
+    it("routes the isolated sandbox web service to the isolated sandbox API", () => {
+        expect(resolveBackendUrl({
+            hostname: "dtd-web-dev-x2kdoaemtq-ts.a.run.app",
+            origin: "https://dtd-web-dev-x2kdoaemtq-ts.a.run.app",
+            envBackend: "",
+        })).toBe("https://dtd-api-dev-625222421634.australia-southeast1.run.app");
+    });
+
+    it("does not redirect normal public hosts to the sandbox API", () => {
+        expect(resolveBackendUrl({
+            hostname: "dogtrainersdirectory.com.au",
+            origin: "https://dogtrainersdirectory.com.au",
+            envBackend: "",
+        })).toBe("https://dogtrainersdirectory.com.au");
+    });
+});
 
 describe("ops passcode storage", () => {
     beforeEach(() => {

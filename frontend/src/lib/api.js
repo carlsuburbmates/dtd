@@ -1,10 +1,20 @@
 import axios from "axios";
 
-const isProductionHost = typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
-const envBackend = process.env.REACT_APP_BACKEND_URL;
-const RAW_BACKEND_URL = (isProductionHost && (!envBackend || envBackend.includes("localhost")))
-    ? window.location.origin
-    : (envBackend || (typeof window !== "undefined" ? window.location.origin : ""));
+const SANDBOX_WEB_HOST = /^dtd-web-dev-[a-z0-9-]+\.a\.run\.app$/i;
+const SANDBOX_API_URL = "https://dtd-api-dev-625222421634.australia-southeast1.run.app";
+
+export const resolveBackendUrl = ({
+    hostname = typeof window !== "undefined" ? window.location.hostname : "",
+    origin = typeof window !== "undefined" ? window.location.origin : "",
+    envBackend = process.env.REACT_APP_BACKEND_URL,
+} = {}) => {
+    const isBrowserHost = Boolean(hostname) && !["localhost", "127.0.0.1"].includes(hostname);
+    if (SANDBOX_WEB_HOST.test(hostname)) return SANDBOX_API_URL;
+    if (isBrowserHost && (!envBackend || envBackend.includes("localhost"))) return origin;
+    return envBackend || origin;
+};
+
+const RAW_BACKEND_URL = resolveBackendUrl();
 const BACKEND_URL = RAW_BACKEND_URL.replace(/\/+$/, "");
 export const API = `${BACKEND_URL}/api`;
 

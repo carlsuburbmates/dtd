@@ -13,7 +13,7 @@ jest.mock("@/lib/publicPolicy", () => ({
     extractPublicMonetizationPolicy: jest.fn(() => ({})),
     resolvePublicMonetizationCopy: jest.fn(() => ({ trainerDetailConnectPricing: "" })),
 }));
-jest.mock("sonner", () => ({ toast: { error: jest.fn() } }));
+jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
 jest.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
@@ -244,6 +244,49 @@ describe("TrainerDetail ownership claim", () => {
         await settle();
 
         expect(view.container.querySelector("[data-testid='claim-success']")).not.toBeNull();
+        view.cleanup();
+    });
+});
+
+describe("TrainerDetail matching enquiry delivery", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        document.body.innerHTML = "";
+        globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+        sessionStorage.setItem("d_match_context_token", "test-context-token");
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1"
+                ? trainer
+                : path === "/match/context"
+                    ? { match_id: "match_1", primary_concerns: ["puppy_prep"], dog_age_months: 4 }
+                    : { public_matching_enabled: true },
+        }));
+    });
+
+    afterEach(() => sessionStorage.removeItem("d_match_context_token"));
+
+    it("does not claim an enquiry was sent when matching follow-up is terminally undeliverable", async () => {
+        api.post.mockResolvedValueOnce({ data: { intro_id: "intro_terminal", delivery_state: "terminal_failure" } });
+        const view = renderDetail();
+        await settle();
+
+        act(() => {
+            changeValue(view.container.querySelector("[data-testid='connect-name']"), "Sandbox Owner");
+            changeValue(view.container.querySelector("[data-testid='connect-email']"), "sandbox-owner@example.com");
+            view.container.querySelector("[data-testid='connect-consent-contact']").click();
+            view.container.querySelector("[data-testid='connect-consent-outcome']").click();
+        });
+        await act(async () => view.container.querySelector("[data-testid='connect-submit']").click());
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='connect-success']")).toBeNull();
+        expect(view.container.querySelector("[data-testid='connect-notice']").textContent)
+            .toContain("No message was sent");
+        expect(api.post).toHaveBeenCalledWith(
+            "/match/follow-up",
+            expect.objectContaining({ trainer_id: "trainer_1", user_email: "sandbox-owner@example.com" }),
+            expect.objectContaining({ headers: expect.objectContaining({ "X-Match-Context-Token": "test-context-token" }) })
+        );
         view.cleanup();
     });
 });

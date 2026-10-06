@@ -1,14 +1,15 @@
 # DTD Full Project Completion Plan
 
-**Status:** active execution plan — 5 October 2026.  This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
+**Status:** active execution plan — 6 October 2026.  This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
 
 ## Current verified baseline
 
-- Developer sandbox: `dogtrainersdirectory-dev`, Cloud Run `dtd-api-dev-00012-bpc`, 100% traffic, `/api/health` database available.
+- Developer sandbox: Cloud Run API `dtd-api-dev-00016-z52` and isolated frontend `dtd-web-dev-00004-c2n`, both at 100% traffic; the API `/api/health` reports an available database and the frontend bundle resolves only to the sandbox API.
 - The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject, canonical regional audience and JSON content type now match the service contract. A real Cloud Scheduler dry-run returned HTTP 200, wrote a zero-mutation run record, and that record was deleted; a real acquisition run remains intentionally unaccepted.
 - Sandbox runtime now uses `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`, with only Vertex AI User and Secret Manager accessor roles required by the current runtime. The prior default Compute identity is no longer attached to Cloud Run runtime traffic (DF-013 resolved for sandbox).
-- Matching local release gate passes: `1d0acb4`, 530 isolated backend tests; the runner creates a UUID-named loopback database and deletes it in `finally`.
-- The first live, disposable matching acceptance passed twice: a unique declared-capability trainer was returned by `/api/match`, a sanitised match event appeared in protected matching Ops, and the trainer/event/context/fallback event were deleted and then confirmed absent from the public trainer endpoint. The remaining M9 matrix, rendered owner UI, profile/enquiry lifecycle and retention expiry are still unaccepted.
+- Matching local release gate passes with 532 isolated backend tests. The runner starts an isolated loopback MongoDB instance when one is not supplied, creates a UUID-named database, and removes both in `finally`. A focused follow-up test now makes its no-provider precondition explicit rather than inheriting a developer's sandbox email secret.
+- The disposable M9 API/Ops runner has passed live validation, emergency/urgent triage, no-confirmed-match, expanded scope, live non-degraded Gemini, redacted/opaque context, forced context expiry, public profile, terminal follow-up/idempotency, protected Ops evidence, and public-fixture removal. It created only UUID-prefixed fixtures, used no recipient email, and removed every created record. Matching events and contexts now write BSON expiry dates; sandbox TTL indexes exist and the sandbox-only legacy conversion found no strings to convert.
+- The isolated frontend has passed its 49-test/build gate and browser inspection of the live questionnaire and disposable profile. It presents the guided owner path, reaches only the sandbox API, and now refuses to claim a terminally undeliverable enquiry was sent. A browser-submitted result-to-profile-to-enquiry path remains the final UI acceptance evidence.
 
 ## Completion rule
 
@@ -38,27 +39,29 @@ DTD is not complete until every applicable item below is independently evidenced
 
 ## Immediate active sequence
 
-1. Expand the passing disposable acceptance runner into the full M9 matrix: validation, safety triage, exact/expanded/no-match, AI degradation, context, profile and enquiry state; keep each run self-cleaning and public-absence checked.
-2. Repair and visually verify the owner web journey (DF-003, DF-011, DF-020) from navigation through mobile questionnaire, error/degraded states, results and profile handoff.
-3. Design a namespaced, approved-source ingestion acceptance run and rerun. The scheduler transport dry-run is complete; do not use a real business source until its acquisition authority, expected record disposition and cleanup plan are explicit.
+1. Complete browser-submitted owner result, profile and protected-enquiry acceptance with disposable fixtures; keep all UI-visible test data namespaced and prove its removal. The API/Ops M9 matrix is accepted, but browser observation alone does not prove the submission handoff.
+2. Design a namespaced, approved-source ingestion acceptance run and rerun. The scheduler transport dry-run is complete; do not use a real business source until its acquisition authority, expected record disposition and cleanup plan are explicit.
+3. Complete same-fixture live Gemini-versus-forced-fallback comparison without relaxing the five-second provider boundary; retain the now-passing live Gemini M9 as provider-path evidence, not full parity proof.
 4. Complete the remaining DF work in the cross-project ledger below, beginning with CI/dependency and privacy/safety acceptance blockers.
 
 ## Cross-project finding ledger
 
-This is a working completion ledger, not a claim that every repository statement has been freshly audited. `DONE` has direct 5 October evidence; `PARTIAL` means code or a bounded sandbox segment works but the full workflow is not accepted; `OPEN` needs implementation or acceptance evidence.
+This is a working completion ledger, not a claim that every repository statement has been freshly audited. `DONE` has direct 6 October evidence; `PARTIAL` means code or a bounded sandbox segment works but the full workflow is not accepted; `OPEN` needs implementation or acceptance evidence.
 
 | Finding(s) | Phase | State | Completion evidence still required |
 | --- | --- | --- | --- |
 | DF-001, DF-007 | 1, 7 | OPEN | Retire/confirm obsolete release-hosting surfaces after an owner-approved production inventory; do not change DNS or production hosting during sandbox work. |
-| DF-003, DF-011, DF-020 | 3 | PARTIAL | Local owner navigation now targets guided matching, config fails closed, inputs/results are labelled/announced, and client-side route metadata is set. A deployed frontend plus desktop/mobile keyboard/browser evidence is still required. |
+| DF-003, DF-011, DF-020 | 3 | PARTIAL | The isolated `dtd-web-dev` frontend deploys the guided path and has questionnaire/profile browser evidence; its bundle calls only the sandbox API. Browser-submitted results and protected-enquiry acceptance remain required. |
 | DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
-| DF-006 | 1, 6 | PARTIAL | Local isolated suite and one live matching cycle pass; expand to browser/API/automation/recovery acceptance in CI. |
+| DF-006 | 1, 6 | PARTIAL | The self-contained local isolated suite and live API/Ops M9 matrix pass; expand to browser-submitted journey, automation/recovery and remote-CI acceptance. |
 | DF-009 | 1 | OPEN | Fresh local audit reports 89 advisories; migrate from the legacy frontend toolchain and remediate in tested batches. |
 | DF-010 | 1 | PARTIAL | Current workflow uses v7 actions; a fresh remote Verify run is still required when branch push authority is exercised. |
 | DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
 | DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |
 | DF-014 | 2 | PARTIAL | Read-only production corpus audit before any production promotion. |
-| DF-015 through DF-019, DF-021 through DF-023, DF-026, DF-027 | 4, 6 | PARTIAL | Full M0–M9 sandbox matrix, retained-record/expiry proof, UI acceptance and AI/fallback parity; the basic live match/record/Ops/cleanup cycle and local suite pass. |
+| DF-015 through DF-019, DF-021 through DF-023, DF-026 | 4, 6 | PARTIAL | Disposable M9 now passes API/Ops triage, expansion, live Gemini, expiry, protected follow-up and cleanup. Browser-submitted journey, same-fixture AI/fallback parity, supply completeness and provider-freshness work remain. |
+| DF-027 | 1, 4 | DONE | The v2-aware isolated release suite now passes all 532 tests and starts its own disposable loopback MongoDB instance. Keep the suite in the deploy preflight. |
+| DF-028 | 4, 5, 6 | PARTIAL | Sandbox writes BSON expiry dates, has TTL indexes, completed a no-op legacy conversion and passed forced-expiry M9 evidence. Any production conversion remains a separate owner gate. |
 | DF-024, DF-025 | 4 | OPEN | Verified urgent-provider data freshness/correction lifecycle, safety UI, and decision on the constrained Maps/Places emergency-discovery exception before implementation. |
 | DF-017 | 5, 6 | PARTIAL | Provider-safe notification failure/retry test that cannot send to a real trainer, with Ops and idempotency evidence. |

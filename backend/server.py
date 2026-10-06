@@ -209,11 +209,23 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _parse_iso(value: str) -> Optional[datetime]:
+def _parse_iso(value: Any) -> Optional[datetime]:
+    """Normalise an ISO string or MongoDB datetime to aware UTC.
+
+    Match-retention timestamps are BSON datetimes so MongoDB TTL indexes can
+    enforce deletion.  Older records may still contain ISO strings while the
+    one-time backfill runs, so readers remain backwards-compatible.
+    """
     try:
-        return datetime.fromisoformat(value)
-    except Exception:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
         return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+
+
+def _is_expired(value: Any) -> bool:
+    parsed = _parse_iso(value)
+    return parsed is not None and parsed <= datetime.now(timezone.utc)
 
 
 def new_id() -> str:
@@ -3027,7 +3039,7 @@ async def instant_match(
                     "source": source,
                     "context_token_hash": None,
                     "created_at": now_dt.isoformat(),
-                    "expires_at": expires_dt.isoformat(),
+                    "expires_at": expires_dt,
                 }
             )
         out = triage_resp.model_dump()
@@ -3105,7 +3117,7 @@ async def instant_match(
                     "source": source,
                     "context_token_hash": None,
                     "created_at": now_dt.isoformat(),
-                    "expires_at": expires_dt.isoformat(),
+                    "expires_at": expires_dt,
                 }
             )
         out = triage_resp.model_dump()
@@ -3161,7 +3173,7 @@ async def instant_match(
                     "service_format": req.service_format,
                     "method_preference": req.method_preference,
                     "created_at": now_dt.isoformat(),
-                    "expires_at": expires_dt.isoformat(),
+                    "expires_at": expires_dt,
                 }
             )
 
@@ -3191,7 +3203,7 @@ async def instant_match(
                 "source": source,
                 "context_token_hash": token_hash,
                 "created_at": now_dt.isoformat(),
-                "expires_at": expires_dt.isoformat(),
+                "expires_at": expires_dt,
             }
         )
 
@@ -3289,7 +3301,7 @@ async def get_match_context(
         raise HTTPException(status_code=404, detail="Match context not found or invalid")
 
     # Check expiration
-    if ctx.get("expires_at") and ctx["expires_at"] < now_iso():
+    if _is_expired(ctx.get("expires_at")):
         raise HTTPException(status_code=410, detail="Match context expired")
 
     return {
@@ -3412,16 +3424,8 @@ async def create_match_follow_up(
         raise HTTPException(status_code=404, detail="Match context not found or invalid")
 
     # Expiration check
-    expires_at = ctx.get("expires_at")
-    if expires_at:
-        try:
-            exp_dt = datetime.fromisoformat(expires_at)
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp_dt:
-                raise HTTPException(status_code=410, detail="Match context has expired.")
-        except (ValueError, TypeError):
-            pass
+    if _is_expired(ctx.get("expires_at")):
+        raise HTTPException(status_code=410, detail="Match context has expired.")
 
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
     if not trainer:
@@ -6997,6 +7001,13 @@ async def _ensure_indexes() -> None:
         await db.intros.create_index("idempotency_key", unique=True, sparse=True)
         await db.intros.create_index("composite_idempotency_key", unique=True, sparse=True)
         await db.intros.create_index("stripe_invoice_id", sparse=True)
+        # TTL requires BSON datetimes, not ISO strings. Matching writes a
+        # timezone-aware datetime; the migration script converts pre-fix
+        # sandbox records before this index is relied on for acceptance.
+        await db.match_events.create_index("id", unique=True, sparse=True)
+        await db.match_events.create_index("expires_at", expireAfterSeconds=0, sparse=True)
+        await db.match_contexts.create_index("token_hash", unique=True, sparse=True)
+        await db.match_contexts.create_index("expires_at", expireAfterSeconds=0, sparse=True)
         await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
         await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
         await db.submissions.create_index("status")

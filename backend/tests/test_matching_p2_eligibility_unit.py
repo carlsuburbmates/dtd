@@ -541,7 +541,8 @@ class TestP2PrivacyAndContextLifecycle:
         assert "owner@test.com" not in str(ev)
         assert ev["policy_version"] == DECISION_CONTRACT_VERSION
         assert ev["locality"] == "Richmond"
-        assert "expires_at" in ev
+        assert isinstance(ev["expires_at"], datetime)
+        assert ev["expires_at"] > datetime.now(timezone.utc)
         assert "context_token_hash" in ev
 
     def test_context_token_retrieval_endpoint(self, monkeypatch):
@@ -572,6 +573,7 @@ class TestP2PrivacyAndContextLifecycle:
         ctx_doc = fake_db.match_contexts.inserted[0]
         assert ctx_doc["token_hash"] == hash_match_context_token(raw_token)
         assert raw_token not in str(ctx_doc)
+        assert isinstance(ctx_doc["expires_at"], datetime)
 
         # Retrieve context via GET /api/match/context using X-Match-Context-Token header
         dummy_req = _make_dummy_request(

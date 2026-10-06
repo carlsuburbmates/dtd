@@ -384,7 +384,7 @@ export default function Home() {
                         </h2>
                         <p className="text-[#4A615A] leading-relaxed font-light text-lg max-w-md">
                             {publicMatchingEnabled
-                                ? "Describe your issue and get up to three ranked trainer matches from our Melbourne directory."
+                                ? "Share the practical details and see up to three trainer profiles that meet the matching rules for your request."
                                 : (publicLaunchPhase === "service_unavailable"
                                     ? "Matching services are currently unavailable while configuration is verified. Please leave your details to register interest."
                                     : "Register your interest so DTD can understand where trainer coverage is needed most in Melbourne.")}
