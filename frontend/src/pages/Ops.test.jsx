@@ -456,4 +456,92 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).not.toContain("Scheduled execution via Cloud Scheduler");
         view.cleanup();
     });
+
+    it("renders the Matching Engine view with AI degradation telemetry and urgent corrections", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                matching: {
+                    policy_version: "2.0",
+                    total_events: 15,
+                    average_eligible_candidates: 3.2,
+                    decision_distribution: {
+                        recommendations: 10,
+                        limited_local_results: 3,
+                        no_confirmed_match: 2,
+                    },
+                    search_scope_distribution: {
+                        local: 12,
+                        expanded: 3,
+                    },
+                    ai_degradation: {
+                        events: [
+                            {
+                                id: "deg_1",
+                                provider: "google_genai",
+                                model: "gemini-3.5-flash",
+                                error_type: "timeout",
+                                latency_ms: 5020,
+                                decision_state: "degraded_recommendations",
+                                timestamp: "2026-10-06T10:00:00Z",
+                            },
+                        ],
+                    },
+                    urgent_provider_freshness: {
+                        pending_corrections_count: 1,
+                        recent_corrections: [
+                            {
+                                id: "corr_123",
+                                provider_name: "Melbourne Emergency Vet",
+                                provider_id: "melb_vet_1",
+                                correction_details: "Updated emergency phone line to 24/7",
+                                status: "pending_review",
+                                created_at: "2026-10-06T11:00:00Z",
+                            },
+                        ],
+                    },
+                    presentation_order_sample: [
+                        {
+                            match_id: "match_evt_999",
+                            created_at: "2026-10-06T12:00:00Z",
+                            decision_state: "recommendations",
+                            search_scope: "local",
+                            result_ids: ["trainer_alpha", "trainer_beta"],
+                            reason_codes: ["location_suburb_match", "concern_behaviour_match"],
+                        },
+                    ],
+                    follow_up_outcomes: {
+                        by_state: { delivered: 8, pending: 2 },
+                    },
+                },
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const matchingNavButton = view.container.querySelector("[data-testid='ops-nav-matching']");
+        expect(matchingNavButton).not.toBeNull();
+        expect(matchingNavButton.textContent).toContain("Matching Engine");
+
+        await act(async () => {
+            matchingNavButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        const matchingView = view.container.querySelector("[data-testid='ops-matching-view']");
+        expect(matchingView).not.toBeNull();
+        expect(matchingView.textContent).toContain("Total Match Events");
+        expect(matchingView.textContent).toContain("15");
+        expect(matchingView.textContent).toContain("Active Decision Contract: v2.0");
+        expect(matchingView.textContent).toContain("Deterministic Fallback Parity");
+        expect(matchingView.textContent).toContain("Acknowledge & Reset Circuit");
+        expect(matchingView.textContent).toContain("Melbourne Emergency Vet");
+        expect(matchingView.textContent).toContain("Verify & Accept");
+        expect(matchingView.textContent).toContain("match_evt_99");
+        expect(matchingView.textContent).toContain("trainer_alpha");
+        view.cleanup();
+    });
 });

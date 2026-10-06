@@ -58,6 +58,13 @@ opsApi.interceptors.request.use((config) => {
     return config;
 });
 
+export const getMatchingOversight = () => opsApi.get("/oversight/matching");
+export const acknowledgeDegradation = (payload) => opsApi.post("/oversight/matching/degradation/acknowledge", payload);
+export const reviewUrgentCorrection = (correctionId, payload) => opsApi.post(`/oversight/urgent-providers/corrections/${encodeURIComponent(correctionId)}/review`, payload);
+export const retryFollowUp = (introId, payload) => opsApi.post(`/oversight/matching/follow-ups/${encodeURIComponent(introId)}/retry`, payload);
+export const recheckTrainerCapability = (trainerId, payload) => opsApi.post(`/oversight/trainers/${encodeURIComponent(trainerId)}/capability/recheck`, payload);
+export const refundSubscription = (payload) => opsApi.post("/oversight/subscriptions/refund", payload);
+
 export const buildAttributionSearch = ({
     campaign = "",
     source = "",

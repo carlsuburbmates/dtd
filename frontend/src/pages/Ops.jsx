@@ -1,13 +1,25 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck } from "lucide-react";
-import { setAdminPass, getAdminPass, opsApi, audCents } from "@/lib/api";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders } from "lucide-react";
+import {
+    setAdminPass,
+    getAdminPass,
+    opsApi,
+    audCents,
+    getMatchingOversight,
+    acknowledgeDegradation,
+    reviewUrgentCorrection,
+    retryFollowUp,
+    recheckTrainerCapability,
+    refundSubscription,
+} from "@/lib/api";
 import { toast } from "sonner";
 
 const VIEW_ORDER = [
     "overview",
     "pipeline_flow",
     "work_queue",
+    "matching",
     "trainer_supply",
     "seo_indexation",
     "messages",
@@ -20,6 +32,7 @@ const VIEW_LABELS = {
     overview: "Overview",
     pipeline_flow: "Pipeline Flow",
     work_queue: "Work Queue",
+    matching: "Matching Engine",
     trainer_supply: "Trainer Supply",
     seo_indexation: "SEO & Indexation",
     messages: "Messages",
@@ -32,6 +45,7 @@ const PAGE_INTROS = {
     overview: "Start here to decide whether the website is ready, blocked, or needs review before anything moves forward.",
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
+    matching: "Monitor AI-assisted matching, search scope expansion, fallback circuit status, urgent vet triage, and outcome follow-up health.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
     seo_indexation: "Review stored suburb pages against current canonical, supply, content and robots requirements before any indexation decision.",
     messages: "Check exactly what the system sent, to which workflow, and whether delivery succeeded or failed.",
@@ -410,6 +424,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const lastIngestionRun = snap.last_ingestion_run || recentIngestionRuns[0] || null;
     const pipelineGuardian = snap.pipeline_guardian || snap.loops?.pipeline_guardian || {};
     const capabilityHealth = snap.capability_health_summary || {};
+    const matchingOversight = snap.matching || {};
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const unhealthyLoops = Object.values(loops || {}).filter((meta) => String(meta?.status || "ok") !== "ok").length;
     const failedMessages = messages.filter((row) => {
@@ -420,6 +435,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const lifecycleIssues = billingCases.length + reactivationCases.length + asArray(sponsorInventory.exceptions).length;
     const demandGapCount = asArray(supplyGeography.demand_gaps).length;
     const latestChange = recentChanges[0];
+    const degradationCount = asArray(matchingOversight?.ai_degradation?.events).length;
     const sectionSummaries = {
         overview: {
             eyebrow: "Readiness",
@@ -435,6 +451,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             eyebrow: "Needs review",
             value: formatShortNumber(needsReview),
             note: needsReview ? "Open the queue before moving on." : "No queue items are waiting right now.",
+        },
+        matching: {
+            eyebrow: degradationCount ? "Degraded AI" : "AI Circuit OK",
+            value: formatShortNumber(matchingOversight?.total_events || 0),
+            note: degradationCount ? `${degradationCount} degradation event(s) recorded.` : "Deterministic & AI routes operational.",
         },
         trainer_supply: {
             eyebrow: "Intro-ready",
@@ -586,6 +607,13 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                             />
                         ) : null}
 
+                        {activeView === "matching" ? (
+                            <MatchingView
+                                matchingOversight={matchingOversight}
+                                onRefresh={onRefresh}
+                            />
+                        ) : null}
+
                         {activeView === "trainer_supply" ? (
                             <TrainerSupplyView
                                 trainerInventory={trainerInventory}
@@ -602,11 +630,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         {activeView === "seo_indexation" ? <SeoIndexationView seoIndexation={seoIndexation} /> : null}
 
                         {activeView === "messages" ? (
-                            <MessagesView messages={messages} />
+                            <MessagesView messages={messages} onRefresh={onRefresh} />
                         ) : null}
 
                         {activeView === "billing_reactivation" ? (
-                            <BillingReactivationView billingCases={billingCases} reactivationCases={reactivationCases} sponsorInventory={sponsorInventory} />
+                            <BillingReactivationView billingCases={billingCases} reactivationCases={reactivationCases} sponsorInventory={sponsorInventory} onRefresh={onRefresh} />
                         ) : null}
 
                         {activeView === "system_activity" ? (
@@ -1318,7 +1346,8 @@ function TrainerSupplyView({
                             <th className="pb-3 pr-3">Source</th>
                             <th className="pb-3 pr-3">Blockers</th>
                             <th className="pb-3 pr-3">Last updated</th>
-                            <th className="pb-3">Public page</th>
+                            <th className="pb-3 pr-3">Public page</th>
+                            <th className="pb-3">Capability action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1342,13 +1371,35 @@ function TrainerSupplyView({
                                     <div>{formatDateTime(row.updated_at)}</div>
                                     {row.created_at ? <div className="mt-1 text-xs">Added {formatDateTime(row.created_at)}</div> : null}
                                 </td>
-                                <td className="py-3">
+                                <td className="py-3 pr-3">
                                     {row.public_detail_path ? <Link className="underline underline-offset-2" to={row.public_detail_path}>Open</Link> : "—"}
+                                </td>
+                                <td className="py-3">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            if (!window.confirm(`Recheck capability projection for ${row.name || row.id}? This will evaluate statutory ABR rules and declared capabilities.`)) return;
+                                            try {
+                                                const res = await recheckTrainerCapability(row.id, { confirmed: true, notes: "Operator initiated capability recheck from Ops" });
+                                                if (res?.data?.ok) {
+                                                    toast.success(`Capability rechecked for ${row.name}: ${res.data.match_eligible ? "Match Eligible" : "Gated"}`);
+                                                    if (onRefresh) onRefresh();
+                                                }
+                                            } catch (err) {
+                                                toast.error(err?.response?.data?.detail || "Capability recheck failed.");
+                                            }
+                                        }}
+                                        data-testid={`ops-recheck-capability-${row.id}`}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-[#2A3935] bg-[#16221F] px-2.5 py-1 text-xs font-mono text-[#D9B36C] hover:bg-[#1E2E2A] transition"
+                                    >
+                                        <RotateCcw className="h-3 w-3" />
+                                        Recheck
+                                    </button>
                                 </td>
                             </tr>
                         )) : (
                             <tr>
-                                <td colSpan="11" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
+                                <td colSpan="12" className="py-6 text-center text-[#8B9E98] font-mono">No trainer inventory rows available.</td>
                             </tr>
                         )}
                     </tbody>
@@ -1443,31 +1494,60 @@ function MessagesView({ messages }) {
                             <th className="pb-3 pr-3">Kind</th>
                             <th className="pb-3 pr-3">Status</th>
                             <th className="pb-3 pr-3">Provider</th>
-                            <th className="pb-3">Delivery detail</th>
+                            <th className="pb-3 pr-3">Delivery detail</th>
+                            <th className="pb-3">Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {messages.length ? messages.map((row) => (
-                            <tr key={row.id} className="border-t border-[#1E2A27]">
-                                <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.created_at)}</td>
-                                <td className="py-3 pr-3">{row.workflow}</td>
-                                <td className="py-3 pr-3">
-                                    <div className="font-medium">{row.entity_label}</div>
-                                    <div className="text-xs text-[#8B9E98] mt-1">{row.canonical_user_type}</div>
-                                    {row.to_email ? <div className="text-xs text-[#8B9E98] mt-1">{row.to_email}</div> : null}
-                                </td>
-                                <td className="py-3 pr-3">{humanizeToken(row.kind)}</td>
-                                <td className="py-3 pr-3"><Badge label={humanizeToken(row.status)} kind="state" /></td>
-                                <td className="py-3 pr-3">{row.provider || "—"}</td>
-                                <td className="py-3">
-                                    <div>Attempt {row.attempt || 0}</div>
-                                    <div className="text-xs text-[#8B9E98] mt-1">HTTP {row.http_status || 0}</div>
-                                    {row.error ? <div className="text-xs text-[#F8D9D3] mt-1">{humanizeToken(row.error)}</div> : null}
-                                </td>
-                            </tr>
-                        )) : (
+                        {messages.length ? messages.map((row) => {
+                            const isFailedIntro = (row.workflow === "match_intro" || row.workflow === "matching") && (String(row?.status || "").toLowerCase() === "failed" || String(row?.status || "").toLowerCase() === "error");
+                            const introId = row.intro_id || row.target_id || (row.entity_id && row.entity_id.startsWith("intro_") ? row.entity_id : null);
+                            return (
+                                <tr key={row.id} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.created_at)}</td>
+                                    <td className="py-3 pr-3">{row.workflow}</td>
+                                    <td className="py-3 pr-3">
+                                        <div className="font-medium">{row.entity_label}</div>
+                                        <div className="text-xs text-[#8B9E98] mt-1">{row.canonical_user_type}</div>
+                                        {row.to_email ? <div className="text-xs text-[#8B9E98] mt-1">{row.to_email}</div> : null}
+                                    </td>
+                                    <td className="py-3 pr-3">{humanizeToken(row.kind)}</td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(row.status)} kind="state" /></td>
+                                    <td className="py-3 pr-3">{row.provider || "—"}</td>
+                                    <td className="py-3 pr-3">
+                                        <div>Attempt {row.attempt || 0}</div>
+                                        <div className="text-xs text-[#8B9E98] mt-1">HTTP {row.http_status || 0}</div>
+                                        {row.error ? <div className="text-xs text-[#F8D9D3] mt-1">{humanizeToken(row.error)}</div> : null}
+                                    </td>
+                                    <td className="py-3">
+                                        {isFailedIntro && introId ? (
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    if (!window.confirm(`Retry delivery for match follow-up ${introId}? This acquires an atomic recovery lease.`)) return;
+                                                    try {
+                                                        const res = await retryFollowUp(introId, { confirmed: true, notes: "Operator retry from Messages view" });
+                                                        if (res?.data?.ok) {
+                                                            toast.success(`Follow-up retry triggered: state is now ${res.data.delivery_state}`);
+                                                            if (onRefresh) onRefresh();
+                                                        }
+                                                    } catch (err) {
+                                                        toast.error(err?.response?.data?.detail || "Retry dispatch failed.");
+                                                    }
+                                                }}
+                                                data-testid={`ops-retry-message-${row.id}`}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-[#2A3935] bg-[#16221F] px-2.5 py-1 text-xs font-mono text-[#D9B36C] hover:bg-[#1E2E2A] transition"
+                                            >
+                                                <RotateCcw className="h-3 w-3" />
+                                                Retry
+                                            </button>
+                                        ) : "—"}
+                                    </td>
+                                </tr>
+                            );
+                        }) : (
                             <tr>
-                                <td colSpan="7" className="py-6 text-center text-[#8B9E98] font-mono">No recent messages logged.</td>
+                                <td colSpan="8" className="py-6 text-center text-[#8B9E98] font-mono">No recent messages logged.</td>
                             </tr>
                         )}
                     </tbody>
@@ -1526,13 +1606,41 @@ function BillingReactivationView({ billingCases, reactivationCases, sponsorInven
                                     Status: {humanizeToken(row.subscription_billing_status || row.billing_collection_status)} · Last update {formatDateTime(row.created_at)}
                                 </div>
                                 {row.trainer_id && row.trainer_action_token ? (
-                                    <div className="mt-3">
+                                    <div className="mt-3 flex flex-wrap items-center gap-3">
                                         <Link
-                                            className="underline underline-offset-2"
+                                            className="underline underline-offset-2 text-xs"
                                             to={`/trainer/billing?trainerId=${encodeURIComponent(row.trainer_id)}&token=${encodeURIComponent(row.trainer_action_token)}`}
                                         >
                                             Review trainer billing
                                         </Link>
+                                        {row.stripe_subscription_id && row.payment_intent_id ? (
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    const reason = window.prompt(`Execute money-back refund for ${row.trainer_name || row.trainer_id}? Enter reason:`);
+                                                    if (!reason || !reason.trim()) return;
+                                                    try {
+                                                        const res = await refundSubscription({
+                                                            trainer_id: row.trainer_id,
+                                                            stripe_subscription_id: row.stripe_subscription_id,
+                                                            payment_intent_id: row.payment_intent_id,
+                                                            reason: reason.trim(),
+                                                        });
+                                                        if (res?.data?.ok) {
+                                                            toast.success("Refund processed successfully.");
+                                                            if (onRefresh) onRefresh();
+                                                        }
+                                                    } catch (err) {
+                                                        toast.error(err?.response?.data?.detail || "Refund request failed.");
+                                                    }
+                                                }}
+                                                data-testid={`ops-refund-${row.trainer_id}`}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-[#5B2B27] bg-[#2B1715] px-2 py-1 text-xs font-mono text-[#F8D9D3] hover:bg-[#3D1E1B] transition"
+                                            >
+                                                <DollarSign className="h-3 w-3" />
+                                                Process refund
+                                            </button>
+                                        ) : null}
                                     </div>
                                 ) : null}
                             </div>
@@ -1866,5 +1974,355 @@ function EmptyCard({ message }) {
         <div className="rounded-3xl border border-dashed border-[#2A3935] bg-[#111A17] p-4 text-sm text-[#8B9E98] font-mono">
             {message}
         </div>
+    );
+}
+
+function MatchingView({ matchingOversight = {}, onRefresh }) {
+    const policyVersion = matchingOversight.policy_version || "2.0";
+    const decisionDist = matchingOversight.decision_distribution || {};
+    const scopeDist = matchingOversight.search_scope_distribution || {};
+    const totalEvents = matchingOversight.total_events || 0;
+    const avgEligible = matchingOversight.average_eligible_candidates || 0;
+    const aiDegradation = matchingOversight.ai_degradation || {};
+    const degradationEvents = asArray(aiDegradation.events);
+    const urgentFreshness = matchingOversight.urgent_provider_freshness || {};
+    const recentCorrections = asArray(urgentFreshness.recent_corrections);
+    const pendingCorrectionsCount = urgentFreshness.pending_corrections_count || 0;
+    const presentationSample = asArray(matchingOversight.presentation_order_sample);
+    const followUps = matchingOversight.follow_up_outcomes || {};
+    const followUpDist = followUps.by_state || {};
+
+    const [acknowledging, setAcknowledging] = useState(false);
+    const [reviewingCorrectionId, setReviewingCorrectionId] = useState(null);
+
+    const handleAcknowledgeCircuit = async () => {
+        if (!window.confirm("Acknowledge recorded AI degradation events and reset the circuit breaker?")) return;
+        setAcknowledging(true);
+        try {
+            const res = await acknowledgeDegradation({
+                action: "reset_circuit",
+                confirmed: true,
+                notes: "Operator acknowledged degradation from Operations Console",
+            });
+            if (res?.data?.ok) {
+                toast.success("AI degradation acknowledged; circuit breaker reset.");
+                if (onRefresh) onRefresh();
+            }
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Failed to acknowledge degradation.");
+        } finally {
+            setAcknowledging(false);
+        }
+    };
+
+    const handleReviewCorrection = async (corrId, action) => {
+        let officialUrl = "";
+        let evidenceRef = "";
+        let statedHours = "";
+        let contactMethod = "";
+
+        if (action === "accept") {
+            officialUrl = window.prompt("Enter verified official first-party source URL (must be primary provider domain):");
+            if (!officialUrl) return;
+            evidenceRef = window.prompt("Enter recorded evidence reference (e.g. section, emergency page heading citation):");
+            if (!evidenceRef) return;
+            statedHours = window.prompt("Enter verified stated hours (e.g. 24/7 or 8am-8pm):", "24/7 emergency service");
+            contactMethod = window.prompt("Enter verified contact phone/method:", "");
+        } else {
+            if (!window.confirm(`Are you sure you want to mark correction ${corrId} as ${action}?`)) return;
+        }
+
+        setReviewingCorrectionId(corrId);
+        try {
+            const payload = {
+                action,
+                confirmed: true,
+                official_source_url: officialUrl || null,
+                verified_official_source: action === "accept",
+                evidence_reference: evidenceRef || null,
+                reviewed_field_values: action === "accept" ? {
+                    stated_hours: statedHours || "24/7",
+                    contact_method: contactMethod || undefined,
+                } : null,
+                notes: `Actioned as ${action} from Ops Matching view`,
+            };
+            const res = await reviewUrgentCorrection(corrId, payload);
+            if (res?.data?.ok) {
+                toast.success(`Correction ${corrId} marked as ${res.data.status}.`);
+                if (onRefresh) onRefresh();
+            }
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Correction review failed.");
+        } finally {
+            setReviewingCorrectionId(null);
+        }
+    };
+
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-matching-view">
+            <PageHeader title="Matching Engine & AI Safety" description={PAGE_INTROS.matching} />
+
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <SummaryCard
+                    title="Total Match Events"
+                    value={totalEvents}
+                    note={`Active Decision Contract: v${policyVersion}`}
+                />
+                <SummaryCard
+                    title="Avg Eligible Candidates"
+                    value={avgEligible}
+                    note="Candidates passing deterministic eligibility"
+                />
+                <SummaryCard
+                    title="AI Degradation Events"
+                    value={degradationEvents.length}
+                    note={degradationEvents.length ? "Fallback active during provider timeouts" : "Gemini 3.5 Flash operational"}
+                />
+                <SummaryCard
+                    title="Pending Vet Corrections"
+                    value={pendingCorrectionsCount}
+                    note="Community emergency corrections awaiting review"
+                />
+            </div>
+
+            {/* AI Degradation & Circuit Breaker */}
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div className="small-caps !text-[#8B9E98] flex items-center gap-2">
+                            <Cpu className="h-4 w-4 text-[#D9B36C]" />
+                            AI Safety &amp; Fallback Circuit Telemetry
+                        </div>
+                        <h3 className="font-serif text-xl tracking-tight mt-1 text-[#F5F2EB]">
+                            Deterministic Fallback Parity &amp; Degradation Events
+                        </h3>
+                        <p className="text-sm text-[#8B9E98] font-mono mt-1 max-w-2xl">
+                            When Vertex AI / Gemini exceeds 5s timeout or returns invalid schema, the system falls back to bounded deterministic scoring with zero downtime.
+                        </p>
+                    </div>
+                    {degradationEvents.length > 0 ? (
+                        <button
+                            type="button"
+                            onClick={handleAcknowledgeCircuit}
+                            disabled={acknowledging}
+                            data-testid="ops-acknowledge-degradation"
+                            className="admin-btn admin-btn-accent self-start shrink-0"
+                        >
+                            <Sliders className="h-4 w-4" />
+                            {acknowledging ? "Resetting…" : "Acknowledge & Reset Circuit"}
+                        </button>
+                    ) : null}
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Timestamp</th>
+                                <th className="pb-3 pr-3">Provider / Model</th>
+                                <th className="pb-3 pr-3">Error Type</th>
+                                <th className="pb-3 pr-3">Latency</th>
+                                <th className="pb-3 pr-3">Fallback Decision</th>
+                                <th className="pb-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {degradationEvents.length ? degradationEvents.map((dev) => (
+                                <tr key={dev.id} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(dev.timestamp)}</td>
+                                    <td className="py-3 pr-3 font-mono text-xs">{dev.provider || "vertex"} / {dev.model || "gemini-3.5-flash"}</td>
+                                    <td className="py-3 pr-3"><Badge label={dev.error_type} kind="state" /></td>
+                                    <td className="py-3 pr-3 text-[#8B9E98]">{dev.latency_ms ? `${dev.latency_ms}ms` : "—"}</td>
+                                    <td className="py-3 pr-3 font-mono text-xs">{humanizeToken(dev.decision_state || "degraded")}</td>
+                                    <td className="py-3 text-xs text-[#F4E2B5]">Handled safely</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">
+                                        Zero degradation events recorded. AI provider responses are healthy.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            {/* Decision Distribution & Search Scope */}
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <section className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                    <div className="small-caps !text-[#8B9E98]">Decision Distribution</div>
+                    <p className="text-xs text-[#8B9E98] mt-1 font-mono">Breakdown of owner matching journeys by Decision Contract v2 states</p>
+                    <div className="mt-4 grid gap-2">
+                        {Object.entries(decisionDist).map(([st, count]) => (
+                            <div key={st} className="flex items-center justify-between rounded-2xl border border-[#22302C] bg-[#0D1412] px-3 py-2 text-sm">
+                                <span className="font-mono text-xs text-[#C9C2B1]">{humanizeToken(st)}</span>
+                                <span className="font-serif text-lg text-[#F5F2EB]">{formatShortNumber(count)}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                    <div className="small-caps !text-[#8B9E98]">Search Scope &amp; Enquiry Follow-up</div>
+                    <p className="text-xs text-[#8B9E98] mt-1 font-mono">Local vs expanded search scope and owner enquiry outcomes</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl border border-[#22302C] bg-[#0D1412] p-3">
+                            <div className="text-xs font-mono uppercase text-[#8B9E98]">Local Suburb Scope</div>
+                            <div className="mt-1 font-serif text-2xl text-[#F5F2EB]">{formatShortNumber(scopeDist.local || 0)}</div>
+                            <div className="mt-1 text-xs text-[#8B9E98]">Direct local trainer match</div>
+                        </div>
+                        <div className="rounded-2xl border border-[#22302C] bg-[#0D1412] p-3">
+                            <div className="text-xs font-mono uppercase text-[#8B9E98]">Expanded Scope</div>
+                            <div className="mt-1 font-serif text-2xl text-[#F5F2EB]">{formatShortNumber(scopeDist.expanded || 0)}</div>
+                            <div className="mt-1 text-xs text-[#8B9E98]">Disclosed regional expansion</div>
+                        </div>
+                    </div>
+                    <div className="mt-4 border-t border-[#1E2A27] pt-3">
+                        <div className="text-xs font-mono uppercase text-[#8B9E98] mb-2">Follow-up Delivery States</div>
+                        <div className="grid gap-2">
+                            {Object.entries(followUpDist).map(([st, count]) => (
+                                <div key={st} className="flex items-center justify-between text-xs font-mono text-[#8B9E98]">
+                                    <span>{humanizeToken(st)}</span>
+                                    <span className="text-[#F5F2EB] font-bold">{formatShortNumber(count)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            {/* Urgent Vet Directory Corrections Review */}
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5" data-testid="ops-urgent-corrections-section">
+                <div className="small-caps !text-[#8B9E98]">Urgent Provider Directory &amp; Corrections</div>
+                <p className="mt-1 text-sm text-[#8B9E98]">
+                    Community submissions to update or suppress 24/7 urgent veterinary listings. Acceptance requires verified official primary-source evidence.
+                </p>
+
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[800px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Provider</th>
+                                <th className="pb-3 pr-3">Claimed Change</th>
+                                <th className="pb-3 pr-3">Status</th>
+                                <th className="pb-3 pr-3">Submitted</th>
+                                <th className="pb-3">Operator Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {recentCorrections.length ? recentCorrections.map((corr) => {
+                                const isPending = corr.status === "pending_review";
+                                const isProcessing = reviewingCorrectionId === corr.id;
+                                return (
+                                    <tr key={corr.id} className="border-t border-[#1E2A27]">
+                                        <td className="py-3 pr-3">
+                                            <div className="font-medium">{corr.provider_name || corr.provider_id || "Provider"}</div>
+                                            <div className="text-xs text-[#8B9E98] mt-0.5">{corr.provider_id}</div>
+                                        </td>
+                                        <td className="py-3 pr-3 text-xs text-[#C9C2B1] max-w-xs truncate">
+                                            {corr.correction_details || corr.notes || "Directory details update"}
+                                        </td>
+                                        <td className="py-3 pr-3">
+                                            <Badge label={humanizeToken(corr.status)} kind="state" />
+                                        </td>
+                                        <td className="py-3 pr-3 text-xs text-[#8B9E98]">
+                                            {formatDateTime(corr.created_at)}
+                                        </td>
+                                        <td className="py-3">
+                                            {isPending ? (
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        disabled={isProcessing}
+                                                        onClick={() => handleReviewCorrection(corr.id, "accept")}
+                                                        data-testid={`ops-accept-correction-${corr.id}`}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-[#2A5945] bg-[#122A20] px-2 py-1 text-xs font-mono text-[#4ADE80] hover:bg-[#1A3A2C] transition"
+                                                    >
+                                                        <CheckCircle className="h-3 w-3" />
+                                                        Verify &amp; Accept
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isProcessing}
+                                                        onClick={() => handleReviewCorrection(corr.id, "reject")}
+                                                        data-testid={`ops-reject-correction-${corr.id}`}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-[#3A2925] bg-[#1E1715] px-2 py-1 text-xs font-mono text-[#F8D9D3] hover:bg-[#2A1E1B] transition"
+                                                    >
+                                                        <XCircle className="h-3 w-3" />
+                                                        Reject
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        disabled={isProcessing}
+                                                        onClick={() => handleReviewCorrection(corr.id, "suppress_provider")}
+                                                        data-testid={`ops-suppress-correction-${corr.id}`}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-[#403423] bg-[#1F1910] px-2 py-1 text-xs font-mono text-[#F4E2B5] hover:bg-[#2A2215] transition"
+                                                    >
+                                                        Suppress
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <span className="text-xs text-[#8B9E98] font-mono">Reviewed</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            }) : (
+                                <tr>
+                                    <td colSpan="5" className="py-6 text-center text-[#8B9E98] font-mono">
+                                        No pending urgent vet correction requests. Directory is up to date.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            {/* Redacted Presentation Sample */}
+            <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5">
+                <div className="small-caps !text-[#8B9E98]">Recent Match Events (Redacted Privacy Audit)</div>
+                <p className="mt-1 text-xs text-[#8B9E98] font-mono">
+                    Per Privacy Invariant and Decision Contract v2, owner behavioural descriptions and contact tokens are strictly omitted.
+                </p>
+                <div className="mt-4 overflow-x-auto">
+                    <table className="w-full min-w-[780px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Match Event</th>
+                                <th className="pb-3 pr-3">Time</th>
+                                <th className="pb-3 pr-3">Decision State</th>
+                                <th className="pb-3 pr-3">Scope</th>
+                                <th className="pb-3 pr-3">Result Trainer IDs</th>
+                                <th className="pb-3">Reason Codes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {presentationSample.length ? presentationSample.map((ev) => (
+                                <tr key={ev.match_id} className="border-t border-[#1E2A27]">
+                                    <td className="py-3 pr-3 font-mono text-xs">{String(ev.match_id).slice(0, 12)}…</td>
+                                    <td className="py-3 pr-3 text-[#8B9E98] text-xs">{formatDateTime(ev.created_at)}</td>
+                                    <td className="py-3 pr-3"><Badge label={humanizeToken(ev.decision_state)} kind="state" /></td>
+                                    <td className="py-3 pr-3 font-mono text-xs text-[#8B9E98]">{ev.search_scope || "local"}</td>
+                                    <td className="py-3 pr-3 font-mono text-xs text-[#D9B36C]">
+                                        {asArray(ev.result_ids).join(", ") || "None"}
+                                    </td>
+                                    <td className="py-3 text-xs text-[#8B9E98]">
+                                        {asArray(ev.reason_codes).map(humanizeToken).join(", ") || "—"}
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">
+                                        No recent match events recorded.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
     );
 }
