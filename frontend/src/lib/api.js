@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const SANDBOX_WEB_HOST = /^dtd-web-dev-[a-z0-9-]+\.a\.run\.app$/i;
+const SANDBOX_WEB_HOST = /^(?:dtd-web-dev-[a-z0-9-]+\.a\.run\.app|dtd-web-dev-625222421634\.australia-southeast1\.run\.app)$/i;
 const SANDBOX_API_URL = "https://dtd-api-dev-625222421634.australia-southeast1.run.app";
 
 export const resolveBackendUrl = ({
@@ -59,6 +59,7 @@ opsApi.interceptors.request.use((config) => {
 });
 
 export const getMatchingOversight = () => opsApi.get("/oversight/matching");
+export const getAttributionOversight = () => opsApi.get("/oversight/attribution");
 export const acknowledgeDegradation = (payload) => opsApi.post("/oversight/matching/degradation/acknowledge", payload);
 export const reviewUrgentCorrection = (correctionId, payload) => opsApi.post(`/oversight/urgent-providers/corrections/${encodeURIComponent(correctionId)}/review`, payload);
 export const retryFollowUp = (introId, payload) => opsApi.post(`/oversight/matching/follow-ups/${encodeURIComponent(introId)}/retry`, payload);

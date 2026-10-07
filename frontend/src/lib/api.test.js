@@ -7,6 +7,11 @@ describe("backend origin selection", () => {
             origin: "https://dtd-web-dev-x2kdoaemtq-ts.a.run.app",
             envBackend: "",
         })).toBe("https://dtd-api-dev-625222421634.australia-southeast1.run.app");
+        expect(resolveBackendUrl({
+            hostname: "dtd-web-dev-625222421634.australia-southeast1.run.app",
+            origin: "https://dtd-web-dev-625222421634.australia-southeast1.run.app",
+            envBackend: "",
+        })).toBe("https://dtd-api-dev-625222421634.australia-southeast1.run.app");
     });
 
     it("does not redirect normal public hosts to the sandbox API", () => {
