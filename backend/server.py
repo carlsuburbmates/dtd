@@ -6423,6 +6423,89 @@ async def build_matching_oversight_read_model(target_db: Any) -> Dict[str, Any]:
     }
 
 
+@api.get("/oversight/attribution")
+async def oversight_attribution(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Joined first-party attribution report across SEO landing, trainer tiers, intros, and Stripe revenue."""
+    growth_coll = getattr(db, "growth_attribution", None)
+    intros_coll = getattr(db, "intros", None)
+    trainers_coll = getattr(db, "trainers", None)
+    billing_events_coll = getattr(db, "billing_events", None)
+
+    # 1. Collect cohorts from growth attribution
+    cohorts: List[Dict[str, Any]] = []
+    if growth_coll is not None:
+        raw_cohorts = await growth_coll.find({}, {"_id": 0}).to_list(200)
+        for c in raw_cohorts:
+            cohorts.append({
+                "campaign": str(c.get("campaign") or "unknown"),
+                "source": str(c.get("source") or "unknown"),
+                "matched": int(c.get("matched") or 0),
+                "connected": int(c.get("connected") or 0),
+                "converted": int(c.get("converted") or 0),
+                "entry_events_30d": int(c.get("entry_events_30d") or 0),
+                "waitlist_joins_30d": int(c.get("waitlist_joins_30d") or 0),
+            })
+
+    # 2. Collect trainer tiers
+    tier_distribution: Dict[str, int] = {"pro": 0, "standard": 0, "unclaimed": 0, "other": 0}
+    trainer_tiers_by_id: Dict[str, str] = {}
+    if trainers_coll is not None:
+        trainers = await trainers_coll.find({}, {"_id": 0, "id": 1, "tier": 1, "claim_status": 1}).to_list(2000)
+        for t in trainers:
+            tid = str(t.get("id") or "")
+            tier = str(t.get("tier") or "standard").lower()
+            claim = str(t.get("claim_status") or "").lower()
+            if claim == "unclaimed":
+                tier_distribution["unclaimed"] += 1
+                assigned_tier = "unclaimed"
+            elif tier == "pro":
+                tier_distribution["pro"] += 1
+                assigned_tier = "pro"
+            elif tier == "standard":
+                tier_distribution["standard"] += 1
+                assigned_tier = "standard"
+            else:
+                tier_distribution["other"] += 1
+                assigned_tier = "other"
+            if tid:
+                trainer_tiers_by_id[tid] = assigned_tier
+
+    # 3. Collect intros joined by tier
+    intros_by_tier: Dict[str, int] = {"pro": 0, "standard": 0, "unclaimed": 0, "other": 0}
+    intros_total = 0
+    if intros_coll is not None:
+        intros = await intros_coll.find({}, {"_id": 0, "trainer_id": 1}).to_list(5000)
+        intros_total = len(intros)
+        for intro in intros:
+            tid = str(intro.get("trainer_id") or "")
+            tier = trainer_tiers_by_id.get(tid, "unclaimed")
+            intros_by_tier[tier] = intros_by_tier.get(tier, 0) + 1
+
+    # 4. Collect realized revenue from billing events
+    realized_revenue_cents = 0
+    billing_event_count = 0
+    if billing_events_coll is not None:
+        billing_events = await billing_events_coll.find({}, {"_id": 0, "amount": 1, "amount_cents": 1, "type": 1, "status": 1}).to_list(1000)
+        for event in billing_events:
+            status = str(event.get("status") or "").lower()
+            if status in {"paid", "succeeded", "completed"}:
+                cents = int(event.get("amount_cents") or event.get("amount") or 0)
+                realized_revenue_cents += cents
+                billing_event_count += 1
+
+    return {
+        "status": "ok",
+        "cohorts": cohorts,
+        "trainer_tiers": tier_distribution,
+        "intros_by_tier": intros_by_tier,
+        "total_intros": intros_total,
+        "realized_revenue_cents": realized_revenue_cents,
+        "realized_revenue_aud": round(realized_revenue_cents / 100.0, 2),
+        "billing_event_count": billing_event_count,
+        "ts": now_iso(),
+    }
+
+
 @api.get("/oversight/matching")
 async def oversight_matching(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     """Protected, redacted matching read model for the Operations Console."""

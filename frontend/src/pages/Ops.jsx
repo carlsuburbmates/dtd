@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp } from "lucide-react";
 import {
     setAdminPass,
     getAdminPass,
@@ -11,12 +11,14 @@ import {
     retryFollowUp,
     recheckTrainerCapability,
     refundSubscription,
+    getAttributionOversight,
 } from "@/lib/api";
 import { toast } from "sonner";
 
 const VIEW_ORDER = [
     "overview",
     "pipeline_flow",
+    "attribution",
     "work_queue",
     "matching",
     "trainer_supply",
@@ -30,6 +32,7 @@ const VIEW_ORDER = [
 const VIEW_LABELS = {
     overview: "Overview",
     pipeline_flow: "Pipeline Flow",
+    attribution: "Attribution & Revenue",
     work_queue: "Work Queue",
     matching: "Matching Engine",
     trainer_supply: "Trainer Supply",
@@ -43,6 +46,7 @@ const VIEW_LABELS = {
 const PAGE_INTROS = {
     overview: "Start here to decide whether the website is ready, blocked, or needs review before anything moves forward.",
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
+    attribution: "Joined first-party report linking acquisition sources, trainer tiers, customer introductions, and Stripe revenue.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
     matching: "Monitor AI-assisted matching, search scope expansion, fallback circuit status, urgent vet triage, and outcome follow-up health.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
@@ -446,6 +450,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             value: `${formatShortNumber(snap.throughput?.intros_7d || 0)} Intros (7d)`,
             note: `${formatShortNumber(snap.throughput?.stalled_intros || 0)} stalled intros.`,
         },
+        attribution: {
+            eyebrow: "Cohorts",
+            value: `${formatShortNumber(snap.growth_attribution_summary?.cohorts?.length || 0)} Active`,
+            note: `${formatShortNumber(snap.growth_attribution_summary?.totals?.entry_events_30d || 0)} entries (30d).`,
+        },
         work_queue: {
             eyebrow: "Needs review",
             value: formatShortNumber(needsReview),
@@ -593,6 +602,8 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "pipeline_flow" ? <PipelineFlowView snap={snap} /> : null}
+
+                        {activeView === "attribution" ? <AttributionView snap={snap} onRefresh={onRefresh} /> : null}
 
                         {activeView === "work_queue" ? (
                             <WorkQueueView
@@ -743,6 +754,146 @@ function PipelineFlowView({ snap }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+function AttributionView({ snap, onRefresh }) {
+    const [attributionData, setAttributionData] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    const loadAttribution = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const res = await getAttributionOversight();
+            setAttributionData(res?.data);
+        } catch (err) {
+            setError("Failed to load joined attribution report.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadAttribution();
+    }, [loadAttribution]);
+
+    const cohorts = attributionData?.cohorts || snap.growth_attribution_summary?.cohorts || [];
+    const trainerTiers = attributionData?.trainer_tiers || {};
+    const introsByTier = attributionData?.intros_by_tier || {};
+    const realizedRev = attributionData?.realized_revenue_aud ?? 0;
+    const totalIntros = attributionData?.total_intros ?? 0;
+
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-attribution-view">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1E2A27] pb-4">
+                <PageHeader title="Attribution & Revenue" description={PAGE_INTROS.attribution} />
+                <button
+                    type="button"
+                    onClick={() => { loadAttribution(); onRefresh?.(); }}
+                    disabled={loading}
+                    className="admin-btn flex items-center gap-2"
+                >
+                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    Refresh
+                </button>
+            </div>
+
+            {error ? (
+                <div className="mt-4 rounded-3xl border border-[#5B2B27] bg-[#2B1715] px-4 py-3 text-sm text-[#F8D9D3]">
+                    {error}
+                </div>
+            ) : null}
+
+            {/* High-level summary metrics */}
+            <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <SummaryCard
+                    title="Realized Revenue"
+                    value={`$${realizedRev.toFixed(2)} AUD`}
+                    note="Paid & completed Stripe transactions."
+                />
+                <SummaryCard
+                    title="Total Introductions"
+                    value={totalIntros}
+                    note="Inquiries delivered across all trainer tiers."
+                />
+                <SummaryCard
+                    title="Active Cohorts"
+                    value={cohorts.length}
+                    note="Distinct acquisition campaigns and channels."
+                />
+                <SummaryCard
+                    title="Pro Trainers"
+                    value={trainerTiers.pro || 0}
+                    note={`${trainerTiers.standard || 0} standard, ${trainerTiers.unclaimed || 0} unclaimed.`}
+                />
+            </div>
+
+            {/* Trainer Tier Breakdown */}
+            <div className="mt-6 rounded-3xl border border-[#1E2A27] bg-[#121A17] p-5">
+                <h3 className="font-serif text-lg tracking-tight mb-3">Introductions by Trainer Tier</h3>
+                <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl border border-[#233530] bg-[#0D1412] p-4">
+                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98]">Pro Tier</div>
+                        <div className="mt-2 text-2xl font-light text-[#F5F2EB]">{introsByTier.pro || 0}</div>
+                        <div className="mt-1 text-xs text-[#8B9E98]">{trainerTiers.pro || 0} registered trainers</div>
+                    </div>
+                    <div className="rounded-2xl border border-[#233530] bg-[#0D1412] p-4">
+                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98]">Standard Tier</div>
+                        <div className="mt-2 text-2xl font-light text-[#F5F2EB]">{introsByTier.standard || 0}</div>
+                        <div className="mt-1 text-xs text-[#8B9E98]">{trainerTiers.standard || 0} registered trainers</div>
+                    </div>
+                    <div className="rounded-2xl border border-[#233530] bg-[#0D1412] p-4">
+                        <div className="text-xs font-mono uppercase tracking-wider text-[#8B9E98]">Unclaimed / Directory</div>
+                        <div className="mt-2 text-2xl font-light text-[#F5F2EB]">{introsByTier.unclaimed || 0}</div>
+                        <div className="mt-1 text-xs text-[#8B9E98]">{trainerTiers.unclaimed || 0} listings</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Cohorts Table */}
+            <div className="mt-6">
+                <h3 className="font-serif text-lg tracking-tight mb-3">Acquisition Cohorts</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[700px] text-sm">
+                        <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
+                            <tr>
+                                <th className="pb-3 pr-3">Campaign / Source</th>
+                                <th className="pb-3 pr-3">Entries (30d)</th>
+                                <th className="pb-3 pr-3">Matched</th>
+                                <th className="pb-3 pr-3">Connected</th>
+                                <th className="pb-3 pr-3">Converted</th>
+                                <th className="pb-3">Waitlist (30d)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cohorts.length ? (
+                                cohorts.map((c, i) => (
+                                    <tr key={`${c.campaign}-${c.source}-${i}`} className="border-t border-[#1E2A27]">
+                                        <td className="py-3 pr-3">
+                                            <div className="font-medium">{c.campaign || "unknown"}</div>
+                                            <div className="mt-1 text-xs text-[#8B9E98]">{c.source || "unknown"}</div>
+                                        </td>
+                                        <td className="py-3 pr-3">{c.entry_events_30d || 0}</td>
+                                        <td className="py-3 pr-3">{c.matched || 0}</td>
+                                        <td className="py-3 pr-3">{c.connected || 0}</td>
+                                        <td className="py-3 pr-3">{c.converted || 0}</td>
+                                        <td className="py-3">{c.waitlist_joins_30d || 0}</td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">
+                                        No attribution cohort data recorded yet.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
     );
 }
 
@@ -1853,10 +2004,11 @@ function PageHeader({ title, description }) {
 }
 
 function SummaryCard({ title, value, note }) {
+    const displayValue = typeof value === "number" ? formatShortNumber(value) : (value ?? 0);
     return (
         <div className="rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3">
             <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">{title}</div>
-            <div className="mt-2 font-serif text-3xl">{formatShortNumber(value)}</div>
+            <div className="mt-2 font-serif text-3xl">{displayValue}</div>
             <div className="mt-1 text-sm text-[#8B9E98]">{note}</div>
         </div>
     );

@@ -594,4 +594,40 @@ describe("Ops auth transition", () => {
             confirmSpy.mockRestore();
         }
     });
+
+    test("renders Attribution & Revenue panel and displays joined metrics", async () => {
+        jest.spyOn(opsApi, "get").mockImplementation((url) => {
+            if (url === "/oversight/attribution") {
+                return Promise.resolve({
+                    data: {
+                        status: "ok",
+                        cohorts: [{ campaign: "google-ads", source: "search", matched: 12, connected: 4, converted: 2, entry_events_30d: 50, waitlist_joins_30d: 5 }],
+                        trainer_tiers: { pro: 5, standard: 10, unclaimed: 25 },
+                        intros_by_tier: { pro: 8, standard: 12, unclaimed: 3 },
+                        total_intros: 23,
+                        realized_revenue_aud: 350.00,
+                    },
+                });
+            }
+            return Promise.resolve({ data: validSnapshot });
+        });
+
+        const view = renderOps();
+        try {
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => {
+                view.container.querySelector("[data-testid='ops-nav-attribution']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            const panel = view.container.querySelector("[data-testid='ops-attribution-view']");
+            expect(panel).toBeTruthy();
+            expect(panel.textContent).toContain("Attribution & Revenue");
+            expect(panel.textContent).toContain("$350.00 AUD");
+            expect(panel.textContent).toContain("google-ads");
+            expect(panel.textContent).toContain("Pro Tier");
+        } finally {
+            view.cleanup();
+        }
+    });
 });
