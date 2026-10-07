@@ -310,6 +310,13 @@ describe("Home page matching test", () => {
         expect(container.textContent).toContain("Not 24/7");
         expect(container.textContent).toContain("Official-Source Urgent Care Listing");
         expect(container.textContent).toContain("No verified veterinary behaviourist listing");
+
+        // CDR-020 Urgent Maps Navigation Aid
+        expect(container.querySelector("[data-testid='cdr020-urgent-maps-slice']")).not.toBeNull();
+        const mapsLink = container.querySelector("[data-testid='cdr020-maps-link']");
+        expect(mapsLink).not.toBeNull();
+        expect(mapsLink.getAttribute("href")).toContain("google.com/maps/search");
+        expect(mapsLink.getAttribute("href")).toContain("emergency%20vet%20hospital");
     });
 
     it("renders no-local-urgent-coverage notice when urgent_providers is empty", async () => {

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { ArrowRight, Sparkles, ExternalLink } from "lucide-react";
+import { ArrowRight, Sparkles, ExternalLink, MapPin } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 
 const stagger = {
@@ -679,6 +679,34 @@ export default function Home() {
                             )}
                             <div className="mt-4 pt-3 border-t border-amber-200 text-xs text-amber-900">
                                 <strong>Veterinary Behaviourists:</strong> No verified veterinary behaviourist listing currently registered with direct official evidence and active VPRBV registration.
+                            </div>
+
+                            {/* CDR-020: Bounded Google Maps/Places User-Initiated Urgent Care Navigation Aid */}
+                            <div className="mt-6 pt-4 border-t border-amber-200" data-testid="cdr020-urgent-maps-slice">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                                            <MapPin className="w-3.5 h-3.5 text-amber-800" />
+                                            Live Emergency Vet Navigation (Google Maps)
+                                        </h4>
+                                        <p className="text-[11px] text-amber-800 mt-0.5">
+                                            User-initiated session navigation under CDR-020. Ephemeral Google Maps directions only; no provider data is stored or used as DTD recommendations.
+                                        </p>
+                                    </div>
+                                    <a
+                                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`emergency vet hospital ${suburbOrPostcode || "Melbourne Victoria"}`)}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        data-testid="cdr020-maps-link"
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-900 text-amber-50 hover:bg-amber-950 text-xs font-medium transition"
+                                    >
+                                        Open Nearest in Google Maps
+                                        <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                </div>
+                                <div className="mt-2 text-[10px] text-amber-700/80">
+                                    Google Maps Platform attribution: Map search provided by Google Maps. Third-party clinic hours and availability must be confirmed directly with the clinic.
+                                </div>
                             </div>
                         </div>
                     </section>
