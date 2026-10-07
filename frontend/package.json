@@ -48,7 +48,6 @@
     "plyr": "^3.7.8",
     "plyr-react": "^5.1.2",
     "react": "^19.0.0",
-    "react-day-picker": "8.10.1",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.2",
     "react-markdown": "^9.0.1",
