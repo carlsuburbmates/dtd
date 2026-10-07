@@ -4,13 +4,13 @@
 
 ## Current verified baseline
 
-- Developer sandbox: Cloud Run API `dtd-api-dev-00021-dfd` and isolated frontend `dtd-web-dev-00004-c2n`, both at 100% traffic; the API `/api/health` reports an available database and the frontend bundle resolves only to the sandbox API.
+- Developer sandbox: Cloud Run API `dtd-api-dev-00021-dfd` and isolated frontend `dtd-web-dev-00006-qqx`, both at 100% traffic; the API `/api/health` reports an available database. Both live frontend hostnames were browser-checked against the sandbox API after the canonical-host routing repair in `6957c69`.
 - The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject, canonical regional audience and JSON content type now match the service contract. A real Cloud Scheduler dry-run returned HTTP 200, wrote a zero-mutation run record, and that record was deleted; a real acquisition run remains intentionally unaccepted.
 - Sandbox runtime now uses `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`, with only Vertex AI User and Secret Manager accessor roles required by the current runtime. The prior default Compute identity is no longer attached to Cloud Run runtime traffic (DF-013 resolved for sandbox).
 - Matching local release gate passes with 532 isolated backend tests. The runner starts an isolated loopback MongoDB instance when one is not supplied, creates a UUID-named database, and removes both in `finally`. A focused follow-up test now makes its no-provider precondition explicit rather than inheriting a developer's sandbox email secret.
 - The disposable M9 API/Ops runner has passed live validation, emergency/urgent triage, no-confirmed-match, expanded scope, live non-degraded Gemini, redacted/opaque context, forced context expiry, public profile, terminal follow-up/idempotency, protected Ops evidence, and public-fixture removal. It created only UUID-prefixed fixtures, used no recipient email, and removed every created record. Matching events and contexts now write BSON expiry dates; sandbox TTL indexes exist and the sandbox-only legacy conversion found no strings to convert.
 - `run_sandbox_matching_parity.sh` now proves the live AI/fallback boundary with one immutable, UUID-namespaced fixture: normal Gemini, a temporary developer-sandbox invalid-model fallback and restored Gemini all produced the same candidate and capability reason. The fallback was visible in protected Ops, `gemini-3.5-flash` was restored, and every record created by the run was removed.
-- The isolated frontend has passed its 49-test/build gate and a browser submission of the live questionnaire to a disposable matching result and profile handoff. It presents the guided owner path, reaches only the sandbox API, and now refuses to claim a terminally undeliverable enquiry was sent. The fixture and all associated match records were removed and verified absent. The final protected-enquiry submission remains a just-in-time owner-confirmation action.
+- The isolated frontend has passed its 51-test/build gate at the deployed commit and a browser submission of the live questionnaire to a disposable matching result and profile handoff. Both sandbox hostnames now present the guided owner path and reach only the sandbox API. The fixture and all associated match records were removed and verified absent. The final protected-enquiry submission remains unexercised.
 
 ## Completion rule
 
@@ -56,7 +56,7 @@ This is a working completion ledger, not a claim that every repository statement
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
 | DF-006 | 1, 6 | PARTIAL | The self-contained local isolated suite and live API/Ops M9 matrix pass; expand to browser-submitted journey, automation/recovery and remote-CI acceptance. |
 | DF-009 | 1 | OPEN | Fresh local audit reports 98 advisories; migrate from the legacy frontend toolchain and remediate in tested batches. |
-| DF-010 | 1 | PARTIAL | Current workflow uses v7 actions; confirm a fresh remote Verify run after the authorised feature branch is synced. |
+| DF-010 | 1 | PARTIAL | Remote Verify run `37551814408` passed for exact deployed commit `6957c69` (532 backend and 51 frontend tests, build, sandbox deploy contract). Newer shared-branch commits require their own independent audit and remote run before advancement. |
 | DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
 | DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |
 | DF-014 | 2 | PARTIAL | Read-only production corpus audit before any production promotion. |
