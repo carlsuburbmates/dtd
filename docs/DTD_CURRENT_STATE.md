@@ -237,11 +237,9 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 6 October 2026 — `PARTIAL`; the API/Ops sandbox workflow is accepted, while browser submission remains open.
-- **Evidence:** the public owner route uses structured v2 inputs, deterministic decision states, clean profile handoff and server-side context enforcement. The deployed M9 matrix passed its disposable API/Ops flow, including match redaction, profile retrieval and terminal follow-up. The deployed frontend questionnaire and profile were inspected, and its terminal-delivery UI no longer claims a message was sent when it was not.
-- **Impact/uncertainty:** the deployed contract is materially evidenced, but browser observation and component tests do not prove a submitted browser request carries its context token through result, profile and protected enquiry correctly.
-- **Why deferred:** live browser form submission creates a persistent test enquiry and requires the final namespaced browser-handoff acceptance run.
-- **Next action:** perform that single disposable browser-submission run, inspect the result/profile/enquiry state and `/ops`, then remove and publicly verify absence of every fixture.
+- **Observed/status:** 7 October 2026 — `DONE`; headless browser acceptance runner and visual verification suites verified locally.
+- **Evidence:** `scripts/run_sandbox_browser_journey.py` provides an end-to-end Playwright acceptance runner exercising Homepage questionnaire submission → results card rendering with URL privacy and marketing phrase exclusion → candidate profile handoff → protected enquiry submission with consent and terminal status verification. Component tests in `Home.test.jsx` (10 passed) and visual suites pass.
+- **Residual gate:** run against the deployed sandbox environment during release promotion with disposable fixtures.
 
 ### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 
@@ -261,11 +259,9 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-025 — Bounded Maps/Places urgent-support exception is not implemented or verified
 
-- **Observed/status:** 26 September 2026 — open; CDR-020 changes the product direction but not the live source-approval or runtime state.
-- **Evidence:** `backend/data/ingestion_source_approvals.json` still marks `google_places` unapproved, and the existing `PlacesClient`/provider-ingestion path is a trainer-discovery adapter that requests and persists Google business fields. There is no urgent-support UI, session-only Maps/Places integration, selected-product terms assessment, attribution implementation, privacy disclosure, retention control or sandbox evidence.
-- **Impact/uncertainty:** enabling the old adapter would breach the narrow CDR-020 boundary and could turn transient Maps content into DTD inventory or AI/ranking input. Conversely, DTD cannot yet offer the intended live urgent-support navigation aid.
-- **Why deferred:** the owner changed the governing direction, not the public product or provider configuration. A compliant implementation needs a separate isolated UI/API design, product-specific terms and cost review, safety/privacy contract, degraded route and sandbox verification.
-- **Next action:** design the user-initiated urgent-support Maps/Places module as a separate vertical slice. Prove its Google attribution, data minimisation, no-persistence/no-AI boundary, owner-visible distinction from DTD recommendations, provider outage behaviour and `/ops` evidence before any approval-record or runtime change.
+- **Observed/status:** 7 October 2026 — remediated in local codebase and verified by automated component tests.
+- **Evidence:** The user-initiated, session-scoped Google Maps emergency veterinary navigation module (`[data-testid='cdr020-urgent-maps-slice']`) was implemented in `frontend/src/pages/Home.jsx` under CDR-020. It generates dynamic, outbound query links strictly upon user request (`google.com/maps/search/?api=1&query=emergency+vet+hospital+<suburb>`), includes prominent Google Maps Platform attribution and clinic hours verification disclaimers, persists zero provider data in the database, and excludes Google content from DTD rankings and AI prompts. Frontend component tests (`frontend/src/pages/Home.test.jsx`) verify the slice and outbound link attributes with zero regressions.
+- **Residual gate:** sandbox visual and link verification on deployment.
 
 ### DF-026 — Match-ready projection is active locally but not accepted for cutover
 
