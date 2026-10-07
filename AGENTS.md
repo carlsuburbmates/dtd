@@ -23,16 +23,16 @@ DTD is a solo-operator project. Any AI system entering or operating in this repo
 
 1. Inspect the repository, current configuration, relevant provider state, existing decisions and available evidence before asking the owner to choose a value or direction.
 2. State verified facts, uncertainty, risks and a recommended path. Where a safe, reversible and in-scope default is supported by evidence, use it rather than presenting the owner with an arbitrary choice.
-3. Ask the owner only when the next action requires new authority or would materially change financial, security, legal, privacy, production, product-scope or irreversible state, or when the required decision cannot be resolved from available evidence.
+3. Carry forward the owner's authorisation from the current and earlier turns until it is revoked or the scope changes. Ask only when the next action needs authority not already granted for a material financial, security, legal, privacy, production, product-scope or irreversible change, or when evidence cannot resolve a required choice.
 4. Do not ask the owner to invent thresholds, settings or architecture choices before measuring the current state. If a decision gate remains, explain exactly what is missing, why it matters and the smallest decision required.
 5. Prefer exception-driven operation and one focused decision gate over repeated broad clarification requests. This rule applies to every AI, LLM, agent, bot, assistant, plugin or automated workflow operating in the project.
 
 ## 1) Preflight Routing (required)
 
-At the start of each new task:
+At the start of each new task, do a proportionate preflight. Reuse current-session evidence while it remains fresh; do not repeat the full reading and reporting sequence for every follow-up:
 
 1. Inspect repo root context and user goal.
-2. Read these files before acting:
+2. Read the relevant authority files when they have not been read in this session or the task changes their domain:
    - `AGENTS.md`
    - `.codex/skill-policy.toml` (if present)
    - `docs/README.md` for the active documentation map
@@ -41,28 +41,12 @@ At the start of each new task:
    - Never read `archive/` during routine work. It is historical, not an instruction source; inspect only on an explicit archival-research request.
 3. Treat the current session's available skills/plugins/tools as the source of truth.
 4. Do not assume a globally installed skill is callable unless it is available in-session.
-5. Before starting implementation, report:
-   - relevant native capabilities/tools
-   - what will be used
-   - what will be skipped
-   - why skipped items are not needed
-   - key risks/dependencies for chosen tools
+5. Give a short progress update when tool work starts. Mention a capability only if its choice, limitation or side effect matters to the work.
 6. Route capability selection through `.codex/skill-policy.toml` and use fallback logic if a listed capability is unavailable in-session.
 
-## 2) Skill Suggestions (required before optional skill use)
+## 2) Skill use
 
-Before using optional skills, provide a concise `Skill Suggestions` list with:
-
-- Skill
-- Why matched
-- Risk (`low`, `medium`, `high`)
-- Dependencies
-- Recommended action (`Use`, `Skip`, `Ask`)
-
-Default behavior:
-
-- Keep the active skill set small and task-relevant.
-- Use broad coverage by default; avoid allowlisting unless explicitly required by policy.
+Use a skill when it materially helps the task; read its instructions before use. Announce the first use briefly. Do not create a suggestion table or ask for skill approval when policy already permits automatic use. Keep the active set small.
 
 ## 3) Skill Policy Gate
 
@@ -72,14 +56,11 @@ If `.codex/skill-policy.toml` exists, it controls routing behavior.
 - Enforce `allowed_skills` only when present.
 - If `require_explicit_composio_invocation = true`, require explicit `$composio-...` user invocation before any Composio skill use.
 
-## 4) Approval Gates
+## 4) Execution authority
 
-Default approval behavior is policy-driven:
+The owner's instructions in this session and prior turns are continuing authority for the work they specify. Complete ordinary implementation, tests, documentation, commits, remote branch sync and developer-sandbox verification when those steps are part of an authorised workflow. Do not request a second yes for the same action. An external system being involved is not, by itself, a new approval gate.
 
-- For `mode = "suggest_then_approve"`:
-  - Do not use optional skills until user approval is granted.
-  - Ask before any external mutation, irreversible action, or spend-impacting action.
-- Read-only local repo analysis/editing without optional skills does not require separate approval.
+Resolve the exact target and effects before consequential actions. Ask once, at the point of action, only for genuinely new authority or an unavoidable provider/platform credential or action-time confirmation. Do not infer a password, OTP or other credential from the owner's project ownership. If an authentication challenge requires the owner, prepare the exact flow, continue independent work, and ask them to complete it in the local trusted UI; never request a secret in chat.
 
 ## 5) Execution Workflow Expectations
 
@@ -95,18 +76,9 @@ Default approval behavior is policy-driven:
    - add explicit output shape and acceptance criteria when missing
    - only skip this rewrite when the user explicitly requests verbatim handling
 
-## 6) Safety Boundary (locked)
+## 6) Product and release boundaries
 
-Capability use never overrides project guardrails. Keep all existing prohibitions in force, including:
-
-- no matching unlock
-- no billing activation
-- no auth replacement
-- no backend changes unless approved
-- no production deploy unless approved
-- no unauthorized public market-coverage claims
-- no guaranteed outcomes claims
-- no unapproved scope expansion
+Apply the current task authority and the active product contracts. Matching, backend and sandbox work already authorised by the owner may proceed without repeated permission. Public production release, live billing/charging, authentication replacement, credential creation/revocation, destructive real-data changes and material legal/privacy policy changes require applicable owner authority if it has not already been given. Never make unsupported coverage or guaranteed-outcome claims.
 
 ## 6A) Antigravity implementation and independent-audit handoff (`LOCKED`)
 
@@ -116,7 +88,7 @@ For a work package delegated to Antigravity, use this sequence. A completion rep
 2. **Antigravity implements locally on an isolated branch.** It may inspect, edit, commit locally and run local tests. It must not push remotely, open/merge a PR, deploy to the developer sandbox or production, mutate a provider, rotate credentials, or enable billing/authentication while implementing.
 3. **Antigravity returns an evidence handoff.** It includes commit SHA(s), changed files, local test commands/results, migrations/data effects, deployment/provider actions (which should be none), residual risks and every roadmap item claimed addressed.
 4. **Codex independently re-audits.** Review the actual diff and the whole affected path: UI/API, persistence, data migration, automation, notification/fallback, `/ops`, security/privacy, documentation, tests and the applicable sandbox matrix. Re-run proportionate tests and classify every claimed item `DONE`, `PARTIAL`, `OPEN`, `REGRESSED`, `NOT_VERIFIED` or `SUPERSEDED`.
-5. **Only an accepted Codex audit may advance the exact commit.** Codex may then push the audited branch and deploy it to the developer sandbox, verify the relevant live sandbox checklist, and report the result. Rejection or incomplete evidence returns the same work package to Antigravity; no environment advancement occurs.
+5. **Only an accepted Codex audit may advance the exact commit.** Once accepted, Codex pushes the audited branch and deploys it to the developer sandbox when those steps are within the owner's standing workstream authority; it verifies the relevant live checklist and reports the result. Do not create a fresh approval stop for each step. Rejection or incomplete evidence returns the same work package to Antigravity; no environment advancement occurs.
 6. **Production remains a separate final gate.** A successful sandbox audit permits the documented zero-traffic canary and production acceptance only under the owner's applicable production authority. It never overrides separate gates for live Stripe charging, provider credential creation/revocation, billing/refunds, authentication or destructive data actions.
 
 ## 7) Validation Before Completion
@@ -132,7 +104,7 @@ Before finishing a task:
    - how output affected implementation decisions
    - supporting evidence
 5. If available capabilities were not used, explain why.
-6. Prefer response structure from `.codex/templates/FINAL_EVIDENCE_TEMPLATE.md`.
+6. Use the evidence template only when it improves clarity for the task.
 
 ## Deferred finding record
 
@@ -162,4 +134,4 @@ Underimplementation and lack of verification are UNACCEPTABLE and SHALL NOT happ
 When executing any task, migration, or refactoring:
 1. **Zero Tolerance for Partial Work:** Do not stop execution simply because the compiler passes or the script runs without errors. You are responsible for the entire end-to-end functionality, including visual state, aesthetics, and edge cases.
 2. **Explicit Verification Mandate:** You MUST rigorously verify the final outcome of your changes. For frontend tasks, this means ensuring all styling dependencies (fonts, plugins, external CSS) are active and the UI maintains its premium feel. For backend tasks, this means verifying the entire request lifecycle.
-3. **Escalate Instead of Assuming:** If you cannot definitively verify the outcome due to environmental constraints, you must escalate and ask the user to manually verify before moving on or marking the task as complete.
+3. **Handle verification limits precisely:** If a required check is unavailable, complete independent work, use another valid verification route where possible, and mark only the unverified claim as such. Request owner action only when that specific missing check cannot be completed without it. Never mark the unverified claim complete.

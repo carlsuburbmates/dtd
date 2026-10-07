@@ -56,7 +56,7 @@ This is a working completion ledger, not a claim that every repository statement
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
 | DF-006 | 1, 6 | PARTIAL | The self-contained local isolated suite and live API/Ops M9 matrix pass; expand to browser-submitted journey, automation/recovery and remote-CI acceptance. |
 | DF-009 | 1 | OPEN | Fresh local audit reports 98 advisories; migrate from the legacy frontend toolchain and remediate in tested batches. |
-| DF-010 | 1 | PARTIAL | Current workflow uses v7 actions; a fresh remote Verify run is still required when branch push authority is exercised. |
+| DF-010 | 1 | PARTIAL | Current workflow uses v7 actions; confirm a fresh remote Verify run after the authorised feature branch is synced. |
 | DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
 | DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |
 | DF-014 | 2 | PARTIAL | Read-only production corpus audit before any production promotion. |

@@ -10,7 +10,7 @@ blocked_skills = []
 # - Add a plugin or skill only when it clearly matches the task and improves evidence quality.
 # - Prefer native browser/visual checks for UI work and repo tests for code changes.
 # - For integration-heavy work, prefer the matching plugin when available and fall back to local tools.
-# - If a task touches an external system, do not mutate it unless the user explicitly asked for that action.
+# - Carry forward session authorisation. An authorised workflow may include remote branch sync and developer-sandbox actions without a new approval for each step.
 # - If a task can be completed by inspecting repo files, build output, browser evidence, or official docs, prefer that path over external provider consoles.
 
 # Precedence
@@ -21,9 +21,9 @@ blocked_skills = []
 # 5. Skills/subagents when they materially reduce cycle time or risk.
 
 # Required response behavior when optional capabilities are relevant
-# - Before using an optional skill, provide a concise Skill Suggestions list with: Skill, Why matched, Risk, Dependencies, Recommended action.
+# - Announce a skill on first use; do not require a suggestion table or a second approval in auto-use mode.
 # - Keep the active skill set small and task-relevant.
-# - Explain why skipped capabilities are not needed when reporting progress or completion.
+# - Mention skipped capabilities only when the omission affects evidence or outcome.
 
 # Integration routing notes
 # - Frontend / local web UI work: Browser plugin first for localhost/127.0.0.1 apps; use Browser screenshots and interaction checks before relying on prose.
@@ -36,7 +36,7 @@ blocked_skills = []
 # Fallback rules
 # - If the preferred plugin is unavailable, use the nearest safe fallback and say why.
 # - If the task is read-only analysis, prefer local inspection and official docs over external provider mutations.
-# - If the task requires a side effect on an external system, ask before proceeding unless the user already explicitly requested that action.
+# - If an external side effect is a normal step of an authorised workflow, proceed; ask only when new authority is genuinely required.
 # - If the task crosses multiple domains, keep the routing stack as small as possible and only add a second capability when it meaningfully reduces risk.
 
 # Default capability bundles

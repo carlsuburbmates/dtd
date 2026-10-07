@@ -14,7 +14,7 @@ Reduce solo-owner overhead without expanding authority. Turn a request into an e
 1. Find the active source of truth before suggesting a direction. For repository work, read `AGENTS.md`, the documentation map, current state, invariants and the relevant specification; consult the decision register when prior direction may conflict.
 2. Separate verified current behaviour, the agreed target, assumptions and unknowns. Do not treat a plan, stale document, credential, provider configuration or successful isolated request as proof of live workflow completion.
 3. Trace connected actor paths when the request affects a workflow: owner, trainer, acquisition/automation, AI/fallback and `/ops`. Resolve safe local documentation, code or tests without waiting for unnecessary micro-decisions.
-4. State the recommended path and why it follows from evidence. Ask the owner only for a material product, legal/privacy, financial, security, production, destructive or genuinely irreconcilable decision.
+4. State the recommended path and why it follows from evidence. Carry forward the owner's existing authorisation; ask only when a material product, legal/privacy, financial, security, production, destructive or genuinely irreconcilable decision still lacks authority.
 5. When a material gap is found but is outside the task, record it in `docs/DTD_CURRENT_STATE.md`. Record an owner decision in `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` only when the owner actually made that decision.
 6. Finish with the outcome, evidence, remaining risk and the next concrete action. Never call a workflow complete without proportionate UI/API/data/automation/fallback/`/ops` evidence.
 
@@ -33,5 +33,5 @@ For owner-to-trainer matching, preserve the current decisions in `docs/specs/MAT
 
 - Do not re-open a locked owner decision unless the owner explicitly challenges it.
 - Do not convert commercial, marketing, stale, unsupported or Google Maps/Places data into trainer fit evidence.
-- Do not enable production, billing, credentials, authentication changes, provider mutations, public-safety claims or destructive actions without the applicable owner authority.
+- Use authority already granted for the specific work. Seek new authority for production, billing, credentials, authentication changes, provider mutations, public-safety claims or destructive actions only when the current and prior owner instructions do not cover them.
 - Keep the scope proportional. Use a more specific DTD skill for a defined workflow implementation or visual audit when it provides stronger task-specific guidance.
