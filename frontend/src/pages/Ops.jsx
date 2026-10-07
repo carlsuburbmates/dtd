@@ -6,7 +6,6 @@ import {
     getAdminPass,
     opsApi,
     audCents,
-    getMatchingOversight,
     acknowledgeDegradation,
     reviewUrgentCorrection,
     retryFollowUp,
@@ -453,9 +452,9 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             note: needsReview ? "Open the queue before moving on." : "No queue items are waiting right now.",
         },
         matching: {
-            eyebrow: degradationCount ? "Degraded AI" : "AI Circuit OK",
+            eyebrow: "Match events",
             value: formatShortNumber(matchingOversight?.total_events || 0),
-            note: degradationCount ? `${degradationCount} degradation event(s) recorded.` : "Deterministic & AI routes operational.",
+            note: `${degradationCount} degradation event(s) in the current snapshot.`,
         },
         trainer_supply: {
             eyebrow: "Intro-ready",
@@ -2026,8 +2025,13 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
             if (!officialUrl) return;
             evidenceRef = window.prompt("Enter recorded evidence reference (e.g. section, emergency page heading citation):");
             if (!evidenceRef) return;
-            statedHours = window.prompt("Enter verified stated hours (e.g. 24/7 or 8am-8pm):", "24/7 emergency service");
+            statedHours = window.prompt("Enter verified stated hours, if this correction changes them:", "");
             contactMethod = window.prompt("Enter verified contact phone/method:", "");
+            if (!String(statedHours || "").trim() && !String(contactMethod || "").trim()) {
+                toast.error("Enter at least one exact verified field value.");
+                return;
+            }
+            if (!window.confirm(`Apply the verified correction ${corrId} to the urgent-provider directory?`)) return;
         } else {
             if (!window.confirm(`Are you sure you want to mark correction ${corrId} as ${action}?`)) return;
         }
@@ -2041,8 +2045,8 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                 verified_official_source: action === "accept",
                 evidence_reference: evidenceRef || null,
                 reviewed_field_values: action === "accept" ? {
-                    stated_hours: statedHours || "24/7",
-                    contact_method: contactMethod || undefined,
+                    ...(String(statedHours || "").trim() ? { stated_hours: statedHours.trim() } : {}),
+                    ...(String(contactMethod || "").trim() ? { contact_method: contactMethod.trim() } : {}),
                 } : null,
                 notes: `Actioned as ${action} from Ops Matching view`,
             };
@@ -2076,7 +2080,7 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                 <SummaryCard
                     title="AI Degradation Events"
                     value={degradationEvents.length}
-                    note={degradationEvents.length ? "Fallback active during provider timeouts" : "Gemini 3.5 Flash operational"}
+                    note={degradationEvents.length ? "Recorded provider or response failures" : "No events in the current snapshot"}
                 />
                 <SummaryCard
                     title="Pending Vet Corrections"
@@ -2097,7 +2101,7 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                             Deterministic Fallback Parity &amp; Degradation Events
                         </h3>
                         <p className="text-sm text-[#8B9E98] font-mono mt-1 max-w-2xl">
-                            When Vertex AI / Gemini exceeds 5s timeout or returns invalid schema, the system falls back to bounded deterministic scoring with zero downtime.
+                            When the AI request times out or returns invalid data, matching uses its deterministic fallback and records the degradation.
                         </p>
                     </div>
                     {degradationEvents.length > 0 ? (
@@ -2134,12 +2138,12 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                                     <td className="py-3 pr-3"><Badge label={dev.error_type} kind="state" /></td>
                                     <td className="py-3 pr-3 text-[#8B9E98]">{dev.latency_ms ? `${dev.latency_ms}ms` : "—"}</td>
                                     <td className="py-3 pr-3 font-mono text-xs">{humanizeToken(dev.decision_state || "degraded")}</td>
-                                    <td className="py-3 text-xs text-[#F4E2B5]">Handled safely</td>
+                                    <td className="py-3 text-xs text-[#F4E2B5]">Decision recorded</td>
                                 </tr>
                             )) : (
                                 <tr>
                                     <td colSpan="6" className="py-6 text-center text-[#8B9E98] font-mono">
-                                        Zero degradation events recorded. AI provider responses are healthy.
+                                        No degradation events are present in this snapshot. This does not verify current provider health.
                                     </td>
                                 </tr>
                             )}
@@ -2196,7 +2200,7 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
             <section className="mt-4 rounded-3xl border border-[#1E2A27] bg-[#111A17] p-5" data-testid="ops-urgent-corrections-section">
                 <div className="small-caps !text-[#8B9E98]">Urgent Provider Directory &amp; Corrections</div>
                 <p className="mt-1 text-sm text-[#8B9E98]">
-                    Community submissions to update or suppress 24/7 urgent veterinary listings. Acceptance requires verified official primary-source evidence.
+                    Community submissions to update or suppress urgent-provider listings. Acceptance requires verified official primary-source evidence.
                 </p>
 
                 <div className="mt-4 overflow-x-auto">
@@ -2271,7 +2275,7 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                             }) : (
                                 <tr>
                                     <td colSpan="5" className="py-6 text-center text-[#8B9E98] font-mono">
-                                        No pending urgent vet correction requests. Directory is up to date.
+                                        No correction requests appear in this snapshot. Verify provider freshness separately.
                                     </td>
                                 </tr>
                             )}

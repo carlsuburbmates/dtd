@@ -556,6 +556,17 @@ def test_trainer_submission_creates_validated_capabilities(monkeypatch):
     fake_db = _make_fake_db()
     monkeypatch.setattr(server, "db", fake_db)
 
+    async def verified_abn_fields(abn):
+        return {"abn": abn, "abn_status": "active", "abn_verified": True, "abn_verified_at": now_iso()}
+
+    async def qualified_score(_payload):
+        return {"confidence": 0.95, "reasoning": "Test fixture", "signals": [], "model": "fixture"}
+
+    # Publication must depend on server-checked statutory evidence, never the
+    # submitter's self-asserted ABN status or a developer's local ABR settings.
+    monkeypatch.setattr(server, "_abn_profile_fields", verified_abn_fields)
+    monkeypatch.setattr(server.ai_service, "score_trainer", qualified_score)
+
     payload = server.SubmissionIn(
         name="Live Submission Trainer",
         suburb="Brunswick",
@@ -564,7 +575,7 @@ def test_trainer_submission_creates_validated_capabilities(monkeypatch):
         email="trainer@livesubmissiontrainer.com.au",
         abn="51824753556",
         abn_status="active",
-        abn_verified=True,
+        abn_verified=False,
         specialties=["puppy_training", "obedience"],
         service_formats=["in_home"],
         training_philosophy="Positive Reinforcement / Force-Free",

@@ -544,4 +544,54 @@ describe("Ops auth transition", () => {
         expect(matchingView.textContent).toContain("trainer_alpha");
         view.cleanup();
     });
+
+    it("does not infer provider health or invent 24/7 hours when accepting a correction", async () => {
+        getSpy.mockResolvedValue({
+            data: {
+                ...validSnapshot,
+                matching: {
+                    total_events: 0,
+                    ai_degradation: { events: [] },
+                    urgent_provider_freshness: {
+                        pending_corrections_count: 1,
+                        recent_corrections: [{ id: "corr_phone", provider_id: "provider_1", status: "pending_review" }],
+                    },
+                },
+            },
+        });
+        const postSpy = jest.spyOn(opsApi, "post").mockResolvedValue({ data: { ok: true, status: "accepted" } });
+        const promptSpy = jest.spyOn(window, "prompt")
+            .mockReturnValueOnce("https://provider.example/urgent")
+            .mockReturnValueOnce("Urgent care contact section")
+            .mockReturnValueOnce("")
+            .mockReturnValueOnce("03 9000 0000");
+        const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+        const view = renderOps();
+        try {
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => {
+                view.container.querySelector("[data-testid='ops-nav-matching']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            });
+            const panel = view.container.querySelector("[data-testid='ops-matching-view']");
+            expect(panel.textContent).toContain("This does not verify current provider health.");
+            expect(panel.textContent).not.toContain("Directory is up to date.");
+            await act(async () => {
+                panel.querySelector("[data-testid='ops-accept-correction-corr_phone']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).toHaveBeenCalledWith(
+                "/oversight/urgent-providers/corrections/corr_phone/review",
+                expect.objectContaining({
+                    reviewed_field_values: { contact_method: "03 9000 0000" },
+                }),
+            );
+        } finally {
+            view.cleanup();
+            postSpy.mockRestore();
+            promptSpy.mockRestore();
+            confirmSpy.mockRestore();
+        }
+    });
 });
