@@ -2506,6 +2506,74 @@ async def health() -> JSONResponse:
     )
 
 
+@api.get("/health/deep")
+async def health_deep() -> JSONResponse:
+    """Comprehensive deep runtime diagnostics probe for operators and automated monitoring.
+
+    Checks:
+    - Database connectivity and ping latency.
+    - Key collection accessibility (trainers, intros, match_events, outbox).
+    - AI service degradation circuit status.
+    - System state & maintenance mode status.
+    """
+    diagnostics: Dict[str, Any] = {
+        "ok": True,
+        "service": "dog-trainers-directory-match-engine",
+        "timestamp": now_iso(),
+        "checks": {},
+    }
+    status_code = 200
+
+    # 1. MongoDB connectivity & ping latency
+    start_t = time.perf_counter()
+    try:
+        await db.command("ping")
+        db_latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
+        diagnostics["checks"]["database"] = {"status": "available", "latency_ms": db_latency_ms}
+    except Exception as exc:
+        diagnostics["ok"] = False
+        status_code = 503
+        diagnostics["checks"]["database"] = {"status": "unavailable", "error": str(exc)}
+
+    # 2. Key collections accessibility
+    collection_checks = {}
+    for coll_name in ["trainers", "intros", "match_events", "outbox", "system_state"]:
+        try:
+            coll = getattr(db, coll_name, None)
+            if coll is not None:
+                cnt = await coll.count_documents({})
+                collection_checks[coll_name] = {"accessible": True, "count": cnt}
+            else:
+                collection_checks[coll_name] = {"accessible": False, "reason": "not_mounted"}
+        except Exception as exc:
+            collection_checks[coll_name] = {"accessible": False, "error": str(exc)}
+    diagnostics["checks"]["collections"] = collection_checks
+
+    # 3. AI Service circuit status
+    try:
+        degradation_events = ai_service.get_degradation_events()
+        circuit_open = len(degradation_events) > 0
+        diagnostics["checks"]["ai_circuit"] = {
+            "status": "degraded" if circuit_open else "nominal",
+            "active_degradation_events": len(degradation_events),
+        }
+    except Exception as exc:
+        diagnostics["checks"]["ai_circuit"] = {"status": "unknown", "error": str(exc)}
+
+    # 4. Maintenance mode status
+    try:
+        maint_state = await db.system_state.find_one({"key": "maintenance_mode"}, {"_id": 0}) or {}
+        diagnostics["checks"]["maintenance_mode"] = {
+            "active": bool(maint_state.get("active", False)),
+            "message": maint_state.get("message", ""),
+            "updated_at": maint_state.get("updated_at"),
+        }
+    except Exception as exc:
+        diagnostics["checks"]["maintenance_mode"] = {"status": "unknown", "error": str(exc)}
+
+    return JSONResponse(status_code=status_code, content=diagnostics)
+
+
 @app.get("/")
 async def app_root() -> Dict[str, Any]:
     return await root()
@@ -2514,6 +2582,11 @@ async def app_root() -> Dict[str, Any]:
 @app.get("/health")
 async def app_health() -> JSONResponse:
     return await health()
+
+
+@app.get("/health/deep")
+async def app_health_deep() -> JSONResponse:
+    return await health_deep()
 
 
 @api.post("/internal/jobs/pro-trial-warnings")
@@ -6572,6 +6645,73 @@ async def oversight_attribution(_: None = Depends(require_oversight)) -> Dict[st
         "realized_revenue_aud": round(realized_revenue_cents / 100.0, 2),
         "billing_event_count": billing_event_count,
         "ts": now_iso(),
+    }
+
+
+class MaintenanceModeIn(BaseModel):
+    active: bool = Field(..., description="Whether maintenance mode is active.")
+    message: Optional[str] = Field(default=None, description="Public maintenance announcement or reason.")
+    confirmed: bool = Field(..., description="Explicit confirmation required.")
+
+
+@api.get("/ops/maintenance-mode")
+async def get_maintenance_mode(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Read maintenance mode state from system_state."""
+    st = await db.system_state.find_one({"key": "maintenance_mode"}, {"_id": 0}) or {}
+    return {
+        "ok": True,
+        "active": bool(st.get("active", False)),
+        "message": st.get("message", ""),
+        "updated_at": st.get("updated_at"),
+        "ts": now_iso(),
+    }
+
+
+@api.post("/ops/maintenance-mode")
+async def set_maintenance_mode(
+    payload: MaintenanceModeIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Emergency switch: Toggle maintenance mode state and record audit log and transactional outbox event."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    now_str = now_iso()
+    await db.system_state.update_one(
+        {"key": "maintenance_mode"},
+        {
+            "$set": {
+                "active": payload.active,
+                "message": payload.message or ("System under maintenance" if payload.active else ""),
+                "updated_at": now_str,
+            }
+        },
+        upsert=True,
+    )
+
+    # Queue outbox event for downstream workers/subscribers
+    outbox_coll = getattr(db, "outbox", None)
+    if outbox_coll is not None:
+        await outbox_coll.insert_one({
+            "id": f"outbox_{uuid.uuid4().hex[:12]}",
+            "event_type": "system.maintenance_mode_toggled",
+            "payload": {"active": payload.active, "message": payload.message},
+            "status": "pending",
+            "created_at": now_str,
+        })
+
+    await _audit(
+        "maintenance_mode_toggled",
+        "system",
+        after={"active": payload.active, "message": payload.message},
+        actor="ops",
+    )
+
+    return {
+        "ok": True,
+        "active": payload.active,
+        "message": payload.message,
+        "updated_at": now_str,
     }
 
 

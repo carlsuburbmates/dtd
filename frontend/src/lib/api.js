@@ -65,6 +65,8 @@ export const reviewUrgentCorrection = (correctionId, payload) => opsApi.post(`/o
 export const retryFollowUp = (introId, payload) => opsApi.post(`/oversight/matching/follow-ups/${encodeURIComponent(introId)}/retry`, payload);
 export const recheckTrainerCapability = (trainerId, payload) => opsApi.post(`/oversight/trainers/${encodeURIComponent(trainerId)}/capability/recheck`, payload);
 export const refundSubscription = (payload) => opsApi.post("/oversight/subscriptions/refund", payload);
+export const getMaintenanceMode = () => opsApi.get("/ops/maintenance-mode");
+export const setMaintenanceMode = (payload) => opsApi.post("/ops/maintenance-mode", payload);
 
 export const buildAttributionSearch = ({
     campaign = "",

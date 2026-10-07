@@ -12,6 +12,8 @@ import {
     recheckTrainerCapability,
     refundSubscription,
     getAttributionOversight,
+    getMaintenanceMode,
+    setMaintenanceMode,
 } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -1830,6 +1832,92 @@ function BillingReactivationView({ billingCases, reactivationCases, sponsorInven
     );
 }
 
+function MaintenanceModeControl() {
+    const [state, setState] = useState({ active: false, message: "" });
+    const [loading, setLoading] = useState(false);
+    const [updating, setUpdating] = useState(false);
+
+    const loadState = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await getMaintenanceMode();
+            setState({
+                active: Boolean(res?.data?.active),
+                message: res?.data?.message || "",
+            });
+        } catch (err) {
+            // non-blocking
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadState();
+    }, [loadState]);
+
+    const toggleMaintenance = async () => {
+        const nextActive = !state.active;
+        const confirmMsg = nextActive
+            ? "ACTIVATE MAINTENANCE MODE? Public visitor traffic will see maintenance messaging."
+            : "DEACTIVATE MAINTENANCE MODE? Restore public traffic.";
+        if (!window.confirm(confirmMsg)) return;
+
+        let msg = state.message;
+        if (nextActive && !msg) {
+            msg = window.prompt("Enter public maintenance notice:", "The directory is undergoing scheduled platform maintenance.") || "Scheduled maintenance";
+        }
+
+        setUpdating(true);
+        try {
+            const res = await setMaintenanceMode({
+                active: nextActive,
+                message: msg,
+                confirmed: true,
+            });
+            if (res?.data?.ok) {
+                setState({ active: nextActive, message: msg });
+                toast.success(nextActive ? "Maintenance mode ACTIVATED" : "Maintenance mode DEACTIVATED");
+            }
+        } catch (err) {
+            toast.error(err?.response?.data?.detail || "Failed to update maintenance mode");
+        } finally {
+            setUpdating(false);
+        }
+    };
+
+    return (
+        <div className="mt-4 rounded-3xl border border-[#3A2220] bg-[#160E0D] p-5" data-testid="ops-maintenance-control">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <AlertTriangle className={`h-4 w-4 ${state.active ? "text-red-400" : "text-[#8B9E98]"}`} />
+                        <span className="font-serif text-lg tracking-tight">Disaster Recovery & Maintenance Mode</span>
+                        <Badge label={state.active ? "ACTIVE (SYSTEM BLOCKED)" : "NORMAL (PUBLIC OPEN)"} kind={state.active ? "severity" : "state"} />
+                    </div>
+                    <p className="mt-1 text-xs text-[#8B9E98]">
+                        Emergency operator kill-switch. When active, visitors are shown the maintenance announcement and background jobs pause non-essential mutations.
+                    </p>
+                    {state.active && state.message ? (
+                        <div className="mt-2 text-xs font-mono text-[#F8D9D3]">
+                            Notice: {state.message}
+                        </div>
+                    ) : null}
+                </div>
+                <button
+                    type="button"
+                    onClick={toggleMaintenance}
+                    disabled={loading || updating}
+                    data-testid="ops-maintenance-toggle-btn"
+                    className={`admin-btn font-mono text-xs ${state.active ? "bg-[#5B2B27] text-[#F8D9D3] hover:bg-[#723631]" : "border-[#3A2220] hover:bg-[#251715]"}`}
+                >
+                    {updating ? "Updating…" : state.active ? "Disable Maintenance Mode" : "Enable Emergency Maintenance"}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHealth }) {
     const loopRows = Object.entries(loops || {});
     const providers = asArray(providerHealth?.providers);
@@ -1849,6 +1937,10 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHea
                 <SummaryCard title="Source issues" value={sourceIngestionSources.length} note={sourceIngestionSources.length ? "Some source ingestion paths are degraded." : "No ingestion suppression is visible."} />
                 <SummaryCard title="Provider gaps" value={providerExceptions} note={providerExceptions ? "Runtime configuration is not evidence of an autonomous recovery path." : "Every material provider has the required evidence."} />
             </div>
+
+            {/* Disaster Recovery & Maintenance Switch */}
+            <MaintenanceModeControl />
+
             {unhealthyLoops || alerts.length ? (
                 <div className="mt-4 rounded-3xl border border-[#403423] bg-[#1F1910] px-4 py-3 text-sm text-[#F4E2B5]">
                     Review this section after the queue and supply read. {staleLoopNames.length ? `Unhealthy loops: ${staleLoopNames.join(", ")}.` : "There is a supporting health signal that needs attention."}
