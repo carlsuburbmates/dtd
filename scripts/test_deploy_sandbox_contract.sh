@@ -18,12 +18,12 @@ if bash "${repo_root}/scripts/deploy_sandbox.sh" --skip-tests >/dev/null 2>&1; t
   exit 1
 fi
 
-if rg -q '^[[:space:]]*bash .*setup_sandbox_ingestion\.sh' "${repo_root}/scripts/deploy_sandbox.sh"; then
+if grep -Eq '^[[:space:]]*bash .*setup_sandbox_ingestion\.sh' "${repo_root}/scripts/deploy_sandbox.sh"; then
   echo "Deployment must not silently invoke scheduler/IAM provisioning" >&2
   exit 1
 fi
 
-if ! rg -Fq -- '--update-headers="Content-Type=application/json"' "${repo_root}/scripts/setup_sandbox_ingestion.sh"; then
+if ! grep -Fq -- '--update-headers="Content-Type=application/json"' "${repo_root}/scripts/setup_sandbox_ingestion.sh"; then
   echo "Scheduler provisioning must send JSON payloads to the FastAPI endpoint" >&2
   exit 1
 fi
