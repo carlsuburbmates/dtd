@@ -2668,6 +2668,75 @@ async def run_trainer_ingest_job(
     return await _execute_trainer_ingest_pipeline(payload=payload, trigger="cloud_scheduler")
 
 
+@api.post("/internal/jobs/engine-tick")
+async def run_engine_tick_job(
+    authorization: str = Header(default="", alias="Authorization"),
+) -> Dict[str, Any]:
+    """Authenticated, serverless execution boundary for autonomous engine loops.
+
+    Solves Cloud Run scale-to-zero background task starvation (DF-006).
+    Allows external Cloud Scheduler or monitoring ping to trigger a deterministic
+    batch execution of autonomous loops safely.
+    """
+    _require_cloud_scheduler_oidc(authorization)
+    results: Dict[str, Any] = {}
+
+    # 1. Ranking calculation
+    try:
+        from services.engine import recompute_ranking
+        ranking_res = await recompute_ranking(db)
+        results["ranking"] = {"status": "ok", "result": ranking_res}
+    except Exception as exc:
+        results["ranking"] = {"status": "error", "error": str(exc)}
+
+    # 2. Inferred conversion promotion
+    try:
+        from services.engine import promote_inferred_conversions
+        infer_res = await promote_inferred_conversions(db)
+        results["inference"] = {"status": "ok", "result": infer_res}
+    except Exception as exc:
+        results["inference"] = {"status": "error", "error": str(exc)}
+
+    # 3. Health check & anomaly state
+    try:
+        from services.engine import update_health
+        health_res = await update_health(db)
+        results["health"] = {"status": "ok", "result": health_res}
+    except Exception as exc:
+        results["health"] = {"status": "error", "error": str(exc)}
+
+    # 4. Sponsor inventory expiry release
+    try:
+        from services.engine import maintain_sponsor_inventory
+        sponsor_res = await maintain_sponsor_inventory(db)
+        results["sponsor_inventory"] = {"status": "ok", "result": sponsor_res}
+    except Exception as exc:
+        results["sponsor_inventory"] = {"status": "error", "error": str(exc)}
+
+    # 5. Growth nurture cohort updates
+    try:
+        from services.engine import run_growth_nurture
+        nurture_res = await run_growth_nurture(db)
+        results["nurture"] = {"status": "ok", "result": nurture_res}
+    except Exception as exc:
+        results["nurture"] = {"status": "error", "error": str(exc)}
+
+    # 6. Reactivation lifecycle routing
+    try:
+        from services.engine import run_reactivation_routing
+        reactivation_res = await run_reactivation_routing(db)
+        results["reactivation_route"] = {"status": "ok", "result": reactivation_res}
+    except Exception as exc:
+        results["reactivation_route"] = {"status": "error", "error": str(exc)}
+
+    return {
+        "ok": True,
+        "job": "engine-tick",
+        "results": results,
+        "ts": now_iso(),
+    }
+
+
 @api.get("/config")
 async def config() -> Dict[str, Any]:
     """Lightweight config the frontend can render without auth."""
