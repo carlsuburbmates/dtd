@@ -17,7 +17,10 @@ def _api_key() -> str:
 
 
 def _from_email() -> str:
-    return (os.environ.get("RESEND_FROM") or "no-reply@dogtrainersdirectory.com.au").strip()
+    raw = (os.environ.get("RESEND_FROM") or "").strip()
+    if raw:
+        return raw
+    return "Dog Trainers Directory <no-reply@dogtrainersdirectory.com.au>"
 
 
 def _reply_to_email() -> str:
