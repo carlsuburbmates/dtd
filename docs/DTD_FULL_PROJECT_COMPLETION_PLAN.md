@@ -55,7 +55,7 @@ This is a working completion ledger, not a claim that every repository statement
 | DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |
 | DF-006 | 1, 6 | PARTIAL | The self-contained local isolated suite and live API/Ops M9 matrix pass; expand to browser-submitted journey, automation/recovery and remote-CI acceptance. |
-| DF-009 | 1 | OPEN | Fresh local audit reports 98 advisories; migrate from the legacy frontend toolchain and remediate in tested batches. |
+| DF-009 | 1 | DONE | Toolchain migrated from CRA/craco to Vite 8 and Vitest 5; 0 dependencies vulnerabilities across 190 audited packages; all 52 tests and production build pass. |
 | DF-010 | 1 | PARTIAL | Remote Verify run `37551814408` passed for exact deployed commit `6957c69` (532 backend and 51 frontend tests, build, sandbox deploy contract). Newer shared-branch commits require their own independent audit and remote run before advancement. |
 | DF-012 | 1 | DONE | Retain the scoped build-identity evidence; recheck only when source deployment identity changes. |
 | DF-013 | 1 | DONE | Dedicated sandbox runtime identity deployed and live-health checked; keep default Compute identity out of runtime traffic. |

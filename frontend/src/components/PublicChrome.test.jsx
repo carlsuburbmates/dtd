@@ -4,12 +4,12 @@ import { createRoot } from "react-dom/client";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
     useLocation: () => ({ pathname: "/" }),
-}), { virtual: true });
+}));
 
-jest.mock("framer-motion", () => ({
+vi.mock("framer-motion", () => ({
     motion: new Proxy({}, { get: () => ({ children }) => <div>{children}</div> }),
     AnimatePresence: ({ children }) => <>{children}</>,
 }));

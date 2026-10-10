@@ -2,16 +2,16 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
     useSearchParams: () => [new URLSearchParams("trainerId=trainer_1&token=action-token")],
-}), { virtual: true });
-jest.mock("@/lib/api", () => ({
-    api: { get: jest.fn(), post: jest.fn() },
+}));
+vi.mock("@/lib/api", () => ({
+    api: { get: vi.fn(), post: vi.fn() },
     audCents: (value) => `A$${(Number(value || 0) / 100).toFixed(2)}`,
 }));
-jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
-jest.mock("@/components/PublicChrome", () => ({
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
 }));

@@ -2,29 +2,29 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-}), { virtual: true });
+}));
 
-jest.mock("@/components/PublicChrome", () => ({
+vi.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
 }));
 
-jest.mock("sonner", () => ({
+vi.mock("sonner", () => ({
     toast: {
-        error: jest.fn(),
-        success: jest.fn(),
+        error: vi.fn(),
+        success: vi.fn(),
     },
 }));
 
-jest.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", () => ({
     api: {
-        post: jest.fn(),
+        post: vi.fn(),
     },
 }));
 
-jest.mock("@/lib/publicPolicy", () => ({
+vi.mock("@/lib/publicPolicy", () => ({
     usePublicMonetizationCopy: () => ({
         submitConsentBillingLabel: "I agree to platform terms.",
         submitConsentBillingRequiredError: "Accept billing terms to continue.",

@@ -4,13 +4,13 @@ import { createRoot } from "react-dom/client";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-    useSearchParams: () => [new URLSearchParams(), jest.fn()],
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
     useLocation: () => ({ hash: "" }),
-}), { virtual: true });
+}));
 
-jest.mock("framer-motion", () => {
+vi.mock("framer-motion", () => {
     const Component = ({ children, ...props }) => <div>{children}</div>;
     return {
         motion: new Proxy({}, { get: () => Component }),
@@ -21,22 +21,20 @@ jest.mock("framer-motion", () => {
     };
 });
 
-jest.mock("lucide-react", () => {
-    const Icon = (props) => <svg {...props} />;
-    return new Proxy({}, { get: () => Icon });
-});
 
-jest.mock("@/components/PublicChrome", () => ({
+vi.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
 }));
 
-jest.mock("@/components/OwnerWaitlistForm", () => () => <div>Waitlist</div>);
+vi.mock("@/components/OwnerWaitlistForm", () => ({
+    default: () => <div>Waitlist</div>,
+}));
 
-jest.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", () => ({
     api: {
-        get: jest.fn(),
-        post: jest.fn(),
+        get: vi.fn(),
+        post: vi.fn(),
     },
     audCents: (val) => `$${val}`,
     buildAttributionSearch: () => "",

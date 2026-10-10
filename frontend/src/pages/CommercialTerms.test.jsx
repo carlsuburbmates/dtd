@@ -2,14 +2,16 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-}), { virtual: true });
-jest.mock("@/components/PublicChrome", () => ({
+}));
+vi.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
 }));
-jest.mock("@/components/PublicArt", () => () => <div>Artwork</div>);
+vi.mock("@/components/PublicArt", () => ({
+    default: () => <div>Artwork</div>,
+}));
 
 import Pricing from "./Pricing";
 import Terms from "./Terms";

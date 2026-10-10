@@ -2,13 +2,13 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-}), { virtual: true });
+}));
 
-const mockToastError = jest.fn();
-const mockToastSuccess = jest.fn();
-jest.mock("sonner", () => ({
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+vi.mock("sonner", () => ({
     toast: {
         error: (...args) => mockToastError(...args),
         success: (...args) => mockToastSuccess(...args),

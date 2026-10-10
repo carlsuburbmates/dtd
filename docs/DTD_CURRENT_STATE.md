@@ -150,11 +150,10 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-009 — Frontend dependency vulnerability backlog
 
-- **Observed/status:** 7 October 2026 — open; fresh local dependency audit completed, no automatic dependency rewrite applied.
-- **Evidence:** `frontend/package-lock.json` is current, and `npm audit` reports 98 advisories (three critical, 75 high, 14 moderate and six low). Direct high-severity paths include `react-scripts` 5.0.1, `postcss`, `tailwindcss` and `remark-mdx-frontmatter`; the critical findings remain transitive below the legacy `react-scripts` development-server chain. The current `frontend` production test/build gate passes, but that does not reduce the audit count. `npm audit fix --dry-run` cannot start because `react-day-picker` 8 requires `date-fns` 2 or 3 while the manifest requests 4.
-- **Impact/uncertainty:** the remaining critical findings are not included in the deployed browser bundle, but they remain a CI/developer-machine risk because the build tool is currently declared as a production dependency. Some other advisories are build-tool or transitive-only; current evidence does not prove every reachable runtime path. Applying `npm audit fix --force` would introduce major-version changes without product regression review.
-- **Why deferred:** the next fixes require a deliberate `react-scripts` toolchain migration and resolution of the pre-existing `date-fns` 4 / `react-day-picker` 8 peer conflict. A forced resolver run would hide rather than resolve that compatibility issue.
-- **Next action:** move the build toolchain to a supported dependency model, resolve the date-picker peer constraint, then continue package upgrades in bounded batches with build, test and live-acceptance evidence.
+- **Observed/status:** 11 October 2026 — remediated and verified locally; CRA toolchain eliminated in favor of Vite + Vitest.
+- **Evidence:** Migrated the frontend build toolchain from legacy Create React App (`react-scripts` 5.0.1 and `craco`) to `vite` 8 and `vitest` 5. Pruned dead transitive and unused dependencies (`cra-template`, `react-scripts`, `@craco/craco`, `@babel/plugin-proposal-private-property-in-object`, `@mdx-js/*`, `remark-*`, `rehype-*`). `yarn audit --groups dependencies` confirms 0 vulnerabilities across 190 audited packages.
+- **Repair/evidence:** Production build compiles cleanly in 790ms (`yarn build`). Full test suite runs under Vitest (`CI=true yarn test --watch=false`), passing all 52 tests across all 10 test suites in 2.08s.
+- **Next action:** Verify remote CI on GitHub once branch is pushed under owner authorization.
 
 ### DF-010 — GitHub Actions runtime and runner-image deprecation
 

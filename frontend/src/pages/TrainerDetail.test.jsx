@@ -2,30 +2,30 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
     useParams: () => ({ id: "trainer_1" }),
-    useSearchParams: () => [new URLSearchParams(), jest.fn()],
-}), { virtual: true });
-
-jest.mock("@/lib/api", () => ({ api: { get: jest.fn(), post: jest.fn() } }));
-jest.mock("@/lib/publicPolicy", () => ({
-    extractPublicMonetizationPolicy: jest.fn(() => ({})),
-    resolvePublicMonetizationCopy: jest.fn(() => ({ trainerDetailConnectPricing: "" })),
+    useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }));
-jest.mock("sonner", () => ({ toast: { error: jest.fn(), success: jest.fn() } }));
-jest.mock("@/components/PublicChrome", () => ({
+
+vi.mock("@/lib/api", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+vi.mock("@/lib/publicPolicy", () => ({
+    extractPublicMonetizationPolicy: vi.fn(() => ({})),
+    resolvePublicMonetizationCopy: vi.fn(() => ({ trainerDetailConnectPricing: "" })),
+}));
+vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+vi.mock("@/components/PublicChrome", () => ({
     PublicHeader: () => <header>DTD</header>,
     PublicFooter: () => <footer>Footer</footer>,
 }));
-jest.mock("@/components/ui/dialog", () => ({
+vi.mock("@/components/ui/dialog", () => ({
     Dialog: ({ open, children }) => open ? <div>{children}</div> : null,
     DialogContent: ({ children, ...props }) => <section {...props}>{children}</section>,
     DialogDescription: ({ children, ...props }) => <p {...props}>{children}</p>,
     DialogHeader: ({ children, ...props }) => <div {...props}>{children}</div>,
     DialogTitle: ({ children, ...props }) => <h2 {...props}>{children}</h2>,
 }));
-jest.mock("@/components/ui/input-otp", () => ({
+vi.mock("@/components/ui/input-otp", () => ({
     InputOTP: ({ value, onChange, children, ...props }) => <input {...props} value={value} onChange={(event) => onChange(event.target.value)} />,
     InputOTPGroup: ({ children }) => <>{children}</>,
     InputOTPSlot: () => null,
