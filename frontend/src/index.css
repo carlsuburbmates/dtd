@@ -404,16 +404,17 @@
         color: var(--dtd-ink-2);
     }
     .nav-link:hover {
-        color: var(--dtd-ink);
-        background-color: #F0EBDF;
+        color: #1A3A32;
+        background-color: #EAE4D7;
     }
     .nav-link:focus-visible {
         outline: 2px solid var(--dtd-focus-ring);
         outline-offset: 2px;
     }
-    .nav-link.active {
-        background-color: var(--dtd-ink);
-        color: var(--dtd-bg);
+    .nav-link.active,
+    .nav-link.active:hover {
+        background-color: #1A3A32 !important;
+        color: #F5F2EB !important;
     }
 
     .footer-link {

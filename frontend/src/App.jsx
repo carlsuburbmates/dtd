@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { Toaster } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import ScrollToTop from "@/components/ScrollToTop";
 
 import Home from "@/pages/Home";
 import TrainerDetail from "@/pages/TrainerDetail";
@@ -114,6 +115,7 @@ function App() {
     return (
         <div className="App">
             <BrowserRouter>
+                <ScrollToTop />
                 <RouteDocumentMeta />
                 <AnimatedRoutes />
                 <Toaster position="top-center" richColors />

@@ -364,7 +364,7 @@ export default function Home() {
                         </p>
                         {trainerOnboardingOpen && (
                             <div className="pt-4">
-                                <Link to="/trainers" className="inline-flex items-center text-[#1A3A32] font-medium hover:opacity-70 transition-opacity pb-1 border-b border-[#1A3A32]/30 hover:border-[#1A3A32]">
+                                <Link to="/submit" className="inline-flex items-center text-[#1A3A32] font-medium hover:opacity-70 transition-opacity pb-1 border-b border-[#1A3A32]/30 hover:border-[#1A3A32]">
                                     Learn about joining <ArrowRight className="w-4 h-4 ml-2" />
                                 </Link>
                             </div>
