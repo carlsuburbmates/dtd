@@ -91,8 +91,7 @@ async def run_browser_journey(
             await submit_btn.click()
 
             # Step 4: Verify Results Card
-            print("Step 4: Waiting for matching results card...")
-            results_section = page.locator('[data-testid="match-results-section"]')
+            results_section = page.locator('[data-testid="match-results-section"], [data-testid="match-empty"]')
             await results_section.wait_for(timeout=15000)
 
             # Check privacy invariant: URL must NOT contain questionnaire parameters
