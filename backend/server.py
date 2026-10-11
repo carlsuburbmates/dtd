@@ -27,6 +27,7 @@ import logging
 import math
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -2551,7 +2552,7 @@ async def health_deep() -> JSONResponse:
 
     # 3. AI Service circuit status
     try:
-        degradation_events = ai_service.get_degradation_events()
+        degradation_events = await ai_service.get_degradation_events(db=db)
         circuit_open = len(degradation_events) > 0
         diagnostics["checks"]["ai_circuit"] = {
             "status": "degraded" if circuit_open else "nominal",

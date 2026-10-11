@@ -43,6 +43,15 @@ def test_root_and_health_endpoints_respond():
     assert api_health_resp.status_code in (200, 503)
     assert "service" in api_health_resp.json()
 
+    # Health deep endpoints
+    deep_resp = client.get("/health/deep")
+    assert deep_resp.status_code in (200, 503)
+    assert "checks" in deep_resp.json()
+
+    api_deep_resp = client.get("/api/health/deep")
+    assert api_deep_resp.status_code in (200, 503)
+    assert "checks" in api_deep_resp.json()
+
 
 def test_cors_headers_match_configured_origins():
     """Verify that requests from allowed origins receive proper Access-Control-Allow-Origin header."""
