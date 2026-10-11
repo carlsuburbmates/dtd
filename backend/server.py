@@ -759,6 +759,7 @@ def _verify_trainer_action_token(
         raise HTTPException(status_code=403, detail="Trainer action token does not match trainer context.")
     if submission_id and token_submission_id and token_submission_id != submission_id:
         raise HTTPException(status_code=403, detail="Trainer action token does not match submission context.")
+    return payload
 
 
 def _issue_trainer_claim_session(*, trainer_id: str, claim_event_id: str) -> Dict[str, Any]:
@@ -5224,6 +5225,7 @@ async def get_trainer_billing_health(
             "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
             "billing_terms_version": trainer.get("billing_terms_version") or "",
             "stripe_customer_id": trainer.get("stripe_customer_id"),
+            "claim_status": str(trainer.get("claim_status") or "unclaimed"),
             "tier": sub_tier,
             "subscription_tier": sub_tier,
             "subscription_status": sub_status,

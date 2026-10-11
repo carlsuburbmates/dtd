@@ -124,4 +124,21 @@ describe("P4 trainer subscription workflow", () => {
         expect(view.container.querySelector("[data-testid='billing-terms-consent'] input").disabled).toBe(true);
         view.cleanup();
     });
+
+    it("renders verification-first notice when profile is unclaimed", async () => {
+        api.get.mockResolvedValueOnce({
+            data: {
+                ...billingData,
+                trainer: { ...billingData.trainer, claim_status: "unclaimed" },
+            },
+        });
+        const view = renderPage();
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='unclaimed-profile-notice']")).not.toBeNull();
+        expect(view.container.textContent).toContain("Profile verification in progress");
+        expect(view.container.textContent).toContain("Once your profile is claimed and verified via email");
+        view.cleanup();
+    });
 });
+

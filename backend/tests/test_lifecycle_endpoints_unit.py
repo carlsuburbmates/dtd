@@ -391,6 +391,15 @@ def test_verify_trainer_action_token_rejects_wrong_submission_context():
     assert exc.value.status_code == 403
 
 
+def test_verify_trainer_action_token_returns_payload_dict():
+    token = server._issue_trainer_action_token(trainer_id="t_1", submission_id="sub_a")
+    payload = server._verify_trainer_action_token(token, trainer_id="t_1", submission_id="sub_a")
+    assert isinstance(payload, dict)
+    assert payload["trainer_id"] == "t_1"
+    assert payload["submission_id"] == "sub_a"
+
+
+
 def test_reconnect_trainer_billing_returns_updated_profile_status(monkeypatch):
     trainer_doc = {
         "id": "t_bill",

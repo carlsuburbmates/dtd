@@ -245,6 +245,24 @@ export default function TrainerBilling() {
                     </div>
                 ) : (
                     <div className="space-y-4 mt-8">
+                        {Boolean(data?.trainer?.claim_status && data?.trainer?.claim_status !== "claimed") && (
+                            <div className="card-public p-5 border-[#D06D4F]/30 bg-[#FFF9F5] flex items-start gap-3.5 rounded-2xl" data-testid="unclaimed-profile-notice">
+                                <AlertCircle className="w-5 h-5 text-[#D06D4F] shrink-0 mt-0.5" />
+                                <div className="text-sm">
+                                    <h3 className="font-semibold text-[#1A3A32]">Profile verification in progress</h3>
+                                    <p className="text-[#4A615A] mt-1 leading-relaxed">
+                                        Your listing is currently undergoing statutory identity and business checks. Core directory listings are free with zero referral fees. Once your profile is claimed and verified via email, optional Pro and Suburb Sponsor upgrades will unlock.
+                                    </p>
+                                    {data?.trainer?.id && (
+                                        <div className="mt-3">
+                                            <Link to={`/t/${data.trainer.id}`} className="text-xs font-semibold text-[#1A3A32] underline underline-offset-2">
+                                                View public listing & initiate email claim →
+                                            </Link>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <section className="card-public p-6" data-testid="trainer-billing-summary">
                             <h2 className="font-serif text-3xl text-[#1A3A32]">{data?.trainer?.name || "Trainer"}</h2>
                             <div className="mt-4 grid sm:grid-cols-3 gap-4">
