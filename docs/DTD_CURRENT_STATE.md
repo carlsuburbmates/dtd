@@ -150,9 +150,9 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-009 — Frontend dependency vulnerability backlog
 
-- **Observed/status:** 11 October 2026 — remediated and verified locally; CRA toolchain eliminated in favor of Vite + Vitest.
-- **Evidence:** Migrated the frontend build toolchain from legacy Create React App (`react-scripts` 5.0.1 and `craco`) to `vite` 8 and `vitest` 5. Pruned dead transitive and unused dependencies (`cra-template`, `react-scripts`, `@craco/craco`, `@babel/plugin-proposal-private-property-in-object`, `@mdx-js/*`, `remark-*`, `rehype-*`). `yarn audit --groups dependencies` confirms 0 vulnerabilities across 190 audited packages.
-- **Repair/evidence:** Production build compiles cleanly in 790ms (`yarn build`). Full test suite runs under Vitest (`CI=true yarn test --watch=false`), passing all 52 tests across all 10 test suites in 2.08s.
+- **Observed/status:** 11 October 2026 — remediated and deployed to developer sandbox; CRA toolchain eliminated in favor of Vite + Vitest.
+- **Evidence:** Migrated the frontend build toolchain from legacy Create React App (`react-scripts` 5.0.1 and `craco`) to `vite` 8 and `vitest` 5. Pruned dead transitive and unused dependencies (`cra-template`, `react-scripts`, `@craco/craco`, `@babel/plugin-proposal-private-property-in-object`, `@mdx-js/*`, `remark-*`, `rehype-*`). `yarn audit --groups dependencies` confirms 0 vulnerabilities across 190 audited packages. Pinned `@testing-library/jest-dom` to `6.9.1` and added `--ignore-engines` to `frontend/Dockerfile` for Node 20 Docker build compatibility.
+- **Repair/evidence:** Production build compiles cleanly in 685ms (`yarn build`). Full test suite runs under Vitest (`CI=true yarn test --watch=false`), passing all 52 tests across all 10 test suites in 1.79s. Deployed to Google Cloud Run developer sandbox (`dtd-web-dev`) serving 100% of traffic, bundle verified against sandbox API.
 - **Next action:** Verify remote CI on GitHub once branch is pushed under owner authorization.
 
 ### DF-010 — GitHub Actions runtime and runner-image deprecation
@@ -236,9 +236,9 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 7 October 2026 — `DONE`; headless browser acceptance runner and visual verification suites verified locally.
-- **Evidence:** `scripts/run_sandbox_browser_journey.py` provides an end-to-end Playwright acceptance runner exercising Homepage questionnaire submission → results card rendering with URL privacy and marketing phrase exclusion → candidate profile handoff → protected enquiry submission with consent and terminal status verification. Component tests in `Home.test.jsx` (10 passed) and visual suites pass.
-- **Residual gate:** run against the deployed sandbox environment during release promotion with disposable fixtures.
+- **Observed/status:** 11 October 2026 — `DONE`; headless browser acceptance runner and visual verification suites verified locally and against live deployed developer sandbox.
+- **Evidence:** `scripts/run_sandbox_browser_journey.py` provides an end-to-end Playwright acceptance runner exercising Homepage questionnaire submission → results card rendering with URL privacy and marketing phrase exclusion → candidate profile handoff → protected enquiry submission with consent and terminal status verification. On 11 October 2026, executed against deployed sandbox frontend (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`) and passed with `ok: true`, verifying `home_loaded`, `questionnaire_filled`, `results_rendered_privacy_verified`, and `empty_match_verified` against the seeded 20 Melbourne trainer dataset. Component tests in `Home.test.jsx` (10 passed) and visual suites pass.
+- **Residual gate:** production release promotion remains a separate owner gate.
 
 ### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 

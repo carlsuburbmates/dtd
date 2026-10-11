@@ -28,7 +28,9 @@ gcloud run deploy "${SERVICE_NAME}" \
   --max-instances 2
 
 WEB_URL="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format='value(status.url)')"
-curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}/" | grep -q '<div id="root">'
-MAIN_BUNDLE=$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}/" | sed -n 's/.*\(\/static\/js\/main\.[^"]*\.js\).*/\1/p')
-curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}${MAIN_BUNDLE}" | grep -q "${API_URL}"
+HTML="$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}/")"
+echo "${HTML}" | grep -q '<div id="root">'
+MAIN_BUNDLE=$(echo "${HTML}" | grep -oE '/(assets/index|static/js/main)[^"]*\.js' | head -n 1)
+BUNDLE_CONTENT="$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}${MAIN_BUNDLE}")"
+echo "${BUNDLE_CONTENT}" | grep -q "${API_URL}"
 echo "Sandbox frontend verified: ${WEB_URL} -> ${API_URL}"
