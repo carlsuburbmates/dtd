@@ -579,7 +579,7 @@ def construct_webhook_event(payload: bytes, signature: str) -> Dict[str, Any]:
         raise RuntimeError("stripe_signature_missing")
     s = _client()
     event = s.Webhook.construct_event(payload=payload, sig_header=signature, secret=_webhook_secret())
-    return event
+    return event.to_dict() if hasattr(event, "to_dict") else dict(event)
 
 
 def extract_invoice_id(event_type: str, obj: Dict[str, Any]) -> str:
