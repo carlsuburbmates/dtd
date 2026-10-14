@@ -246,6 +246,24 @@ describe("TrainerDetail ownership claim", () => {
         expect(view.container.querySelector("[data-testid='claim-success']")).not.toBeNull();
         view.cleanup();
     });
+
+    it("renders verified storefront owner controls when trainer is claimed", async () => {
+        const claimedTrainer = { ...trainer, claim_status: "claimed", tier: "core" };
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1" ? claimedTrainer : { public_matching_enabled: false },
+        }));
+        const view = renderDetail();
+        await settle();
+
+        const ownerControls = view.container.querySelector("[data-testid='trainer-owner-controls']");
+        expect(ownerControls).not.toBeNull();
+        expect(ownerControls.textContent).toContain("Verified Storefront Owner");
+        expect(ownerControls.textContent).toContain("Manage your listing");
+        expect(view.container.querySelector("[data-testid='edit-capabilities-open']")).not.toBeNull();
+        expect(view.container.querySelector("[data-testid='trainer-billing-link']")).not.toBeNull();
+
+        view.cleanup();
+    });
 });
 
 describe("TrainerDetail matching enquiry delivery", () => {

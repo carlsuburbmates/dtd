@@ -538,8 +538,36 @@ export default function TrainerDetail() {
                 {Array.isArray(trainer.gallery_images) && trainer.gallery_images.length ? <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{trainer.gallery_images.slice(0, 3).map((url, index) => <img key={url} src={url} alt={`${trainer.name} gallery ${index + 1}`} className="aspect-[4/3] w-full rounded-2xl object-cover border border-[#E5DFD3]" loading="lazy" />)}</div> : null}
                 {isClaimable ? (
                     <section className="mt-8 rounded-2xl border border-[#D9B36C]/70 bg-[#FFF9ED] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6" data-testid="claim-banner">
-                        <div><div className="small-caps">Business owner</div><h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Is this your business?</h2><p className="mt-1 text-sm text-[#4A615A]">Claim this profile using the email recorded on the listing.</p></div>
+                        <div><div className="small-caps text-[#8B5E14]">Business owner</div><h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Is this your business?</h2><p className="mt-1 text-sm text-[#4A615A]">Claim this storefront in 60 seconds with your business email to manage your profile.</p></div>
                         <button type="button" onClick={() => setClaimOpen(true)} className="btn-primary mt-4 sm:mt-0" data-testid="claim-profile-open">Claim this profile</button>
+                    </section>
+                ) : claimStatus === "claimed" ? (
+                    <section className="mt-8 rounded-2xl border border-[#1A3A32]/20 bg-[#FAF8F5] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 shadow-sm" data-testid="trainer-owner-controls">
+                        <div>
+                            <div className="small-caps text-[#5C6D59] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#1A3A32]" /> Verified Storefront Owner</div>
+                            <h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Manage your listing</h2>
+                            <p className="mt-1 text-sm text-[#4A615A]">Update your active specialties, service formats, suburbs, or review visibility upgrades.</p>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2.5 sm:mt-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setClaimStep("capabilities");
+                                    setClaimOpen(true);
+                                }}
+                                className="btn-secondary text-xs py-2.5 px-4"
+                                data-testid="edit-capabilities-open"
+                            >
+                                Edit specialties &amp; formats
+                            </button>
+                            <Link
+                                to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${claimSessionToken ? `&claimSession=${encodeURIComponent(claimSessionToken)}` : ""}`}
+                                className="btn-primary text-xs py-2.5 px-4"
+                                data-testid="trainer-billing-link"
+                            >
+                                Billing &amp; upgrades
+                            </Link>
+                        </div>
                     </section>
                 ) : null}
                 </section>
