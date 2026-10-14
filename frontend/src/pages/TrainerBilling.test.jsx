@@ -136,8 +136,8 @@ describe("P4 trainer subscription workflow", () => {
         await settle();
 
         expect(view.container.querySelector("[data-testid='unclaimed-profile-notice']")).not.toBeNull();
-        expect(view.container.textContent).toContain("Profile verification in progress");
-        expect(view.container.textContent).toContain("Once your profile is claimed and verified via email");
+        expect(view.container.textContent).toContain("Welcome to Melbourne's Independent Dog Training Network!");
+        expect(view.container.textContent).toContain("Claim your business in 60 seconds");
         view.cleanup();
     });
 });

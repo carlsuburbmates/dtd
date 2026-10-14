@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertCircle, CheckCircle2, CreditCard, ExternalLink, RefreshCcw } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, ExternalLink, RefreshCcw, Sparkles } from "lucide-react";
 import { api, audCents } from "@/lib/api";
 import { toast } from "sonner";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
@@ -246,17 +246,17 @@ export default function TrainerBilling() {
                 ) : (
                     <div className="space-y-4 mt-8">
                         {Boolean(data?.trainer?.claim_status && data?.trainer?.claim_status !== "claimed") && (
-                            <div className="card-public p-5 border-[#D06D4F]/30 bg-[#FFF9F5] flex items-start gap-3.5 rounded-2xl" data-testid="unclaimed-profile-notice">
-                                <AlertCircle className="w-5 h-5 text-[#D06D4F] shrink-0 mt-0.5" />
+                            <div className="card-public p-6 border-[#1A3A32]/20 bg-gradient-to-br from-[#FAF8F5] to-[#F0F6F2] flex items-start gap-4 rounded-2xl shadow-sm" data-testid="unclaimed-profile-notice">
+                                <Sparkles className="w-6 h-6 text-[#1A3A32] shrink-0 mt-0.5" />
                                 <div className="text-sm">
-                                    <h3 className="font-semibold text-[#1A3A32]">Profile verification in progress</h3>
-                                    <p className="text-[#4A615A] mt-1 leading-relaxed">
-                                        Your listing is currently undergoing statutory identity and business checks. Core directory listings are free with zero referral fees. Once your profile is claimed and verified via email, optional Pro and Suburb Sponsor upgrades will unlock.
+                                    <h3 className="font-serif text-lg font-semibold text-[#1A3A32]">Welcome to Melbourne's Independent Dog Training Network!</h3>
+                                    <p className="text-[#4A615A] mt-1.5 leading-relaxed">
+                                        Your storefront is live and <strong>100% free forever</strong>—with zero lead fees, zero commissions, and direct client connections. Claim your business in 60 seconds using your verified business email to unlock direct enquiries, add your website/booking links, and access exclusive Suburb Sponsorship spotlight positions.
                                     </p>
                                     {data?.trainer?.id && (
-                                        <div className="mt-3">
-                                            <Link to={`/t/${data.trainer.id}`} className="text-xs font-semibold text-[#1A3A32] underline underline-offset-2">
-                                                View public listing & initiate email claim →
+                                        <div className="mt-3.5">
+                                            <Link to={`/t/${data.trainer.id}`} className="btn-primary text-xs py-2 px-4 inline-flex items-center gap-1.5 shadow-sm">
+                                                Claim your profile in 60 seconds →
                                             </Link>
                                         </div>
                                     )}
