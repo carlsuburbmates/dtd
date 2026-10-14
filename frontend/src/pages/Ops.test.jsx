@@ -377,6 +377,68 @@ describe("Ops auth transition", () => {
         view.cleanup();
     });
 
+    it("triggers 1-click quick action on case and renders action hub on overview", async () => {
+        const postSpy = vi.spyOn(opsApi, "post").mockResolvedValue({ data: { ok: true } });
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                ops_cases: [
+                    {
+                        case_id: "submission:sub_2",
+                        case_type: "trainer_submission_case",
+                        workflow: "trainer submission",
+                        entity_type: "submission",
+                        entity_id: "sub_2",
+                        title: "Trainer Submission sub_2",
+                        summary: "Needs statutory review",
+                        severity: "high",
+                        state: "detected",
+                    },
+                ],
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        // Overview action hub is present
+        expect(view.container.querySelector("[data-testid='ops-action-hub']")).not.toBeNull();
+        expect(view.container.querySelector("[data-testid='ops-quick-trigger-queue']")).not.toBeNull();
+
+        // Switch to Work Queue
+        const queueNav = view.container.querySelector("[data-testid='ops-nav-work_queue']");
+        await act(async () => {
+            queueNav.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        // Select case
+        const caseButton = view.container.querySelector("[data-testid='ops-case-submission:sub_2']");
+        await act(async () => {
+            caseButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        // 1-click quick resolve
+        const quickResolveBtn = view.container.querySelector("[data-testid='ops-case-quick-resolve']");
+        expect(quickResolveBtn).not.toBeNull();
+
+        await act(async () => {
+            quickResolveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(postSpy).toHaveBeenCalledWith("/oversight/cases/submission%3Asub_2", expect.objectContaining({
+            state: "resolved",
+        }));
+        expect(mockToastSuccess).toHaveBeenCalledWith("Case marked as resolved");
+
+        postSpy.mockRestore();
+        view.cleanup();
+    });
+
     it("renders recent automated changes with readable event and entity labels", async () => {
         getSpy.mockResolvedValueOnce({
             data: {

@@ -83,9 +83,71 @@ The system maintains strict isolation between live production and staging/sandbo
   - Promotion Gate: Features, data migrations, or infrastructure changes must pass verification in the sandbox before promotion to production.
   - Deployment Automation: Executable via `bash scripts/deploy_sandbox.sh`. It runs mandatory preflight compilation and release-gate checks, deploys `dtd-api-dev` with Secret Manager bindings, and fails unless `/api/health` confirms an available `dtd-sandbox` database. It may be run only by an authenticated, authorised operator or assistant; it is not an authority for arbitrary agents or for production promotion.
 
-## Operating cadence
+## Operating cadence and daily responsibilities
 
-- **Each session:** posture, failed/stale flows, work queue, message failures, billing/reactivation, inventory, recent changes.
-- **Daily during launch:** resolve safety/identity/payment issues first; then delivery and supply exceptions.
-- **Weekly:** review source health, catalogue/indexation drift, unresolved cases, provider costs and automation reliability.
-- Refresh authenticated numbers before making an operational decision; never preserve a dated snapshot as live truth.
+DTD operates under a single solo operator model. The operator does not perform repetitive background monitoring or manual database manipulation; instead, `/ops` consolidates exceptions into prioritised actionable triggers with bounded mutations and immutable audit events.
+
+### Operational Principles
+
+1. **Exception-Driven Review:** Never poll or guess. Only intervene when `/ops` surfaces an exception, degrade flag, or held case.
+2. **Fresh Authenticated State:** Always click `[Refresh]` (`data-testid="ops-refresh"`) before making an operational decision. Never act on stale browser memory.
+3. **Bounded 1-Click Mutations:** Use the rapid triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) or specific control triggers. Every mutation records an immutable audit log with reviewer ID, timestamp, and before/after diffs.
+4. **Fail-Closed Safety:** Commercial checkouts remain disabled (`ENABLE_TRAINER_BILLING_CHECKOUT=0`) and matching degrades to deterministic fallback upon any provider fault. Never override safety gates without explicit verification.
+
+### Daily Operator Responsibilities Checklist
+
+#### Phase 1: Morning Posture & Circuit Safety (P0 - Immediate)
+- **Check Readiness & Posture:**
+  - View `Overview` (`ops-nav-overview`): inspect the 4 top cards (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) and the `Operational Posture & Safety Gates` summary.
+  - Confirm `Commercial Gate`: verify `ENABLE_TRAINER_BILLING_CHECKOUT=0` is reported as inactive and fail-closed until live charging authorization.
+- **Verify Matching Health & Fallbacks:**
+  - View `Matching Engine` (`ops-nav-matching`): check AI degradation telemetry.
+  - If AI degradation or timeout events are detected, inspect the reason codes (e.g. `rate_limit`, `timeout`, `json_malformed`).
+  - If degraded state is confirmed stable under deterministic fallback, trigger `[Acknowledge degradation]` (`ops-ack-degradation`) to register operator acknowledgement.
+
+#### Phase 2: Work Queue & Triage Processing (P1 - Priority Daily)
+- **Open Work Queue:**
+  - Navigate to `Work Queue` (`ops-nav-work_queue`) or click `[Review Top Cases]` on the Operator Daily Action Hub (`ops-action-hub`).
+  - Focus on the `Needs review` queue bucket (states `detected` and `notified`).
+- **Trainer Submissions & Claims Triage:**
+  - Select each submission or claim case in the queue.
+  - Review statutory verification items (ABN, business registry match, location match).
+  - Use **1-Click Rapid Triage** in the Case Detail panel:
+    - `[Resolve]` (`ops-case-quick-resolve`): Marks case `resolved` with a standard statutory verification note (`Verified statutory facts and resolved in daily ops review.`).
+    - `[Acknowledge]` (`ops-case-quick-acknowledge`): Marks case `acknowledged` (`Acknowledged in daily ops triage; monitoring.`) if waiting on third-party verification.
+    - `[Dismiss]` (`ops-case-quick-dismiss`): Marks case `dismissed` if duplicate or non-actionable test fixture.
+- **Urgent-Support Directory Review:**
+  - In `Matching Engine` view, inspect pending provider correction/removal submissions.
+  - Click `[Approve & publish correction]` or `[Reject correction]` after verifying Google Places / public directory facts.
+
+#### Phase 3: Outbound Communications & Delivery Verification (P2 - Midday)
+- **Review Message Logs:**
+  - Navigate to `Messages` (`ops-nav-messages`).
+  - Filter for delivery errors (`failed`, `error`, HTTP 4xx/5xx).
+- **Retry Failed Customer Touchpoints:**
+  - For failed outcome follow-ups, click `[Retry follow-up]` (`ops-retry-follow-up-{id}`).
+  - Document provider communication failures without rotating live API keys unless containment is required.
+
+#### Phase 4: Supply, Capability Freshness & Demand Gaps (P3 - Afternoon)
+- **Supply Balance & Demand Gaps:**
+  - Navigate to `Trainer Supply` (`ops-nav-trainer_supply`) and `Pipeline Flow` (`ops-nav-pipeline_flow`).
+  - Review `Intro-ready` vs `Blocked supply` counts.
+  - Identify top suburb demand gaps where dog owner waitlist count exceeds verified trainer coverage.
+- **Trainer Capability Refresh:**
+  - If a trainer has updated behavioural declarations, insurance, or council registrations, click `[Re-check capability]` (`ops-recheck-capability-{id}`) to refresh matchable capacity immediately without waiting for scheduled nightly pipelines.
+
+#### Phase 5: Financial Health, Audits & Close (P4 - End of Day)
+- **Lifecycle & Billing Verification:**
+  - Navigate to `Billing & Reactivation` (`ops-nav-billing_reactivation`).
+  - Verify zero unhandled webhook errors, trial grace-period anomalies, or stale reactivation cases.
+- **Audit Verification:**
+  - Navigate to `Recent Changes` (`ops-nav-recent_changes`).
+  - Confirm every mutation performed during the day has a corresponding immutable audit event (`actor`, `action`, `entity_id`, `ts`).
+- **Background Loop Health:**
+  - Navigate to `System Activity` (`ops-nav-system_activity`).
+  - Confirm all active automation loops (`pipeline_guardian`, `matching_retention`, `waitlist_dispatch`) show healthy recent execution (`status: ok`) and non-stale timestamps.
+
+### Weekly Responsibilities
+- **Catalogue & SEO Drift:** Review `SEO & Indexation` (`ops-nav-seo_indexation`) against minimum eligible trainer count thresholds (>=3 intro-ready trainers per suburb) before publishing suburb landing pages.
+- **Provider Registry & Costs:** Check `System Activity` provider registry records (MongoDB Atlas, Firebase Hosting, Cloud Run, Resend, Sentry) for upcoming certificate/key review dates and runtime health.
+

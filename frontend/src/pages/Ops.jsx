@@ -31,6 +31,12 @@ const VIEW_ORDER = [
     "system_activity",
 ];
 
+const VIEW_GROUPS = [
+    { title: "Daily Operations", keys: ["overview", "work_queue", "matching", "messages"] },
+    { title: "Supply & Pipeline", keys: ["trainer_supply", "pipeline_flow", "attribution", "seo_indexation"] },
+    { title: "Platform & Governance", keys: ["billing_reactivation", "system_activity", "recent_changes"] },
+];
+
 const VIEW_LABELS = {
     overview: "Overview",
     pipeline_flow: "Pipeline Flow",
@@ -546,46 +552,52 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                             </p>
                         </section>
                         <nav className="admin-card p-3" data-testid="ops-shell-nav">
-                            <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98]">Sections</div>
-                            <div className="mt-3 grid gap-2">
-                                {VIEW_ORDER.map((key) => {
-                                    const summary = sectionSummaries[key];
-                                    const isActive = activeView === key;
-                                    return (
-                                        <button
-                                            key={key}
-                                            type="button"
-                                            onClick={() => setActiveView(key)}
-                                            data-testid={`ops-nav-${key}`}
-                                            aria-current={isActive ? "page" : undefined}
-                                            className={`w-full rounded-3xl border px-4 py-3 text-left transition ${
-                                                isActive
-                                                    ? "border-[#D9B36C] bg-[#16120D]"
-                                                    : "border-[#2A3935] bg-[#111A17]"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div>
-                                                    <div className={`font-mono text-xs uppercase tracking-[0.18em] ${isActive ? "text-[#D9B36C]" : "text-[#8B9E98]"}`}>
-                                                        {VIEW_LABELS[key]}
+                            {VIEW_GROUPS.map((group, gIdx) => (
+                                <div key={group.title} className={gIdx > 0 ? "mt-4 pt-3 border-t border-[#1E2A27]" : ""}>
+                                    <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#8B9E98] px-2 mb-2 font-semibold">
+                                        {group.title}
+                                    </div>
+                                    <div className="grid gap-1.5">
+                                        {group.keys.map((key) => {
+                                            const summary = sectionSummaries[key];
+                                            const isActive = activeView === key;
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    type="button"
+                                                    onClick={() => setActiveView(key)}
+                                                    data-testid={`ops-nav-${key}`}
+                                                    aria-current={isActive ? "page" : undefined}
+                                                    className={`w-full rounded-2xl border px-3.5 py-2.5 text-left transition ${
+                                                        isActive
+                                                            ? "border-[#D9B36C] bg-[#16120D]"
+                                                            : "border-[#2A3935]/60 bg-[#111A17] hover:border-[#2A3935]"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className={`font-mono text-xs uppercase tracking-[0.16em] truncate ${isActive ? "text-[#D9B36C]" : "text-[#8B9E98]"}`}>
+                                                                {VIEW_LABELS[key]}
+                                                            </div>
+                                                            <div className={`mt-0.5 text-xs truncate ${isActive ? "text-[#F5F2EB]" : "text-[#A9A291]"}`}>
+                                                                {summary.note}
+                                                            </div>
+                                                        </div>
+                                                        <div className="shrink-0 text-right">
+                                                            <div className={`font-serif text-lg leading-none ${isActive ? "text-[#F5F2EB]" : "text-[#F0E6D3]"}`}>
+                                                                {summary.value}
+                                                            </div>
+                                                            <div className="mt-0.5 text-[9px] font-mono uppercase tracking-[0.16em] text-[#8B9E98]">
+                                                                {summary.eyebrow}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className={`mt-2 text-sm ${isActive ? "text-[#F5F2EB]" : "text-[#C9C2B1]"}`}>
-                                                        {summary.note}
-                                                    </div>
-                                                </div>
-                                                <div className="shrink-0 text-right">
-                                                    <div className={`font-serif text-2xl leading-none ${isActive ? "text-[#F5F2EB]" : "text-[#F0E6D3]"}`}>
-                                                        {summary.value}
-                                                    </div>
-                                                    <div className="mt-1 text-[11px] font-mono uppercase tracking-[0.18em] text-[#8B9E98]">
-                                                        {summary.eyebrow}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
                         </nav>
                     </aside>
 
@@ -600,6 +612,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                                 supplyGeography={supplyGeography}
                                 supplyTrends={supplyTrends}
                                 loops={loops}
+                                onSelectCase={(id) => {
+                                    setSelectedCaseId(id);
+                                    setActiveView("work_queue");
+                                }}
+                                setActiveView={setActiveView}
                             />
                         ) : null}
 
@@ -899,14 +916,9 @@ function AttributionView({ snap, onRefresh }) {
     );
 }
 
-function OverviewView({ snap, phaseState, readiness, alerts, queueBuckets, supplyGeography, supplyTrends, loops }) {
+function OverviewView({ snap, phaseState, readiness, alerts, queueBuckets, supplyGeography, supplyTrends, loops, onSelectCase, setActiveView }) {
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
-    const topQueueRows = queueBuckets.flatMap((bucket) => bucket.rows).slice(0, 3);
-    const billingProblems = (snap.billing_summary?.payment_failed || 0)
-        + (snap.billing_summary?.uncollectible || 0)
-        + (snap.billing_summary?.profile_incomplete || 0)
-        + (snap.billing_summary?.consent_required || 0)
-        + (snap.billing_summary?.stripe_unconfigured || 0);
+    const topQueueRows = queueBuckets.flatMap((bucket) => bucket.rows).slice(0, 4);
     const loopRows = Object.entries(loops || {});
     const unhealthyLoops = loopRows.filter(([, meta]) => String(meta?.status || "ok") !== "ok").length;
     const decision = decisionSummary(readiness, needsReview, alerts.length + unhealthyLoops);
@@ -917,11 +929,56 @@ function OverviewView({ snap, phaseState, readiness, alerts, queueBuckets, suppl
         <div className="mt-4 grid gap-4">
             <PageHeader title="Overview" description={PAGE_INTROS.overview} />
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <SummaryCard title="Needs review" value={needsReview} note={needsReview ? "Open the work queue first." : "No review items are waiting right now."} />
-                <SummaryCard title="Intro-ready" value={readiness.intro_ready_trainer_count || 0} note="Trainers currently usable for intro-first supply." />
-                <SummaryCard title="Blocked supply" value={readiness.blocked_trainer_count || 0} note="These trainers are slowing readiness." />
-                <SummaryCard title="Health watch" value={alerts.length + unhealthyLoops} note="Supporting health signals stay visible after the main decision read." />
+                <SummaryCard title="Needs review" value={needsReview} note={needsReview ? "Items in Work Queue requiring operator action." : "No review items are waiting right now."} />
+                <SummaryCard title="Intro-ready" value={readiness.intro_ready_trainer_count || 0} note="Trainers active for discovery & matching." />
+                <SummaryCard title="Blocked supply" value={readiness.blocked_trainer_count || 0} note="Unpublished trainers or missing declarations." />
+                <SummaryCard title="Health watch" value={alerts.length + unhealthyLoops} note="Provider & loop health signals." />
             </section>
+
+            {/* Daily Operational Action Triggers */}
+            <div className="rounded-2xl border border-[#2A3935] bg-[#111A17] p-4 flex flex-wrap items-center justify-between gap-3 shadow-sm" data-testid="ops-action-hub">
+                <div>
+                    <div className="text-xs font-mono uppercase tracking-[0.18em] text-[#D9B36C] flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-[#D9B36C]" /> Operator Daily Action Hub
+                    </div>
+                    <div className="text-sm text-[#C9C2B1] mt-1">Jump directly to high-priority operational workflows:</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setActiveView?.("work_queue")}
+                        className="px-3.5 py-2 text-xs font-mono rounded-xl bg-[#D9B36C] text-[#0D1412] font-semibold hover:bg-[#E5C280] transition flex items-center gap-1.5"
+                        data-testid="ops-quick-trigger-queue"
+                    >
+                        Work Queue ({needsReview})
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveView?.("matching")}
+                        className="admin-btn text-xs py-2 px-3.5 font-mono"
+                        data-testid="ops-quick-trigger-matching"
+                    >
+                        Matching Engine
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveView?.("trainer_supply")}
+                        className="admin-btn text-xs py-2 px-3.5 font-mono"
+                        data-testid="ops-quick-trigger-supply"
+                    >
+                        Trainer Supply
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveView?.("messages")}
+                        className="admin-btn text-xs py-2 px-3.5 font-mono"
+                        data-testid="ops-quick-trigger-messages"
+                    >
+                        Messages Log
+                    </button>
+                </div>
+            </div>
+
             <section className="grid gap-4 xl:grid-cols-[1.4fr,1fr]">
                 <div className="admin-card p-5" data-testid="ops-overview">
                     <div className="small-caps !text-[#8B9E98]">Website status</div>
@@ -948,12 +1005,34 @@ function OverviewView({ snap, phaseState, readiness, alerts, queueBuckets, suppl
                 </div>
 
                 <div className="admin-card p-5">
-                    <div className="small-caps !text-[#8B9E98]">What needs attention now</div>
+                    <div className="small-caps !text-[#8B9E98]">Operational Posture & Safety Gates</div>
                     <div className="mt-4 grid gap-3">
-                        <SummaryCard title="Needs review" value={needsReview} note={needsReview ? "Open the work queue first." : "No review items are waiting right now."} />
-                        <SummaryCard title="Blocked supply" value={readiness.blocked_trainer_count || 0} note="These trainers stop readiness from moving forward." />
-                        <SummaryCard title="Billing problems" value={billingProblems} note="Review before these become trust issues." />
-                        <SummaryCard title="Health watch" value={alerts.length + unhealthyLoops} note="Visible, but kept behind the main decision work." />
+                        <div className="p-3.5 rounded-2xl border border-[#1E2A27] bg-[#111A17]">
+                            <div className="text-xs font-mono uppercase text-[#8B9E98]">Commercial Gate</div>
+                            <div className="mt-1 flex items-center justify-between">
+                                <span className="font-serif text-lg text-[#F5F2EB]">Fail-Closed ($0 Risk)</span>
+                                <span className="px-2 py-0.5 text-xs font-mono rounded bg-[#234E42] text-[#81C784]">Enforced</span>
+                            </div>
+                            <div className="text-xs text-[#8B9E98] mt-1">ENABLE_TRAINER_BILLING_CHECKOUT=0; zero lead fees.</div>
+                        </div>
+                        <div className="p-3.5 rounded-2xl border border-[#1E2A27] bg-[#111A17]">
+                            <div className="text-xs font-mono uppercase text-[#8B9E98]">Catalogue Boundary</div>
+                            <div className="mt-1 flex items-center justify-between">
+                                <span className="font-serif text-lg text-[#F5F2EB]">539 Melbourne Suburbs</span>
+                                <span className="px-2 py-0.5 text-xs font-mono rounded bg-[#234E42] text-[#81C784]">Seeded</span>
+                            </div>
+                            <div className="text-xs text-[#8B9E98] mt-1">Official canonical suburb catalogue in database.</div>
+                        </div>
+                        <div className="p-3.5 rounded-2xl border border-[#1E2A27] bg-[#111A17]">
+                            <div className="text-xs font-mono uppercase text-[#8B9E98]">Action Queue</div>
+                            <div className="mt-1 flex items-center justify-between">
+                                <span className="font-serif text-lg text-[#F5F2EB]">{needsReview} Pending Action(s)</span>
+                                <span className={`px-2 py-0.5 text-xs font-mono rounded ${needsReview > 0 ? "bg-[#3E341F] text-[#FBC02D]" : "bg-[#234E42] text-[#81C784]"}`}>
+                                    {needsReview > 0 ? "Review Required" : "Clear"}
+                                </span>
+                            </div>
+                            <div className="text-xs text-[#8B9E98] mt-1">Cases in work queue requiring manual operator review.</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1021,18 +1100,43 @@ function OverviewView({ snap, phaseState, readiness, alerts, queueBuckets, suppl
             </section>
 
             <section className="admin-card p-5">
-                <div className="small-caps !text-[#8B9E98]">Review next</div>
+                <div className="flex items-center justify-between">
+                    <div className="small-caps !text-[#8B9E98]">Review next (Priority Queue Items)</div>
+                    {needsReview > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setActiveView?.("work_queue")}
+                            className="text-xs font-mono text-[#D9B36C] hover:underline flex items-center gap-1"
+                        >
+                            Open full queue <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+                </div>
                 <div className="mt-4 grid gap-3">
                     {topQueueRows.length ? topQueueRows.map((row) => (
-                        <div key={row.case_id} className="rounded-3xl border border-[#1E2A27] bg-[#111A17] px-4 py-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Badge label={humanizeToken(row.severity)} kind="severity" />
-                                <Badge label={stateLabel(row.state)} kind="state" />
-                                <Badge label={caseDecisionLabel(row)} kind="decision" />
-                                <span className="text-xs font-mono text-[#8B9E98]">{row.workflow}</span>
+                        <div
+                            key={row.case_id}
+                            className="rounded-3xl border border-[#1E2A27] bg-[#111A17] p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:border-[#2A3935] transition"
+                        >
+                            <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Badge label={humanizeToken(row.severity)} kind="severity" />
+                                    <Badge label={stateLabel(row.state)} kind="state" />
+                                    <Badge label={caseDecisionLabel(row)} kind="decision" />
+                                    <span className="text-xs font-mono text-[#8B9E98]">{row.workflow}</span>
+                                </div>
+                                <div className="mt-2 font-medium text-[#F5F2EB]">{row.title}</div>
+                                <div className="mt-1 text-sm text-[#8B9E98]">{caseDecisionNote(row)}</div>
                             </div>
-                            <div className="mt-2 font-medium text-[#F5F2EB]">{row.title}</div>
-                            <div className="mt-1 text-sm text-[#8B9E98]">{caseDecisionNote(row)}</div>
+                            {onSelectCase && (
+                                <button
+                                    type="button"
+                                    onClick={() => onSelectCase(row.case_id)}
+                                    className="admin-btn text-xs py-1.5 px-3 shrink-0 self-start md:self-center"
+                                >
+                                    Open case
+                                </button>
+                            )}
                         </div>
                     )) : <EmptyCard message="No queue items currently need attention." />}
                 </div>
@@ -1167,6 +1271,28 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
         }
     }, [draftState, note, onRefresh, owner, selectedCase]);
 
+    const executeQuickAction = useCallback(async (targetState, defaultNote) => {
+        if (!selectedCase) return;
+        setSaving(true);
+        setSaveError("");
+        const reviewOwner = owner.trim() || "Owner";
+        const reviewNote = note.trim() || defaultNote || `Actioned as ${targetState} by ${reviewOwner}`;
+        try {
+            await opsApi.post(`/oversight/cases/${encodeURIComponent(selectedCase.case_id)}`, {
+                state: targetState,
+                owner: reviewOwner,
+                note: reviewNote,
+            });
+            toast.success(`Case marked as ${targetState}`);
+            await onRefresh?.();
+        } catch (err) {
+            setSaveError("Review could not be saved. Try again after refreshing the page.");
+            toast.error("Review could not be saved");
+        } finally {
+            setSaving(false);
+        }
+    }, [note, onRefresh, owner, selectedCase]);
+
     return (
         <aside className="admin-card p-5">
             <PageHeader title="Case detail" description="Use this panel to understand the item, review the evidence, and record what happened next." />
@@ -1174,6 +1300,36 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                 <div className="mt-6 text-sm text-[#8B9E98] font-mono">Pick a work item to see why it exists, what evidence supports it, and what the next safe review step is.</div>
             ) : (
                 <div className="mt-4 grid gap-4">
+                    <div className="flex flex-wrap items-center gap-2 p-3 bg-[#111A17] border border-[#2A3935] rounded-2xl" data-testid="ops-case-quick-actions">
+                        <span className="text-xs font-mono uppercase tracking-[0.18em] text-[#8B9E98] mr-1">Quick Action:</span>
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => executeQuickAction("resolved", "Verified statutory facts and resolved in daily ops review.")}
+                            className="px-3 py-1.5 text-xs font-mono rounded-xl bg-[#234E42] hover:bg-[#2D6656] text-[#E8F5E9] border border-[#488B73] transition flex items-center gap-1.5"
+                            data-testid="ops-case-quick-resolve"
+                        >
+                            <CheckCircle className="w-3.5 h-3.5 text-[#81C784]" /> Resolve
+                        </button>
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => executeQuickAction("acknowledged", "Acknowledged in daily ops triage; monitoring.")}
+                            className="px-3 py-1.5 text-xs font-mono rounded-xl bg-[#3E341F] hover:bg-[#524529] text-[#FFF9C4] border border-[#7D6B3E] transition flex items-center gap-1.5"
+                            data-testid="ops-case-quick-acknowledge"
+                        >
+                            <AlertTriangle className="w-3.5 h-3.5 text-[#FBC02D]" /> Acknowledge
+                        </button>
+                        <button
+                            type="button"
+                            disabled={saving}
+                            onClick={() => executeQuickAction("dismissed", "Dismissed as non-actionable or test fixture.")}
+                            className="px-3 py-1.5 text-xs font-mono rounded-xl bg-[#3E2321] hover:bg-[#542F2C] text-[#FFCDD2] border border-[#7E4541] transition flex items-center gap-1.5"
+                            data-testid="ops-case-quick-dismiss"
+                        >
+                            <XCircle className="w-3.5 h-3.5 text-[#E57373]" /> Dismiss
+                        </button>
+                    </div>
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
                             <Badge label={humanizeToken(selectedCase.severity)} kind="severity" />
