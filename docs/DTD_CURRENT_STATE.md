@@ -358,9 +358,9 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-035 — Trainer radius catchment was selectable without a supported radius definition
 
 - **Observed/status:** 16 October 2026 — `PARTIAL` in developer sandbox; production remains unchanged.
-- **Evidence:** commit `26c6fbe` deployed to `dtd-web-dev-00011-dwf` at 100% traffic. Chrome on sandbox `/submit` showed only `Specific Nominated Suburbs` and `Melbourne-Wide Coverage`, with the notice “Distance-based matching is not currently supported.” No radius control is offered. The same choices and notice were visible in the live mobile and tablet accessibility trees at 390px and 768px; no application was submitted. Regression tests cover the claimed-profile editor; that authenticated path was not exercised in the live sandbox. Matching Decision Contract v2 prohibits radius until canonical coordinates and a separately verified geo policy exist.
+- **Evidence:** commit `26c6fbe` deployed to `dtd-web-dev-00011-dwf` at 100% traffic. Chrome on sandbox `/submit` showed only `Specific Nominated Suburbs` and `Melbourne-Wide Coverage`, with the notice “Distance-based matching is not currently supported.” No radius control is offered. The same choices and notice were visible in the live mobile and tablet accessibility trees at 390px and 768px; a fresh 390px browser check again showed no radius option and no overflow. No application was submitted. Regression tests cover the claimed-profile editor, but that authenticated path remains unverified in the live sandbox. The current developer API exposes Resend key/from/reply-to settings but no test-recipient override. The legacy trainer-flow runner was retired because it created persistent records and could send to arbitrary recipients without cleanup; it was not executed. Matching Decision Contract v2 prohibits radius until canonical coordinates and a separately verified geo policy exist.
 - **Impact/uncertainty:** new submissions cannot declare unsupported radius coverage. Existing legacy radius values are not migrated or deleted; claimed-profile confirmation remains verified by local tests, not live sandbox interaction.
-- **Next action:** verify the authenticated trainer capability editor in a sandbox account and keep radius matching disabled until a reviewed geo policy is adopted.
+- **Next action:** create a bounded synthetic claimed-profile fixture with test-only OTP delivery and verified cleanup, then exercise the authenticated capability editor; keep radius matching disabled until a reviewed geo policy is adopted.
 
 ### DF-036 — Public privacy, trial and support disclosures need source reconciliation and review
 
@@ -392,3 +392,17 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** the exposed credential no longer authenticates to the current developer service; the previous source text remains in public Git history and the default branch still needs the retirement change. The old script's successful-write behavior was not exercised. This incident finding does not establish the status of unrelated credentials.
 - **Why deferred:** history rewriting is unnecessary for containment after version 1 was disabled and would be destructive; the default-branch source change must be reviewed and landed through the normal branch workflow.
 - **Next action:** push the audited retirement change, open a reviewable change for the default branch, and verify the default-branch file no longer contains a literal credential before any further trainer-flow sandbox acceptance.
+
+### DF-039 — Pricing actions must preserve the trainer's selected plan
+
+- **Observed/status:** 16 October 2026 — `DONE` in the developer sandbox; production remains unchanged.
+- **Evidence:** revision `dtd-web-dev-00011-dwf` serves 100% of developer traffic. On 16 October, Chrome verified all four pricing actions carry distinct `plan` values to `/contact`, and the Pro action displays “Pro Trainer” and builds a plan-specific email subject. The four current prices use `A$`. The page states that checkout is not active and that no purchase or charge is created until authorised checkout is enabled. The 390px route checks had no horizontal overflow. `npm --prefix frontend test` passed all 57 tests and the production build succeeded.
+- **Impact/uncertainty:** visitors can express interest in the selected plan without losing intent or mistaking the inquiry for checkout. The email link was not invoked, no message or purchase was submitted, and legal wording remains under DF-036.
+- **Next action:** retain the plan parameter and disabled-checkout disclosure; include plan-specific navigation in the separately gated billing acceptance.
+
+### DF-040 — Directory specialty filters need explicit single-choice behavior
+
+- **Observed/status:** 16 October 2026 — `DONE` as a single-choice filter in the developer sandbox; production remains unchanged.
+- **Evidence:** revision `dtd-web-dev-00011-dwf` serves 100% of developer traffic. The filter is labeled “Specialty filter — choose one,” exposes a named filter group and `aria-pressed` buttons, sets exactly one specialty in the URL at a time, and restores the unfiltered state through “All specialties.” The live browser verified Reactivity → Puppy training → All transitions at 390px.
+- **Impact/uncertainty:** the observed single-choice behavior is now communicated and accessible in the tested browser; multi-select was not specified as a product requirement.
+- **Next action:** retain single-choice wording, group labeling and pressed state; change to multi-select only if the product contract is explicitly revised.
