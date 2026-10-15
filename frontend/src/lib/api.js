@@ -1,10 +1,20 @@
 import axios from "axios";
 
-const isProductionHost = typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname);
-const envBackend = process.env.REACT_APP_BACKEND_URL;
-const RAW_BACKEND_URL = (isProductionHost && (!envBackend || envBackend.includes("localhost")))
-    ? window.location.origin
-    : (envBackend || (typeof window !== "undefined" ? window.location.origin : ""));
+const SANDBOX_WEB_HOST = /^(?:dtd-web-dev-[a-z0-9-]+\.a\.run\.app|dtd-web-dev-625222421634\.australia-southeast1\.run\.app)$/i;
+const SANDBOX_API_URL = "https://dtd-api-dev-625222421634.australia-southeast1.run.app";
+
+export const resolveBackendUrl = ({
+    hostname = typeof window !== "undefined" ? window.location.hostname : "",
+    origin = typeof window !== "undefined" ? window.location.origin : "",
+    envBackend = process.env.REACT_APP_BACKEND_URL,
+} = {}) => {
+    const isBrowserHost = Boolean(hostname) && !["localhost", "127.0.0.1"].includes(hostname);
+    if (SANDBOX_WEB_HOST.test(hostname)) return SANDBOX_API_URL;
+    if (isBrowserHost && (!envBackend || envBackend.includes("localhost"))) return origin;
+    return envBackend || origin;
+};
+
+const RAW_BACKEND_URL = resolveBackendUrl();
 const BACKEND_URL = RAW_BACKEND_URL.replace(/\/+$/, "");
 export const API = `${BACKEND_URL}/api`;
 
@@ -47,6 +57,16 @@ opsApi.interceptors.request.use((config) => {
     if (pass) config.headers["X-Admin-Pass"] = pass;
     return config;
 });
+
+export const getMatchingOversight = () => opsApi.get("/oversight/matching");
+export const getAttributionOversight = () => opsApi.get("/oversight/attribution");
+export const acknowledgeDegradation = (payload) => opsApi.post("/oversight/matching/degradation/acknowledge", payload);
+export const reviewUrgentCorrection = (correctionId, payload) => opsApi.post(`/oversight/urgent-providers/corrections/${encodeURIComponent(correctionId)}/review`, payload);
+export const retryFollowUp = (introId, payload) => opsApi.post(`/oversight/matching/follow-ups/${encodeURIComponent(introId)}/retry`, payload);
+export const recheckTrainerCapability = (trainerId, payload) => opsApi.post(`/oversight/trainers/${encodeURIComponent(trainerId)}/capability/recheck`, payload);
+export const refundSubscription = (payload) => opsApi.post("/oversight/subscriptions/refund", payload);
+export const getMaintenanceMode = () => opsApi.get("/ops/maintenance-mode");
+export const setMaintenanceMode = (payload) => opsApi.post("/ops/maintenance-mode", payload);
 
 export const buildAttributionSearch = ({
     campaign = "",

@@ -104,6 +104,41 @@ def test_unknown_seo_slug_is_rejected_before_database_access():
     assert exc_info.value.status_code == 404
 
 
+def test_existing_thin_seo_page_remains_non_indexable_without_generation(monkeypatch):
+    class _EligibleTrainers:
+        async def count_documents(self, _query):
+            return 3
+
+    async def _unexpected_generation(*_args, **_kwargs):
+        raise AssertionError("Stored legacy page must not invoke SEO generation")
+
+    fake_db = SimpleNamespace(
+        trainers=_EligibleTrainers(),
+        seo_pages=_Collection(
+            rows=[
+                {
+                    "id": "seo_carlton",
+                    "slug": "carlton",
+                    "suburb": "Carlton",
+                    "publication_status": "published",
+                    "meta_robots": "index,follow",
+                    "copy": {"intro": "thin"},
+                }
+            ]
+        ),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setattr(server.ai_service, "generate_seo_copy", _unexpected_generation)
+    monkeypatch.setenv("SEO_MIN_PUBLISHED_TRAINERS", "3")
+    monkeypatch.setenv("SEO_MIN_CONTENT_WORDS", "500")
+
+    out = asyncio.run(server.get_seo("carlton"))
+
+    assert out["publication_status"] == "not_eligible"
+    assert out["meta_robots"] == "noindex,follow"
+    assert out["reason_codes"] == ["insufficient_content_quality"]
+
+
 class _Trainers:
     async def distinct(self, _field, _query):
         return ["Carlton", "Richmond"]
@@ -268,7 +303,18 @@ def _fake_oversight_db():
                 "http_status": 202,
                 "provider": "resend",
                 "created_at": "2026-05-20T00:00:00+00:00",
-            }
+            },
+            {
+                "id": "note_2",
+                "target_kind": "submission",
+                "target_id": "sub_1",
+                "kind": "submission_update",
+                "status": "failed",
+                "attempt": 2,
+                "http_status": 500,
+                "provider": "resend",
+                "created_at": "2026-05-19T23:00:00+00:00",
+            },
         ]
     )
     outreach_events = _Collection(
@@ -344,6 +390,7 @@ def _fake_oversight_db():
         owner_waitlist=owner_waitlist,
         owner_waitlist_events=owner_waitlist_events,
         ops_case_states=_Collection(rows=[]),
+        seo_pages=_Collection(rows=[]),
     )
 
 
@@ -517,6 +564,8 @@ def test_startup_seeds_only_from_api_when_enabled(monkeypatch):
 
 
 def test_match_gate_default_and_legacy_env_allows(monkeypatch):
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers = _Collection(
         rows=[
             {
@@ -525,8 +574,17 @@ def test_match_gate_default_and_legacy_env_allows(monkeypatch):
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.6,
                 "billing_profile_status": "ready",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )
@@ -547,10 +605,14 @@ def test_match_gate_default_and_legacy_env_allows(monkeypatch):
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     out = asyncio.run(server.instant_match(payload))
     assert out["matches"][0]["id"] == "t_1"
@@ -609,7 +671,7 @@ def test_intro_gate_default_and_legacy_env_allows(monkeypatch):
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
@@ -633,6 +695,8 @@ def test_intro_gate_default_and_legacy_env_allows(monkeypatch):
 
 
 def test_match_gate_on_allows_existing_behavior(monkeypatch):
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers = _Collection(
         rows=[
             {
@@ -641,8 +705,17 @@ def test_match_gate_on_allows_existing_behavior(monkeypatch):
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.6,
                 "billing_profile_status": "ready",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )
@@ -662,10 +735,14 @@ def test_match_gate_on_allows_existing_behavior(monkeypatch):
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     out = asyncio.run(server.instant_match(payload))
     assert out["matches"][0]["id"] == "t_1"
@@ -701,7 +778,7 @@ def test_intro_gate_on_allows_existing_success_behavior(monkeypatch):
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
@@ -910,6 +987,8 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
         "active_regions": ["Greater Melbourne"],
     }
     system_state_coll = _Collection(rows=[legacy_row.copy()])
+    from services.trainer_quality import now_iso, package_trainer_capabilities
+
     trainers_coll = _Collection(
         rows=[
             {
@@ -918,11 +997,20 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
                 "suburb": "Carlton",
                 "region": "Greater Melbourne",
                 "published": True,
+                "contact_ready": True,
                 "outcome_score": 0.9,
                 "billing_profile_status": "ready",
                 "website": "https://example.com",
                 "phone": "0400000000",
                 "email": "trainer@example.com",
+                "capabilities": package_trainer_capabilities(
+                    specialties=["basic_manners", "reactivity"],
+                    serviced_suburbs=["Carlton"],
+                    service_formats=["in_home"],
+                    life_stages=["puppy", "adolescent", "adult"],
+                    basis="trainer_declaration",
+                    confirmed_at=now_iso(),
+                ),
             }
         ]
     )
@@ -971,10 +1059,14 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
     monkeypatch.setattr(server.ai_service, "match_trainers", _fake_match)
     monkeypatch.setattr(server, "_decorate_with_pricing", _fake_decorate)
 
-    payload = server.InstantMatchIn(
-        description="leash reactivity",
-        suburb="Carlton",
-        consent_match_processing=True,
+    payload = server.matching_contract_v2.MatchRequestIn(
+        suburb_or_postcode="Carlton",
+        dog_age_months=12,
+        primary_concerns=["basic_manners"],
+        service_format="in_home",
+        method_preference="no_preference",
+        behaviour_description="leash reactivity",
+        consent=server.matching_contract_v2.MatchConsentIn(match_processing=True, terms=True),
     )
     match_out = asyncio.run(server.instant_match(payload))
     assert match_out["matches"][0]["id"] == "t_1"
@@ -990,7 +1082,7 @@ def test_persisted_legacy_false_launch_phase_state_is_migrated_and_does_not_bloc
         raise AssertionError("intros must not create Stripe invoices")
 
     async def _fake_notify(_db, _trainer_doc, _intro):
-        return None
+        return {"trainer_notification_status": "sent"}
 
     monkeypatch.setattr(server, "_audit", _noop_audit)
     monkeypatch.setattr(server.fraud_service, "evaluate_intro", _fake_fraud)
@@ -1138,6 +1230,27 @@ def test_oversight_exposes_operations_console_read_models(monkeypatch):
     assert any(case["case_type"] == "owner_follow_up_case" for case in ops_cases)
 
 
+def test_oversight_exposes_sanitised_provider_control_gaps(monkeypatch):
+    monkeypatch.setattr(server, "db", _fake_oversight_db())
+    monkeypatch.setenv("MONGO_URL", "configured-for-test")
+    monkeypatch.setenv("RESEND_API_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "configured-for-test")
+    monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", "configured-for-test")
+    monkeypatch.setenv("ABR_GUID", "configured-for-test")
+
+    out = asyncio.run(server.oversight(None))
+
+    provider_health = out["provider_health"]
+    assert provider_health["status"] == "action_required"
+    assert provider_health["summary"]["providers_total"] == 6
+    assert all("configured-for-test" not in str(row) for row in provider_health["providers"])
+    atlas = next(row for row in provider_health["providers"] if row["id"] == "atlas")
+    assert atlas["runtime_status"] == "configuration_detected"
+    assert atlas["management_recovery_status"] == "not_evidenced"
+    assert atlas["last_verified_at"] is None
+    assert any(case["case_id"] == "provider:atlas" for case in out["ops_cases"])
+
+
 def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
     monkeypatch.setattr(server, "db", _fake_oversight_db())
 
@@ -1162,6 +1275,65 @@ def test_oversight_exposes_supply_decision_support_contract(monkeypatch):
     assert isinstance(trends.get("waitlist_joins_30d"), int)
     assert trends.get("submission_pace") in {"rising", "steady", "slowing", "quiet"}
     assert trends.get("published_pace") in {"rising", "steady", "slowing", "quiet"}
+
+
+def test_ops_seo_inventory_rechecks_canonical_supply_and_stored_content(monkeypatch):
+    fake_db = _fake_oversight_db()
+    fake_db.trainers.rows = [
+        {
+            "id": f"t_{index}",
+            "published": True,
+            "region": "Greater Melbourne",
+            "suburb": "Carlton",
+            "serviced_suburbs": [],
+        }
+        for index in range(3)
+    ]
+    fake_db.seo_pages.rows = [
+        {
+            "id": "seo_carlton",
+            "slug": "carlton",
+            "suburb": "Carlton",
+            "publication_status": "published",
+            "meta_robots": "index,follow",
+            "copy": {"intro": "useful " * 500},
+            "generated_at": "2026-09-25T00:00:00+00:00",
+        },
+        {
+            "id": "seo_legacy",
+            "slug": "legacy-not-a-suburb",
+            "suburb": "Legacy",
+            "publication_status": "published",
+            "meta_robots": "index,follow",
+            "copy": {"intro": "thin"},
+        },
+        {
+            "id": "seo_richmond_unconfigured",
+            "slug": "richmond",
+            "suburb": "Richmond",
+            "copy": {"intro": "thin"},
+        },
+    ]
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setenv("SEO_MIN_PUBLISHED_TRAINERS", "3")
+    monkeypatch.setenv("SEO_MIN_CONTENT_WORDS", "500")
+
+    summary = asyncio.run(server._ops_seo_indexation_summary())
+
+    assert summary["status"] == "ready"
+    assert summary["canonical_suburb_count"] == 539
+    assert summary["stored_record_count"] == 3
+    assert summary["canonical_stored_record_count"] == 2
+    assert summary["noncanonical_stored_record_count"] == 1
+    assert summary["indexable_now_count"] == 1
+    assert summary["review_required_count"] == 2
+    carlton = next(row for row in summary["rows"] if row["slug"] == "carlton")
+    assert carlton["eligible_trainer_count"] == 3
+    assert carlton["indexable_now"] is True
+    legacy = next(row for row in summary["rows"] if row["slug"] == "legacy-not-a-suburb")
+    assert legacy["reason_codes"] == ["noncanonical_stored_page"]
+    richmond = next(row for row in summary["rows"] if row["slug"] == "richmond")
+    assert richmond["publication_status"] == "unconfigured"
 
 
 def test_oversight_merges_persisted_case_review_state(monkeypatch):

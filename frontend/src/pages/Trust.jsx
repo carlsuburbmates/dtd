@@ -15,11 +15,11 @@ export default function Trust() {
                             Trust & Standards
                         </div>
                         <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-dtd-heading mb-6">
-                            Verified professionals. <br className="hidden sm:block" />
+                            Independent professionals. <br className="hidden sm:block" />
                             <span className="text-accent italic">Transparent practices.</span>
                         </h1>
                         <p className="text-dtd-content text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
-                            The dog training industry is unregulated. We're changing how owners find help by enforcing strict verification and transparency standards for every trainer listed.
+                            The dog training industry is unregulated. We're changing how owners find help through structured profiles, declared methods, and transparent standards across our directory listings.
                         </p>
                     </div>
                 </section>
@@ -31,9 +31,9 @@ export default function Trust() {
                             <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center mb-6">
                                 <FileCheck className="w-6 h-6 text-accent" />
                             </div>
-                            <h2 className="font-serif text-3xl text-dtd-heading mb-4">Manual Verification</h2>
+                            <h2 className="font-serif text-3xl text-dtd-heading mb-4">Structured Profile Standards</h2>
                             <p className="text-dtd-content leading-relaxed text-lg">
-                                Every trainer application is reviewed by a human. We check credentials, business registration, insurance, and professional affiliations before approving any profile. Automated scraping is not permitted.
+                                Trainer profiles present declared qualifications, Australian Business Register status where verified, and stated service formats. We do not permit automated scraping.
                             </p>
                         </article>
 

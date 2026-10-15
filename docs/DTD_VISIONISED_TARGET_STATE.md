@@ -26,4 +26,4 @@
 ## Explicitly retired vision
 
 - Appsmith is not the future operator layer. DTD already owns a bespoke `/ops` surface; future operator work extends or simplifies that surface instead of creating a parallel system.
-- Google Places/Maps content, Search Grounding, generic SERP scraping and unapproved directories are not a shortcut to autonomous trainer inventory.
+- Google Places/Maps content, Search Grounding, generic SERP scraping and unapproved directories are not a shortcut to autonomous trainer inventory. The only exception is the separately governed, user-initiated, session-scoped urgent-support discovery/navigation surface in CDR-020; it creates no DTD inventory, claim or AI/ranking input.

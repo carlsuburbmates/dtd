@@ -32,10 +32,21 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
-# Configuration contract from DTD Google Ecosystem Migration Spec
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+try:
+    from services.trainer_quality import build_match_ready_projection  # type: ignore
+except ImportError:
+    from backend.services.trainer_quality import build_match_ready_projection  # type: ignore
+
+# The default must be a current Vertex model that is available in the
+# sandbox's Australian region. Deployments still set this explicitly so a
+# provider-model change is visible in the Cloud Run configuration and can be
+# independently accepted before it reaches production.
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 GEMINI_TIMEOUT_S = float(os.environ.get("GEMINI_TIMEOUT_S", "5.0"))
 MAX_DEGRADATION_EVENTS = 100
+ENABLE_MATCH_READY_PROJECTION_FILTER = (
+    os.environ.get("ENABLE_MATCH_READY_PROJECTION_FILTER", "").lower() in ("1", "true", "yes")
+)
 
 VALID_PHILOSOPHIES: Set[str] = {
     "Positive Reinforcement / Force-Free",
@@ -86,21 +97,62 @@ class StructuredValidationError(ValueError):
 
 
 def is_gemini_configured() -> bool:
-    """Check whether a Gemini API key is configured."""
-    return bool(os.environ.get("GEMINI_API_KEY", "").strip())
+    """Check whether Gemini is configured (Google AI Studio API key or Vertex AI ADC)."""
+    if bool(os.environ.get("GEMINI_API_KEY", "").strip()):
+        return True
+    if os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes"):
+        return True
+    if bool(os.environ.get("VERTEXAI_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")):
+        return True
+    return False
 
 
 def get_gemini_client() -> Optional[Any]:
-    """Obtain a Google GenAI client if configured, otherwise None."""
+    """Obtain a Google GenAI client if configured, otherwise None.
+
+    Supports dual-mode configuration:
+    1. Google AI Studio: via GEMINI_API_KEY (default for local dev & testing).
+    2. Google Cloud Vertex AI: via Application Default Credentials (ADC) with
+       roles/aiplatform.user on Cloud Run when GOOGLE_GENAI_USE_VERTEXAI=true,
+       VERTEXAI_PROJECT, or GOOGLE_CLOUD_PROJECT is set.
+    """
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    if not api_key:
+    use_vertex = (
+        os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true", "yes")
+        or bool(os.environ.get("VERTEXAI_PROJECT"))
+        or (not api_key and bool(os.environ.get("GOOGLE_CLOUD_PROJECT")))
+    )
+
+    if not api_key and not use_vertex:
         return None
+
     try:
         from google import genai
-        return genai.Client(api_key=api_key)
+        if api_key:
+            return genai.Client(api_key=api_key)
+
+        # Vertex AI mode via Application Default Credentials (ADC)
+        project = os.environ.get("VERTEXAI_PROJECT") or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        location = os.environ.get("VERTEXAI_LOCATION", "australia-southeast1")
+        return genai.Client(vertexai=True, project=project, location=location)
     except Exception as e:
         logger.debug("Failed to initialize google.genai Client: %s", e)
         return None
+
+
+def _generate_content_config(**kwargs: Any) -> Any:
+    """Build the provider config without making injected-client tests need its SDK.
+
+    A live Gemini client can only be constructed when ``google.genai`` is
+    installed. Test doubles are deliberately injectable, however, and only
+    need the configuration shape. Returning the plain shape keeps that
+    contract offline while preserving the real SDK object in production.
+    """
+    try:
+        from google.genai import types
+    except ModuleNotFoundError:
+        return kwargs
+    return types.GenerateContentConfig(**kwargs)
 
 
 def _extract_json(text: str) -> Optional[Any]:
@@ -137,6 +189,9 @@ async def record_degradation_event(
     message: str,
     operation: str,
     db: Optional[Any] = None,
+    latency_ms: Optional[float] = None,
+    decision_state: Optional[str] = None,
+    policy_version: Optional[str] = "v2",
 ) -> Dict[str, Any]:
     """Record a sanitized degradation event without prompts, source content, or secrets.
 
@@ -153,6 +208,9 @@ async def record_degradation_event(
         "operation": operation,
         "fallback_used": True,
         "recovered": True,
+        "latency_ms": latency_ms,
+        "decision_state": decision_state,
+        "policy_version": policy_version,
     }
 
     _degradation_events.append(event)
@@ -191,49 +249,263 @@ async def get_degradation_events(
     return events[:limit]
 
 
+AI_FALLBACK_BURST_WINDOW_S = int(os.environ.get("AI_FALLBACK_BURST_WINDOW_S", "3600"))
+AI_FALLBACK_BURST_THRESHOLD = int(os.environ.get("AI_FALLBACK_BURST_THRESHOLD", "3"))
+AI_FALLBACK_PERSISTENT_WINDOW_S = int(os.environ.get("AI_FALLBACK_PERSISTENT_WINDOW_S", "86400"))
+AI_FALLBACK_PERSISTENT_THRESHOLD = int(os.environ.get("AI_FALLBACK_PERSISTENT_THRESHOLD", "5"))
+STALE_DEGRADATION_MAX_AGE_S = int(os.environ.get("AI_STALE_DEGRADATION_MAX_AGE_S", "86400"))
+
+# Backwards compatibility aliases
+DEGRADATION_WINDOW_S = AI_FALLBACK_BURST_WINDOW_S
+SUSTAINED_DEGRADATION_THRESHOLD = AI_FALLBACK_BURST_THRESHOLD
+
+
 async def get_ops_degradation_cases(
     limit: int = 50,
     db: Optional[Any] = None,
+    *,
+    window_s: Optional[int] = None,
+    sustained_threshold: Optional[int] = None,
+    burst_window_s: Optional[int] = None,
+    burst_threshold: Optional[int] = None,
+    persistent_window_s: Optional[int] = None,
+    persistent_threshold: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Format recent degradation events into /ops exception case objects."""
+    """Format recent degradation events into /ops exception case objects.
+
+    Implements outcome-aware classification with provisional thresholds:
+      - Service failures (fallback unrecovered) -> high severity, detected state immediately.
+      - Sustained burst degradation (>= 3 in 1h window) -> correlated aggregate case (detected).
+      - Persistent low-volume degradation (>= 5 in 24h window) -> aggregate case (detected, medium severity).
+      - Isolated recovered fallbacks (< 3 in 1h, < 5 in 24h) -> low severity, monitoring state.
+      - Stale recovered events (> 24h) are excluded from active cases.
+    """
     events = await get_degradation_events(limit=limit, db=db)
-    cases: List[Dict[str, Any]] = []
+    if not events:
+        return []
+
+    burst_win_s = burst_window_s if burst_window_s is not None else (window_s if window_s is not None else AI_FALLBACK_BURST_WINDOW_S)
+    burst_thresh = burst_threshold if burst_threshold is not None else (sustained_threshold if sustained_threshold is not None else AI_FALLBACK_BURST_THRESHOLD)
+    pers_win_s = persistent_window_s if persistent_window_s is not None else AI_FALLBACK_PERSISTENT_WINDOW_S
+    pers_thresh = persistent_threshold if persistent_threshold is not None else AI_FALLBACK_PERSISTENT_THRESHOLD
+    now_dt = datetime.now(timezone.utc)
+
+    unrecovered_cases: List[Dict[str, Any]] = []
+    burst_recovered_events: List[Dict[str, Any]] = []
+    persistent_recovered_events: List[Dict[str, Any]] = []
+
     for ev in events:
+        ts_str = str(ev.get("timestamp") or ev.get("created_at") or "").strip()
+        ev_dt = None
+        timestamp_valid = False
+        age_s = None
+        if ts_str:
+            try:
+                ev_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                if ev_dt.tzinfo is None:
+                    ev_dt = ev_dt.replace(tzinfo=timezone.utc)
+                delta_s = (now_dt - ev_dt).total_seconds()
+                # Validate against clock skew / future timestamps (> 60s in future)
+                if delta_s >= -60.0:
+                    age_s = max(0.0, delta_s)
+                    timestamp_valid = True
+            except Exception:
+                ev_dt = None
+                timestamp_valid = False
+                age_s = None
+
+        # Check recovery status
+        is_recovered = bool(ev.get("recovered", True) and ev.get("fallback_used", True))
+
+        if not is_recovered:
+            # Category C: Service failure — unrecovered (alerts immediately at high severity)
+            # Unrecovered failures with invalid/missing timestamps must remain visible as
+            # actionable diagnostic cases with age explicitly classified as 'unknown',
+            # without inflating rolling burst counts on repeated reads.
+            det_at = ts_str if timestamp_valid else "unknown"
+            detail_rows = [
+                {"label": "Provider", "value": "Google Gemini"},
+                {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
+                {"label": "Error type", "value": ev.get("error_type") or "unknown"},
+                {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                {"label": "Fallback used", "value": str(ev.get("fallback_used", False)).lower()},
+                {"label": "Recovered", "value": "false"},
+                {"label": "Timestamp status", "value": "valid" if timestamp_valid else "missing_or_malformed"},
+                {"label": "Age", "value": f"{int(age_s)}s" if age_s is not None else "unknown"},
+            ]
+            unrecovered_cases.append(
+                {
+                    "case_id": f"ai_degradation:{ev.get('id')}",
+                    "case_type": "ai_degradation_case",
+                    "canonical_user_type": "System / AI Integration",
+                    "workflow": "AI scoring and matching",
+                    "entity_type": "ai_service",
+                    "entity_id": ev.get("id"),
+                    "title": f"AI service failure · {str(ev.get('error_type', 'unrecovered')).replace('_', ' ').title()}",
+                    "summary": (
+                        ev.get("message")
+                        or "AI provider and deterministic fallback both failed; request could not be completed safely."
+                    ),
+                    "severity": "high",
+                    "state": "detected",
+                    "owner": "",
+                    "detected_at": det_at,
+                    "last_updated_at": det_at,
+                    "occurrence_fingerprint": f"ai_fail:{ev.get('id')}:{ev.get('error_code')}",
+                    "source_refs": [{"kind": "ai_service", "id": ev.get("model", GEMINI_MODEL)}],
+                    "risk_reason_codes": [ev.get("error_code") or "AI_UNRECOVERED_FAILURE"],
+                    "recommended_next_step": "Investigate AI service and deterministic fallback failures immediately.",
+                    "responsibility_layer": "Layer 1 — Normal Ops",
+                    "detail_rows": detail_rows,
+                    "linked_paths": [],
+                    "audit_refs": [],
+                }
+            )
+        else:
+            # Recovered events: ONLY events with trustworthy temporal evidence may contribute
+            # to rolling time windows (1h burst / 24h persistent).
+            if not timestamp_valid or age_s is None:
+                # Missing or unparseable timestamps do not enter rolling burst/persistent windows
+                continue
+
+            # Ignore stale recovered events (> 24h)
+            if age_s > STALE_DEGRADATION_MAX_AGE_S:
+                continue
+            if age_s <= pers_win_s:
+                persistent_recovered_events.append(ev)
+            if age_s <= burst_win_s:
+                burst_recovered_events.append(ev)
+
+    cases: List[Dict[str, Any]] = list(unrecovered_cases)
+
+    # Check for sustained burst degradation in the 1h window
+    if len(burst_recovered_events) >= burst_thresh:
+        err_types = sorted(set(str(e.get("error_type") or "error") for e in burst_recovered_events))
+        has_rate_limit = any(e.get("error_type") == "rate_limit" for e in burst_recovered_events)
+        sev = "high" if len(burst_recovered_events) >= 5 or has_rate_limit else "medium"
+        latest_ts = burst_recovered_events[0].get("timestamp") or now_dt.isoformat()
+        earliest_ts = burst_recovered_events[-1].get("timestamp") or latest_ts
+
+        all_error_codes = [e.get("error_code") for e in burst_recovered_events if e.get("error_code")]
+        unique_codes = sorted(set(all_error_codes)) if all_error_codes else ["AI_DEGRADATION"]
+
         cases.append(
             {
-                "case_id": f"ai_degradation:{ev.get('id')}",
+                "case_id": "ai_degradation:sustained",
                 "case_type": "ai_degradation_case",
                 "canonical_user_type": "System / AI Integration",
                 "workflow": "AI scoring and matching",
                 "entity_type": "ai_service",
-                "entity_id": ev.get("id"),
-                "title": f"AI provider degradation · {str(ev.get('error_type', '')).replace('_', ' ').title()}",
+                "entity_id": "gemini_sustained",
+                "title": f"Sustained AI provider degradation · {len(burst_recovered_events)} events",
                 "summary": (
-                    ev.get("message")
-                    or "AI provider experienced an operational disruption; deterministic fallback engaged."
+                    f"AI provider fallback engaged {len(burst_recovered_events)} times recently "
+                    f"({', '.join(err_types)}); deterministic fallback active without user disruption."
                 ),
-                "severity": "high" if ev.get("error_type") in {"unavailable_service", "rate_limit"} else "medium",
+                "severity": sev,
                 "state": "detected",
                 "owner": "",
-                "detected_at": ev.get("timestamp"),
-                "last_updated_at": ev.get("timestamp"),
-                "source_refs": [{"kind": "ai_service", "id": ev.get("model", "gemini-1.5-flash")}],
-                "risk_reason_codes": [ev.get("error_code") or "AI_DEGRADATION"],
-                "recommended_next_step": (
-                    "Verify Gemini API quota, billing tier, and health status; deterministic fallback remains active."
-                ),
+                "detected_at": earliest_ts,
+                "last_updated_at": latest_ts,
+                "occurrence_fingerprint": f"ai_burst:{len(burst_recovered_events)}:{latest_ts}",
+                "source_refs": [{"kind": "ai_service", "id": GEMINI_MODEL}],
+                "risk_reason_codes": ["ai_sustained_degradation"] + unique_codes,
+                "recommended_next_step": "Verify Gemini API quota, billing tier, and health status; deterministic fallback remains active.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
                     {"label": "Provider", "value": "Google Gemini"},
-                    {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
-                    {"label": "Error type", "value": ev.get("error_type") or "unknown"},
-                    {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                    {"label": "Model", "value": GEMINI_MODEL},
+                    {"label": "Recent events (1h)", "value": len(burst_recovered_events)},
+                    {"label": "Error types", "value": ", ".join(err_types)},
                     {"label": "Fallback used", "value": "true"},
+                    {"label": "Service state", "value": "deterministic_fallback_active"},
                 ],
                 "linked_paths": [],
                 "audit_refs": [],
             }
         )
+    # Check for persistent low-volume degradation across the 24h window
+    elif len(persistent_recovered_events) >= pers_thresh:
+        err_types = sorted(set(str(e.get("error_type") or "error") for e in persistent_recovered_events))
+        latest_ts = persistent_recovered_events[0].get("timestamp") or now_dt.isoformat()
+        earliest_ts = persistent_recovered_events[-1].get("timestamp") or latest_ts
+
+        all_error_codes = [e.get("error_code") for e in persistent_recovered_events if e.get("error_code")]
+        unique_codes = sorted(set(all_error_codes)) if all_error_codes else ["AI_DEGRADATION"]
+
+        cases.append(
+            {
+                "case_id": "ai_degradation:persistent_low_volume",
+                "case_type": "ai_degradation_case",
+                "canonical_user_type": "System / AI Integration",
+                "workflow": "AI scoring and matching",
+                "entity_type": "ai_service",
+                "entity_id": "gemini_persistent_low_volume",
+                "title": f"Persistent low-volume AI fallback · {len(persistent_recovered_events)} events in 24h",
+                "summary": (
+                    f"AI fallback engaged {len(persistent_recovered_events)} times across 24h "
+                    f"({', '.join(err_types)}) without burst threshold; indicates ongoing intermittent provider instability."
+                ),
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": earliest_ts,
+                "last_updated_at": latest_ts,
+                "occurrence_fingerprint": f"ai_pers:{len(persistent_recovered_events)}:{latest_ts}",
+                "source_refs": [{"kind": "ai_service", "id": GEMINI_MODEL}],
+                "risk_reason_codes": ["ai_persistent_degradation"] + unique_codes,
+                "recommended_next_step": "Review provider quota, network timeouts, and model error patterns across recent cycles.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Provider", "value": "Google Gemini"},
+                    {"label": "Model", "value": GEMINI_MODEL},
+                    {"label": "Events (24h)", "value": len(persistent_recovered_events)},
+                    {"label": "Error types", "value": ", ".join(err_types)},
+                    {"label": "Fallback used", "value": "true"},
+                    {"label": "Service state", "value": "deterministic_fallback_active"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+    else:
+        # Category A: Isolated successfully recovered degradation events (monitoring state)
+        for ev in persistent_recovered_events:
+            cases.append(
+                {
+                    "case_id": f"ai_degradation:{ev.get('id')}",
+                    "case_type": "ai_degradation_case",
+                    "canonical_user_type": "System / AI Integration",
+                    "workflow": "AI scoring and matching",
+                    "entity_type": "ai_service",
+                    "entity_id": ev.get("id"),
+                    "title": f"AI fallback engaged · {str(ev.get('error_type', '')).replace('_', ' ').title()}",
+                    "summary": (
+                        ev.get("message")
+                        or "AI provider experienced an operational disruption; deterministic fallback engaged."
+                    ),
+                    "severity": "low",
+                    "state": "monitoring",
+                    "owner": "",
+                    "detected_at": ev.get("timestamp") or now_dt.isoformat(),
+                    "last_updated_at": ev.get("timestamp") or now_dt.isoformat(),
+                    "occurrence_fingerprint": f"ai_recov:{ev.get('id')}:{ev.get('timestamp')}",
+                    "source_refs": [{"kind": "ai_service", "id": ev.get("model", GEMINI_MODEL)}],
+                    "risk_reason_codes": [ev.get("error_code") or "AI_DEGRADATION"],
+                    "recommended_next_step": "Telemetry logged; isolated fallback recovered request deterministically.",
+                    "responsibility_layer": "Layer 1 — Normal Ops",
+                    "detail_rows": [
+                        {"label": "Provider", "value": "Google Gemini"},
+                        {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
+                        {"label": "Error type", "value": ev.get("error_type") or "unknown"},
+                        {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                        {"label": "Fallback used", "value": "true"},
+                    ],
+                    "linked_paths": [],
+                    "audit_refs": [],
+                }
+            )
+
     return cases
 
 
@@ -594,31 +866,44 @@ def route_extraction_confidence(conf: float) -> str:
 
 
 def _heuristic_match(query: str, trainers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deterministic keyword overlap matching (paid tier is NEVER used)."""
+    """Deterministic keyword overlap matching based strictly on capability facts (bio & paid tier are EXCLUDED)."""
     q = (query or "").lower()
     tokens = [tok for tok in set(q.split()) if len(tok) > 3]
     scored: List[Dict[str, Any]] = []
     for t in trainers:
+        # MP-001: Source documents with capabilities/declarations must always be projected fresh
+        proj = (
+            build_match_ready_projection(t)
+            if ("capabilities" in t or "trainer_declared_at" in t or "projection_version" not in t)
+            else t
+        )
+        if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
+            continue
+
         words = (
-            (t.get("name") or "")
+            (proj.get("name") or t.get("name") or "")
             + " "
-            + (t.get("suburb") or "")
+            + (proj.get("suburb") or t.get("suburb") or "")
             + " "
-            + " ".join(t.get("services") or [])
+            + " ".join(proj.get("specialties") or t.get("specialties") or t.get("services") or [])
             + " "
-            + " ".join(t.get("categories") or [])
+            + " ".join(proj.get("service_formats") or t.get("service_formats") or [])
             + " "
-            + " ".join(t.get("specialties") or [])
+            + " ".join(proj.get("life_stages") or t.get("life_stages") or [])
             + " "
-            + (t.get("bio") or "")
+            + (proj.get("training_philosophy") or t.get("training_philosophy") or t.get("philosophy") or "")
+            + " "
+            + " ".join(proj.get("serviced_suburbs") or t.get("serviced_suburbs") or [])
         ).lower()
         hits = sum(1 for tok in tokens if tok in words)
         score = min(1.0, 0.40 + 0.15 * hits) if hits > 0 else 0.40
         scored.append(
             {
-                "trainer_id": t.get("id"),
+                "trainer_id": proj.get("trainer_id") or t.get("id"),
                 "score": round(score, 2),
                 "reasoning": f"Deterministic keyword match ({hits} topic overlaps detected) for owner enquiry.",
+                "match_ready": bool(proj.get("match_eligible")),
+                "eligibility_reasons": proj.get("eligibility_reasons") or [],
             }
         )
     scored.sort(key=lambda x: x["score"], reverse=True)
@@ -646,11 +931,12 @@ EXTRACTION_SYSTEM = (
 MATCH_SYSTEM = (
     "You are a calm, expert dog-training diagnostic advisor in Greater Melbourne, Australia. "
     "Given a list of candidate trainers "
-    "(each with id, name, suburb, specialties, service_formats, training_philosophy, bio) "
+    "(each with id, name, suburb, specialties, service_formats, training_philosophy, life_stages, serviced_suburbs) "
     "and a dog owner's enquiry, assess the best diagnostic fit based strictly on clinical, behavioral, "
     "and logistical relevance. "
     "RANKING INTEGRITY RULE: Paid tier or sponsorship MUST NEVER influence match fit — judge purely on "
     "dog needs and trainer capability. "
+    "PROJECTION RULE: Freeform marketing bio, unverified claims, and commercial tiers are excluded. Reason only from structured capability facts. "
     "Return ONLY a JSON array of up to 3 objects with keys:\n"
     "  - trainer_id: string\n"
     "  - score: float (0.0 to 1.0)\n"
@@ -721,8 +1007,7 @@ async def extract_trainer_source(
 
     operation = "trainer_source_extraction"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=EXTRACTION_SYSTEM,
             temperature=0.1,
@@ -785,26 +1070,43 @@ async def match_trainers(
     if not trainers:
         return []
 
-    # Clean candidate payload: deliberately strip 'tier', 'billing_status', or sponsorship flags
+    # Clean candidate payload: project through build_match_ready_projection
+    # Deliberately exclude bio, tier, billing_status, pricing, or confidence scores
     candidates = []
     candidate_ids: Set[str] = set()
+    diagnostics_by_id: Dict[str, Dict[str, Any]] = {}
     for t in trainers:
-        t_id = str(t.get("id") or "")
+        # MP-001: Source documents with capabilities/declarations must always be projected fresh
+        proj = (
+            build_match_ready_projection(t)
+            if ("capabilities" in t or "trainer_declared_at" in t or "projection_version" not in t)
+            else t
+        )
+        if ENABLE_MATCH_READY_PROJECTION_FILTER and not proj.get("match_eligible"):
+            continue
+        t_id = str(proj.get("trainer_id") or t.get("id") or "")
         candidate_ids.add(t_id)
+        diagnostics_by_id[t_id] = {
+            "match_ready": bool(proj.get("match_eligible")),
+            "eligibility_reasons": proj.get("eligibility_reasons") or [],
+        }
         candidates.append({
             "id": t_id,
-            "name": t.get("name"),
-            "suburb": t.get("suburb"),
-            "specialties": t.get("specialties") or t.get("services") or [],
-            "service_formats": t.get("service_formats") or [],
-            "training_philosophy": t.get("training_philosophy") or "",
-            "bio": t.get("bio") or "",
+            "name": proj.get("name") or t.get("name"),
+            "suburb": proj.get("suburb") or t.get("suburb"),
+            "specialties": proj.get("specialties") or t.get("specialties") or t.get("services") or [],
+            "service_formats": proj.get("service_formats") or t.get("service_formats") or [],
+            "training_philosophy": proj.get("training_philosophy") or t.get("training_philosophy") or t.get("philosophy") or "",
+            "life_stages": proj.get("life_stages") or t.get("life_stages") or [],
+            "serviced_suburbs": proj.get("serviced_suburbs") or t.get("serviced_suburbs") or [],
         })
+
+    if not candidates:
+        return []
 
     operation = "diagnostic_matching"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=MATCH_SYSTEM,
             temperature=0.2,
@@ -826,7 +1128,13 @@ async def match_trainers(
         if not parsed:
             raise StructuredValidationError("Empty or non-JSON output from Gemini match")
 
-        return validate_match_output(parsed, candidate_ids)
+        results = validate_match_output(parsed, candidate_ids)
+        for item in results:
+            t_id = str(item.get("trainer_id") or "")
+            if t_id in diagnostics_by_id:
+                item["match_ready"] = diagnostics_by_id[t_id]["match_ready"]
+                item["eligibility_reasons"] = diagnostics_by_id[t_id]["eligibility_reasons"]
+        return results
 
     except asyncio.TimeoutError:
         await record_degradation_event(
@@ -866,8 +1174,7 @@ async def score_trainer(
 
     operation = "trainer_verification_scoring"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=VERIFY_SYSTEM,
             temperature=0.1,
@@ -953,8 +1260,7 @@ async def generate_seo_copy(
 
     operation = "seo_copy_generation"
     try:
-        from google.genai import types
-        config = types.GenerateContentConfig(
+        config = _generate_content_config(
             response_mime_type="application/json",
             system_instruction=SEO_SYSTEM,
             temperature=0.3,
@@ -992,3 +1298,453 @@ async def generate_seo_copy(
             db=db,
         )
         return fallback
+
+
+# ---------- Constrained Gemini Matching Adapter (Package P3) ----------
+
+MATCHING_SYSTEM_INSTRUCTION = (
+    "You are DTD’s constrained fit assessor. Assess fit only among the supplied, already eligible trainer candidates. "
+    "You are not a safety triage service and must not give veterinary, medical, legal, behavioural-treatment, handling, "
+    "or emergency advice. Use only the supplied structured fields and sanitised owner signals. Do not infer, invent, "
+    "embellish, or use commercial status. Never claim availability, credentials, outcomes, personality traits, diagnoses, "
+    "guarantees, rankings, reviews, or facts not present in the input. Return JSON only. Every trainer_id must be from "
+    "the supplied candidate list. Return a semantic_fit from 0.00 to 1.00 and only approved factual reason codes. "
+    "Do not write public-facing prose. The application renders explanations from validated reason codes and permitted facts."
+)
+
+# The live matcher needs only a short, bounded JSON assessment.  Constraining
+# the shape prevents explanatory prose from consuming its five-second budget
+# and lets the server retain ownership of public wording and presentation.
+MATCHING_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "required": ["candidates"],
+    "properties": {
+        "candidates": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "required": ["trainer_id", "semantic_fit", "reason_codes"],
+                "properties": {
+                    "trainer_id": {"type": "STRING"},
+                    "semantic_fit": {"type": "NUMBER", "minimum": 0, "maximum": 1},
+                    "reason_codes": {"type": "ARRAY", "items": {"type": "STRING"}},
+                },
+            },
+        },
+    },
+}
+
+
+def _matching_generation_config() -> Any:
+    """Return a low-latency, structured configuration for the constrained matcher.
+
+    This endpoint passes no tools, so automatic function calling has no product
+    role.  Explicitly disabling it removes avoidable SDK work.  Zero thinking
+    budget is intentional: the model ranks an already eligible pool and the
+    deterministic layer owns all safety, eligibility and public explanation.
+    """
+    kwargs: Dict[str, Any] = {
+        "response_mime_type": "application/json",
+        "response_schema": MATCHING_RESPONSE_SCHEMA,
+        "system_instruction": MATCHING_SYSTEM_INSTRUCTION,
+        "temperature": 0.1,
+        "candidate_count": 1,
+        "max_output_tokens": 512,
+    }
+    try:
+        from google.genai import types
+    except ModuleNotFoundError:
+        kwargs["automatic_function_calling"] = {"disable": True}
+        kwargs["thinking_config"] = {"thinking_budget": 0}
+    else:
+        kwargs["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(disable=True)
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+    return _generate_content_config(**kwargs)
+
+
+def build_gemini_matching_input(
+    request: Any,
+    eligible_candidates: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Construct constrained allow-list input payload for Gemini matching."""
+    try:
+        from services.matching_contract_v2 import sanitize_behaviour_description
+    except ImportError:
+        from backend.services.matching_contract_v2 import sanitize_behaviour_description
+
+    age_months = getattr(request, "dog_age_months", 12)
+    if age_months < 6:
+        dog_age_category = "puppy"
+    elif age_months <= 18:
+        dog_age_category = "adolescent"
+    elif age_months <= 83:
+        dog_age_category = "adult"
+    else:
+        dog_age_category = "senior"
+
+    raw_desc = getattr(request, "behaviour_description", "") or ""
+    sanitised_desc = sanitize_behaviour_description(raw_desc)
+
+    owner_signals = {
+        "dog_age_category": dog_age_category,
+        "primary_concerns": list(getattr(request, "primary_concerns", [])),
+        "service_format": str(getattr(request, "service_format", "any")),
+        "method_preference": str(getattr(request, "method_preference", "no_preference")),
+        "behaviour_description": sanitised_desc,
+    }
+
+    candidates_input = []
+    for cand in eligible_candidates:
+        cid = str(cand.get("trainer_id") or cand.get("id"))
+        raw_dc = cand.get("delivery_constraints")
+        if isinstance(raw_dc, dict):
+            dc_items = [
+                f"{k}:{v}"
+                for k, v in sorted(raw_dc.items())
+                if v is not None and k in ("in_home_available", "facility_available", "travel_distance_km")
+            ]
+        elif isinstance(raw_dc, list):
+            dc_items = [str(x) for x in raw_dc]
+        else:
+            dc_items = []
+
+        candidates_input.append({
+            "trainer_id": cid,
+            "specialties": list(cand.get("specialties") or []),
+            "service_formats": list(cand.get("service_formats") or []),
+            "life_stages": list(cand.get("life_stages") or []),
+            "training_philosophy": cand.get("training_philosophy") or None,
+            "catchment_type": str(cand.get("catchment_type") or "specific_suburbs"),
+            "serviced_suburbs": list(cand.get("serviced_suburbs") or []),
+            "delivery_constraints": dc_items,
+        })
+
+    return {
+        "contract_version": "v2",
+        "owner": owner_signals,
+        "candidates": candidates_input,
+    }
+
+
+class GeminiMatchingAdapter:
+    """Production typed async matching adapter using configured Google GenAI/Vertex client.
+
+    Governance (Contract v2 Section 5, DF-019, DF-023, DF-026):
+    - System instruction restricts model to constrained fit assessor.
+    - Input allow-list: contract_version, owner (dog_age_category, primary_concerns, service_format,
+      method_preference, sanitised description), and candidates (trainer_id, specialties, service_formats,
+      life_stages, training_philosophy, catchment_type, serviced_suburbs, delivery_constraints).
+    - NEVER sends commercial tier, sponsorship, pricing, bios, reviews, URLs, acquisition evidence,
+      contact fields, raw trainer documents, or unprojected candidates.
+    - Validates candidate IDs against eligible pool, validates semantic_fit range, validates reason codes.
+    - Server renders public explanation deterministically from permitted facts.
+    - 5.0s timeout enforced.
+    - Raises typed exceptions (GeminiTimeoutError, GeminiRateLimitError, GeminiUnavailableError, ValidationError).
+    - Records sanitised degradation events (provider/model, error_type, latency_ms, fallback_used, decision_state, policy_version).
+    """
+
+    def __init__(
+        self,
+        client: Optional[Any] = None,
+        model: Optional[str] = None,
+        timeout_s: Optional[float] = None,
+        db: Optional[Any] = None,
+    ):
+        self.client = client if client is not None else get_gemini_client()
+        self.model = model or GEMINI_MODEL
+        self.timeout_s = timeout_s if timeout_s is not None else GEMINI_TIMEOUT_S
+        self.db = db
+
+    async def _raise_malformed_output(
+        self,
+        *,
+        detail: str,
+        start_t: float,
+        target_db: Optional[Any],
+    ) -> None:
+        """Persist one sanitised operational signal for rejected model output."""
+        import time
+
+        latency_ms = (time.perf_counter() - start_t) * 1000.0
+        await record_degradation_event(
+            event_type="malformed_output",
+            error_code="MALFORMED_OUTPUT",
+            message="Gemini matching produced malformed or invalid schema output; deterministic fallback engaged.",
+            operation="matching",
+            latency_ms=latency_ms,
+            decision_state="degraded_fallback",
+            policy_version="v2",
+            db=target_db,
+        )
+        raise ValueError(detail)
+
+    async def call_model_async(
+        self,
+        request: Any,
+        eligible_candidates: List[Dict[str, Any]],
+        search_scope: Any = "local",
+        triage_state: Optional[Any] = None,
+        *,
+        candidate_scopes: Optional[Dict[str, str]] = None,
+        canonical_locality: Optional[str] = None,
+        db: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Execute constrained fit assessment through Gemini or raise typed degradation error."""
+        import time
+        from pydantic import ValidationError
+
+        try:
+            from services.matching_contract_v2 import (
+                GeminiTimeoutError,
+                GeminiRateLimitError,
+                GeminiUnavailableError,
+                DecisionState,
+                SearchScope,
+                QUALIFICATION_THRESHOLD,
+                MAX_RECOMMENDED_CANDIDATES,
+                apply_fair_presentation,
+                compute_deterministic_fit,
+            )
+        except ImportError:
+            from backend.services.matching_contract_v2 import (
+                GeminiTimeoutError,
+                GeminiRateLimitError,
+                GeminiUnavailableError,
+                DecisionState,
+                SearchScope,
+                QUALIFICATION_THRESHOLD,
+                MAX_RECOMMENDED_CANDIDATES,
+                apply_fair_presentation,
+                compute_deterministic_fit,
+            )
+
+        # PyMongo/Motor database objects deliberately reject truth-value
+        # evaluation. An explicitly supplied request database is valid even
+        # though ``bool(database)`` raises NotImplementedError.
+        target_db = db if db is not None else self.db
+        start_t = time.perf_counter()
+        scope_val = search_scope.value if hasattr(search_scope, "value") else str(search_scope)
+
+        if self.client is None:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            await record_degradation_event(
+                event_type="unavailable_service",
+                error_code="UNAVAILABLE_UNCONFIGURED",
+                message="Gemini client is unconfigured or unavailable; deterministic fallback engaged.",
+                operation="matching",
+                latency_ms=latency_ms,
+                decision_state="degraded_fallback",
+                policy_version="v2",
+                db=target_db,
+            )
+            raise GeminiUnavailableError("Gemini client is unconfigured or unavailable")
+
+        if not eligible_candidates:
+            return {
+                "decision_state": DecisionState.NO_CONFIRMED_MATCH.value,
+                "candidates": [],
+                "reason_codes": ["no_qualified_candidates"],
+                "search_scope": scope_val,
+            }
+
+        input_payload = build_gemini_matching_input(request, eligible_candidates)
+        config = _matching_generation_config()
+
+        try:
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model,
+                    contents=f"Evaluate fit for these candidates:\n\n{json.dumps(input_payload, ensure_ascii=False)}",
+                    config=config,
+                ),
+                timeout=self.timeout_s,
+            )
+        except asyncio.TimeoutError:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            await record_degradation_event(
+                event_type="timeout",
+                error_code="TIMEOUT",
+                message=f"Gemini matching timed out after {self.timeout_s}s; deterministic fallback engaged.",
+                operation="matching",
+                latency_ms=latency_ms,
+                decision_state="degraded_fallback",
+                policy_version="v2",
+                db=target_db,
+            )
+            raise GeminiTimeoutError(f"Gemini matching timed out after {self.timeout_s}s")
+        except Exception as err:
+            latency_ms = (time.perf_counter() - start_t) * 1000.0
+            err_str = str(err)
+            err_lower = err_str.lower()
+            if "429" in err_str or "quota" in err_lower or "resource_exhausted" in err_lower:
+                await record_degradation_event(
+                    event_type="rate_limit",
+                    error_code="RATE_LIMIT_429",
+                    message="Gemini matching rate limited; deterministic fallback engaged.",
+                    operation="matching",
+                    latency_ms=latency_ms,
+                    decision_state="degraded_fallback",
+                    policy_version="v2",
+                    db=target_db,
+                )
+                raise GeminiRateLimitError(f"Gemini API quota exceeded (HTTP 429): {err_str}")
+            else:
+                await record_degradation_event(
+                    event_type="unavailable_service",
+                    error_code="SERVICE_UNAVAILABLE",
+                    message=f"Gemini matching unavailable ({type(err).__name__}); deterministic fallback engaged.",
+                    operation="matching",
+                    latency_ms=latency_ms,
+                    decision_state="degraded_fallback",
+                    policy_version="v2",
+                    db=target_db,
+                )
+                raise GeminiUnavailableError(f"Gemini matching service unavailable: {err_str}")
+
+        raw_text = getattr(response, "text", "") or ""
+        parsed = _extract_json(raw_text)
+        if not isinstance(parsed, dict) or "candidates" not in parsed or not isinstance(parsed["candidates"], list):
+            await self._raise_malformed_output(
+                detail="Model returned malformed or non-JSON output",
+                start_t=start_t,
+                target_db=target_db,
+            )
+
+        eligible_map = {str(c.get("trainer_id") or c.get("id")): c for c in eligible_candidates}
+        approved_codes = {
+            "capability_concern_match",
+            "life_stage_match",
+            "format_match",
+            "method_preference_match",
+            "service_area_match",
+            "expanded_service_area",
+            "serious_behavioural_support",
+        }
+
+        cards_data = []
+        for item in parsed["candidates"]:
+            if not isinstance(item, dict):
+                await self._raise_malformed_output(
+                    detail="Candidate entry is not a dictionary",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
+            cid = str(item.get("trainer_id") or "")
+            if cid not in eligible_map:
+                await self._raise_malformed_output(
+                    detail="Model returned unauthorized candidate ID not in eligible pool",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
+
+            cand_doc = eligible_map[cid]
+            fit_raw = item.get("semantic_fit")
+            if not isinstance(fit_raw, (int, float)):
+                await self._raise_malformed_output(
+                    detail="Model returned an invalid semantic fit type",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
+            fit_score = round(float(fit_raw), 4)
+            if not (0.0 <= fit_score <= 1.0):
+                await self._raise_malformed_output(
+                    detail="semantic_fit out of bounds [0.0, 1.0]",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
+
+            raw_codes = item.get("reason_codes") or []
+            if not isinstance(raw_codes, list):
+                await self._raise_malformed_output(
+                    detail="Model returned invalid reason codes",
+                    start_t=start_t,
+                    target_db=target_db,
+                )
+            val_codes = [c for c in raw_codes if str(c) in approved_codes]
+            if not val_codes:
+                val_codes = ["capability_concern_match"]
+
+            cand_scope = candidate_scopes.get(cid, scope_val) if candidate_scopes else scope_val
+
+            # Server renders explanation deterministically from permitted facts
+            _, _, explanation = compute_deterministic_fit(
+                cand_doc, request, search_scope=cand_scope, triage_state=triage_state
+            )
+
+            if fit_score >= QUALIFICATION_THRESHOLD:
+                cards_data.append({
+                    "trainer_id": cid,
+                    "match_score": fit_score,
+                    "reason_codes": val_codes,
+                    "explanation": explanation,
+                    "search_scope": cand_scope,
+                    "tier": cand_doc.get("tier", "unclaimed"),
+                    "policy_penalty": cand_doc.get("policy_penalty", 0.0),
+                })
+
+        presented = apply_fair_presentation(cards_data, max_results=MAX_RECOMMENDED_CANDIDATES)
+
+        if not presented:
+            return {
+                "decision_state": DecisionState.NO_CONFIRMED_MATCH.value,
+                "candidates": [],
+                "reason_codes": ["no_qualified_candidates"],
+                "search_scope": scope_val,
+            }
+
+        any_expanded = any(p.get("search_scope") == SearchScope.EXPANDED.value for p in presented)
+        dec_state = (
+            DecisionState.LIMITED_LOCAL_RESULTS.value
+            if any_expanded
+            else DecisionState.RECOMMENDATIONS.value
+        )
+
+        final_cards = [
+            {
+                "trainer_id": p["trainer_id"],
+                "match_score": p["match_score"],
+                "reason_codes": p["reason_codes"],
+                "explanation": p["explanation"],
+                "search_scope": p["search_scope"],
+            }
+            for p in presented
+        ]
+
+        return {
+            "decision_state": dec_state,
+            "candidates": final_cards,
+            "reason_codes": final_cards[0]["reason_codes"] if final_cards else [],
+            "search_scope": scope_val,
+        }
+
+    def call_model(
+        self,
+        request: Any,
+        eligible_candidates: List[Dict[str, Any]],
+        search_scope: Any = "local",
+        triage_state: Optional[Any] = None,
+        *,
+        candidate_scopes: Optional[Dict[str, str]] = None,
+        canonical_locality: Optional[str] = None,
+        db: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Synchronous wrapper for offline/sync testing."""
+        import concurrent.futures
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    lambda: asyncio.run(self.call_model_async(
+                        request, eligible_candidates, search_scope, triage_state,
+                        candidate_scopes=candidate_scopes, canonical_locality=canonical_locality, db=db
+                    ))
+                )
+                return future.result()
+        else:
+            return asyncio.run(self.call_model_async(
+                request, eligible_candidates, search_scope, triage_state,
+                candidate_scopes=candidate_scopes, canonical_locality=canonical_locality, db=db
+            ))

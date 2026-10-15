@@ -2,13 +2,13 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-}), { virtual: true });
+}));
 
-const mockToastError = jest.fn();
-const mockToastSuccess = jest.fn();
-jest.mock("sonner", () => ({
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+vi.mock("sonner", () => ({
     toast: {
         error: (...args) => mockToastError(...args),
         success: (...args) => mockToastSuccess(...args),
@@ -88,10 +88,49 @@ const validSnapshot = {
         submission_pace: "steady",
         published_pace: "rising",
     },
+    ops_seo_indexation: {
+        status: "ready",
+        thresholds: { minimum_published_trainers: 3, minimum_content_words: 500 },
+        canonical_suburb_count: 539,
+        stored_record_count: 1,
+        canonical_stored_record_count: 1,
+        noncanonical_stored_record_count: 0,
+        indexable_now_count: 0,
+        review_required_count: 1,
+        inventory_truncated: false,
+        rows: [
+            {
+                slug: "carlton",
+                suburb: "Carlton",
+                eligible_trainer_count: 1,
+                content_word_count: 120,
+                publication_status: "published",
+                meta_robots: "index,follow",
+                indexable_now: false,
+                reason_codes: ["insufficient_eligible_supply"],
+            },
+        ],
+    },
     trainer_inventory: [],
     message_log: [],
     ops_cases: [],
     ops_investigation: {},
+    provider_health: {
+        status: "action_required",
+        providers: [
+            {
+                id: "atlas",
+                provider: "MongoDB Atlas",
+                purpose: "Directory database",
+                runtime_status: "configuration_detected",
+                management_recovery_status: "not_evidenced",
+                safe_verification_status: "not_evidenced",
+                independent_alert_status: "not_evidenced",
+                autonomy_status: "not_accepted",
+                next_review: "Verify static egress before narrowing database access.",
+            },
+        ],
+    },
     launch_phase_state: {
         current_phase: "supply_first",
         public_emphasis: "waitlist_first",
@@ -253,6 +292,45 @@ describe("Ops auth transition", () => {
         view.cleanup();
     });
 
+    it("renders the read-only SEO indexation inventory", async () => {
+        getSpy.mockResolvedValueOnce({ data: validSnapshot });
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            view.container.querySelector("[data-testid='ops-nav-seo_indexation']").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.querySelector("[data-testid='ops-seo-indexation']")).not.toBeNull();
+        expect(view.container.textContent).toContain("SEO & Indexation");
+        expect(view.container.textContent).toContain("Carlton");
+        expect(view.container.textContent).toContain("Insufficient Eligible Supply");
+        expect(view.container.textContent).toContain("this screen never creates, changes or deletes them");
+        view.cleanup();
+    });
+
+    it("shows sanitised provider-control status in system activity", async () => {
+        getSpy.mockResolvedValueOnce({ data: validSnapshot });
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        await act(async () => {
+            view.container.querySelector("[data-testid='ops-nav-system_activity']").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        expect(view.container.textContent).toContain("Provider control");
+        expect(view.container.textContent).toContain("MongoDB Atlas");
+        expect(view.container.textContent).toContain("Runtime configuration is not evidence");
+        expect(view.container.textContent).not.toContain("configured-for-test");
+        view.cleanup();
+    });
+
     it("saves review state from the work queue case detail panel", async () => {
         const postSpy = jest.spyOn(opsApi, "post");
         getSpy.mockResolvedValue({ data: validSnapshot });
@@ -299,6 +377,68 @@ describe("Ops auth transition", () => {
         view.cleanup();
     });
 
+    it("triggers 1-click quick action on case and renders action hub on overview", async () => {
+        const postSpy = vi.spyOn(opsApi, "post").mockResolvedValue({ data: { ok: true } });
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                ops_cases: [
+                    {
+                        case_id: "submission:sub_2",
+                        case_type: "trainer_submission_case",
+                        workflow: "trainer submission",
+                        entity_type: "submission",
+                        entity_id: "sub_2",
+                        title: "Trainer Submission sub_2",
+                        summary: "Needs statutory review",
+                        severity: "high",
+                        state: "detected",
+                    },
+                ],
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        // Overview action hub is present
+        expect(view.container.querySelector("[data-testid='ops-action-hub']")).not.toBeNull();
+        expect(view.container.querySelector("[data-testid='ops-quick-trigger-queue']")).not.toBeNull();
+
+        // Switch to Work Queue
+        const queueNav = view.container.querySelector("[data-testid='ops-nav-work_queue']");
+        await act(async () => {
+            queueNav.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        // Select case
+        const caseButton = view.container.querySelector("[data-testid='ops-case-submission:sub_2']");
+        await act(async () => {
+            caseButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        // 1-click quick resolve
+        const quickResolveBtn = view.container.querySelector("[data-testid='ops-case-quick-resolve']");
+        expect(quickResolveBtn).not.toBeNull();
+
+        await act(async () => {
+            quickResolveBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        expect(postSpy).toHaveBeenCalledWith("/oversight/cases/submission%3Asub_2", expect.objectContaining({
+            state: "resolved",
+        }));
+        expect(mockToastSuccess).toHaveBeenCalledWith("Case marked as resolved");
+
+        postSpy.mockRestore();
+        view.cleanup();
+    });
+
     it("renders recent automated changes with readable event and entity labels", async () => {
         getSpy.mockResolvedValueOnce({
             data: {
@@ -331,5 +471,225 @@ describe("Ops auth transition", () => {
         expect(view.container.textContent).toContain("Trainer trainer_1");
         expect(view.container.textContent).toContain("Dog owner");
         view.cleanup();
+    });
+
+    it("renders the capability health and match-readiness panel with truthful non-PII counts in Trainer Supply view", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                capability_health_summary: {
+                    policy_version: "v1",
+                    permitted_bases: ["trainer_declaration"],
+                    total_trainers: 42,
+                    match_eligible_trainers: 12,
+                    missing_declaration: 18,
+                    ai_proposed_unconfirmed: 8,
+                    stale_capabilities: 2,
+                    invalidated_capabilities: 1,
+                    ownership_disputed: 1,
+                    suppressed_or_unpublished: 0,
+                    not_contact_ready: 0,
+                },
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const supplyButton = view.container.querySelector("[data-testid='ops-nav-trainer_supply']");
+        expect(supplyButton).not.toBeNull();
+        await act(async () => {
+            supplyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        const panel = view.container.querySelector("[data-testid='ops-capability-health-panel']");
+        expect(panel).not.toBeNull();
+        expect(panel.textContent).toContain("Match-Readiness & Capability Health Boundary (Non-PII)");
+        expect(panel.textContent).toContain("Effective Capability Projection Telemetry");
+        expect(panel.textContent).toContain("12"); // match eligible
+        expect(panel.textContent).toContain("18"); // missing declaration
+        expect(panel.textContent).toContain("8");  // ai proposed
+        expect(panel.textContent).toContain("Policy version: v1");
+        expect(panel.textContent).toContain("trainer_declaration");
+        expect(view.container.textContent).toContain("Dual-engine repository capability; live cloud scheduling remains unverified without control-plane access. Read-only telemetry.");
+        expect(view.container.textContent).not.toContain("Scheduled execution via Cloud Scheduler");
+        view.cleanup();
+    });
+
+    it("renders the Matching Engine view with AI degradation telemetry and urgent corrections", async () => {
+        getSpy.mockResolvedValueOnce({
+            data: {
+                ...validSnapshot,
+                matching: {
+                    policy_version: "2.0",
+                    total_events: 15,
+                    average_eligible_candidates: 3.2,
+                    decision_distribution: {
+                        recommendations: 10,
+                        limited_local_results: 3,
+                        no_confirmed_match: 2,
+                    },
+                    search_scope_distribution: {
+                        local: 12,
+                        expanded: 3,
+                    },
+                    ai_degradation: {
+                        events: [
+                            {
+                                id: "deg_1",
+                                provider: "google_genai",
+                                model: "gemini-3.5-flash",
+                                error_type: "timeout",
+                                latency_ms: 5020,
+                                decision_state: "degraded_recommendations",
+                                timestamp: "2026-10-06T10:00:00Z",
+                            },
+                        ],
+                    },
+                    urgent_provider_freshness: {
+                        pending_corrections_count: 1,
+                        recent_corrections: [
+                            {
+                                id: "corr_123",
+                                provider_name: "Melbourne Emergency Vet",
+                                provider_id: "melb_vet_1",
+                                correction_details: "Updated emergency phone line to 24/7",
+                                status: "pending_review",
+                                created_at: "2026-10-06T11:00:00Z",
+                            },
+                        ],
+                    },
+                    presentation_order_sample: [
+                        {
+                            match_id: "match_evt_999",
+                            created_at: "2026-10-06T12:00:00Z",
+                            decision_state: "recommendations",
+                            search_scope: "local",
+                            result_ids: ["trainer_alpha", "trainer_beta"],
+                            reason_codes: ["location_suburb_match", "concern_behaviour_match"],
+                        },
+                    ],
+                    follow_up_outcomes: {
+                        by_state: { delivered: 8, pending: 2 },
+                    },
+                },
+            },
+        });
+
+        const view = renderOps();
+        await act(async () => {
+            await Promise.resolve();
+            await Promise.resolve();
+        });
+
+        const matchingNavButton = view.container.querySelector("[data-testid='ops-nav-matching']");
+        expect(matchingNavButton).not.toBeNull();
+        expect(matchingNavButton.textContent).toContain("Matching Engine");
+
+        await act(async () => {
+            matchingNavButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
+
+        const matchingView = view.container.querySelector("[data-testid='ops-matching-view']");
+        expect(matchingView).not.toBeNull();
+        expect(matchingView.textContent).toContain("Total Match Events");
+        expect(matchingView.textContent).toContain("15");
+        expect(matchingView.textContent).toContain("Active Decision Contract: v2.0");
+        expect(matchingView.textContent).toContain("Deterministic Fallback Parity");
+        expect(matchingView.textContent).toContain("Acknowledge & Reset Circuit");
+        expect(matchingView.textContent).toContain("Melbourne Emergency Vet");
+        expect(matchingView.textContent).toContain("Verify & Accept");
+        expect(matchingView.textContent).toContain("match_evt_99");
+        expect(matchingView.textContent).toContain("trainer_alpha");
+        view.cleanup();
+    });
+
+    it("does not infer provider health or invent 24/7 hours when accepting a correction", async () => {
+        getSpy.mockResolvedValue({
+            data: {
+                ...validSnapshot,
+                matching: {
+                    total_events: 0,
+                    ai_degradation: { events: [] },
+                    urgent_provider_freshness: {
+                        pending_corrections_count: 1,
+                        recent_corrections: [{ id: "corr_phone", provider_id: "provider_1", status: "pending_review" }],
+                    },
+                },
+            },
+        });
+        const postSpy = jest.spyOn(opsApi, "post").mockResolvedValue({ data: { ok: true, status: "accepted" } });
+        const promptSpy = jest.spyOn(window, "prompt")
+            .mockReturnValueOnce("https://provider.example/urgent")
+            .mockReturnValueOnce("Urgent care contact section")
+            .mockReturnValueOnce("")
+            .mockReturnValueOnce("03 9000 0000");
+        const confirmSpy = jest.spyOn(window, "confirm").mockReturnValue(true);
+        const view = renderOps();
+        try {
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => {
+                view.container.querySelector("[data-testid='ops-nav-matching']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            });
+            const panel = view.container.querySelector("[data-testid='ops-matching-view']");
+            expect(panel.textContent).toContain("This does not verify current provider health.");
+            expect(panel.textContent).not.toContain("Directory is up to date.");
+            await act(async () => {
+                panel.querySelector("[data-testid='ops-accept-correction-corr_phone']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).toHaveBeenCalledWith(
+                "/oversight/urgent-providers/corrections/corr_phone/review",
+                expect.objectContaining({
+                    reviewed_field_values: { contact_method: "03 9000 0000" },
+                }),
+            );
+        } finally {
+            view.cleanup();
+            postSpy.mockRestore();
+            promptSpy.mockRestore();
+            confirmSpy.mockRestore();
+        }
+    });
+
+    test("renders Attribution & Revenue panel and displays joined metrics", async () => {
+        jest.spyOn(opsApi, "get").mockImplementation((url) => {
+            if (url === "/oversight/attribution") {
+                return Promise.resolve({
+                    data: {
+                        status: "ok",
+                        cohorts: [{ campaign: "google-ads", source: "search", matched: 12, connected: 4, converted: 2, entry_events_30d: 50, waitlist_joins_30d: 5 }],
+                        trainer_tiers: { pro: 5, standard: 10, unclaimed: 25 },
+                        intros_by_tier: { pro: 8, standard: 12, unclaimed: 3 },
+                        total_intros: 23,
+                        realized_revenue_aud: 350.00,
+                    },
+                });
+            }
+            return Promise.resolve({ data: validSnapshot });
+        });
+
+        const view = renderOps();
+        try {
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => {
+                view.container.querySelector("[data-testid='ops-nav-attribution']")
+                    .dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            const panel = view.container.querySelector("[data-testid='ops-attribution-view']");
+            expect(panel).toBeTruthy();
+            expect(panel.textContent).toContain("Attribution & Revenue");
+            expect(panel.textContent).toContain("$350.00 AUD");
+            expect(panel.textContent).toContain("google-ads");
+            expect(panel.textContent).toContain("Pro Tier");
+        } finally {
+            view.cleanup();
+        }
     });
 });

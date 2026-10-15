@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 19 September 2026
+**Reconciled:** 26 September 2026
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -9,16 +9,21 @@ This folder is both the map of DTD's authoritative documentation and a readable 
 
 DTD is a free-to-dog-owners directory and guided matching service for Greater Melbourne. Trainers can hold free listings or buy flat-price visibility products; DTD never charges owners and never takes commissions or per-lead fees. The directory is publicly deployed and its core owner, trainer, matching, billing, suburb-catalogue, and operator surfaces exist, but commercial launch gates and several operational gaps remain. "Current" therefore means evidenced implementation state, not owner acceptance of the final product.
 
-The immediate target is to make that existing system safe and dependable for a solo operator: finish the production suburb seed, correct SEO resources and indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
+The immediate target is to make that existing system safe and dependable for a solo operator: maintain the seeded production suburb catalogue, correct SEO indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, remediate the documented dependency-security backlog, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. The owner-to-trainer matching pipeline is a separately governed targeted workstream: it must complete its decision contract, trainer-capability supply, safe AI/fallback states, urgent support and acceptance evidence before it can be called complete. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
 
-The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL.
+The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL. The Google Cloud technical migration requested during the Google for Startups review is complete: Firebase Hosting serves the frontend in project `gen-lang-client-0028123502`, Cloud Run serves the API, and the public domain routes through the Google stack. An isolated developer staging sandbox (`dogtrainersdirectory-dev` and MongoDB Atlas `dtd-sandbox`) provides safe pre-production testing and development. The program application remains subject to Google's manual re-review; no approval or credit award is recorded here.
 
 ## Authority map
+
+The active cross-project execution sequence is [DTD Full Project Completion Plan](DTD_FULL_PROJECT_COMPLETION_PLAN.md). It coordinates the detailed matching, acquisition, website, automation, Ops, sandbox and production contracts; it does not replace their locked decisions.
 
 | Document | What it answers | When to read it |
 | --- | --- | --- |
 | [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) | What code, tests, deployment and captured runtime evidence show now | Before changing or reporting the product |
 | [DTD_TARGETED_POST_LAUNCH_STATE.md](DTD_TARGETED_POST_LAUNCH_STATE.md) | The concrete next build and operating target | When choosing or implementing near-term work |
+| [DTD_TARGETED_MATCHING_PIPELINE_STATE.md](DTD_TARGETED_MATCHING_PIPELINE_STATE.md) | The concrete owner-to-trainer matching target, including acquisition, AI, urgent support and acceptance | Before changing matching, trainer capability data or urgent-support work |
+| [DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) | Matching work packages, completion rules and independent verification evidence | Before implementing or accepting matching-pipeline work |
+| [specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md](specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md) | Versioned owner input, triage, eligibility, fit, presentation, privacy and acceptance rules | Before implementing or accepting a matching work package |
 | [DTD_VISIONISED_TARGET_STATE.md](DTD_VISIONISED_TARGET_STATE.md) | Possible later evolution with explicit triggers | For strategy; never as an implementation instruction |
 | [DTD_INVARIANTS_AND_CONSTRAINTS.md](DTD_INVARIANTS_AND_CONSTRAINTS.md) | Rules that every phase must preserve | Before any product, data, pricing, automation or ops change |
 | [DTD_CONFLICT_AND_DECISION_REGISTER.md](DTD_CONFLICT_AND_DECISION_REGISTER.md) | What was decided, why, and what it superseded | When an old statement or ambiguity resurfaces |
@@ -27,6 +32,7 @@ The First Leash remains a separate application at `learn.dogtrainersdirectory.co
 | [specs/GEOGRAPHY_AND_CATCHMENTS.md](specs/GEOGRAPHY_AND_CATCHMENTS.md) | Canonical suburbs, regions and catchments | Geography, seed or inventory work |
 | [specs/SEO_AND_INDEXATION.md](specs/SEO_AND_INDEXATION.md) | Indexation eligibility, sitemap and robots rules | Public discovery and suburb-page work |
 | [specs/OPS_AND_OBSERVABILITY.md](specs/OPS_AND_OBSERVABILITY.md) | Operator workflows, automation and degraded states | `/ops`, alerts or production operations |
+| [specs/SANDBOX_VERIFICATION_MATRIX.md](specs/SANDBOX_VERIFICATION_MATRIX.md) | Mandatory pre-flight checklist and sandbox gates | Testing features before production promotion |
 | [specs/ACQUISITION_AND_INGESTION.md](specs/ACQUISITION_AND_INGESTION.md) | Lawful trainer sourcing, verification and lifecycle | Any data acquisition or profile ingestion work |
 
 ## State progression
@@ -40,6 +46,10 @@ known data, SEO, messaging and operations gaps remain
 TARGETED POST-LAUNCH STATE
 truthful production data; bounded reliable operations; live billing with
 cohort/refund safeguards; measurable SEO; clean cross-site separation
+        |
+        +--> TARGETED MATCHING PIPELINE STATE
+             AI-assisted but deterministic-bound matching, acquisition and
+             trainer-declaration facts, urgent support, privacy and sandbox evidence
         |
         v
 VISIONISED TARGET STATE

@@ -229,7 +229,7 @@ def _public_app_base_url() -> str:
 async def send_t7_outreach(db) -> Dict[str, Any]:
     """Send a T+7 day follow-up email for intros with no conversion signal."""
     api_key = (os.environ.get("RESEND_API_KEY") or "").strip()
-    resend_from = (os.environ.get("RESEND_FROM") or "no-reply@dogtrainersdirectory.com.au").strip()
+    resend_from = (os.environ.get("RESEND_FROM") or "Dog Trainers Directory <no-reply@dogtrainersdirectory.com.au>").strip()
     resend_reply_to = (os.environ.get("RESEND_REPLY_TO") or "info@dogtrainersdirectory.com.au").strip()
     if not api_key:
         return {"ok": True, "skipped": True, "reason": "no_resend_api_key", "checked": 0, "sent": 0}

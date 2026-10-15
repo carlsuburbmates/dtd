@@ -8,8 +8,8 @@ const SUPPORT_EMAIL = "info@dogtrainersdirectory.com.au";
 export default function FAQ() {
     const monetizationCopy = usePublicMonetizationCopy();
     const faqs = [
-        { q: "Can I browse every trainer?", a: "Yes. You can browse verified dog trainers across Greater Melbourne by suburb or use our diagnostic matching tool to find trainers matching your dog's needs." },
-        { q: "What can owners do on the directory?", a: "Owners can browse local trainers, run instant diagnostic matching, view verified credentials, and connect directly with trainers at zero cost." },
+        { q: "Can I browse every trainer?", a: "Yes. You can browse dog trainers across Greater Melbourne by suburb or use our diagnostic matching tool to find trainers matching your dog's needs." },
+        { q: "What can owners do on the directory?", a: "Owners can browse local trainers, run instant diagnostic matching, view declared specialties, and connect directly with trainers at zero cost." },
         { q: "How do I submit or claim a trainer profile?", a: "Go to the For Trainers page to claim an existing listing or create a new profile. Profiles are ABR-verified before full publication." },
         { q: "What happens after I submit?", a: "You receive a submission ID so you can track your listing verification status, required details, and next steps." },
         { q: "Do trainers pay monthly?", a: monetizationCopy.faqTrainerPricing },

@@ -1,9 +1,10 @@
-import React from "react";
+import React, { useEffect } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
+import ScrollToTop from "@/components/ScrollToTop";
 
 import Home from "@/pages/Home";
 import TrainerDetail from "@/pages/TrainerDetail";
@@ -55,7 +56,7 @@ function AnimatedRoutes() {
                 <Route path="/terms" element={<PageTransition><Terms /></PageTransition>} />
                 <Route path="/ops" element={<PageTransition><Ops /></PageTransition>} />
                 {/* Legacy routes — redirect to home (the product surface) */}
-                <Route path="/match" element={<Navigate to="/" replace />} />
+                <Route path="/match" element={<Navigate to="/#owner-interest" replace />} />
                 <Route path="/admin" element={<Navigate to="/" replace />} />
                 <Route path="/admin/dashboard" element={<Navigate to="/" replace />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
@@ -64,10 +65,58 @@ function AnimatedRoutes() {
     );
 }
 
+function RouteDocumentMeta() {
+    const location = useLocation();
+    const path = location.pathname;
+    let title = "Dog Trainers Directory | Melbourne";
+    let description = "Find and compare dog trainers in Greater Melbourne, or start guided matching for your dog.";
+
+    if (path === "/trainers") {
+        title = "Find a Dog Trainer in Melbourne | DTD";
+        description = "Browse Melbourne dog trainer profiles by area and support type.";
+    } else if (path.startsWith("/t/") || path.startsWith("/trainers/")) {
+        title = "Trainer Profile | Dog Trainers Directory";
+        description = "Review a trainer's stated service details before getting in touch.";
+    } else if (path.startsWith("/melbourne/")) {
+        const suburb = decodeURIComponent(path.split("/").pop() || "Melbourne").replace(/-/g, " ");
+        title = `Dog Trainers in ${suburb} | DTD`;
+        description = `Browse dog trainer profiles serving ${suburb}, Melbourne.`;
+    } else if (path === "/how-it-works") {
+        title = "How Guided Matching Works | DTD";
+        description = "See how to start guided matching, review profile details and contact a trainer.";
+    } else if (path === "/submit") {
+        title = "Join the Trainer Network | DTD";
+        description = "Create a Melbourne dog trainer profile with clear service details for owners.";
+    } else if (path === "/trust") {
+        title = "Trust and Profile Information | DTD";
+        description = "Understand how DTD presents trainer profile information and matching details.";
+    } else if (path === "/pricing") {
+        title = "Trainer Plans and Pricing | DTD";
+        description = "Explore DTD trainer profile plans and optional directory visibility upgrades.";
+    }
+
+    useEffect(() => {
+        document.title = title;
+        const descriptionNode = document.querySelector('meta[name="description"]');
+        if (descriptionNode) descriptionNode.setAttribute("content", description);
+        let canonicalNode = document.querySelector('link[rel="canonical"]');
+        if (!canonicalNode) {
+            canonicalNode = document.createElement("link");
+            canonicalNode.setAttribute("rel", "canonical");
+            document.head.appendChild(canonicalNode);
+        }
+        canonicalNode.setAttribute("href", `${window.location.origin}${path}`);
+    }, [path, title, description]);
+
+    return null;
+}
+
 function App() {
     return (
         <div className="App">
             <BrowserRouter>
+                <ScrollToTop />
+                <RouteDocumentMeta />
                 <AnimatedRoutes />
                 <Toaster position="top-center" richColors />
             </BrowserRouter>

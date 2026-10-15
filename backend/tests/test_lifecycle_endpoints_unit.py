@@ -15,7 +15,16 @@ import server
 
 class _Cursor:
     def __init__(self, rows):
-        self.rows = rows
+        self.rows = list(rows)
+
+    def sort(self, *args, **kwargs):
+        return self
+
+    def limit(self, *args, **kwargs):
+        return self
+
+    def skip(self, *args, **kwargs):
+        return self
 
     async def to_list(self, _n):
         return list(self.rows)
@@ -33,6 +42,10 @@ class _Collection:
     def find(self, *_args, **_kwargs):
         return _Cursor(self.rows)
 
+    async def insert_one(self, doc):
+        self.rows.append(doc)
+        return SimpleNamespace(inserted_id=doc.get("id"))
+
     async def update_one(self, filt, update, upsert=False):
         self.updated.append((filt, update, upsert))
         target = self.find_one_result
@@ -46,6 +59,15 @@ class _Collection:
         if target is None:
             return
         target.update(update.get("$set", {}))
+
+    async def count_documents(self, *_args, **_kwargs):
+        return len(self.rows)
+
+    async def distinct(self, *_args, **_kwargs):
+        return []
+
+    def aggregate(self, *_args, **_kwargs):
+        return _Cursor(self.rows)
 
     async def delete_one(self, filt):
         key = next(iter(filt.items()), None)
@@ -391,6 +413,15 @@ def test_verify_trainer_action_token_rejects_wrong_submission_context():
     assert exc.value.status_code == 403
 
 
+def test_verify_trainer_action_token_returns_payload_dict():
+    token = server._issue_trainer_action_token(trainer_id="t_1", submission_id="sub_a")
+    payload = server._verify_trainer_action_token(token, trainer_id="t_1", submission_id="sub_a")
+    assert isinstance(payload, dict)
+    assert payload["trainer_id"] == "t_1"
+    assert payload["submission_id"] == "sub_a"
+
+
+
 def test_reconnect_trainer_billing_returns_updated_profile_status(monkeypatch):
     trainer_doc = {
         "id": "t_bill",
@@ -449,3 +480,157 @@ def test_submit_follow_up_outcome_rejects_unknown_action(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         asyncio.run(server.submit_follow_up_outcome(valid_token, server.FollowUpOutcomeIn(action="oops")))
     assert exc.value.status_code == 400
+
+
+def test_update_oversight_case_review_transitions_state_and_audits(monkeypatch):
+    case_row = {
+        "case_id": "test_case:123",
+        "case_type": "trainer_submission_case",
+        "workflow": "trainer submission",
+        "entity_type": "submission",
+        "entity_id": "sub_123",
+        "state": "detected",
+    }
+    ops_case_states = _Collection()
+    audit_log = _Collection()
+    fake_db = SimpleNamespace(
+        ops_case_states=ops_case_states,
+        audit_log=audit_log,
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    async def _mock_current_ops_cases():
+        return [case_row]
+
+    monkeypatch.setattr(server, "_current_ops_cases", _mock_current_ops_cases)
+
+    payload = server.OpsCaseReviewIn(
+        state="dismissed",
+        owner="Carl",
+        note="Dismissed in unit test verification",
+    )
+    result = asyncio.run(
+        server.update_oversight_case_review(
+            case_id="test_case:123",
+            payload=payload,
+            _=None,
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["case"]["state"] == "dismissed"
+    assert result["case"]["owner"] == "Carl"
+    assert len(ops_case_states.updated) == 1
+    assert ops_case_states.find_one_result["state"] == "dismissed"
+    assert ops_case_states.find_one_result["note"] == "Dismissed in unit test verification"
+    assert len(ops_case_states.find_one_result["history"]) == 1
+    assert ops_case_states.find_one_result["history"][0]["actor"] == "ops:Carl"
+    # Check audit log insertion
+    assert len(audit_log.rows) == 1
+    assert audit_log.rows[0]["action"] == "ops_case_review_updated"
+    assert audit_log.rows[0]["target"] == "test_case:123"
+    assert audit_log.rows[0]["actor"] == "ops:Carl"
+
+
+def test_update_oversight_case_review_404_when_not_in_current_cases(monkeypatch):
+    fake_db = SimpleNamespace(
+        ops_case_states=_Collection(),
+        audit_log=_Collection(),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    async def _mock_current_ops_cases():
+        return []
+
+    monkeypatch.setattr(server, "_current_ops_cases", _mock_current_ops_cases)
+
+    payload = server.OpsCaseReviewIn(state="dismissed")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            server.update_oversight_case_review(
+                case_id="missing:999",
+                payload=payload,
+                _=None,
+            )
+        )
+    assert exc.value.status_code == 404
+    assert "Ops case not found" in exc.value.detail
+
+
+def test_update_oversight_case_review_400_when_invalid_state(monkeypatch):
+    fake_db = SimpleNamespace(
+        ops_case_states=_Collection(),
+        audit_log=_Collection(),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    payload = server.OpsCaseReviewIn(state="invalid_nonexistent_state")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            server.update_oversight_case_review(
+                case_id="any:123",
+                payload=payload,
+                _=None,
+            )
+        )
+    assert exc.value.status_code == 400
+    assert "Invalid case state" in exc.value.detail
+
+
+class _StrictReadOnlyCollection(_Collection):
+    async def insert_one(self, *args, **kwargs):
+        raise AssertionError("Write detected: insert_one called on read-only endpoint!")
+
+    async def update_one(self, *args, **kwargs):
+        raise AssertionError("Write detected: update_one called on read-only endpoint!")
+
+    async def delete_one(self, *args, **kwargs):
+        raise AssertionError("Write detected: delete_one called on read-only endpoint!")
+
+
+def test_df032_get_read_only_phase_runtime_records_performs_zero_writes(monkeypatch):
+    """Regression test for DF-032: verify _get_read_only_phase_runtime_records performs zero writes."""
+    fake_db = SimpleNamespace(
+        system_state=_StrictReadOnlyCollection(rows=[{"key": "launch_phase_state", "current_phase": "live_matching"}]),
+        phase_readiness_snapshots=_StrictReadOnlyCollection(),
+        phase_transition_decisions=_StrictReadOnlyCollection(),
+        trainers=_StrictReadOnlyCollection(),
+        owner_waitlist=_StrictReadOnlyCollection(),
+        owner_waitlist_events=_StrictReadOnlyCollection(),
+        growth_attribution=_StrictReadOnlyCollection(),
+        attribution_entries=_StrictReadOnlyCollection(),
+        reactivation_candidates=_StrictReadOnlyCollection(),
+    )
+    monkeypatch.setattr(server, "db", fake_db)
+
+    # 1. _get_read_only_phase_runtime_records must succeed with zero writes
+    res = asyncio.run(server._get_read_only_phase_runtime_records())
+    assert "phase_state" in res
+    assert "readiness_snapshot" in res
+    assert "phase_decisions" in res
+
+    # 2. _refresh_phase_runtime_records must trigger a write error on _StrictReadOnlyCollection
+    with pytest.raises(AssertionError) as exc:
+        asyncio.run(server._refresh_phase_runtime_records())
+    assert "Write detected" in str(exc.value)
+
+
+class _StrictReadOnlyDB:
+    def __init__(self):
+        self._collections = {}
+
+    def __getattr__(self, name):
+        if name not in self._collections:
+            self._collections[name] = _StrictReadOnlyCollection()
+        return self._collections[name]
+
+
+def test_df032_oversight_endpoint_handler_performs_zero_writes(monkeypatch):
+    """Regression test for DF-032: verify oversight() GET handler performs zero writes on any collection."""
+    fake_db = _StrictReadOnlyDB()
+    monkeypatch.setattr(server, "db", fake_db)
+
+    # Calling oversight() must complete with zero writes triggered
+    res = asyncio.run(server.oversight(_=None))
+    assert res is not None
+    assert "readiness_status" in res

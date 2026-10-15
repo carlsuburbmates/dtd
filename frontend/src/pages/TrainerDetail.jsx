@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, Mail, Phone, Globe, MapPin, ShieldCheck, ArrowRight, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { extractPublicMonetizationPolicy, resolvePublicMonetizationCopy } from "@/lib/publicPolicy";
@@ -21,11 +21,60 @@ function claimErrorMessage(error) {
     return "We could not verify this profile right now. Please try again.";
 }
 
+const CANONICAL_SPECIALTY_OPTIONS = [
+    { id: "puppy_training", label: "Puppy Training & Socialisation" },
+    { id: "obedience", label: "Basic & Advanced Obedience" },
+    { id: "behaviour_modification", label: "Behaviour Modification" },
+    { id: "leash_reactivity", label: "Leash Reactivity & Pulling" },
+    { id: "separation_anxiety", label: "Separation Anxiety" },
+    { id: "barking", label: "Excessive Barking" },
+    { id: "aggression", label: "Aggression & Complex Behaviour" },
+    { id: "fear_anxiety", label: "Fear, Phobias & Anxiety" },
+    { id: "recall", label: "Reliable Recall" },
+    { id: "resource_guarding", label: "Resource Guarding" },
+    { id: "rescue_rehoming", label: "Rescue & Rehoming" },
+    { id: "scent_work", label: "Scent Work & Mental Stimulation" },
+    { id: "therapy_assistance", label: "Therapy & Assistance Dog Prep" },
+];
+
+const CANONICAL_FORMAT_OPTIONS = [
+    { id: "in_home", label: "In-Home Private Training" },
+    { id: "facility", label: "Training Centre / Facility" },
+    { id: "outdoor_park", label: "Outdoor & Park Sessions" },
+    { id: "board_and_train", label: "Board & Train (Residential)" },
+    { id: "online", label: "Online / Virtual Coaching" },
+    { id: "group_classes", label: "Group Classes" },
+];
+
+const CANONICAL_STAGE_OPTIONS = [
+    { id: "puppy", label: "Puppy (< 6 months)" },
+    { id: "adolescent", label: "Adolescent (6 - 18 months)" },
+    { id: "adult", label: "Adult (1.5 - 7 years)" },
+    { id: "senior", label: "Senior (7+ years)" },
+    { id: "all_life_stages", label: "All Life Stages" },
+];
+
+const TRAINING_PHILOSOPHY_OPTIONS = [
+    { id: "positive_reinforcement_force_free", label: "Positive Reinforcement / Force-Free" },
+    { id: "balanced", label: "Balanced Training" },
+];
+
+const CATCHMENT_OPTIONS = [
+    { id: "specific_suburbs", label: "Specific Nominated Suburbs" },
+    { id: "radius", label: "Distance Radius from Suburb" },
+    { id: "melbourne_wide", label: "Melbourne-Wide Coverage" },
+];
+
 export default function TrainerDetail() {
     const { id } = useParams();
-    const [search] = useSearchParams();
-    const matchId = search.get("match") || null;
-    const initialDesc = search.get("q") || "";
+    const [matchContextToken, setMatchContextToken] = useState(() => {
+        try {
+            return typeof window !== "undefined" ? sessionStorage.getItem("d_match_context_token") || null : null;
+        } catch (_) {
+            return null;
+        }
+    });
+    const [matchContext, setMatchContext] = useState(null);
 
     const [trainer, setTrainer] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -33,6 +82,7 @@ export default function TrainerDetail() {
     const [introId, setIntroId] = useState(null);
     const [introMeta, setIntroMeta] = useState(null);
     const [connectError, setConnectError] = useState("");
+    const [connectNotice, setConnectNotice] = useState("");
     const [busy, setBusy] = useState(false);
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(true);
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("live_matching");
@@ -46,11 +96,30 @@ export default function TrainerDetail() {
     const [claimError, setClaimError] = useState("");
     const [claimComplete, setClaimComplete] = useState(false);
     const [claimSessionToken, setClaimSessionToken] = useState("");
+    const [claimStep, setClaimStep] = useState("email");
+    const [claimPrefill, setClaimPrefill] = useState(null);
+    const [confirmedCaps, setConfirmedCaps] = useState({
+        specialties: [],
+        service_formats: [],
+        life_stages: [],
+        training_philosophy: "",
+        serviced_suburbs: "",
+        catchment_type: "specific_suburbs",
+        delivery_constraints: {
+            in_home_available: false,
+            facility_available: false,
+            travel_distance_km: 0,
+            notes: "",
+        },
+    });
+    const [confirmStatement, setConfirmStatement] = useState(false);
+    const [confirmBusy, setConfirmBusy] = useState(false);
+    const [confirmError, setConfirmError] = useState("");
     const [form, setForm] = useState({
         user_name: "",
         user_email: "",
         user_phone: "",
-        description: initialDesc,
+        description: "",
         consent_contact_release: false,
         consent_outcome_tracking: false,
     });
@@ -60,6 +129,30 @@ export default function TrainerDetail() {
         } catch (_) {}
         return `intro-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     });
+
+    useEffect(() => {
+        if (!matchContextToken) return;
+        api.get("/match/context", {
+            headers: { "X-Match-Context-Token": matchContextToken },
+        })
+        .then((res) => {
+            setMatchContext(res.data);
+            if (res.data?.primary_concerns?.length > 0) {
+                const concernStr = res.data.primary_concerns.map((c) => String(c).replace(/_/g, " ")).join(", ");
+                setForm((prev) => ({
+                    ...prev,
+                    description: prev.description || `Enquiry regarding ${concernStr} for dog (${res.data.dog_age_months || 12} months).`,
+                }));
+            }
+        })
+        .catch(() => {
+            try {
+                sessionStorage.removeItem("d_match_context_token");
+            } catch (_) {}
+            setMatchContextToken(null);
+            setMatchContext(null);
+        });
+    }, [matchContextToken]);
 
     useEffect(() => {
         api
@@ -77,7 +170,7 @@ export default function TrainerDetail() {
                 setPublicMatchingEnabled(Boolean(config.public_matching_enabled ?? true));
                 setPublicLaunchPhase(String(config.public_launch_phase || "live_matching"));
                 setPublicEmphasis(String(config.public_emphasis || "live_matching"));
-                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(config)));
+                setMonetizationCopy(resolvePublicMonetizationCopy(extractPublicMonetizationPolicy(config)) || {});
             })
             .catch(() => setPublicMatchingEnabled(true));
     }, []);
@@ -98,6 +191,54 @@ export default function TrainerDetail() {
         }
         setBusy(true);
         setConnectError("");
+        setConnectNotice("");
+
+        if (matchContextToken && matchContext) {
+            try {
+                const r = await api.post("/match/follow-up", {
+                    trainer_id: id,
+                    user_name: form.user_name,
+                    user_email: form.user_email,
+                    user_phone: form.user_phone || "",
+                    notes: form.description || "",
+                    consent_contact_release: form.consent_contact_release,
+                }, {
+                    headers: {
+                        "X-Match-Context-Token": matchContextToken,
+                        "Idempotency-Key": introClientToken,
+                    },
+                });
+                setIntroId(r.data.intro_id);
+                const deliveryState = String(r.data.delivery_state || "");
+                setIntroMeta({ deliveryStatus: deliveryState });
+                if (deliveryState !== "delivered") {
+                    const message = deliveryState === "terminal_failure"
+                        ? "We could not deliver this enquiry because no confirmed trainer email is available. No message was sent."
+                        : deliveryState === "suppressed"
+                            ? "This enquiry was not delivered automatically. No message was sent."
+                            : "We received the enquiry but have not confirmed delivery to the trainer. Please do not submit it again.";
+                    setConnectNotice(message);
+                    toast.error(message);
+                    return;
+                }
+                setContact({
+                    name: trainer?.name,
+                    email: trainer?.email || "Enquiry dispatched directly to trainer",
+                    phone: trainer?.phone || "",
+                });
+                toast.success("Enquiry sent directly to trainer!");
+            } catch (err) {
+                const message = err?.response?.status === 409
+                    ? "This enquiry could not be repeated safely. Refresh the page and try again."
+                    : (err?.response?.data?.detail || "Couldn't connect. Please try again.");
+                setConnectError(message);
+                toast.error(message);
+            } finally {
+                setBusy(false);
+            }
+            return;
+        }
+
         try {
             const r = await api.post("/intros", {
                 trainer_id: id,
@@ -106,7 +247,6 @@ export default function TrainerDetail() {
                 user_name: form.user_name,
                 user_phone: form.user_phone,
                 suburb: trainer?.suburb,
-                match_id: matchId,
                 client_token: introClientToken,
                 consent_contact_release: form.consent_contact_release,
                 consent_outcome_tracking: form.consent_outcome_tracking,
@@ -172,14 +312,125 @@ export default function TrainerDetail() {
                 claim_event_id: claimEvent.claim_event_id,
                 otp: claimCode,
             });
-            setClaimSessionToken(response.data?.session?.token || "");
+            const sessionToken = response.data?.session?.token || "";
+            setClaimSessionToken(sessionToken);
             setTrainer((current) => current ? { ...current, claim_status: "claimed", tier: "claimed" } : current);
-            setClaimComplete(true);
+
+            // Fetch prefill facts for Step 2
+            try {
+                const prefillRes = await api.get(`/trainers/${id}/capabilities/prefill`, {
+                    headers: sessionToken ? { "X-Trainer-Claim-Session": sessionToken } : {},
+                });
+                const pData = prefillRes.data || {};
+                const pre = pData.prefilled || pData.prefill || {};
+                const preDelivery = pre.delivery_constraints || {};
+                setClaimPrefill(pData);
+                setConfirmedCaps({
+                    specialties: pre.specialties || [],
+                    service_formats: pre.service_formats || [],
+                    life_stages: pre.life_stages || [],
+                    training_philosophy: pre.training_philosophy || "",
+                    serviced_suburbs: Array.isArray(pre.serviced_suburbs)
+                        ? pre.serviced_suburbs.join(", ")
+                        : (pre.serviced_suburbs || trainer?.suburb || ""),
+                    catchment_type: pre.catchment_type || "specific_suburbs",
+                    delivery_constraints: {
+                        in_home_available: Boolean(preDelivery.in_home_available),
+                        facility_available: Boolean(preDelivery.facility_available),
+                        travel_distance_km: Math.min(200, Math.max(0, Number(preDelivery.travel_distance_km) || 0)),
+                        notes: typeof preDelivery.notes === "string" ? preDelivery.notes.slice(0, 200) : "",
+                    },
+                });
+            } catch {
+                const fallbackDelivery = trainer?.delivery_constraints || {};
+                setConfirmedCaps({
+                    specialties: trainer?.specialties || [],
+                    service_formats: trainer?.service_formats || [],
+                    life_stages: trainer?.life_stages || [],
+                    training_philosophy: trainer?.training_philosophy || "",
+                    serviced_suburbs: trainer?.suburb || "",
+                    catchment_type: "specific_suburbs",
+                    delivery_constraints: {
+                        in_home_available: Boolean(fallbackDelivery.in_home_available),
+                        facility_available: Boolean(fallbackDelivery.facility_available),
+                        travel_distance_km: Math.min(200, Math.max(0, Number(fallbackDelivery.travel_distance_km) || 0)),
+                        notes: typeof fallbackDelivery.notes === "string" ? fallbackDelivery.notes.slice(0, 200) : "",
+                    },
+                });
+            }
+            setClaimStep("capabilities");
         } catch (error) {
             setClaimError(claimErrorMessage(error));
         } finally {
             setClaimBusy(false);
         }
+    };
+
+    const toggleConfirmArrayItem = (field, itemId) => {
+        setConfirmedCaps((prev) => {
+            const list = prev[field] || [];
+            const exists = list.includes(itemId);
+            const updated = exists ? list.filter((x) => x !== itemId) : [...list, itemId];
+            return { ...prev, [field]: updated };
+        });
+    };
+
+    const updateDeliveryConstraint = (key, value) => {
+        setConfirmedCaps((prev) => ({
+            ...prev,
+            delivery_constraints: {
+                ...(prev.delivery_constraints || {}),
+                [key]: value,
+            },
+        }));
+    };
+
+    const submitCapabilityConfirmation = async (event) => {
+        if (event) event.preventDefault();
+        if (!confirmStatement) {
+            setConfirmError("Please affirm the confirmation statement to declare capabilities.");
+            return;
+        }
+        setConfirmBusy(true);
+        setConfirmError("");
+        try {
+            const suburbsArray = typeof confirmedCaps.serviced_suburbs === "string"
+                ? confirmedCaps.serviced_suburbs.split(",").map((s) => s.trim()).filter(Boolean)
+                : (confirmedCaps.serviced_suburbs || []);
+
+            const res = await api.post(`/trainers/${id}/capabilities/confirm`, {
+                confirmation_statement: true,
+                specialties: confirmedCaps.specialties,
+                service_formats: confirmedCaps.service_formats,
+                life_stages: confirmedCaps.life_stages,
+                training_philosophy: confirmedCaps.training_philosophy,
+                serviced_suburbs: suburbsArray,
+                catchment_type: confirmedCaps.catchment_type,
+                delivery_constraints: {
+                    in_home_available: Boolean(confirmedCaps.delivery_constraints?.in_home_available),
+                    facility_available: Boolean(confirmedCaps.delivery_constraints?.facility_available),
+                    travel_distance_km: Math.min(200, Math.max(0, Number(confirmedCaps.delivery_constraints?.travel_distance_km) || 0)),
+                    notes: String(confirmedCaps.delivery_constraints?.notes || "").trim().slice(0, 200),
+                },
+            }, {
+                headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},
+            });
+            if (res.data?.capabilities) {
+                setTrainer((curr) => curr ? { ...curr, capabilities: res.data.capabilities } : curr);
+            }
+            setClaimStep("done");
+            setClaimComplete(true);
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            setConfirmError(typeof detail === "string" ? detail : "Failed to confirm capabilities.");
+        } finally {
+            setConfirmBusy(false);
+        }
+    };
+
+    const skipCapabilityConfirmation = () => {
+        setClaimStep("done");
+        setClaimComplete(true);
     };
 
     const closeClaim = (open) => {
@@ -190,6 +441,9 @@ export default function TrainerDetail() {
             setClaimEvent(null);
             setClaimComplete(false);
             setClaimSessionToken("");
+            setClaimStep("email");
+            setConfirmError("");
+            setConfirmStatement(false);
         }
     };
 
@@ -231,19 +485,10 @@ export default function TrainerDetail() {
                     <div>
                         <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-[#5C6D59]">
                             <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {trainer.suburb || "Greater Melbourne"}</span>
-                            {trainer.catchment_type ? <span>· {trainer.catchment_type}</span> : null}
-                            {trainer.verification_status === "verified" && (
-                                <span className="pill pill-verified ml-2">
-                                    <ShieldCheck className="h-3 w-3" /> Verified
-                                </span>
-                            )}
-                            {trainer.verification_status === "unverified" && (
-                                <span className="pill pill-unverified ml-2">Listed</span>
-                            )}
-                            {claimStatus === "claimed" ? <span className="pill pill-verified">Identity claimed</span> : null}
-                            {claimStatus === "claim_disputed" ? <span className="pill pill-unverified">Ownership under review</span> : null}
-                            {trainer.abn_verified ? <span className="pill pill-verified" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
-                            {isPro ? <span className="pill bg-[#1A3A32] !text-[#F5F2EB]">Verified Pro</span> : null}
+                            {trainer.abn_verified ? <span className="pill pill-verified ml-2" title="Business details match an Australian Business Register record.">ABN verified</span> : null}
+                            {claimStatus === "claimed" ? <span className="pill pill-verified ml-2">Identity claimed</span> : null}
+                            {claimStatus === "claim_disputed" ? <span className="pill pill-unverified ml-2">Ownership under review</span> : null}
+                            {isPro && !matchContextToken ? <span className="pill pill-unverified ml-2" title="Commercial directory listing">Sponsored</span> : null}
                         </div>
                         <h1 className="editorial-h1 text-5xl text-[#1A3A32] mt-2">{trainer.name}</h1>
                     </div>
@@ -293,8 +538,36 @@ export default function TrainerDetail() {
                 {Array.isArray(trainer.gallery_images) && trainer.gallery_images.length ? <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">{trainer.gallery_images.slice(0, 3).map((url, index) => <img key={url} src={url} alt={`${trainer.name} gallery ${index + 1}`} className="aspect-[4/3] w-full rounded-2xl object-cover border border-[#E5DFD3]" loading="lazy" />)}</div> : null}
                 {isClaimable ? (
                     <section className="mt-8 rounded-2xl border border-[#D9B36C]/70 bg-[#FFF9ED] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6" data-testid="claim-banner">
-                        <div><div className="small-caps">Business owner</div><h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Is this your business?</h2><p className="mt-1 text-sm text-[#4A615A]">Claim this profile using the email recorded on the listing.</p></div>
+                        <div><div className="small-caps text-[#8B5E14]">Business owner</div><h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Is this your business?</h2><p className="mt-1 text-sm text-[#4A615A]">Claim this storefront in 60 seconds with your business email to manage your profile.</p></div>
                         <button type="button" onClick={() => setClaimOpen(true)} className="btn-primary mt-4 sm:mt-0" data-testid="claim-profile-open">Claim this profile</button>
+                    </section>
+                ) : claimStatus === "claimed" ? (
+                    <section className="mt-8 rounded-2xl border border-[#1A3A32]/20 bg-[#FAF8F5] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 shadow-sm" data-testid="trainer-owner-controls">
+                        <div>
+                            <div className="small-caps text-[#5C6D59] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#1A3A32]" /> Verified Storefront Owner</div>
+                            <h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Manage your listing</h2>
+                            <p className="mt-1 text-sm text-[#4A615A]">Update your active specialties, service formats, suburbs, or review visibility upgrades.</p>
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-2.5 sm:mt-0">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setClaimStep("capabilities");
+                                    setClaimOpen(true);
+                                }}
+                                className="btn-secondary text-xs py-2.5 px-4"
+                                data-testid="edit-capabilities-open"
+                            >
+                                Edit specialties &amp; formats
+                            </button>
+                            <Link
+                                to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${claimSessionToken ? `&claimSession=${encodeURIComponent(claimSessionToken)}` : ""}`}
+                                className="btn-primary text-xs py-2.5 px-4"
+                                data-testid="trainer-billing-link"
+                            >
+                                Billing &amp; upgrades
+                            </Link>
+                        </div>
                     </section>
                 ) : null}
                 </section>
@@ -355,13 +628,14 @@ export default function TrainerDetail() {
                         </div>
                         <div className="mt-5 flex items-center justify-between gap-4">
                             <span className="text-xs font-mono text-[#5C6D59]">
-                                {monetizationCopy.trainerDetailConnectPricing}
+                                {monetizationCopy?.trainerDetailConnectPricing || ""}
                             </span>
                             <button type="submit" disabled={busy} data-testid="connect-submit" className="btn-accent">
                                 {busy ? "Connecting…" : <>Connect <ArrowRight className="h-4 w-4" /></>}
                             </button>
                         </div>
                         {connectError ? <p className="mt-4 text-sm text-[#8B2020]" role="alert" data-testid="connect-error">{connectError}</p> : null}
+                        {connectNotice ? <p className="mt-4 text-sm text-[#715A20]" role="status" data-testid="connect-notice">{connectNotice}</p> : null}
                     </form>
                     )
                 ) : (
@@ -423,10 +697,244 @@ export default function TrainerDetail() {
             <Dialog open={claimOpen} onOpenChange={closeClaim}>
                 <DialogContent className="border-[#E5DFD3] bg-[#FAFAF7] p-6 sm:rounded-2xl" data-testid="claim-dialog">
                     <DialogHeader>
-                        <DialogTitle className="font-serif text-3xl text-[#1A3A32]">Claim this profile</DialogTitle>
-                        <DialogDescription className="text-[#4A615A]">We will send a six-digit code to the email already recorded on this listing.</DialogDescription>
+                        <DialogTitle className="font-serif text-3xl text-[#1A3A32]">
+                            {claimStep === "capabilities" ? "Confirm capabilities" : "Claim this profile"}
+                        </DialogTitle>
+                        <DialogDescription className="text-[#4A615A]">
+                            {claimStep === "capabilities"
+                                ? "Ownership verified. Explicitly declare your active capabilities to become matchable with dog owners."
+                                : "We will send a six-digit code to the email already recorded on this listing."}
+                        </DialogDescription>
                     </DialogHeader>
-                    {claimComplete ? <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] p-4 text-sm text-[#14532D]" data-testid="claim-success"><CheckCircle2 className="mr-2 inline h-4 w-4" />Profile claimed. Core remains free.{claimSessionToken ? <Link to={`/trainer/billing?trainerId=${encodeURIComponent(id)}&claimSession=${encodeURIComponent(claimSessionToken)}`} className="btn-primary mt-4 w-full justify-center" data-testid="claim-open-billing">Review optional upgrades</Link> : null}</div> : !claimEvent ? (
+                    {claimComplete || claimStep === "done" ? (
+                        <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] p-4 text-sm text-[#14532D]" data-testid="claim-success">
+                            <CheckCircle2 className="mr-2 inline h-4 w-4" />Profile claimed. Core remains free.
+                            {claimSessionToken ? (
+                                <Link to={`/trainer/billing?trainerId=${encodeURIComponent(id)}&claimSession=${encodeURIComponent(claimSessionToken)}`} className="btn-primary mt-4 w-full justify-center" data-testid="claim-open-billing">
+                                    Review optional upgrades
+                                </Link>
+                            ) : null}
+                        </div>
+                    ) : claimStep === "capabilities" ? (
+                        <form onSubmit={submitCapabilityConfirmation} className="space-y-4" data-testid="claim-capabilities-step">
+                            <div className="rounded-xl border border-[#D9B36C]/70 bg-[#FFFDF7] p-3 text-xs text-[#4A615A] leading-relaxed">
+                                <strong className="text-[#1A3A32]">Step 2: Declare Capabilities.</strong> Freeform bio and marketing text do not influence matching. Only explicitly confirmed capabilities are matchable.
+                            </div>
+
+                            {/* Specialties */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Specialties &amp; Concerns
+                                </label>
+                                <div className="max-h-36 overflow-y-auto space-y-1 pr-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_SPECIALTY_OPTIONS.map((spec) => (
+                                        <label key={spec.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.specialties.includes(spec.id)}
+                                                onChange={() => toggleConfirmArrayItem("specialties", spec.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-specialty-${spec.id}`}
+                                            />
+                                            <span>{spec.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Service Formats */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Service Formats
+                                </label>
+                                <div className="grid grid-cols-2 gap-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_FORMAT_OPTIONS.map((fmt) => (
+                                        <label key={fmt.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.service_formats.includes(fmt.id)}
+                                                onChange={() => toggleConfirmArrayItem("service_formats", fmt.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-format-${fmt.id}`}
+                                            />
+                                            <span>{fmt.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Life Stages */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Dog Life Stages Accepted
+                                </label>
+                                <div className="grid grid-cols-2 gap-1 border border-[#E5DFD3] rounded-lg p-2 bg-white">
+                                    {CANONICAL_STAGE_OPTIONS.map((stg) => (
+                                        <label key={stg.id} className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedCaps.life_stages.includes(stg.id)}
+                                                onChange={() => toggleConfirmArrayItem("life_stages", stg.id)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid={`claim-stage-${stg.id}`}
+                                            />
+                                            <span>{stg.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Training Philosophy */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Training Philosophy
+                                </label>
+                                <select
+                                    value={confirmedCaps.training_philosophy}
+                                    onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, training_philosophy: e.target.value }))}
+                                    className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                    data-testid="claim-philosophy"
+                                >
+                                    <option value="">Select methodology preference…</option>
+                                    {TRAINING_PHILOSOPHY_OPTIONS.map((opt) => (
+                                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Catchment & Serviced Suburbs */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Service Catchment
+                                    </label>
+                                    <select
+                                        value={confirmedCaps.catchment_type}
+                                        onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, catchment_type: e.target.value }))}
+                                        className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                        data-testid="claim-catchment-type"
+                                    >
+                                        {CATCHMENT_OPTIONS.map((opt) => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                        Serviced Suburbs
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={confirmedCaps.serviced_suburbs}
+                                        onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, serviced_suburbs: e.target.value }))}
+                                        placeholder="e.g. Richmond, South Yarra"
+                                        className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                        data-testid="claim-serviced-suburbs"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Delivery Constraints & Logistics */}
+                            <div>
+                                <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    Delivery Constraints &amp; Logistics
+                                </label>
+                                <div className="space-y-2 border border-[#E5DFD3] rounded-lg p-2.5 bg-white">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <label className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(confirmedCaps.delivery_constraints?.in_home_available)}
+                                                onChange={(e) => updateDeliveryConstraint("in_home_available", e.target.checked)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid="claim-delivery-in-home"
+                                            />
+                                            <span>In-home visits</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 text-xs text-[#2A443B] cursor-pointer hover:bg-[#F2ECE1]/50 p-1 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(confirmedCaps.delivery_constraints?.facility_available)}
+                                                onChange={(e) => updateDeliveryConstraint("facility_available", e.target.checked)}
+                                                className="h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                                data-testid="claim-delivery-facility"
+                                            />
+                                            <span>Facility / centre</span>
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-[#E5DFD3]/60">
+                                        <div>
+                                            <label className="block text-[11px] font-medium text-[#4A615A] mb-1">
+                                                Max Travel Distance (km)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="200"
+                                                step="1"
+                                                value={confirmedCaps.delivery_constraints?.travel_distance_km ?? 0}
+                                                onChange={(e) => updateDeliveryConstraint("travel_distance_km", parseFloat(e.target.value) || 0)}
+                                                placeholder="0"
+                                                className="w-full text-xs p-1.5 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                                data-testid="claim-delivery-distance"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[11px] font-medium text-[#4A615A] mb-1">
+                                                Delivery / Travel Notes
+                                            </label>
+                                            <input
+                                                type="text"
+                                                maxLength={200}
+                                                value={confirmedCaps.delivery_constraints?.notes || ""}
+                                                onChange={(e) => updateDeliveryConstraint("notes", e.target.value)}
+                                                placeholder="e.g. In-home visits within 15km; parking required"
+                                                className="w-full text-xs p-1.5 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
+                                                data-testid="claim-delivery-notes"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Confirmation Checkbox */}
+                            <label className="flex items-start gap-2 text-xs text-[#1A3A32] p-2.5 rounded-lg bg-[#FAF8F5] border border-[#E5DFD3] cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={confirmStatement}
+                                    onChange={(e) => setConfirmStatement(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 accent-[#1A3A32] cursor-pointer"
+                                    data-testid="claim-confirm-statement"
+                                />
+                                <span>I explicitly confirm these capabilities and service boundaries represent my active training offerings.</span>
+                            </label>
+
+                            {confirmError ? (
+                                <p className="text-sm text-[#8B2020]" role="alert" data-testid="claim-confirm-error">
+                                    {confirmError}
+                                </p>
+                            ) : null}
+
+                            <div className="flex flex-col gap-2 pt-2">
+                                <button
+                                    type="submit"
+                                    disabled={confirmBusy}
+                                    className="btn-primary w-full"
+                                    data-testid="claim-confirm-submit"
+                                >
+                                    {confirmBusy ? "Confirming…" : "Confirm Capabilities"}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={skipCapabilityConfirmation}
+                                    className="btn-ghost w-full text-xs text-[#4A615A]"
+                                    data-testid="claim-skip-capabilities"
+                                >
+                                    Skip for now (remain unconfirmed)
+                                </button>
+                            </div>
+                        </form>
+                    ) : !claimEvent ? (
                         <form onSubmit={startClaim} className="space-y-4">
                             <label className="grid gap-2 text-sm font-medium text-[#1A3A32]">Listing email<input type="email" autoComplete="email" value={claimEmail} onChange={(event) => setClaimEmail(event.target.value)} className="input-public" placeholder="you@business.com.au" data-testid="claim-email" /></label>
                             {claimError ? <p className="text-sm text-[#8B2020]" role="alert" data-testid="claim-error">{claimError}</p> : null}

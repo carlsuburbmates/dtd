@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -47,8 +49,83 @@ def _require_local_mongo(uri: str) -> None:
         )
 
 
+def _start_ephemeral_mongo() -> tuple[MongoClient, subprocess.Popen[str], tempfile.TemporaryDirectory[str]]:
+    """Start an isolated loopback MongoDB when no local service was supplied.
+
+    The full suite is the documented one-command verification path.  It must
+    therefore not depend on a developer having separately started MongoDB, and
+    it must not share a persistent database with another local workflow.
+    """
+    mongod = shutil.which("mongod")
+    if not mongod:
+        raise SystemExit(
+            "MongoDB is required for the isolated integration suite. Install "
+            "`mongod`, or provide a loopback service with --mongo-url."
+        )
+
+    data_dir = tempfile.TemporaryDirectory(prefix="dtd-isolated-mongo-")
+    port = _free_port()
+    mongo_url = f"mongodb://127.0.0.1:{port}"
+    log_path = Path(data_dir.name) / "mongod.log"
+    process = subprocess.Popen(
+        [
+            mongod,
+            "--dbpath", data_dir.name,
+            "--bind_ip", "127.0.0.1",
+            "--port", str(port),
+            "--logpath", str(log_path),
+            "--logappend",
+            "--quiet",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    client = MongoClient(mongo_url, serverSelectionTimeoutMS=500)
+    deadline = time.monotonic() + 12
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            log_tail = log_path.read_text(errors="replace")[-2000:] if log_path.exists() else ""
+            client.close()
+            data_dir.cleanup()
+            raise RuntimeError(
+                f"Ephemeral MongoDB exited during startup (exit {process.returncode}):\n{log_tail}"
+            )
+        try:
+            client.admin.command("ping")
+            return client, process, data_dir
+        except Exception:
+            time.sleep(0.15)
+
+    process.terminate()
+    process.wait(timeout=5)
+    client.close()
+    log_tail = log_path.read_text(errors="replace")[-2000:] if log_path.exists() else ""
+    data_dir.cleanup()
+    raise RuntimeError(f"Timed out starting ephemeral MongoDB:\n{log_tail}")
+
+
 def _fixture_trainer() -> Dict[str, object]:
     now = datetime.now(timezone.utc).isoformat()
+    # This disposable fixture must use the same confirmed, structured facts as
+    # a matchable trainer. Legacy descriptive fields alone are deliberately
+    # insufficient for v2 matching.
+    repo_path = str(REPO_ROOT)
+    if repo_path not in sys.path:
+        sys.path.insert(0, repo_path)
+    from backend.services.trainer_quality import package_trainer_capabilities
+    capabilities = package_trainer_capabilities(
+        specialties=["puppy_training", "leash_reactivity"],
+        service_formats=["in_home"],
+        life_stages=["puppy", "adolescent"],
+        training_philosophy="positive_reinforcement_force_free",
+        serviced_suburbs=["Fitzroy", "Carlton"],
+        catchment_type="specific_suburbs",
+        delivery_constraints={"in_home_available": True, "facility_available": False, "travel_distance_km": 20},
+        basis="trainer_declaration",
+        evidence_reference="isolated_integration_fixture",
+        confirmed_at=now,
+    )
     return {
         "id": "integration-fixture-trainer",
         "slug": "integration-fixture-dog-training",
@@ -56,6 +133,7 @@ def _fixture_trainer() -> Dict[str, object]:
         "suburb": "Fitzroy",
         "region": "Greater Melbourne",
         "published": True,
+        "contact_ready": True,
         "verification_status": "verified",
         "abn_verified": True,
         "claim_status": "unclaimed",
@@ -66,6 +144,7 @@ def _fixture_trainer() -> Dict[str, object]:
         "service_formats": ["in_home"],
         "serviced_suburbs": ["Fitzroy", "Carlton"],
         "training_philosophy": "Force-free",
+        "capabilities": capabilities,
         "bio": "Test-only verified fixture for puppy and reactive-dog matching in Fitzroy.",
         "website": "https://example.test/integration-fixture",
         "phone": "0400000000",
@@ -136,20 +215,33 @@ def _server_environment(mongo_url: str, db_name: str, base_url: str) -> Dict[str
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mongo-url", default="mongodb://127.0.0.1:27017")
+    parser.add_argument(
+        "--mongo-url",
+        help="Existing loopback MongoDB URI. Omit to start a disposable local mongod.",
+    )
     args = parser.parse_args()
-    _require_local_mongo(args.mongo_url)
 
     db_name = f"dtd_integration_{uuid.uuid4().hex}"
     port = _free_port()
     base_url = f"http://127.0.0.1:{port}"
-    client = MongoClient(args.mongo_url, serverSelectionTimeoutMS=2000)
+    client: MongoClient | None = None
+    mongo_process: subprocess.Popen[str] | None = None
+    mongo_data_dir: tempfile.TemporaryDirectory[str] | None = None
     process: subprocess.Popen[str] | None = None
 
     try:
+        if args.mongo_url:
+            _require_local_mongo(args.mongo_url)
+            mongo_url = args.mongo_url
+            client = MongoClient(mongo_url, serverSelectionTimeoutMS=2000)
+        else:
+            client, mongo_process, mongo_data_dir = _start_ephemeral_mongo()
+            mongo_url = client.address and f"mongodb://{client.address[0]}:{client.address[1]}"
+            if not mongo_url:
+                raise RuntimeError("Ephemeral MongoDB did not expose a loopback address")
         client.admin.command("ping")
         client[db_name].trainers.insert_one(_fixture_trainer())
-        env = _server_environment(args.mongo_url, db_name, base_url)
+        env = _server_environment(mongo_url, db_name, base_url)
         process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
             cwd=BACKEND_DIR,
@@ -169,8 +261,20 @@ def main() -> int:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=4)
-        client.drop_database(db_name)
-        client.close()
+        if client is not None:
+            try:
+                client.drop_database(db_name)
+            finally:
+                client.close()
+        if mongo_process and mongo_process.poll() is None:
+            mongo_process.terminate()
+            try:
+                mongo_process.wait(timeout=8)
+            except subprocess.TimeoutExpired:
+                mongo_process.kill()
+                mongo_process.wait(timeout=4)
+        if mongo_data_dir is not None:
+            mongo_data_dir.cleanup()
 
 
 if __name__ == "__main__":

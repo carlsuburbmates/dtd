@@ -1,6 +1,6 @@
 ---
 name: dtd-premium-look-audit
-description: Audit and refine DTD public-facing website pages, route groups, navigation, public copy, CTA hierarchy, metadata, and light visual/mobile polish while preserving the current business priority and locked launch posture. Use when Codex is asked to review or improve the homepage, landing pages, trainer-facing pages, owner waitlist surfaces, navigation, footer, public copy, visual hierarchy, mobile presentation, or premium brand quality across the public website without expanding into backend, billing, auth, database, or major product redesign work.
+description: Audit and refine DTD public-facing website pages, route groups, navigation, public copy, CTA hierarchy, metadata, and light visual/mobile polish while preserving the current business priority and locked launch posture. Use when an AI, LLM, agent, bot, automated assistant or AI-enabled tool is asked to review or improve the homepage, landing pages, trainer-facing pages, owner waitlist surfaces, navigation, footer, public copy, visual hierarchy, mobile presentation, or premium brand quality across the public website without expanding into backend, billing, auth, database, or major product redesign work.
 ---
 
 # DTD Premium look audit

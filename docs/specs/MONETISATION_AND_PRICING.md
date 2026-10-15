@@ -34,6 +34,7 @@ There is no A$99 Regional Sponsor tier. Legacy strings do not create a product.
 - A business cannot occupy the same suburb twice.
 - The canonical business-wide suburb cap is four. Configuration remains safety-clamped between three and five; changing the policy value requires a decision-register update.
 - Billing success activates reserved inventory; failure or timeout must release or surface the reservation for intervention.
+- `past_due` is surfaced to `/ops` while Stripe's collection process remains open. Terminal `unpaid` and `incomplete_expired` states remove paid entitlement; a sponsor reservation is then released. A future grace-period policy requires a decision-register amendment and an end-to-end implementation.
 
 ## Refunds and cancellation
 
@@ -41,6 +42,8 @@ There is no A$99 Regional Sponsor tier. Legacy strings do not create a product.
 - Annual Pro refund window: 30 days.
 - Eligibility is not the same as execution. Production refunds remain fail-closed until live payments, authenticated operator action, confirmation, idempotency, Stripe result persistence, inventory release and audit evidence are verified.
 - Trainer self-service portal/cancellation and operator refund are separate workflows. Public copy must describe only the workflow actually available.
+- A configured Stripe key is not a commercial launch. New checkout is fail-closed unless `ENABLE_TRAINER_BILLING_CHECKOUT=1` is deliberately set at the final approved billing release.
+- Checkout requires an active, versioned acceptance of the public trainer subscription terms. The accepted version and timestamp are persisted with the trainer billing profile.
 
 ## Acceptance evidence
 

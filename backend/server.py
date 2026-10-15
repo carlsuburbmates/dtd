@@ -24,16 +24,18 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlencode, urlparse
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request, Query
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Header, Request, Response, Query
 from fastapi.responses import JSONResponse
 from google.auth import exceptions as google_auth_exceptions
 from google.auth.transport import requests as google_auth_requests
@@ -41,6 +43,11 @@ from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from pymongo.errors import DuplicateKeyError
+
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional observability dependency locally
+    sentry_sdk = None
 from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
@@ -50,18 +57,44 @@ from services import event_contract
 from services import follow_up_tokens
 from services import fraud as fraud_service
 from services import notifications as notifications_service
+from services import provider_health
 from services import pro_trials
+from services import ingestion_manager
+from services import pipeline_guardian
+from services import trainer_quality
 from services import runtime_control
 from services import stripe_billing
 from services import suburb_catalogue
 from services import suburb_inventory
+from services import matching_contract_v2
+from services import urgent_providers as urgent_providers_service
 from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
+
+matching_ai_adapter: Optional[Any] = None
 
 try:
     from bson import ObjectId
 except Exception:  # noqa: BLE001
     ObjectId = None
+
+_PROCESS_START_DT: datetime = datetime.now(timezone.utc)
+_LAST_DB_OP_AT: Optional[datetime] = None
+_LAST_DB_ERROR: Optional[str] = None
+_LAST_DB_ERROR_AT: Optional[datetime] = None
+_LAST_SENTRY_EVENT_VERIFIED: bool = False
+
+
+def _record_db_op_success() -> None:
+    global _LAST_DB_OP_AT
+    _LAST_DB_OP_AT = datetime.now(timezone.utc)
+
+
+def _record_db_op_failure(err: Any) -> None:
+    global _LAST_DB_ERROR, _LAST_DB_ERROR_AT
+    _LAST_DB_ERROR = str(err)
+    _LAST_DB_ERROR_AT = datetime.now(timezone.utc)
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -84,6 +117,41 @@ api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("dtd")
+
+_SENTRY_INITIALIZED = False
+
+
+def _initialise_sentry() -> bool:
+    """Initialise Sentry in the process that serves API or worker work."""
+    global _SENTRY_INITIALIZED
+    if _SENTRY_INITIALIZED:
+        return True
+
+    dsn = (os.environ.get("SENTRY_DSN") or "").strip()
+    if not dsn or sentry_sdk is None:
+        return False
+
+    environment = (os.environ.get("SENTRY_ENVIRONMENT") or "development").strip()
+    try:
+        traces_sample_rate = float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1"))
+    except ValueError:
+        traces_sample_rate = 0.1
+        logger.warning("Invalid SENTRY_TRACES_SAMPLE_RATE; using 0.1")
+
+    try:
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=environment,
+            traces_sample_rate=traces_sample_rate,
+            send_default_pii=False,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Sentry initialization failed; continuing without Sentry")
+        return False
+
+    _SENTRY_INITIALIZED = True
+    logger.info("Sentry initialized for environment=%s", environment)
+    return True
 
 TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
 STARTUP_SEEDS_ENV = "ENABLE_STARTUP_SEEDS"
@@ -160,11 +228,23 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _parse_iso(value: str) -> Optional[datetime]:
+def _parse_iso(value: Any) -> Optional[datetime]:
+    """Normalise an ISO string or MongoDB datetime to aware UTC.
+
+    Match-retention timestamps are BSON datetimes so MongoDB TTL indexes can
+    enforce deletion.  Older records may still contain ISO strings while the
+    one-time backfill runs, so readers remain backwards-compatible.
+    """
     try:
-        return datetime.fromisoformat(value)
-    except Exception:
+        parsed = value if isinstance(value, datetime) else datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
         return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+
+
+def _is_expired(value: Any) -> bool:
+    parsed = _parse_iso(value)
+    return parsed is not None and parsed <= datetime.now(timezone.utc)
 
 
 def new_id() -> str:
@@ -194,17 +274,19 @@ def _scrub(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 async def _audit(action: str, target: str, before: Any = None, after: Any = None, actor: str = "system") -> None:
     try:
-        await db.audit_log.insert_one(
-            {
-                "id": new_id(),
-                "action": action,
-                "target": target,
-                "before": before,
-                "after": after,
-                "actor": actor,
-                "ts": now_iso(),
-            }
-        )
+        audit_coll = getattr(db, "audit_log", None)
+        if audit_coll is not None:
+            await audit_coll.insert_one(
+                {
+                    "id": new_id(),
+                    "action": action,
+                    "target": target,
+                    "before": before,
+                    "after": after,
+                    "actor": actor,
+                    "ts": now_iso(),
+                }
+            )
     except Exception:  # noqa: BLE001
         logger.exception("audit write failed action=%s target=%s actor=%s", action, target, actor)
 
@@ -358,6 +440,16 @@ class IntroIn(BaseModel):
     consent_outcome_tracking: bool = False
 
 
+class MatchFollowUpIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    trainer_id: str
+    user_name: str = Field(min_length=1, max_length=120)
+    user_email: EmailStr
+    user_phone: Optional[str] = None
+    notes: Optional[str] = Field(default="", max_length=800)
+    consent_contact_release: bool = False
+
+
 class ConversionIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     intro_id: str
@@ -415,6 +507,8 @@ class SubmissionIn(BaseModel):
     service_formats: List[str] = Field(default_factory=list)
     serviced_suburbs: List[str] = Field(default_factory=list)
     catchment_type: Optional[str] = ""
+    life_stages: List[str] = Field(default_factory=list)
+    delivery_constraints: Optional[Dict[str, Any]] = None
     booking_url: Optional[str] = ""
     gallery_images: List[str] = Field(default_factory=list)
     sponsored_suburbs: List[str] = Field(default_factory=list)
@@ -488,6 +582,7 @@ class TrainerCheckoutIn(BaseModel):
     suburb: Optional[str] = ""
     interval: str = "month"
     consent_subscription_billing_terms: bool = False
+    billing_terms_version: str = ""
     trainer_claim_session: Optional[str] = ""
     trainer_action_token: Optional[str] = ""
 
@@ -593,21 +688,36 @@ def _scheduler_oidc_configuration() -> tuple[str, str]:
     )
 
 
-def _require_cloud_scheduler_oidc(authorization: str) -> None:
-    expected_email, expected_audience = _scheduler_oidc_configuration()
+def _require_cloud_scheduler_oidc(authorization: str, expected_route_audience: Optional[str] = None) -> None:
+    expected_email, raw_audience = _scheduler_oidc_configuration()
     raw = (authorization or "").strip()
     scheme, _, token = raw.partition(" ")
-    if not expected_email or not expected_audience or scheme.lower() != "bearer" or not token.strip():
+    if not expected_email or not raw_audience or scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
-    try:
-        claims = google_id_token.verify_oauth2_token(
-            token.strip(),
-            google_auth_requests.Request(),
-            expected_audience,
-        )
-    except (google_auth_exceptions.GoogleAuthError, ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid scheduler credential.") from None
-    if claims.get("email") != expected_email or claims.get("email_verified") is not True:
+
+    accepted_audiences = [a.strip() for a in raw_audience.split(",") if a.strip()]
+    if expected_route_audience and expected_route_audience not in accepted_audiences:
+        accepted_audiences.append(expected_route_audience)
+
+    verified_claims = None
+    last_exc = None
+    for aud in accepted_audiences:
+        try:
+            claims = google_id_token.verify_oauth2_token(
+                token.strip(),
+                google_auth_requests.Request(),
+                aud,
+            )
+            verified_claims = claims
+            break
+        except (google_auth_exceptions.GoogleAuthError, ValueError, TypeError) as exc:
+            last_exc = exc
+            continue
+
+    if verified_claims is None:
+        raise HTTPException(status_code=401, detail="Invalid scheduler credential.") from last_exc
+
+    if verified_claims.get("email") != expected_email or verified_claims.get("email_verified") is not True:
         raise HTTPException(status_code=401, detail="Invalid scheduler credential.")
 
 
@@ -667,6 +777,7 @@ def _verify_trainer_action_token(
         raise HTTPException(status_code=403, detail="Trainer action token does not match trainer context.")
     if submission_id and token_submission_id and token_submission_id != submission_id:
         raise HTTPException(status_code=403, detail="Trainer action token does not match submission context.")
+    return payload
 
 
 def _issue_trainer_claim_session(*, trainer_id: str, claim_event_id: str) -> Dict[str, Any]:
@@ -1348,35 +1459,142 @@ async def _load_ops_case_state_map(case_ids: List[str]) -> Dict[str, Dict[str, A
     states_coll = getattr(db, "ops_case_states", None)
     if states_coll is None or not case_ids:
         return {}
-    rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
-    return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+    try:
+        rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
+        return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+    except Exception:
+        return {}
+
+
+def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
+    """Derive an authoritative occurrence identity fingerprint for a case.
+
+    Returns a unique string if the case type has authoritative occurrence
+    identity (event ID, counter, error code, status transition).
+    Returns None if the case type lacks distinct occurrence tracking in Phase 1.
+    """
+    if not isinstance(case, dict):
+        return None
+
+    # Check if case already carries an explicit occurrence_fingerprint
+    explicit_fp = case.get("occurrence_fingerprint")
+    if explicit_fp:
+        return str(explicit_fp)
+
+    case_type = str(case.get("case_type") or "")
+    case_id = str(case.get("case_id") or "")
+
+    if case_type == "loop_health_case":
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        status = details.get("Status", "")
+        mode = details.get("Execution mode", "")
+        reason = str(case.get("summary") or "")
+        return f"{case_id}:{status}:{mode}:{reason}"
+
+    if case_type == "source_ingestion_case":
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        failures = details.get("Consecutive failures", "")
+        err = details.get("Last error", "")
+        return f"{case_id}:{failures}:{err}"
+
+    if case_type == "ai_degradation_case":
+        entity_id = str(case.get("entity_id") or "")
+        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        return f"{case_id}:{entity_id}:{reasons}"
+
+    if case_type == "fraud_suppression_case":
+        intro_id = str(case.get("entity_id") or "")
+        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        return f"{case_id}:{intro_id}:{reasons}"
+
+    if case_type in {"trainer_claim_case", "abn_verification_case", "submission_case", "trainer_reactivation_case"}:
+        entity_id = str(case.get("entity_id") or "")
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        status = details.get("Status") or details.get("ABN status") or details.get("Last notification status") or ""
+        updated = details.get("Updated") or str(case.get("last_updated_at") or "")
+        return f"{case_id}:{entity_id}:{status}:{updated}"
+
+    if case_type in {"provider_operational_case", "provider_governance_case"}:
+        entity_id = str(case.get("entity_id") or "")
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        op_status = details.get("Operational status", "")
+        op_reason = details.get("Operational diagnostic", "")
+        return f"{case_id}:{entity_id}:{op_status}:{op_reason}"
+
+    # Phase 1 case type lacks distinct occurrence identity
+    return None
 
 
 def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    case_fp = case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(case)
     if not override:
         return {
             **case,
+            "occurrence_fingerprint": case_fp,
+            "recurred": False,
             "review": {
                 "state": str(case.get("state") or "detected"),
                 "owner": str(case.get("owner") or ""),
                 "note": "",
                 "updated_at": case.get("last_updated_at") or case.get("detected_at"),
+                "recurrence_tracking": "fingerprint_verified" if case_fp else "deferred_to_phase2",
                 "history": [],
             },
         }
 
     merged = dict(case)
+    merged["occurrence_fingerprint"] = case_fp
     override_state = str(override.get("state") or "")
-    merged["state"] = override_state or merged.get("state")
-    merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
-    merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
-    merged["review"] = {
-        "state": merged.get("state"),
-        "owner": str(override.get("owner") or ""),
-        "note": str(override.get("note") or ""),
-        "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
-        "history": list(override.get("history") or []),
-    }
+
+    # Safe recurrence detection:
+    # Requires authoritative event identity / fingerprint comparison.
+    # Where Phase 1 lacks distinct occurrence IDs, do NOT claim reliable recurrence
+    # or fabricate occurrences; preserve visibility of unresolved critical conditions conservatively.
+    acknowledged_fp = override.get("occurrence_fingerprint")
+    sev = str(case.get("severity") or "").lower()
+
+    is_recurred = False
+    if override_state in {"dismissed", "resolved"} and sev in {"high", "medium"}:
+        if case_fp and acknowledged_fp and case_fp != acknowledged_fp:
+            is_recurred = True
+
+    if is_recurred:
+        merged["state"] = "detected"
+        merged["recurred"] = True
+        orig_title = str(case.get("title") or "")
+        if " (Recurred)" not in orig_title:
+            merged["title"] = f"{orig_title} (Recurred)"
+        merged["recommended_next_step"] = (
+            f"Incident recurred with new event evidence after prior {override_state}; re-investigate root cause and telemetry."
+        )
+        codes = list(merged.get("risk_reason_codes") or [])
+        if "incident_recurred" not in codes:
+            codes.append("incident_recurred")
+        merged["risk_reason_codes"] = codes
+        merged["last_updated_at"] = case.get("last_updated_at") or now_iso()
+        merged["review"] = {
+            "state": "detected",
+            "recurred": True,
+            "owner": str(override.get("owner") or ""),
+            "note": str(override.get("note") or ""),
+            "updated_at": merged["last_updated_at"],
+            "recurrence_tracking": "fingerprint_verified",
+            "history": list(override.get("history") or []),
+        }
+    else:
+        merged["state"] = override_state or merged.get("state")
+        merged["recurred"] = False
+        merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
+        merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
+        tracking_mode = "fingerprint_verified" if case_fp else "deferred_to_phase2"
+        merged["review"] = {
+            "state": merged.get("state"),
+            "owner": str(override.get("owner") or ""),
+            "note": str(override.get("note") or ""),
+            "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
+            "recurrence_tracking": tracking_mode,
+            "history": list(override.get("history") or []),
+        }
     return merged
 
 
@@ -1395,14 +1613,18 @@ async def _ops_case_rows(
     message_log: List[Dict[str, Any]],
     ai_degradation_cases: Optional[List[Dict[str, Any]]] = None,
     sponsor_inventory_cases: Optional[List[Dict[str, Any]]] = None,
+    provider_cases: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
 
-    submissions_coll = getattr(db, "submissions", None)
-    held_submissions = await submissions_coll.find(
-        {"status": {"$in": ["pending", "held"]}},
-        {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1, "confidence_score": 1, "verification_model": 1, "reason": 1, "duplicate": 1},
-    ).sort("created_at", -1).limit(50).to_list(50) if submissions_coll is not None and hasattr(submissions_coll, "find") else []
+    try:
+        submissions_coll = getattr(db, "submissions", None)
+        held_submissions = await submissions_coll.find(
+            {"status": {"$in": ["pending", "held"]}},
+            {"_id": 0, "id": 1, "name": 1, "status": 1, "created_at": 1, "confidence_score": 1, "verification_model": 1, "reason": 1, "duplicate": 1},
+        ).sort("created_at", -1).limit(50).to_list(50) if submissions_coll is not None and hasattr(submissions_coll, "find") else []
+    except Exception:
+        held_submissions = []
     for row in held_submissions:
         status = str(row.get("status") or "pending")
         severity = "high" if status == "held" else "medium"
@@ -1474,7 +1696,10 @@ async def _ops_case_rows(
             }
         )
 
+    DISCOVERY_BACKLOG_ATTENTION_THRESHOLD = int(os.environ.get("DISCOVERY_BACKLOG_ATTENTION_THRESHOLD", "50"))
     if int(discovery_summary.get("pending") or 0) > 0:
+        pending_count = int(discovery_summary.get("pending") or 0)
+        is_backlog = pending_count >= DISCOVERY_BACKLOG_ATTENTION_THRESHOLD
         cases.append(
             {
                 "case_id": "discovery:pending",
@@ -1483,19 +1708,20 @@ async def _ops_case_rows(
                 "workflow": "discovery intake",
                 "entity_type": "discovery_queue",
                 "entity_id": "pending",
-                "title": "Discovery queue awaiting review",
-                "summary": f"{int(discovery_summary.get('pending') or 0)} discovery candidates remain pending.",
-                "severity": "low",
-                "state": "detected",
+                "title": "Discovery queue awaiting review" if not is_backlog else f"Discovery queue backlog · {pending_count} pending",
+                "summary": f"{pending_count} discovery candidates remain pending.",
+                "severity": "medium" if is_backlog else "low",
+                "state": "detected" if is_backlog else "monitoring",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
                 "source_refs": [{"kind": "discovery_summary", "id": "pending"}],
-                "risk_reason_codes": ["discovery_pending"],
-                "recommended_next_step": "Review discovery backlog and confirm sources are still appropriate.",
+                "risk_reason_codes": ["discovery_backlog" if is_backlog else "discovery_pending"],
+                "recommended_next_step": "Review discovery backlog when expanding regional coverage." if not is_backlog else "Triage pending discovery items to prevent regional intake stall.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
-                    {"label": "Pending discovery items", "value": int(discovery_summary.get("pending") or 0)},
+                    {"label": "Pending discovery items", "value": pending_count},
+                    {"label": "Attention threshold", "value": DISCOVERY_BACKLOG_ATTENTION_THRESHOLD},
                     {"label": "Promoted", "value": int(discovery_summary.get("promoted") or 0)},
                     {"label": "Discarded", "value": int(discovery_summary.get("discarded") or 0)},
                 ],
@@ -1515,14 +1741,14 @@ async def _ops_case_rows(
                 "entity_id": "suppressed",
                 "title": "Delisted identities blocked from re-ingestion",
                 "summary": f"{int(discovery_summary.get('suppressed') or 0)} discovery candidates matched the delisting suppression register.",
-                "severity": "medium",
-                "state": "detected",
+                "severity": "low",
+                "state": "monitoring",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
                 "source_refs": [{"kind": "discovery_summary", "id": "suppressed"}],
                 "risk_reason_codes": ["discovery_delisted_identity_suppressed"],
-                "recommended_next_step": "Confirm suppression is expected; do not re-publish without technical-owner review.",
+                "recommended_next_step": "Automated suppression active; confirm suppression remains intended.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
                     {"label": "Suppressed discovery items", "value": int(discovery_summary.get("suppressed") or 0)},
@@ -1533,9 +1759,45 @@ async def _ops_case_rows(
             }
         )
 
+    # Workstream A: Aggregate serverless loops with missing execution owners (DF-029) into a single governance case
+    missing_owner_loops = [k for k, meta in loop_statuses.items() if str(meta.get("status") or "") == "missing_owner"]
+    if missing_owner_loops:
+        cases.append(
+            {
+                "case_id": "autonomy:missing_scheduled_owner",
+                "case_type": "loop_governance_case",
+                "canonical_user_type": "Autonomous system actor",
+                "workflow": "system activity",
+                "entity_type": "autonomy_scheduler",
+                "entity_id": "missing_scheduled_owner",
+                "title": f"Autonomy loops unowned · {len(missing_owner_loops)} serverless tasks need scheduler",
+                "summary": (
+                    f"Background daemons disabled on serverless runtime without configured external scheduler (DF-029). "
+                    f"Affects: {', '.join(sorted(missing_owner_loops))}."
+                ),
+                "severity": "low",
+                "state": "monitoring",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "architecture_constraint", "id": "DF-029"}],
+                "risk_reason_codes": ["autonomy_serverless_unowned", "DF-029"],
+                "recommended_next_step": "Configure Cloud Scheduler to invoke /api/internal/jobs/engine-tick on schedule (per DF-029).",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Affected tasks", "value": ", ".join(sorted(missing_owner_loops))},
+                    {"label": "Runtime mode", "value": "serverless (scaled to zero)"},
+                    {"label": "Architectural finding", "value": "DF-029"},
+                    {"label": "Endpoint ready", "value": "/api/internal/jobs/engine-tick"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
     for key, status_meta in loop_statuses.items():
         loop_status = str(status_meta.get("status") or "ok")
-        if loop_status == "ok":
+        if loop_status in {"ok", "disabled", "not_scheduled", "missing_owner", "maintenance_paused", "startup_pending"}:
             continue
         severity = "high" if loop_status == "escalate" else "medium"
         cases.append(
@@ -1547,12 +1809,13 @@ async def _ops_case_rows(
                 "entity_type": "loop",
                 "entity_id": key,
                 "title": f"{humanize_case_token(key)} needs review",
-                "summary": f"Loop status is {humanize_case_token(loop_status)}.",
+                "summary": status_meta.get("reason") or f"Loop status is {humanize_case_token(loop_status)}.",
                 "severity": severity,
                 "state": "detected",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
+                "occurrence_fingerprint": f"loop:{key}:{status_meta.get('status')}:{status_meta.get('execution_mode')}",
                 "source_refs": [{"kind": "loop_status", "id": key}],
                 "risk_reason_codes": [f"loop_{loop_status}"],
                 "recommended_next_step": "Inspect system activity and escalate if the loop stays stale.",
@@ -1560,6 +1823,8 @@ async def _ops_case_rows(
                 "detail_rows": [
                     {"label": "Loop", "value": key},
                     {"label": "Status", "value": loop_status},
+                    {"label": "Execution owner", "value": status_meta.get("execution_owner", "unknown")},
+                    {"label": "Execution mode", "value": status_meta.get("execution_mode", "unknown")},
                     {"label": "Age (seconds)", "value": status_meta.get("age_s")},
                     {"label": "Escalates after (seconds)", "value": status_meta.get("stale_after_s")},
                 ],
@@ -1819,8 +2084,9 @@ async def _ops_case_rows(
 
     for row in source_ingestion_state_rows:
         failures = int(row.get("consecutive_failures") or 0)
-        has_error = bool(row.get("last_error") or row.get("last_error_code"))
-        if failures <= 0 and not row.get("suppressed_until") and not has_error:
+        is_suppressed = bool(row.get("suppressed_until"))
+        has_error = bool(row.get("last_error") or row.get("last_error_code")) if failures > 0 else False
+        if failures <= 0 and not is_suppressed and not has_error:
             continue
         err_msg = str(row.get("last_error") or f"{row.get('source_url') or 'Source'} has {failures} consecutive failures.")
         risk_code = str(row.get("last_error_code") or "source_ingestion_failures")
@@ -1856,8 +2122,11 @@ async def _ops_case_rows(
         )
 
     for row in message_log:
-        if str(row.get("status") or "") in {"failed", "sent"}:
+        status = str(row.get("status") or "").lower()
+        if status in {"failed", "error", "bounced"}:
             cases.append(_build_message_case(row))
+
+    cases.extend(provider_cases or [])
 
     overrides = await _load_ops_case_state_map([str(case.get("case_id") or "") for case in cases if case.get("case_id")])
     cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
@@ -1880,29 +2149,193 @@ def _loop_interval_seconds() -> Dict[str, int]:
     }
 
 
+def bounded_grace_seconds(interval_s: int) -> int:
+    """Calculate bounded grace period based on loop cadence."""
+    if interval_s <= 0:
+        return 0
+    if interval_s <= 60:
+        return max(int(interval_s * 0.5), 30)
+    if interval_s <= 3600:
+        return min(max(int(interval_s * 0.25), 60), 900)
+    return min(max(int(interval_s * 0.1), 900), 3600)
+
+
 def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Dict[str, Any]:
     interval_s = int(_loop_interval_seconds().get(loop_key) or 0)
     last_run = str(loop.get("last_run") or "")
+    consecutive_failures = int(loop.get("consecutive_failures") or 0)
+    last_error = loop.get("last_error")
     try:
         last_dt = datetime.fromisoformat(last_run) if last_run else None
+        if last_dt and last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
     except Exception:  # noqa: BLE001
         last_dt = None
-    age_s = None
-    status = "warn"
-    if last_dt and interval_s > 0:
-        age_s = max(0, int((now_dt - last_dt).total_seconds()))
-        if age_s <= interval_s:
-            status = "ok"
-        elif age_s <= interval_s * 2:
-            status = "investigate"
+
+    # Priority 1: Real execution failures are never masked by serverless, maintenance, or disabled flags
+    if consecutive_failures > 0 or last_error:
+        status = "escalate" if consecutive_failures >= 3 else "investigate"
+        age_s = max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None
+        return {
+            "status": status,
+            "interval_s": interval_s,
+            "age_s": age_s,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s) if interval_s > 0 else None,
+            "execution_owner": "failing",
+            "execution_mode": "failing",
+            "reason": f"Loop failing: {last_error or f'{consecutive_failures} consecutive failures'}",
+        }
+
+    # Priority 2: Maintenance mode boundary
+    if os.environ.get("MAINTENANCE_MODE") == "1":
+        return {
+            "status": "maintenance_paused",
+            "interval_s": interval_s,
+            "age_s": max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None,
+            "stale_after_s": None,
+            "execution_owner": "maintenance",
+            "execution_mode": "maintenance_paused",
+            "reason": "Autonomy loops paused during active maintenance mode",
+        }
+
+    # Priority 3: Unknown cadence (unconfigured interval)
+    if interval_s <= 0:
+        return {
+            "status": "unknown_cadence",
+            "interval_s": 0,
+            "age_s": max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None,
+            "stale_after_s": None,
+            "execution_owner": "none",
+            "execution_mode": "unconfigured_cadence",
+            "reason": f"Loop '{loop_key}' has no configured cadence; interval unknown",
+        }
+
+    # Priority 4: Missing last_run boundary
+    if not last_dt:
+        is_serverless_disabled = (
+            os.environ.get("DISABLE_AUTONOMY") == "1"
+            or os.environ.get("AUTONOMY_LOOP_OWNER") == "none"
+        )
+        if is_serverless_disabled:
+            return {
+                "status": "missing_owner",
+                "interval_s": interval_s,
+                "age_s": None,
+                "stale_after_s": None,
+                "execution_owner": "none",
+                "execution_mode": "unowned_serverless",
+                "reason": "Serverless daemon disabled; no external scheduler configured (DF-029)",
+            }
+
+        # Check process startup grace for in-process daemon (within 60s of process start)
+        startup_elapsed = (now_dt - _PROCESS_START_DT).total_seconds()
+        if 0 <= startup_elapsed <= 60:
+            return {
+                "status": "startup_pending",
+                "interval_s": interval_s,
+                "age_s": None,
+                "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+                "execution_owner": "startup",
+                "execution_mode": "startup_grace",
+                "reason": f"Process started {int(startup_elapsed)}s ago; initial loop run pending",
+            }
+
+        return {
+            "status": "investigate",
+            "interval_s": interval_s,
+            "age_s": None,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+            "execution_owner": "in_process",
+            "execution_mode": "daemon_pending",
+            "reason": "In-process loop has not executed yet",
+        }
+
+    # Priority 5: Clock skew / future timestamp check
+    skew_s = (last_dt - now_dt).total_seconds()
+    if skew_s > 30:
+        return {
+            "status": "investigate",
+            "interval_s": interval_s,
+            "age_s": 0,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+            "execution_owner": "clock_skew",
+            "execution_mode": "clock_skew",
+            "reason": f"Loop timestamp is {int(skew_s)}s in the future (clock skew detected)",
+        }
+
+    age_s = max(0, int((now_dt - last_dt).total_seconds()))
+    grace_s = bounded_grace_seconds(interval_s)
+    stale_after_s = interval_s + grace_s
+    escalate_after_s = (interval_s * 2) + grace_s
+
+    # Priority 6: Serverless execution vs In-process daemon
+    is_serverless_disabled = (
+        os.environ.get("DISABLE_AUTONOMY") == "1"
+        or os.environ.get("AUTONOMY_LOOP_OWNER") == "none"
+    )
+
+    if is_serverless_disabled:
+        if age_s <= stale_after_s:
+            return {
+                "status": "ok",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler",
+                "reason": f"Executed via external scheduler within cadence ({age_s}s <= {stale_after_s}s)",
+            }
+        elif age_s <= escalate_after_s:
+            return {
+                "status": "investigate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler_delayed",
+                "reason": f"External scheduler run delayed ({age_s}s > {stale_after_s}s, grace {grace_s}s)",
+            }
         else:
-            status = "escalate"
-    return {
-        "status": status,
-        "interval_s": interval_s,
-        "age_s": age_s,
-        "stale_after_s": interval_s * 2 if interval_s > 0 else None,
-    }
+            return {
+                "status": "escalate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler_stale",
+                "reason": f"External scheduler run stale ({age_s}s > {escalate_after_s}s, interval {interval_s}s)",
+            }
+    else:
+        if age_s <= stale_after_s:
+            return {
+                "status": "ok",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon",
+                "reason": f"In-process daemon fresh ({age_s}s <= {stale_after_s}s)",
+            }
+        elif age_s <= escalate_after_s:
+            return {
+                "status": "investigate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon_delayed",
+                "reason": f"In-process daemon delayed ({age_s}s > {stale_after_s}s, grace {grace_s}s)",
+            }
+        else:
+            return {
+                "status": "escalate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon_stalled",
+                "reason": f"In-process daemon stalled ({age_s}s > {escalate_after_s}s)",
+            }
 
 
 def humanize_case_token(value: str) -> str:
@@ -2189,6 +2622,27 @@ async def _ensure_phase_transition_baseline(
     return [baseline]
 
 
+async def _read_phase_transition_decisions() -> List[Dict[str, Any]]:
+    coll = getattr(db, "phase_transition_decisions", None)
+    if coll is None:
+        return []
+    existing = await coll.find({}, {"_id": 0}).to_list(20)
+    if existing:
+        existing.sort(key=lambda row: str(row.get("decided_at") or ""), reverse=True)
+    return existing
+
+
+async def _get_read_only_phase_runtime_records() -> Dict[str, Any]:
+    phase_state = await _read_launch_phase_state()
+    readiness_snapshot = await _build_phase_readiness_snapshot(phase_state)
+    phase_decisions = await _read_phase_transition_decisions()
+    return {
+        "phase_state": phase_state,
+        "readiness_snapshot": readiness_snapshot,
+        "phase_decisions": phase_decisions,
+    }
+
+
 async def _refresh_phase_runtime_records() -> Dict[str, Any]:
     phase_state = await _get_or_create_launch_phase_state()
     readiness_snapshot = await _build_phase_readiness_snapshot(phase_state)
@@ -2406,6 +2860,74 @@ async def health() -> JSONResponse:
     )
 
 
+@api.get("/health/deep")
+async def health_deep() -> JSONResponse:
+    """Comprehensive deep runtime diagnostics probe for operators and automated monitoring.
+
+    Checks:
+    - Database connectivity and ping latency.
+    - Key collection accessibility (trainers, intros, match_events, outbox).
+    - AI service degradation circuit status.
+    - System state & maintenance mode status.
+    """
+    diagnostics: Dict[str, Any] = {
+        "ok": True,
+        "service": "dog-trainers-directory-match-engine",
+        "timestamp": now_iso(),
+        "checks": {},
+    }
+    status_code = 200
+
+    # 1. MongoDB connectivity & ping latency
+    start_t = time.perf_counter()
+    try:
+        await db.command("ping")
+        db_latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
+        diagnostics["checks"]["database"] = {"status": "available", "latency_ms": db_latency_ms}
+    except Exception as exc:
+        diagnostics["ok"] = False
+        status_code = 503
+        diagnostics["checks"]["database"] = {"status": "unavailable", "error": str(exc)}
+
+    # 2. Key collections accessibility
+    collection_checks = {}
+    for coll_name in ["trainers", "intros", "match_events", "outbox", "system_state"]:
+        try:
+            coll = getattr(db, coll_name, None)
+            if coll is not None:
+                cnt = await coll.count_documents({})
+                collection_checks[coll_name] = {"accessible": True, "count": cnt}
+            else:
+                collection_checks[coll_name] = {"accessible": False, "reason": "not_mounted"}
+        except Exception as exc:
+            collection_checks[coll_name] = {"accessible": False, "error": str(exc)}
+    diagnostics["checks"]["collections"] = collection_checks
+
+    # 3. AI Service circuit status
+    try:
+        degradation_events = await ai_service.get_degradation_events(db=db)
+        circuit_open = len(degradation_events) > 0
+        diagnostics["checks"]["ai_circuit"] = {
+            "status": "degraded" if circuit_open else "nominal",
+            "active_degradation_events": len(degradation_events),
+        }
+    except Exception as exc:
+        diagnostics["checks"]["ai_circuit"] = {"status": "unknown", "error": str(exc)}
+
+    # 4. Maintenance mode status
+    try:
+        maint_state = await db.system_state.find_one({"key": "maintenance_mode"}, {"_id": 0}) or {}
+        diagnostics["checks"]["maintenance_mode"] = {
+            "active": bool(maint_state.get("active", False)),
+            "message": maint_state.get("message", ""),
+            "updated_at": maint_state.get("updated_at"),
+        }
+    except Exception as exc:
+        diagnostics["checks"]["maintenance_mode"] = {"status": "unknown", "error": str(exc)}
+
+    return JSONResponse(status_code=status_code, content=diagnostics)
+
+
 @app.get("/")
 async def app_root() -> Dict[str, Any]:
     return await root()
@@ -2414,6 +2936,11 @@ async def app_root() -> Dict[str, Any]:
 @app.get("/health")
 async def app_health() -> JSONResponse:
     return await health()
+
+
+@app.get("/health/deep")
+async def app_health_deep() -> JSONResponse:
+    return await health_deep()
 
 
 @api.post("/internal/jobs/pro-trial-warnings")
@@ -2430,6 +2957,211 @@ async def run_pro_trial_warning_job(
         return f"{base}/trainer/billing?{urlencode({'trainerId': trainer_id, 'token': token})}"
 
     return await pro_trials.process_expiry_warnings(db, billing_url_factory=billing_url)
+
+
+class TrainerIngestJobRequest(BaseModel):
+    source_urls: Optional[List[str]] = Field(default=None, description="Optional custom source URLs to ingest.")
+    batch_size: Optional[int] = Field(default=10, description="Max batch candidates to process.")
+    run_guardian: Optional[bool] = Field(default=True, description="Whether to run Supervisory Guardian after ingestion.")
+    dry_run: bool = Field(default=False, description="Verify authenticated scheduler delivery without fetching, mutating trainer data, or running the guardian.")
+
+
+async def _execute_trainer_ingest_pipeline(
+    payload: Optional[TrainerIngestJobRequest] = None,
+    trigger: str = "cloud_scheduler",
+) -> Dict[str, Any]:
+    """Shared execution coordinator for Engine 1 (Ingestion) and Engine 2 (Supervisory Guardian).
+
+    Persists comprehensive run metadata into db.ingestion_runs for full /ops auditability.
+    """
+    source_urls = payload.source_urls if payload else None
+    batch_size = payload.batch_size if payload and payload.batch_size else 10
+    run_guardian = payload.run_guardian if payload and payload.run_guardian is not None else True
+    dry_run = bool(payload.dry_run) if payload else False
+    run_id = f"ingest_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
+    started_at = datetime.now(timezone.utc).isoformat()
+
+    try:
+        # A scheduler dry run proves the real OIDC delivery path and produces a
+        # bounded Ops record without silently crawling seed URLs, changing
+        # trainer records, or invoking providers. It is intentionally explicit
+        # so the normal daily scheduler cannot become a no-op by accident.
+        if dry_run:
+            completed_at = datetime.now(timezone.utc).isoformat()
+            result = {
+                "id": run_id,
+                "ok": True,
+                "dry_run": True,
+                "trigger": trigger,
+                "executed_at": started_at,
+                "completed_at": completed_at,
+                "ingestion": {
+                    "ok": True,
+                    "dry_run": True,
+                    "total_resolved": 0,
+                    "total_processed": 0,
+                    "reason_codes": ["scheduler_delivery_verified_no_mutation"],
+                },
+                "guardian": None,
+            }
+            if db is not None:
+                ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+                if ingestion_runs_coll is not None:
+                    await ingestion_runs_coll.insert_one(dict(result))
+            return result
+
+        # 1. Run Engine 1: Batch Ingestion Orchestrator
+        ingestion_summary = await ingestion_manager.run_batch_ingestion_pipeline(
+            source_urls=source_urls,
+            db=db,
+            batch_size=batch_size,
+        )
+
+        # 2. Run Engine 2: Supervisory Verification Guardian
+        guardian_summary = None
+        if run_guardian:
+            guardian_summary = await pipeline_guardian.audit_corpus_integrity(db, auto_remediate=True)
+
+        completed_at = datetime.now(timezone.utc).isoformat()
+        result = {
+            "id": run_id,
+            "ok": True,
+            "trigger": trigger,
+            "executed_at": started_at,
+            "completed_at": completed_at,
+            "ingestion": ingestion_summary,
+            "guardian": guardian_summary,
+        }
+
+        if db is not None:
+            ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+            if ingestion_runs_coll is not None:
+                try:
+                    await ingestion_runs_coll.insert_one(dict(result))
+                except Exception as exc:
+                    logger.warning("Failed writing to db.ingestion_runs: %s", exc)
+
+        return result
+    except Exception as exc:
+        logger.exception("Critical failure in trainer ingest pipeline (trigger=%s): %s", trigger, exc)
+        completed_at = datetime.now(timezone.utc).isoformat()
+        failure_record = {
+            "id": run_id,
+            "ok": False,
+            "trigger": trigger,
+            "executed_at": started_at,
+            "completed_at": completed_at,
+            "error": str(exc),
+        }
+        if db is not None:
+            ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+            if ingestion_runs_coll is not None:
+                try:
+                    await ingestion_runs_coll.insert_one(dict(failure_record))
+                except Exception:
+                    pass
+            coll = getattr(db, "source_ingestion_state", None)
+            if coll is not None:
+                try:
+                    await coll.update_one(
+                        {"source_url": "system_job_failure"},
+                        {
+                            "$set": {
+                                "source_url": "system_job_failure",
+                                "last_checked_at": completed_at,
+                                "last_error": str(exc),
+                                "last_error_code": "internal_job_exception",
+                                "consecutive_failures": 1,
+                            }
+                        },
+                        upsert=True,
+                    )
+                except Exception:
+                    pass
+        raise HTTPException(status_code=500, detail=f"Trainer ingestion failed: {exc}")
+
+
+@api.post("/internal/jobs/trainer-ingest")
+async def run_trainer_ingest_job(
+    payload: Optional[TrainerIngestJobRequest] = None,
+    authorization: str = Header(default="", alias="Authorization"),
+) -> Dict[str, Any]:
+    """Authenticated, serverless execution boundary for automated trainer acquisition.
+
+    Guarded by Google Cloud Scheduler OIDC ID Token authentication.
+    Executes Engine 1 (Ingestion Orchestrator) followed by Engine 2 (Supervisory Guardian).
+    """
+    _require_cloud_scheduler_oidc(authorization)
+    return await _execute_trainer_ingest_pipeline(payload=payload, trigger="cloud_scheduler")
+
+
+@api.post("/internal/jobs/engine-tick")
+async def run_engine_tick_job(
+    authorization: str = Header(default="", alias="Authorization"),
+) -> Dict[str, Any]:
+    """Authenticated, serverless execution boundary for autonomous engine loops.
+
+    Solves Cloud Run scale-to-zero background task starvation (DF-006).
+    Allows external Cloud Scheduler or monitoring ping to trigger a deterministic
+    batch execution of autonomous loops safely.
+    """
+    _require_cloud_scheduler_oidc(authorization)
+    results: Dict[str, Any] = {}
+
+    # 1. Ranking calculation
+    try:
+        from services.engine import recompute_ranking
+        ranking_res = await recompute_ranking(db)
+        results["ranking"] = {"status": "ok", "result": ranking_res}
+    except Exception as exc:
+        results["ranking"] = {"status": "error", "error": str(exc)}
+
+    # 2. Inferred conversion promotion
+    try:
+        from services.engine import promote_inferred_conversions
+        infer_res = await promote_inferred_conversions(db)
+        results["inference"] = {"status": "ok", "result": infer_res}
+    except Exception as exc:
+        results["inference"] = {"status": "error", "error": str(exc)}
+
+    # 3. Health check & anomaly state
+    try:
+        from services.engine import update_health
+        health_res = await update_health(db)
+        results["health"] = {"status": "ok", "result": health_res}
+    except Exception as exc:
+        results["health"] = {"status": "error", "error": str(exc)}
+
+    # 4. Sponsor inventory expiry release
+    try:
+        from services.engine import maintain_sponsor_inventory
+        sponsor_res = await maintain_sponsor_inventory(db)
+        results["sponsor_inventory"] = {"status": "ok", "result": sponsor_res}
+    except Exception as exc:
+        results["sponsor_inventory"] = {"status": "error", "error": str(exc)}
+
+    # 5. Growth nurture cohort updates
+    try:
+        from services.engine import run_growth_nurture
+        nurture_res = await run_growth_nurture(db)
+        results["nurture"] = {"status": "ok", "result": nurture_res}
+    except Exception as exc:
+        results["nurture"] = {"status": "error", "error": str(exc)}
+
+    # 6. Reactivation lifecycle routing
+    try:
+        from services.engine import run_reactivation_routing
+        reactivation_res = await run_reactivation_routing(db)
+        results["reactivation_route"] = {"status": "ok", "result": reactivation_res}
+    except Exception as exc:
+        results["reactivation_route"] = {"status": "error", "error": str(exc)}
+
+    return {
+        "ok": True,
+        "job": "engine-tick",
+        "results": results,
+        "ts": now_iso(),
+    }
 
 
 @api.get("/config")
@@ -2536,65 +3268,790 @@ def _unpublished_seo_response(*, slug: str, suburb: str, reason: str) -> Dict[st
     }
 
 
-@api.post("/match")
-async def instant_match(payload: InstantMatchIn) -> Dict[str, Any]:
-    """Single input → 3 trainers. The only product surface for end users."""
-    if not payload.consent_match_processing:
-        raise HTTPException(status_code=400, detail="Consent required to process match request.")
+def _eligible_trainer_query_for_suburb(suburb: str) -> Dict[str, Any]:
+    """Return the one eligibility query shared by public SEO and protected ops."""
+    escaped_suburb = re.escape(suburb)
+    return {
+        "published": True,
+        "region": {"$in": ACTIVE_REGIONS},
+        "$or": [
+            {"suburb": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+            {"serviced_suburbs": {"$regex": f"^{escaped_suburb}$", "$options": "i"}},
+        ],
+    }
 
-    pool_query: Dict[str, Any] = {"published": True, "region": {"$in": ACTIVE_REGIONS}}
-    if payload.suburb:
-        pool_query["suburb"] = {"$regex": f"^{payload.suburb}$", "$options": "i"}
-    pool = await db.trainers.find(pool_query, {"_id": 0}).to_list(60)
-    if not pool:
-        pool = await db.trainers.find({"published": True, "region": {"$in": ACTIVE_REGIONS}}, {"_id": 0}).to_list(60)
 
-    matches = await ai_service.match_trainers(payload.description, pool)
-    by_id = {t["id"]: t for t in pool}
+def _seo_page_word_count(page: Dict[str, Any]) -> int:
+    """Recalculate content quality from stored copy rather than trusting a flag."""
+    copy = page.get("copy")
+    return _seo_word_count(copy) if isinstance(copy, dict) else 0
 
-    selected: List[Dict[str, Any]] = []
-    for m in matches:
-        t = by_id.get(m["trainer_id"])
-        if not t:
-            continue
-        contact_ready = _has_contact_channel(t)
-        if CONTACT_READY_POLICY == "block" and not contact_ready:
-            continue
-        policy_penalty = 0.0
-        if CONTACT_READY_POLICY == "rerank" and not contact_ready:
-            policy_penalty += 0.15
-        # outcome_score already on the doc; AI provides relevance reason.
-        selected.append(
+
+def _canonical_suburb_name_index() -> Dict[str, Dict[str, Any]]:
+    return {
+        str(row.get("suburb_name") or "").strip().lower(): row
+        for row in suburb_catalogue.canonical_suburbs()
+        if str(row.get("suburb_name") or "").strip()
+    }
+
+
+async def _ops_seo_indexation_summary() -> Dict[str, Any]:
+    """Read-only SEO inventory for the protected operations console.
+
+    This deliberately does not generate copy, change stored SEO records, or use
+    Search Console. It exposes whether existing records still satisfy the same
+    canonical/supply/content contract used by the public route.
+    """
+    minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
+    minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    canonical_rows = suburb_catalogue.canonical_suburbs()
+    canonical_by_slug = {
+        str(row.get("slug") or ""): row
+        for row in canonical_rows
+        if str(row.get("slug") or "")
+    }
+    canonical_by_name = _canonical_suburb_name_index()
+
+    trainers_coll = getattr(db, "trainers", None)
+    published_trainers = (
+        await trainers_coll.find(
+            {"published": True, "region": {"$in": ACTIVE_REGIONS}},
+            {"_id": 0, "id": 1, "suburb": 1, "serviced_suburbs": 1},
+        ).to_list(5000)
+        if trainers_coll is not None
+        else []
+    )
+    eligible_by_slug: Dict[str, int] = {slug: 0 for slug in canonical_by_slug}
+    for trainer in published_trainers:
+        matched_slugs = set()
+        raw_localities = [trainer.get("suburb")]
+        serviced_suburbs = trainer.get("serviced_suburbs")
+        if isinstance(serviced_suburbs, list):
+            raw_localities.extend(serviced_suburbs)
+        for locality in raw_localities:
+            canonical = canonical_by_name.get(str(locality or "").strip().lower())
+            if canonical:
+                matched_slugs.add(str(canonical.get("slug") or ""))
+        for matched_slug in matched_slugs:
+            if matched_slug in eligible_by_slug:
+                eligible_by_slug[matched_slug] += 1
+
+    pages_coll = getattr(db, "seo_pages", None)
+    stored_records = int(await pages_coll.count_documents({})) if pages_coll is not None else 0
+    inventory_limit = 2000
+    page_rows = (
+        await pages_coll.find(
+            {},
             {
-                **t,
-                "match_score": m["score"],
-                "match_reasoning": m["reasoning"],
-                "contact_ready": contact_ready,
-                "billable_ready": True,
-                "_policy_penalty": policy_penalty,
+                "_id": 0,
+                "id": 1,
+                "slug": 1,
+                "suburb": 1,
+                "publication_status": 1,
+                "meta_robots": 1,
+                "copy": 1,
+                "content_word_count": 1,
+                "generated_at": 1,
+            },
+        ).to_list(inventory_limit)
+        if pages_coll is not None
+        else []
+    )
+    pages_by_slug: Dict[str, List[Dict[str, Any]]] = {}
+    for page in page_rows:
+        pages_by_slug.setdefault(str(page.get("slug") or ""), []).append(page)
+
+    rows: List[Dict[str, Any]] = []
+    indexable_now = 0
+    review_required = 0
+    canonical_records = 0
+    noncanonical_records = 0
+    for slug, canonical in canonical_by_slug.items():
+        pages = pages_by_slug.pop(slug, [])
+        if pages:
+            canonical_records += len(pages)
+        page = pages[0] if pages else None
+        eligible_count = int(eligible_by_slug.get(slug) or 0)
+        word_count = _seo_page_word_count(page) if page else 0
+        reasons: List[str] = []
+        if minimum_trainers is None or minimum_words is None:
+            reasons.append("thresholds_not_configured")
+        elif eligible_count < minimum_trainers:
+            reasons.append("insufficient_eligible_supply")
+        if page is None:
+            reasons.append("no_stored_page")
+        elif minimum_words is not None and word_count < minimum_words:
+            reasons.append("insufficient_content_quality")
+        elif str(page.get("publication_status") or "") != "published":
+            reasons.append("stored_page_not_published")
+        elif str(page.get("meta_robots") or "") != "index,follow":
+            reasons.append("stored_page_not_indexable")
+        if len(pages) > 1:
+            reasons.append("duplicate_stored_pages")
+
+        indexable = bool(page) and not reasons
+        if indexable:
+            indexable_now += 1
+        elif page:
+            review_required += 1
+        rows.append(
+            {
+                "slug": slug,
+                "suburb": str(canonical.get("suburb_name") or ""),
+                "eligible_trainer_count": eligible_count,
+                "content_word_count": word_count if page else None,
+                # A stored legacy record with no publication field is not the
+                # same thing as an absent record. Keep it visible to Ops as an
+                # unconfigured record requiring review.
+                "publication_status": str(page.get("publication_status") or "unconfigured") if page else "not_stored",
+                "meta_robots": str(page.get("meta_robots") or "noindex,follow") if page else "noindex,follow",
+                "indexable_now": indexable,
+                "reason_codes": reasons,
+                "generated_at": page.get("generated_at") if page else None,
             }
         )
 
-    # Fit remains the primary score. Commercial tier is consulted only for
-    # trainers inside the five-percentage-point comparable-fit band.
-    selected = _sort_diagnostic_matches(selected)
-    for t in selected:
-        t.pop("_policy_penalty", None)
-    selected = await _decorate_with_pricing(selected[:3])
+    for slug, pages in pages_by_slug.items():
+        noncanonical_records += len(pages)
+        page = pages[0]
+        review_required += 1
+        rows.append(
+            {
+                "slug": slug or "(missing)",
+                "suburb": str(page.get("suburb") or ""),
+                "eligible_trainer_count": None,
+                "content_word_count": _seo_page_word_count(page),
+                "publication_status": str(page.get("publication_status") or "unknown"),
+                "meta_robots": str(page.get("meta_robots") or "unknown"),
+                "indexable_now": False,
+                "reason_codes": ["noncanonical_stored_page"],
+                "generated_at": page.get("generated_at"),
+            }
+        )
 
+    rows.sort(key=lambda row: (bool(row.get("indexable_now")), str(row.get("suburb") or "").lower()))
+    return {
+        "status": "ready" if minimum_trainers is not None and minimum_words is not None else "thresholds_not_configured",
+        "thresholds": {
+            "minimum_published_trainers": minimum_trainers,
+            "minimum_content_words": minimum_words,
+        },
+        "canonical_suburb_count": len(canonical_rows),
+        "stored_record_count": stored_records,
+        "canonical_stored_record_count": canonical_records,
+        "noncanonical_stored_record_count": noncanonical_records,
+        "indexable_now_count": indexable_now,
+        "review_required_count": review_required,
+        "inventory_truncated": stored_records > len(page_rows),
+        "rows": rows,
+    }
+
+
+@api.post("/match")
+async def instant_match(
+    payload: Union[matching_contract_v2.MatchRequestIn, InstantMatchIn],
+    request: Request = None,
+    response: Response = None,
+) -> Dict[str, Any]:
+    """Owner-to-Trainer Matching Endpoint.
+
+    Governance (Decision Contract v2, CDR-018..024, DF-018, DF-019, DF-022, DF-026):
+    - Validates versioned request schema (MatchRequestIn).
+    - Rate limits by non-reversible IP hash (10 attempts / 10 min, 30s burst).
+    - Resolves canonical locality before querying.
+    - Pre-AI triage intercepts emergencies and clarifies unresolved concerns.
+    - Enforces fail-closed match-ready capability projections (build_match_ready_projection).
+    - Evaluates deterministic eligibility and thin supply expansion (local -> expanded).
+    - Issues opaque, single-use/expiring context token (stored hashed in db.match_contexts).
+    - Persists sanitised match event with zero PII and zero raw behavioural text.
+    - Retains 30-day lifecycle metadata.
+    """
+    # 1. Rate limiting by IP-derived non-reversible key
+    client_ip = ""
+    if request:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        elif request.client and request.client.host:
+            client_ip = request.client.host
+
+    if client_ip:
+        allowed, limit_reason = matching_contract_v2.match_rate_limiter.check_limit(client_ip)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded: {limit_reason}. Please wait before submitting another match request.",
+            )
+        matching_contract_v2.match_rate_limiter.record_attempt(client_ip)
+
+    # 2. Contract normalization and strict consent check
+    if isinstance(payload, InstantMatchIn):
+        raise HTTPException(
+            status_code=400,
+            detail="Legacy two-field match requests are deprecated and rejected. Ordinary matching requires a structured MatchRequestIn with dog_age_months, primary_concerns, service_format, method_preference, and explicit consent.",
+        )
+    req = payload
+    if not (req.consent.match_processing and req.consent.terms):
+        raise HTTPException(status_code=400, detail="Consent required to process match request.")
+    campaign = getattr(req, "campaign", "") or ""
+    source = getattr(req, "source", "") or ""
+    is_legacy = False
+
+    # 3. Pre-AI Emergency Triage (evaluated first so emergency/urgent requests are never blocked by locality syntax)
     match_id = new_id()
-    await db.match_events.insert_one(
-        {
-            "id": match_id,
-            "description": payload.description,
-            "suburb": payload.suburb,
-            "campaign": (payload.campaign or "").strip(),
-            "source": (payload.source or "").strip(),
-            "result_ids": [t["id"] for t in selected],
-            "created_at": now_iso(),
-        }
+    now_dt = datetime.now(timezone.utc)
+    expires_dt = now_dt + timedelta(days=matching_contract_v2.RETENTION_PERIOD_DAYS)
+
+    triage_state = matching_contract_v2.classify_pre_ai_triage(req.primary_concerns, req.behaviour_description)
+    if triage_state in {
+        matching_contract_v2.DecisionState.IMMEDIATE_HUMAN_DANGER,
+        matching_contract_v2.DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT,
+    }:
+        loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
+        canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode) if loc_res.get("valid") else req.suburb_or_postcode
+        triage_resp = matching_contract_v2.DecisionResponseV2(
+            decision_state=triage_state,
+            search_scope=matching_contract_v2.SearchScope.LOCAL,
+            candidates=[],
+            reason_codes=[triage_state.value],
+        )
+        if hasattr(db, "match_events"):
+            await db.match_events.insert_one(
+                {
+                    "id": match_id,
+                    "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+                    "decision_state": triage_state.value,
+                    "search_scope": matching_contract_v2.SearchScope.LOCAL.value,
+                    "reason_codes": [triage_state.value],
+                    "result_ids": [],
+                    "locality": canonical_suburb,
+                    "suburb_or_postcode": req.suburb_or_postcode,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "consent": req.consent.model_dump(),
+                    "campaign": campaign,
+                    "source": source,
+                    "context_token_hash": None,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt,
+                }
+            )
+        out = triage_resp.model_dump()
+        out["match_id"] = match_id
+        out["context_token"] = None
+        out["matches"] = []
+        if triage_state == matching_contract_v2.DecisionState.IMMEDIATE_HUMAN_DANGER:
+            out["emergency_notice"] = urgent_providers_service.TRIPLE_ZERO_VICTORIA_NOTICE
+        elif triage_state == matching_contract_v2.DecisionState.URGENT_ANIMAL_HEALTH_SUPPORT:
+            urgent_docs = await urgent_providers_service.get_active_urgent_providers(
+                db, category="urgent_veterinary_care", suburb=canonical_suburb
+            )
+            out["urgent_providers"] = urgent_docs
+            out["coverage_state"] = "local_coverage" if urgent_docs else "no_local_coverage"
+            out["coverage_notice"] = (
+                "DTD has no current local listing for this area."
+                if not urgent_docs
+                else None
+            )
+            out["coverage_disclosure"] = (
+                "Local urgent veterinary care entries are verified against official provider pages. "
+                "DTD does not claim Melbourne-wide emergency coverage. In an emergency involving human "
+                "safety or active dog attack, call Triple Zero (000)."
+            )
+            out["veterinary_behaviourist_status"] = (
+                "No verified veterinary behaviourist listing currently registered with direct official evidence "
+                "and active VPRBV registration."
+            )
+        return out
+
+    # 4. Canonical Locality Resolution (for standard matchmaking)
+    loc_res = matching_contract_v2.resolve_canonical_locality(req.suburb_or_postcode)
+    if not loc_res["valid"]:
+        raw_reason = loc_res.get("reason", "invalid_locality")
+        reason = "ambiguous_postcode" if raw_reason == "ambiguous_postcode" else "invalid_locality"
+        resp_clarification = matching_contract_v2.DecisionResponseV2(
+            decision_state=matching_contract_v2.DecisionState.NEEDS_CLARIFICATION,
+            search_scope=matching_contract_v2.SearchScope.LOCAL,
+            candidates=[],
+            reason_codes=[matching_contract_v2.DecisionState.NEEDS_CLARIFICATION.value, reason],
+        )
+        out = resp_clarification.model_dump()
+        out["match_id"] = match_id
+        out["context_token"] = None
+        out["matches"] = []
+        return out
+
+    canonical_suburb = loc_res.get("canonical_name", req.suburb_or_postcode)
+
+    # 5. Non-emergency clarification triage (e.g. other/unsure concerns)
+    if triage_state == matching_contract_v2.DecisionState.NEEDS_CLARIFICATION:
+        triage_resp = matching_contract_v2.DecisionResponseV2(
+            decision_state=triage_state,
+            search_scope=matching_contract_v2.SearchScope.LOCAL,
+            candidates=[],
+            reason_codes=[triage_state.value],
+        )
+        if hasattr(db, "match_events"):
+            await db.match_events.insert_one(
+                {
+                    "id": match_id,
+                    "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+                    "decision_state": triage_state.value,
+                    "search_scope": matching_contract_v2.SearchScope.LOCAL.value,
+                    "reason_codes": [triage_state.value],
+                    "result_ids": [],
+                    "locality": canonical_suburb,
+                    "suburb_or_postcode": req.suburb_or_postcode,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "consent": req.consent.model_dump(),
+                    "campaign": campaign,
+                    "source": source,
+                    "context_token_hash": None,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt,
+                }
+            )
+        out = triage_resp.model_dump()
+        out["match_id"] = match_id
+        out["context_token"] = None
+        out["matches"] = []
+        out["clarification_notice"] = (
+            "We need a bit more specific information to find a safe and reliable match. "
+            "Please select specific behavioural concerns from the options above."
+        )
+        return out
+
+    # 5. Fetch candidate pool & build match-ready capability projections
+    pool_docs = await db.trainers.find(
+        {"published": True, "region": {"$in": ACTIVE_REGIONS}},
+        {"_id": 0},
+    ).to_list(100)
+
+    candidate_pool: List[Dict[str, Any]] = []
+    for doc in pool_docs:
+        # MP-001: Always rebuild match-ready projection dynamically from source doc
+        # at query time. Never trust a stored projection dictionary which bypasses
+        # confirmation age and invalidation checks.
+        proj = trainer_quality.build_match_ready_projection(doc)
+        # Exclude trainers who fail closed on capability/statutory/dispute gates
+        # Never fabricate capability or eligibility for unconfirmed profiles
+        if not proj.get("match_eligible"):
+            continue
+        proj["tier"] = doc.get("tier", "unclaimed")
+        candidate_pool.append(proj)
+
+    # 6. Execute matching with AI adapter & deterministic fallback wrapper (Contract v2 Section 3, 4, 5)
+    ai_adapter = globals().get("matching_ai_adapter") or matching_contract_v2.get_default_ai_adapter()
+    decision_resp = await matching_contract_v2.execute_matching_with_adapter_async(
+        req, candidate_pool, ai_adapter, triage_state=triage_state, db=db
     )
-    return {"match_id": match_id, "matches": [_public_trainer_payload(t, include_match=True) for t in selected]}
+
+    # 7. Context Token & Persistence (issued only when results exist for profile handoff)
+    has_results_for_handoff = len(decision_resp.candidates) > 0
+    raw_token = None
+    token_hash = None
+
+    if has_results_for_handoff:
+        raw_token, token_hash = matching_contract_v2.generate_match_context_token()
+        if hasattr(db, "match_contexts"):
+            await db.match_contexts.insert_one(
+                {
+                    "token_hash": token_hash,
+                    "match_id": match_id,
+                    "suburb_or_postcode": canonical_suburb,
+                    "dog_age_months": req.dog_age_months,
+                    "primary_concerns": req.primary_concerns,
+                    "service_format": req.service_format,
+                    "method_preference": req.method_preference,
+                    "created_at": now_dt.isoformat(),
+                    "expires_at": expires_dt,
+                }
+            )
+
+    # 8. Persist sanitised match event in db.match_events (ZERO raw description or PII)
+    if hasattr(db, "match_events"):
+        await db.match_events.insert_one(
+            {
+                "id": match_id,
+                "policy_version": getattr(req, "policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+                "decision_state": decision_resp.decision_state,
+                "degraded": getattr(decision_resp, "degraded", False),
+                "search_scope": decision_resp.search_scope,
+                "reason_codes": [r if isinstance(r, str) else r.value for r in decision_resp.reason_codes],
+                "result_ids": [c.trainer_id for c in decision_resp.candidates],
+                "presentation_order": [c.trainer_id for c in decision_resp.candidates],
+                "candidate_fit_scores": {
+                    c.trainer_id: c.match_score for c in decision_resp.candidates if c.match_score is not None
+                },
+                "locality": canonical_suburb,
+                "suburb_or_postcode": req.suburb_or_postcode,
+                "dog_age_months": req.dog_age_months,
+                "primary_concerns": req.primary_concerns,
+                "service_format": req.service_format,
+                "method_preference": req.method_preference,
+                "consent": req.consent.model_dump(),
+                "campaign": campaign,
+                "source": source,
+                "context_token_hash": token_hash,
+                "created_at": now_dt.isoformat(),
+                "expires_at": expires_dt,
+            }
+        )
+
+    # 9. Format public response: strictly exclude raw fit scores and commercial tiers
+    cand_by_id = {t["id"]: t for t in pool_docs}
+    out = decision_resp.model_dump()
+    out["match_id"] = match_id
+    out["context_token"] = raw_token
+
+    # Exclude candidates with missing display names (never use "Verified Trainer")
+    valid_candidates = []
+    valid_matches = []
+    for c in decision_resp.candidates:
+        cand_doc = cand_by_id.get(c.trainer_id) or {}
+        display_name = (cand_doc.get("name") or "").strip()
+        if not display_name:
+            continue  # Exclude candidate without genuine display name
+
+        scope_val = c.search_scope.value if hasattr(c.search_scope, "value") else str(c.search_scope)
+        expanded_disclosure = "Servicing across Greater Melbourne" if scope_val == "expanded" else None
+
+        card_public = {
+            "trainer_id": c.trainer_id,
+            "name": display_name,
+            "locality": cand_doc.get("suburb", ""),
+            "service_formats": list(cand_doc.get("service_formats") or []),
+            "explanation": c.explanation,
+            "search_scope": scope_val,
+            "expanded_disclosure": expanded_disclosure,
+            "reason_codes": [r if isinstance(r, str) else r.value for r in c.reason_codes],
+        }
+        valid_candidates.append(card_public)
+        valid_matches.append({
+            "id": c.trainer_id,
+            "name": display_name,
+            "suburb": cand_doc.get("suburb", ""),
+            "service_formats": list(cand_doc.get("service_formats") or []),
+            "match_reasoning": c.explanation,
+            "search_scope": scope_val,
+            "expanded_disclosure": expanded_disclosure,
+            "reason_codes": [r if isinstance(r, str) else r.value for r in c.reason_codes],
+        })
+
+    out["candidates"] = valid_candidates
+    out["matches"] = valid_matches
+
+    if not valid_candidates and decision_resp.candidates:
+        out["decision_state"] = matching_contract_v2.DecisionState.NO_CONFIRMED_MATCH.value
+        out["reason_codes"] = ["no_qualified_candidates"]
+        out["context_token"] = None
+        raw_token = None
+
+    if has_results_for_handoff and response and raw_token:
+        response.headers["X-Match-Context-Token"] = raw_token
+
+    if triage_state == matching_contract_v2.DecisionState.SERIOUS_BEHAVIOURAL_SUPPORT:
+        out["support_context"] = (
+            "Specialist pathway active: results restricted to trainers with declared "
+            "aggression and behavioural modification competencies."
+        )
+
+    return out
+
+
+@api.get("/match/context")
+async def get_match_context(
+    request: Request,
+    x_match_context_token: Optional[str] = Header(default=None, alias="X-Match-Context-Token"),
+) -> Dict[str, Any]:
+    """Retrieve sanitised match context using the opaque session token.
+
+    Governance (Decision Contract v2 Section 2, DF-018, DF-022):
+    - Context retrieval is header-based ONLY (X-Match-Context-Token).
+    - Query parameter tokens (?token=...) are strictly forbidden and rejected.
+    - Context token is stored hashed (SHA-256); raw token is never persisted.
+    - Returns only bounded, non-sensitive request parameters.
+    - Zero behavioural description or owner PII returned.
+    - Validates 30-day expiration TTL.
+    """
+    if "token" in request.query_params or "context_token" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail="Query parameter authentication is forbidden. Provide token via X-Match-Context-Token header.",
+        )
+
+    raw_token = x_match_context_token if isinstance(x_match_context_token, str) else None
+    if not raw_token:
+        raw_token = request.headers.get("x-match-context-token")
+    if not raw_token or not raw_token.strip():
+        raise HTTPException(status_code=401, detail="Missing X-Match-Context-Token header")
+
+    token_hash = matching_contract_v2.hash_match_context_token(raw_token.strip())
+    ctx = await db.match_contexts.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Match context not found or invalid")
+
+    # Check expiration
+    if _is_expired(ctx.get("expires_at")):
+        raise HTTPException(status_code=410, detail="Match context expired")
+
+    return {
+        "match_id": ctx.get("match_id"),
+        "suburb_or_postcode": ctx.get("suburb_or_postcode"),
+        "dog_age_months": ctx.get("dog_age_months"),
+        "primary_concerns": ctx.get("primary_concerns"),
+        "service_format": ctx.get("service_format"),
+        "method_preference": ctx.get("method_preference"),
+        "created_at": ctx.get("created_at"),
+    }
+
+
+def map_notification_delivery_state(
+    initial_delivery_state: str,
+    notif_meta: Optional[Dict[str, Any]],
+) -> Tuple[str, Dict[str, Any]]:
+    """Map notification dispatch outcome to truthful delivery state.
+
+    Governance Invariants (AGENTS.md, M5, M8, MP-002R):
+    - 'delivered' requires actual provider acceptance (status == 'sent').
+    - Missing provider configuration (no_resend_api_key) is strictly 'retryable_failure' (never 'delivered').
+    - Transport error, network timeout, HTTP 5xx is 'retryable_failure'.
+    - Missing recipient email or terminal 4xx is 'terminal_failure'.
+    - Anti-gaming / fraud / duplicate detection is 'suppressed'.
+    """
+    if initial_delivery_state == "suppressed":
+        return "suppressed", {
+            "delivery_state": "suppressed",
+            "delivery_status": "suppressed",
+            "status": "suppressed",
+            "delivery_reason": "fraud_or_duplicate_suppression",
+            "delivery_attempts": 0,
+            "delivery_last_attempt_at": now_iso(),
+        }
+
+    if initial_delivery_state == "terminal_failure":
+        return "terminal_failure", {
+            "delivery_state": "terminal_failure",
+            "delivery_status": "terminal_failure",
+            "status": "terminal_failure",
+            "delivery_reason": "missing_recipient_email",
+            "delivery_attempts": 0,
+            "delivery_last_attempt_at": now_iso(),
+        }
+
+    meta = notif_meta or {}
+    st = meta.get("trainer_notification_status")
+    reason = meta.get("trainer_notification_reason") or ""
+    err = meta.get("trainer_notification_error") or ""
+    attempts = int(meta.get("trainer_notification_attempts") or 0)
+
+    if st == "sent":
+        final_state = "delivered"
+        final_reason = "provider_accepted"
+    elif st == "suppressed":
+        final_state = "suppressed"
+        final_reason = "fraud_or_duplicate_suppression"
+    elif st == "skipped" and reason == "missing_email":
+        final_state = "terminal_failure"
+        final_reason = "missing_email"
+    elif st == "skipped" and reason == "no_resend_api_key":
+        final_state = "retryable_failure"
+        final_reason = "no_resend_api_key"
+    elif st == "failed":
+        if "http_4" in str(err) and "429" not in str(err):
+            final_state = "terminal_failure"
+            final_reason = str(err)
+        else:
+            final_state = "retryable_failure"
+            final_reason = str(err or "transport_failure")
+    else:
+        final_state = "retryable_failure"
+        final_reason = str(reason or err or "unknown_dispatch_state")
+
+    fields = {
+        "delivery_state": final_state,
+        "delivery_status": final_state,
+        "status": final_state,
+        "delivery_reason": final_reason,
+        "delivery_attempts": attempts,
+        "delivery_last_attempt_at": now_iso(),
+        **meta,
+    }
+    return final_state, fields
+
+
+@api.post("/match/follow-up")
+async def create_match_follow_up(
+    payload: MatchFollowUpIn,
+    request: Request,
+    x_match_context_token: Optional[str] = Header(default=None, alias="X-Match-Context-Token"),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+) -> Dict[str, Any]:
+    """Context-authenticated follow-up enquiry submission (Contract v2 Section 2, DF-018, DF-022).
+
+    - Context retrieval is header-based ONLY (X-Match-Context-Token).
+    - Query parameter tokens (?token=...) are strictly forbidden.
+    - Requires consent_contact_release.
+    - Links enquiry to match context without leaking raw behavioural text.
+    - Idempotent via Idempotency-Key or match_id + trainer_id + user_email.
+    """
+    if "token" in request.query_params or "context_token" in request.query_params:
+        raise HTTPException(
+            status_code=400,
+            detail="Query parameter authentication is forbidden. Provide token via X-Match-Context-Token header.",
+        )
+    raw_token = x_match_context_token if isinstance(x_match_context_token, str) else None
+    if not raw_token:
+        raw_token = request.headers.get("x-match-context-token")
+    if not raw_token or not raw_token.strip():
+        raise HTTPException(status_code=401, detail="Missing X-Match-Context-Token header")
+
+    if not payload.consent_contact_release:
+        raise HTTPException(status_code=400, detail="Consent required for contact release.")
+
+    token_hash = matching_contract_v2.hash_match_context_token(raw_token.strip())
+    ctx = await db.match_contexts.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not ctx:
+        raise HTTPException(status_code=404, detail="Match context not found or invalid")
+
+    # Expiration check
+    if _is_expired(ctx.get("expires_at")):
+        raise HTTPException(status_code=410, detail="Match context has expired.")
+
+    trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    match_id = str(ctx.get("match_id") or "")
+    if hasattr(db, "match_events") and match_id:
+        match_event = await db.match_events.find_one({"id": match_id}, {"_id": 0, "result_ids": 1})
+        if match_event and "result_ids" in match_event:
+            res_ids = [str(x) for x in (match_event.get("result_ids") or [])]
+            if res_ids and payload.trainer_id not in res_ids:
+                raise HTTPException(status_code=400, detail="Trainer is not in eligible match results.")
+
+    # Idempotency: enforce both client Idempotency-Key and server composite key
+    email_clean = payload.user_email.strip().lower()
+    email_hash = hashlib.sha256(email_clean.encode("utf-8")).hexdigest()[:16]
+    composite_idem = f"match:{match_id}:{payload.trainer_id}:{email_hash}"
+
+    raw_idem = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() else None
+
+    query_filter = (
+        {"$or": [{"idempotency_key": raw_idem}, {"composite_idempotency_key": composite_idem}]}
+        if raw_idem
+        else {"composite_idempotency_key": composite_idem}
+    )
+
+    existing = await db.intros.find_one(query_filter, {"_id": 0})
+    if existing:
+        return {
+            "intro_id": str(existing.get("id")),
+            "match_id": match_id,
+            "trainer_id": str(payload.trainer_id),
+            "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
+            "idempotent": True,
+        }
+
+    ip = (request.client.host if request.client else "") or ""
+    intro_id_val = new_id()
+
+    # MP-002: Evaluate anti-gaming and verify trainer contact before dispatch
+    fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email)
+    fraud_status = fraud.get("fraud_status") or "clear"
+    fraud_reasons = fraud.get("reasons") or []
+    initial_delivery_status = fraud.get("delivery_status") or "pending"
+
+    trainer_email = (trainer.get("billing_email") or trainer.get("email") or "").strip()
+    if not trainer_email:
+        initial_delivery_state = "terminal_failure"
+    elif initial_delivery_status == "suppressed":
+        initial_delivery_state = "suppressed"
+    else:
+        initial_delivery_state = "pending"
+
+    concerns_str = ", ".join(ctx.get("primary_concerns") or [])
+    description_text = f"Matching follow-up for {ctx.get('suburb_or_postcode') or trainer.get('suburb') or ''}. Concerns: {concerns_str}. Notes: {payload.notes or 'None'}"
+
+    intro = {
+        "id": intro_id_val,
+        "trainer_id": trainer["id"],
+        "trainer_name": trainer.get("name"),
+        "match_id": match_id,
+        "suburb": ctx.get("suburb_or_postcode") or trainer.get("suburb"),
+        "dog_age_months": ctx.get("dog_age_months"),
+        "primary_concerns": ctx.get("primary_concerns") or [],
+        "service_format": ctx.get("service_format"),
+        "description": description_text,
+        "user_name": payload.user_name,
+        "user_email": payload.user_email,
+        "user_phone": payload.user_phone or "",
+        "notes": payload.notes or "",
+        "consent_contact_release": True,
+        "consent_outcome_tracking": True,
+        "delivery_status": initial_delivery_state,
+        "delivery_state": initial_delivery_state,
+        "status": initial_delivery_state,
+        "fraud_status": fraud_status,
+        "fraud_reasons": fraud_reasons,
+        "idempotency_key": raw_idem or composite_idem,
+        "composite_idempotency_key": composite_idem,
+        "ip": ip,
+        "created_at": now_iso(),
+    }
+
+    # MP-002S: Concurrency-safe insert with deterministic DuplicateKeyError recovery
+    try:
+        await db.intros.insert_one(intro.copy())
+    except DuplicateKeyError:
+        existing = await db.intros.find_one(query_filter, {"_id": 0})
+        if existing:
+            return {
+                "intro_id": str(existing.get("id")),
+                "match_id": match_id,
+                "trainer_id": str(payload.trainer_id),
+                "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
+                "idempotent": True,
+            }
+        raise
+
+    final_delivery_state = initial_delivery_state
+    if initial_delivery_state not in {"terminal_failure", "suppressed"}:
+        try:
+            notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+            final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, notif_meta)
+            await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+        except Exception as exc:
+            logger.exception("Trainer follow-up notification dispatch failed for intro_id=%s", intro_id_val)
+            final_delivery_state, update_fields = map_notification_delivery_state("pending", {
+                "trainer_notification_status": "failed",
+                "trainer_notification_error": str(exc)[:200],
+            })
+            await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+    else:
+        final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, None)
+        await db.intros.update_one({"id": intro_id_val}, {"$set": update_fields})
+
+    await _audit(
+        "match_follow_up",
+        trainer["id"],
+        after={"intro_id": intro_id_val, "match_id": match_id, "delivery_state": final_delivery_state},
+        actor="user",
+    )
+
+    # Return strictly permitted follow-up response shape
+    return {
+        "intro_id": str(intro_id_val),
+        "match_id": match_id,
+        "trainer_id": str(payload.trainer_id),
+        "delivery_state": final_delivery_state,
+        "idempotent": False,
+    }
 
 
 @api.post("/match/connect-click")
@@ -2626,6 +4083,62 @@ async def record_match_connect_click(payload: ConnectClickIn) -> Dict[str, Any]:
         actor="user",
     )
     return _scrub(ev)
+
+
+@api.get("/urgent-providers")
+async def get_urgent_providers(
+    category: Optional[str] = Query(default=None),
+    suburb: Optional[str] = Query(default=None),
+) -> Dict[str, Any]:
+    """Retrieve verified urgent support providers from official sources."""
+    providers = await urgent_providers_service.get_active_urgent_providers(
+        db, category=category, suburb=suburb
+    )
+    return {
+        "urgent_providers": providers,
+        "coverage_state": "local_coverage" if providers else "no_local_coverage",
+        "coverage_notice": "DTD has no current local listing for this area." if not providers else None,
+        "disclaimer": (
+            "Local emergency/urgent listings are verified against official provider pages. "
+            "DTD does not claim Melbourne-wide urgent coverage. In an emergency involving human "
+            "safety or active dog attack, call Triple Zero (000)."
+        ),
+        "veterinary_behaviourist_verified_count": 0,
+        "veterinary_behaviourist_status": (
+            "No verified veterinary behaviourist listing currently registered with direct official evidence "
+            "and active VPRBV registration."
+        ),
+        "emergency_notice": urgent_providers_service.TRIPLE_ZERO_VICTORIA_NOTICE,
+    }
+
+
+@api.post("/urgent-providers/correction")
+async def create_urgent_provider_correction(
+    payload: urgent_providers_service.UrgentProviderCorrectionIn,
+) -> Dict[str, Any]:
+    """Submit a public correction request for an urgent provider record."""
+    if not payload.provider_name.strip() or not payload.official_source_url.strip():
+        raise HTTPException(status_code=400, detail="provider_name and official_source_url are required.")
+
+    correction_id = new_id()
+    doc = {
+        "id": correction_id,
+        "provider_id": payload.provider_id,
+        "provider_name": payload.provider_name.strip(),
+        "official_source_url": payload.official_source_url.strip(),
+        "reason": payload.reason,
+        "notes": (payload.notes or "").strip(),
+        "status": "pending_review",
+        "created_at": now_iso(),
+    }
+    if hasattr(db, "urgent_provider_corrections"):
+        await db.urgent_provider_corrections.insert_one(doc)
+
+    return {
+        "status": "received",
+        "request_id": correction_id,
+        "message": "Correction request received for evidence-backed review.",
+    }
 
 
 @api.get("/trainers")
@@ -2709,19 +4222,33 @@ async def create_intro(
             )
             return _scrub({**existing, "contact": contact_existing})
 
+    if payload.match_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Direct enquiries cannot attach match_id; use /api/match/follow-up with verified context token.",
+        )
+
     ip = (request.client.host if request.client else "") or ""
 
-    # Anti-gaming evaluation. Always record; mark suppressed if suspicious.
+    # Anti-gaming evaluation.
     fraud = await fraud_service.evaluate_intro(db, ip, trainer["id"], payload.user_email or "")
-    delivery_status = fraud.get("delivery_status") or "delivered"
     fraud_status = fraud.get("fraud_status") or "clear"
     fraud_reasons = fraud.get("reasons") or []
+    fraud_delivery = fraud.get("delivery_status") or "pending"
+
+    trainer_email = (trainer.get("billing_email") or trainer.get("email") or "").strip()
+    if not trainer_email:
+        initial_delivery_state = "terminal_failure"
+    elif fraud_status == "suppressed" or fraud_delivery == "suppressed":
+        initial_delivery_state = "suppressed"
+    else:
+        initial_delivery_state = "pending"
 
     intro = {
         "id": new_id(),
         "trainer_id": trainer["id"],
         "trainer_name": trainer.get("name"),
-        "match_id": payload.match_id,
+        "match_id": None,
         "description": payload.description,
         "user_name": payload.user_name or "",
         "user_email": payload.user_email or "",
@@ -2729,23 +4256,15 @@ async def create_intro(
         "suburb": trainer.get("suburb"),
         "consent_contact_release": True,
         "consent_outcome_tracking": True,
-        "delivery_status": delivery_status,
-        "status": delivery_status,
+        "delivery_state": initial_delivery_state,
+        "delivery_status": initial_delivery_state,
+        "status": initial_delivery_state,
         "fraud_status": fraud_status,
         "fraud_reasons": fraud_reasons,
         "ip": ip,
         "user_agent": request.headers.get("user-agent", "")[:200],
         "created_at": now_iso(),
     }
-    if payload.match_id:
-        match_event = await db.match_events.find_one(
-            {"id": payload.match_id},
-            {"_id": 0, "campaign": 1, "source": 1, "created_at": 1},
-        )
-        if match_event:
-            intro["campaign"] = (match_event.get("campaign") or "").strip()
-            intro["source"] = (match_event.get("source") or "").strip()
-            intro["match_created_at"] = match_event.get("created_at")
     if idem:
         intro["idempotency_key"] = idem
     try:
@@ -2764,26 +4283,39 @@ async def create_intro(
                 )
                 return _scrub({**existing, "contact": contact_existing})
         raise
+
+    final_delivery_state = initial_delivery_state
+    if initial_delivery_state not in {"terminal_failure", "suppressed"}:
+        try:
+            notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+            final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, notif_meta)
+            await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+            intro.update(update_fields)
+        except Exception as exc:
+            logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
+            final_delivery_state, update_fields = map_notification_delivery_state("pending", {
+                "trainer_notification_status": "failed",
+                "trainer_notification_error": str(exc)[:200],
+            })
+            await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+            intro.update(update_fields)
+    else:
+        final_delivery_state, update_fields = map_notification_delivery_state(initial_delivery_state, None)
+        await db.intros.update_one({"id": intro["id"]}, {"$set": update_fields})
+        intro.update(update_fields)
+
     await _audit(
         "intro",
         trainer["id"],
         after={
             "intro_id": intro["id"],
-            "delivery_status": delivery_status,
+            "delivery_state": final_delivery_state,
+            "delivery_status": final_delivery_state,
             "fraud_status": fraud_status,
             "reasons": fraud_reasons,
         },
         actor="user",
     )
-
-    # Notify trainer about the new intro; never block owner experience.
-    try:
-        notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
-        if notif_meta:
-            await db.intros.update_one({"id": intro["id"]}, {"$set": notif_meta})
-            intro.update(notif_meta)
-    except Exception:  # noqa: BLE001
-        logger.exception("trainer intro notification failed for intro_id=%s", intro.get("id"))
 
     contact = _released_contact_payload(trainer)
     return _scrub({**intro, "contact": contact})
@@ -3000,6 +4532,14 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         existing_trainer = await db.trainers.find_one({"website": str(sub["website"]).strip()}, {"_id": 0})
 
     if existing_trainer and str(existing_trainer.get("claim_status") or "").lower() in {"claimed", "claim_disputed"}:
+        # R4: Atomically invalidate capabilities upon ownership dispute
+        inv_caps = trainer_quality.invalidate_trainer_capabilities(existing_trainer, reason="ownership_dispute")
+        await db.trainers.update_one(
+            {"id": existing_trainer["id"]},
+            {"$set": {"claim_status": "claim_disputed", "capabilities": inv_caps, "updated_at": now_iso()}},
+        )
+        await _audit("trainer_capabilities_invalidated", existing_trainer["id"], after={"reason": "ownership_dispute"}, actor="system")
+
         sub_doc = {
             "id": new_id(),
             "trainer_id": existing_trainer["id"],
@@ -3063,6 +4603,19 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         **sub,
     }
 
+    declared_capabilities = trainer_quality.package_trainer_capabilities(
+        specialties=sub.get("specialties"),
+        service_formats=sub.get("service_formats"),
+        life_stages=sub.get("life_stages"),
+        training_philosophy=sub.get("training_philosophy"),
+        serviced_suburbs=sub.get("serviced_suburbs"),
+        catchment_type=sub.get("catchment_type"),
+        delivery_constraints=sub.get("delivery_constraints"),
+        basis="trainer_declaration",
+        evidence_reference=sub_doc["id"],
+        confirmed_at=now_iso(),
+    )
+
     if existing_trainer:
         trainer_id = existing_trainer["id"]
         update_fields = {
@@ -3091,6 +4644,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "service_formats": sub.get("service_formats") or existing_trainer.get("service_formats", []),
             "serviced_suburbs": sub.get("serviced_suburbs") or existing_trainer.get("serviced_suburbs", []),
             "catchment_type": sub.get("catchment_type") or existing_trainer.get("catchment_type", ""),
+            "capabilities": declared_capabilities,
             "booking_url": sub.get("booking_url") or existing_trainer.get("booking_url", ""),
             "gallery_images": sub.get("gallery_images") or existing_trainer.get("gallery_images", []),
             "sponsored_suburbs": sub.get("sponsored_suburbs") or existing_trainer.get("sponsored_suburbs", []),
@@ -3139,6 +4693,7 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
             "service_formats": sub.get("service_formats", []),
             "serviced_suburbs": sub.get("serviced_suburbs", []),
             "catchment_type": sub.get("catchment_type", ""),
+            "capabilities": declared_capabilities,
             "booking_url": sub.get("booking_url", ""),
             "gallery_images": sub.get("gallery_images", []),
             "sponsored_suburbs": sub.get("sponsored_suburbs", []),
@@ -3407,9 +4962,18 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         )
         raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
 
+    # R2: Keep identity/ownership claim verification separate from capability confirmation.
+    # The server MUST NOT promote capabilities solely because OTP verification succeeded.
     claim_update = await db.trainers.update_one(
         {"id": trainer_id, "claim_status": {"$in": ["", "unclaimed", "pending_verification"]}},
-        {"$set": {"claim_status": "claimed", "tier": "claimed", "claimed_at": now.isoformat(), "claim_event_id": event["id"]}},
+        {
+            "$set": {
+                "claim_status": "claimed",
+                "tier": "claimed",
+                "claimed_at": now.isoformat(),
+                "claim_event_id": event["id"],
+            }
+        },
     )
     if getattr(claim_update, "matched_count", 1) != 1:
         await db.claim_events.update_one(
@@ -3423,7 +4987,303 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
     )
     session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
     await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
-    return _scrub({"ok": True, "trainer_id": trainer_id, "claim_status": "claimed", "tier": "claimed", "session": session})
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "claim_status": "claimed",
+        "tier": "claimed",
+        "capabilities_confirmed": bool(trainer.get("capabilities_confirmed_at")),
+        "session": session,
+    })
+
+
+class DeliveryConstraintsIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    in_home_available: Optional[bool] = None
+    facility_available: Optional[bool] = None
+    travel_distance_km: Optional[float] = None
+    notes: Optional[str] = None
+
+    @field_validator("in_home_available", "facility_available", mode="before")
+    @classmethod
+    def validate_strict_bool(cls, v: Any) -> Optional[bool]:
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        raise ValueError("Availability flags must be actual booleans (true or false), not strings or numbers.")
+
+    @field_validator("travel_distance_km", mode="before")
+    @classmethod
+    def validate_distance(cls, v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError("travel_distance_km must be a number, not a boolean or string.")
+        val = float(v)
+        if math.isnan(val) or math.isinf(val):
+            raise ValueError("travel_distance_km must be finite.")
+        if val < 0.0 or val > 200.0:
+            raise ValueError("travel_distance_km must be between 0 and 200 km.")
+        return val
+
+    @field_validator("notes", mode="before")
+    @classmethod
+    def validate_notes(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("Notes must be a string.")
+        trimmed = v.strip()
+        if len(trimmed) > 200:
+            raise ValueError("Notes must not exceed 200 characters.")
+        return trimmed
+
+
+class TrainerCapabilitiesConfirmIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    specialties: Optional[List[str]] = None
+    service_formats: Optional[List[str]] = None
+    life_stages: Optional[List[str]] = None
+    training_philosophy: Optional[str] = None
+    serviced_suburbs: Optional[List[str]] = None
+    catchment_type: Optional[str] = None
+    delivery_constraints: Optional[DeliveryConstraintsIn] = None
+    confirmation_statement: bool = False
+    trainer_claim_session: Optional[str] = None
+
+
+@api.get("/trainers/{trainer_id}/capabilities/prefill")
+async def get_trainer_capabilities_prefill(
+    trainer_id: str,
+    request: Request,
+    x_trainer_claim_session: Optional[str] = Header(None, alias="X-Trainer-Claim-Session"),
+) -> Dict[str, Any]:
+    """Retrieve prefilled trainer capabilities and canonical taxonomy options for confirmation UI.
+
+    Requires valid trainer claim session matching trainer_id or administrative oversight credentials.
+    """
+    req_headers = request.headers if request else {}
+    session_hdr = x_trainer_claim_session if isinstance(x_trainer_claim_session, str) else None
+    token = (
+        session_hdr
+        or req_headers.get("X-Trainer-Claim-Session")
+        or (req_headers.get("Authorization") or "").replace("Bearer ", "").strip()
+    )
+    admin_pass = req_headers.get("X-Admin-Pass") or ""
+    expected_admin_pass = os.environ.get("ADMIN_PASS")
+    is_admin = bool(expected_admin_pass and admin_pass and hmac.compare_digest(admin_pass, expected_admin_pass))
+
+    if not is_admin:
+        if not token:
+            raise HTTPException(status_code=401, detail="Trainer claim session or admin authorization required.")
+        _verify_trainer_claim_session(token, trainer_id=trainer_id)
+
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+
+    caps = trainer.get("capabilities") or {}
+    prefill = {
+        "specialties": (
+            (caps.get("specialties") or {}).get("canonical_value")
+            or trainer.get("specialties")
+            or trainer.get("services")
+            or []
+        ),
+        "service_formats": (
+            (caps.get("service_formats") or {}).get("canonical_value")
+            or trainer.get("service_formats")
+            or []
+        ),
+        "life_stages": (
+            (caps.get("life_stages") or {}).get("canonical_value")
+            or trainer.get("life_stages")
+            or []
+        ),
+        "training_philosophy": (
+            (caps.get("training_philosophy") or {}).get("canonical_value")
+            or trainer.get("training_philosophy")
+            or trainer.get("philosophy")
+            or ""
+        ),
+        "serviced_suburbs": (
+            (caps.get("serviced_suburbs") or {}).get("canonical_value")
+            or trainer.get("serviced_suburbs")
+            or ([trainer.get("suburb")] if trainer.get("suburb") else [])
+        ),
+        "catchment_type": (
+            (caps.get("catchment_type") or {}).get("canonical_value")
+            or trainer.get("catchment_type")
+            or "specific_suburbs"
+        ),
+        "delivery_constraints": (
+            ((caps.get("delivery_constraints") or {}).get("canonical_value") or (caps.get("delivery_constraints") or {}).get("value"))
+            if (caps.get("delivery_constraints") or {}).get("permitted_in_projection")
+            else {
+                "in_home_available": False,
+                "facility_available": False,
+                "travel_distance_km": 0.0,
+                "notes": "",
+            }
+        ),
+        "capabilities_confirmed_at": trainer.get("capabilities_confirmed_at") or "",
+        "claim_status": trainer.get("claim_status") or "unclaimed",
+    }
+    options = {
+        "specialties": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_SPECIALTIES.items()
+        ],
+        "service_formats": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_SERVICE_FORMATS.items()
+        ],
+        "life_stages": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.CANONICAL_LIFE_STAGES.items()
+        ],
+        "training_philosophies": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.VALID_TRAINING_PHILOSOPHIES.items()
+        ],
+        "catchment_types": [
+            {"id": k, "label": v["label"]}
+            for k, v in trainer_quality.VALID_CATCHMENT_TYPES.items()
+        ],
+    }
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "prefill": prefill,
+        "prefilled": prefill,
+        "options": options,
+        "canonical_options": options,
+    })
+
+
+@api.post("/trainers/{trainer_id}/capabilities/confirm")
+async def confirm_trainer_capabilities(
+    trainer_id: str,
+    payload: TrainerCapabilitiesConfirmIn,
+    request: Request,
+    x_trainer_claim_session: Optional[str] = Header(None, alias="X-Trainer-Claim-Session"),
+) -> Dict[str, Any]:
+    """Explicitly confirm and declare structured trainer capabilities (R2).
+
+    Requires explicit confirmation statement and valid trainer claim session or admin pass.
+    """
+    req_headers = request.headers if request else {}
+    session_hdr = x_trainer_claim_session if isinstance(x_trainer_claim_session, str) else None
+    token = (
+        session_hdr
+        or req_headers.get("X-Trainer-Claim-Session")
+        or payload.trainer_claim_session
+        or (req_headers.get("Authorization") or "").replace("Bearer ", "").strip()
+    )
+    admin_pass = req_headers.get("X-Admin-Pass") or ""
+    expected_admin_pass = os.environ.get("ADMIN_PASS")
+    is_admin = bool(expected_admin_pass and admin_pass and hmac.compare_digest(admin_pass, expected_admin_pass))
+
+    claim_session = None
+    if not is_admin:
+        if not token:
+            raise HTTPException(status_code=401, detail="Trainer claim session or admin authorization required.")
+        claim_session = _verify_trainer_claim_session(token, trainer_id=trainer_id)
+
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found.")
+
+    if str(trainer.get("claim_status") or "").lower() == "claim_disputed":
+        raise HTTPException(status_code=409, detail="This profile is under ownership dispute and capabilities cannot be confirmed.")
+
+    # R2: Strict confirmation statement requirement
+    if not payload.confirmation_statement:
+        raise HTTPException(
+            status_code=422,
+            detail="Explicit confirmation statement is required before capabilities gain trainer declaration basis.",
+        )
+
+    now_ts = now_iso()
+    claim_ref = f"claim_confirmation:{claim_session['claim_event_id']}" if claim_session else f"ops_confirmation:{now_ts}"
+
+    dc_dict = (
+        payload.delivery_constraints.model_dump(exclude_unset=True)
+        if hasattr(payload.delivery_constraints, "model_dump")
+        else payload.delivery_constraints
+    )
+
+    # Package validated structured capabilities
+    confirmed_caps = trainer_quality.package_trainer_capabilities(
+        specialties=payload.specialties,
+        service_formats=payload.service_formats,
+        life_stages=payload.life_stages,
+        training_philosophy=payload.training_philosophy,
+        serviced_suburbs=payload.serviced_suburbs,
+        catchment_type=payload.catchment_type,
+        delivery_constraints=dc_dict,
+        basis="trainer_declaration",
+        evidence_reference=claim_ref,
+        confirmed_at=now_ts,
+    )
+
+    if payload.delivery_constraints is not None:
+        dc_fact = confirmed_caps.get("delivery_constraints")
+        if dc_fact and not dc_fact.get("validation_result", {}).get("valid", True):
+            reason = dc_fact.get("validation_result", {}).get("reason", "invalid_delivery_constraints")
+            raise HTTPException(status_code=422, detail=f"Invalid delivery_constraints: {reason}")
+
+    # R4: Preserve historical audit trail; omit/corrected fields receive invalidation rather than deletion
+    existing_caps = trainer.get("capabilities") or {}
+    for cat, old_fact in existing_caps.items():
+        if cat not in confirmed_caps and isinstance(old_fact, dict):
+            old_fact["permitted_in_projection"] = False
+            old_fact["invalidated_at"] = now_ts
+            old_fact["invalidation_reason"] = "trainer_corrected"
+            confirmed_caps[cat] = old_fact
+
+    update_data: Dict[str, Any] = {
+        "capabilities": confirmed_caps,
+        "capabilities_confirmed_at": now_ts,
+        "updated_at": now_ts,
+    }
+    if payload.specialties is not None:
+        update_data["specialties"] = payload.specialties
+    if payload.service_formats is not None:
+        update_data["service_formats"] = payload.service_formats
+    if payload.life_stages is not None:
+        update_data["life_stages"] = payload.life_stages
+    if payload.training_philosophy is not None:
+        update_data["training_philosophy"] = payload.training_philosophy
+    if payload.serviced_suburbs is not None:
+        update_data["serviced_suburbs"] = payload.serviced_suburbs
+    if payload.catchment_type is not None:
+        update_data["catchment_type"] = payload.catchment_type
+    if payload.delivery_constraints is not None:
+        update_data["delivery_constraints"] = (
+            (confirmed_caps.get("delivery_constraints") or {}).get("canonical_value")
+            or payload.delivery_constraints
+        )
+
+    await db.trainers.update_one({"id": trainer_id}, {"$set": update_data})
+    await _audit(
+        "trainer_capabilities_confirmed",
+        trainer_id,
+        after={"categories": list(confirmed_caps.keys()), "confirmed_at": now_ts, "ref": claim_ref},
+        actor="trainer" if claim_session else "ops",
+    )
+
+    updated_trainer = {**trainer, **update_data}
+    projection = trainer_quality.build_match_ready_projection(updated_trainer)
+
+    return _scrub({
+        "ok": True,
+        "trainer_id": trainer_id,
+        "capabilities": confirmed_caps,
+        "match_ready": projection["match_eligible"],
+        "projection": projection,
+    })
 
 
 @api.post("/owner-waitlist")
@@ -3715,7 +5575,9 @@ async def get_trainer_billing_health(
             "name": trainer.get("name"),
             "billing_email": trainer.get("billing_email") or trainer.get("email"),
             "billing_profile_status": trainer.get("billing_profile_status") or (sub or {}).get("billing_profile_status") or "unknown",
+            "billing_terms_version": trainer.get("billing_terms_version") or "",
             "stripe_customer_id": trainer.get("stripe_customer_id"),
+            "claim_status": str(trainer.get("claim_status") or "unclaimed"),
             "tier": sub_tier,
             "subscription_tier": sub_tier,
             "subscription_status": sub_status,
@@ -3730,6 +5592,10 @@ async def get_trainer_billing_health(
             "stripe_subscription_id": trainer.get("stripe_subscription_id"),
             "stripe_customer_id": trainer.get("stripe_customer_id"),
             "trial": trial,
+        },
+        "billing": {
+            "checkout_available": stripe_billing.checkout_enabled(),
+            "terms_version": stripe_billing.billing_terms_version(),
         },
         "submission_id": (sub or {}).get("id"),
         "status_counts": statuses,
@@ -3785,8 +5651,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=404, detail="Trainer not found.")
     if str(trainer.get("claim_status") or "").lower() != "claimed":
         raise HTTPException(status_code=403, detail="Only a claimed trainer profile can start subscription checkout.")
-    if not payload.consent_subscription_billing_terms:
-        raise HTTPException(status_code=400, detail="Subscription billing consent is required before checkout.")
+    if not payload.consent_subscription_billing_terms or payload.billing_terms_version != stripe_billing.billing_terms_version():
+        raise HTTPException(status_code=400, detail="Accept the current subscription billing terms before checkout.")
 
     try:
         plan = stripe_billing.subscription_plan(tier=payload.tier, suburb=payload.suburb, interval=payload.interval)
@@ -3794,6 +5660,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if plan["tier"] == "suburb_sponsor" and not _trainer_serves_suburb(trainer, plan["suburb"]):
         raise HTTPException(status_code=403, detail="Suburb sponsorship must match a suburb served by this profile.")
+    if not stripe_billing.checkout_enabled():
+        raise HTTPException(status_code=503, detail="Trainer billing is not accepting purchases yet.")
 
     reservation: Dict[str, Any] = {}
     if plan["tier"] in {"suburb_sponsor", "citywide"}:
@@ -3802,7 +5670,7 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
             trainer_id=trainer_id,
             tier=plan["tier"],
             suburb=plan["suburb"],
-            idempotency_key=f"{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+            idempotency_key=f"{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         )
         if not reservation_result.get("ok"):
             code = str(reservation_result.get("code") or "inventory_unavailable")
@@ -3817,7 +5685,8 @@ async def create_trainer_billing_checkout(payload: TrainerCheckoutIn) -> Dict[st
         suburb=plan["suburb"],
         interval=plan["interval"],
         consent_granted=payload.consent_subscription_billing_terms,
-        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
+        consent_version=payload.billing_terms_version,
+        idempotency_key=f"dtd-checkout:{auth_reference}:{plan['tier']}:{plan['interval']}:{_normalize_suburb_key(plan['suburb']) or 'all'}",
         reservation_id=str(reservation.get("reservation_id") or ""),
         billing_return_url=(
             f"{(os.environ.get('FRONTEND_BASE_URL') or 'http://127.0.0.1:3001').strip().rstrip('/')}/trainer/billing?"
@@ -4099,13 +5968,9 @@ async def get_seo(slug: str) -> Dict[str, Any]:
         # Crucially, unknown paths do not call AI or write seo_pages.
         raise HTTPException(status_code=404, detail="Unknown canonical suburb")
 
-    slug = str(canonical_suburb["slug"])
-    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
-    if page:
-        return page
-
     minimum_trainers = _configured_positive_int("SEO_MIN_PUBLISHED_TRAINERS")
     minimum_words = _configured_positive_int("SEO_MIN_CONTENT_WORDS")
+    slug = str(canonical_suburb["slug"])
     suburb = str(canonical_suburb["suburb_name"])
     if minimum_trainers is None or minimum_words is None:
         return _unpublished_seo_response(
@@ -4114,22 +5979,29 @@ async def get_seo(slug: str) -> Dict[str, Any]:
             reason="seo_thresholds_not_configured",
         )
 
-    eligible_trainers = await db.trainers.count_documents(
-        {
-            "published": True,
-            "region": {"$in": ACTIVE_REGIONS},
-            "$or": [
-                {"suburb": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-                {"serviced_suburbs": {"$regex": f"^{re.escape(suburb)}$", "$options": "i"}},
-            ],
-        }
-    )
+    eligible_trainers = await db.trainers.count_documents(_eligible_trainer_query_for_suburb(suburb))
     if eligible_trainers < minimum_trainers:
         return _unpublished_seo_response(
             slug=slug,
             suburb=suburb,
             reason="insufficient_eligible_supply",
         )
+
+    page = await db.seo_pages.find_one({"slug": slug}, {"_id": 0})
+    if page:
+        if _seo_page_word_count(page) < minimum_words:
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="insufficient_content_quality",
+            )
+        if str(page.get("publication_status") or "") != "published" or str(page.get("meta_robots") or "") != "index,follow":
+            return _unpublished_seo_response(
+                slug=slug,
+                suburb=suburb,
+                reason="stored_page_not_indexable",
+            )
+        return _scrub(page)
 
     copy = await ai_service.generate_seo_copy(suburb, "general")
     word_count = _seo_word_count(copy)
@@ -4161,6 +6033,52 @@ async def get_seo(slug: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+async def _get_provider_telemetry(message_log: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    telemetry: Dict[str, Any] = {}
+    now_dt = datetime.now(timezone.utc)
+
+    # Correction B: Authoritative recent operation evidence for MongoDB Atlas.
+    # Do NOT declare operational solely because getattr(db, "client", None) is not None.
+    # Check for recent successful operations or recent failure within 300s.
+    global _LAST_DB_OP_AT, _LAST_DB_ERROR, _LAST_DB_ERROR_AT
+    if _LAST_DB_ERROR_AT and _LAST_DB_OP_AT and _LAST_DB_ERROR_AT > _LAST_DB_OP_AT:
+        if (now_dt - _LAST_DB_ERROR_AT).total_seconds() <= 300:
+            telemetry["atlas_connected"] = False
+            telemetry["atlas_error"] = _LAST_DB_ERROR
+    elif _LAST_DB_OP_AT and (now_dt - _LAST_DB_OP_AT).total_seconds() <= 300:
+        telemetry["atlas_connected"] = True
+        telemetry["atlas_last_op_at"] = _LAST_DB_OP_AT.isoformat()
+    else:
+        # No authoritative recent operation signal in observation window -> unknown
+        telemetry["atlas_connected"] = None
+
+    if message_log:
+        for msg in message_log:
+            st = str(msg.get("status") or msg.get("delivery_status") or "").lower()
+            if any(term in st for term in ["auth_failed", "unauthorized", "401", "403"]):
+                telemetry["resend_status"] = "auth_failure"
+                break
+            elif any(term in st for term in ["rate_limited", "429"]):
+                telemetry["resend_status"] = "rate_limited"
+                break
+            elif any(term in st for term in ["failed", "server_error", "500", "502", "503"]):
+                telemetry["resend_status"] = "service_error"
+                break
+            elif any(term in st for term in ["sent", "delivered", "accepted", "202"]):
+                telemetry["resend_status"] = "ok"
+
+    # Correction B: Sentry configuration present is unverified without event delivery evidence
+    global _LAST_SENTRY_EVENT_VERIFIED
+    if _LAST_SENTRY_EVENT_VERIFIED:
+        telemetry["sentry_status"] = "verified"
+    elif _SENTRY_INITIALIZED:
+        telemetry["sentry_status"] = "initialized_unverified"
+    elif os.environ.get("SENTRY_DSN"):
+        telemetry["sentry_status"] = "unverified"
+
+    return telemetry
+
+
 async def _current_ops_cases() -> List[Dict[str, Any]]:
     discovery_summary = {
         "pending": await db.discovery_queue.count_documents({"status": "pending"}),
@@ -4183,6 +6101,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
     pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
+    _record_db_op_success()
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
@@ -4281,10 +6200,79 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     message_log = await _message_log_rows()
     ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
+    provider_telemetry = await _get_provider_telemetry(message_log)
+    provider_snapshot = provider_health.snapshot(telemetry=provider_telemetry)
+
+    intros_coll = getattr(db, "intros", None)
+    fraud_cases_raw = await intros_coll.find(
+        {"$or": [{"delivery_status": "suppressed"}, {"billing_status": "suppressed"}]},
+        {"_id": 0, "id": 1, "trainer_id": 1, "delivery_status": 1, "fraud_status": 1, "fraud_reasons": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(50).to_list(50) if intros_coll is not None and hasattr(intros_coll, "find") else []
+    fraud_suppression_cases = [
+        {
+            "intro_id": row.get("id"),
+            "trainer_id": row.get("trainer_id"),
+            "delivery_status": row.get("delivery_status") or "suppressed",
+            "fraud_status": row.get("fraud_status") or "suppressed",
+            "fraud_reasons": row.get("fraud_reasons") or [],
+            "created_at": row.get("created_at"),
+        }
+        for row in fraud_cases_raw
+    ]
+
+    claim_events_coll = getattr(db, "claim_events", None)
+    claim_cases = await claim_events_coll.find(
+        {"status": {"$nin": ["verified", "superseded"]}},
+        {"_id": 0, "id": 1, "trainer_id": 1, "status": 1, "reason": 1, "delivery_status": 1, "delivery_error": 1, "method": 1, "masked_destination": 1, "attempts": 1, "profile_claim_status": 1, "created_at": 1, "updated_at": 1},
+    ).sort("updated_at", -1).limit(50).to_list(50) if claim_events_coll is not None and hasattr(claim_events_coll, "find") else []
+
+    abn_degradation_cases: List[Dict[str, Any]] = []
+    if not (os.environ.get("ABR_GUID") or "").strip():
+        abn_degradation_cases.append(
+            {
+                "id": "system_abr_guid_missing",
+                "name": "ABR Web Services",
+                "abn": "",
+                "abn_status": "abr_guid_missing",
+                "abn_verification_reason": "ABR_GUID is not configured in the environment.",
+                "abn_checked_at": now_iso(),
+                "created_at": now_iso(),
+            }
+        )
+    if trainers_coll is not None and hasattr(trainers_coll, "find"):
+        trainer_degraded = await trainers_coll.find(
+            {
+                "$or": [
+                    {
+                        "abn_status": {
+                            "$in": [
+                                "abr_unavailable",
+                                "degraded",
+                                "abr_guid_missing",
+                                "abr_maintenance",
+                                "abr_network_error",
+                                "pending_verification",
+                                "invalid_checksum",
+                                "checksum_failed",
+                                "invalid_length",
+                                "unverified",
+                            ]
+                        }
+                    },
+                    {"abn": {"$ne": "", "$exists": True}, "abn_verified": False},
+                ]
+            },
+            {"_id": 0, "id": 1, "name": 1, "abn": 1, "abn_status": 1, "abn_verification_reason": 1, "abn_checked_at": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(50).to_list(50)
+        abn_degradation_cases.extend(trainer_degraded)
+
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
         loop_statuses=loop_statuses,
+        fraud_suppression_cases=fraud_suppression_cases,
+        claim_cases=claim_cases,
+        abn_degradation_cases=abn_degradation_cases,
         billing_recovery_case_rows=billing_recovery_case_rows,
         subscription_billing_case_rows=subscription_billing_case_rows,
         reactivation_case_rows=reactivation_case_rows,
@@ -4292,6 +6280,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
 
@@ -4324,6 +6313,14 @@ async def update_oversight_case_review(
     if not current_case:
         raise HTTPException(status_code=404, detail="Ops case not found.")
 
+    # Workstream D: Guard against casual dismissal of high-severity incidents
+    if normalized_state == "dismissed" and str(current_case.get("severity") or "").lower() == "high":
+        if len(note) < 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Dismissing a high-severity operational case requires an explanatory review note of at least 5 characters.",
+            )
+
     states_coll = getattr(db, "ops_case_states", None)
     if states_coll is None:
         raise HTTPException(status_code=503, detail="Ops case state store unavailable.")
@@ -4341,6 +6338,7 @@ async def update_oversight_case_review(
         }
     )
     history = history[-OPS_CASE_HISTORY_LIMIT:]
+    current_fp = current_case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(current_case)
     after = {
         "case_id": case_id,
         "case_type": current_case.get("case_type"),
@@ -4352,6 +6350,7 @@ async def update_oversight_case_review(
         "note": note,
         "updated_at": updated_at,
         "history": history,
+        "occurrence_fingerprint": current_fp,
     }
     await states_coll.update_one({"case_id": case_id}, {"$set": after}, upsert=True)
     await _audit("ops_case_review_updated", case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
@@ -4366,7 +6365,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     This route is read-only. The wider Ops surface may still persist bounded
     Layer 1 review-state history through dedicated review endpoints.
     """
-    phase_runtime = await _refresh_phase_runtime_records()
+    phase_runtime = await _get_read_only_phase_runtime_records()
     phase_state = phase_runtime["phase_state"]
     readiness_snapshot = phase_runtime["readiness_snapshot"]
     phase_decisions = phase_runtime["phase_decisions"]
@@ -4473,6 +6472,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "live_total": await db.trainers.count_documents({"published": True}),
     }
 
+    capability_health_summary = await trainer_quality.compute_capability_health_summary(db.trainers)
+
     rollback_recent = await db.config_snapshots.find(
         {"rolled_back": True}, {"_id": 0}
     ).sort("rolled_back_at", -1).to_list(5)
@@ -4485,6 +6486,15 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     growth_attribution_summary = await _growth_attribution_summary()
     reactivation_summary = await _reactivation_summary()
     now_dt = datetime.now(timezone.utc)
+    ingestion_runs_coll = getattr(db, "ingestion_runs", None)
+    recent_ingestion_runs = (
+        await ingestion_runs_coll.find({}, {"_id": 0}).sort("executed_at", -1).limit(10).to_list(10)
+        if ingestion_runs_coll is not None
+        else []
+    )
+    last_ingestion_run = recent_ingestion_runs[0] if recent_ingestion_runs else None
+    pipeline_guardian_state = await db.system_state.find_one({"key": "pipeline_guardian"}, {"_id": 0}) or {}
+
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
@@ -4672,6 +6682,8 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     trainer_inventory = await _trainer_inventory_rows()
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
     message_log = await _message_log_rows()
+    provider_telemetry = await _get_provider_telemetry(message_log)
+    provider_snapshot = provider_health.snapshot(telemetry=provider_telemetry)
     supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
     supply_trends = await _ops_supply_trend_summary(
         trainer_inventory=trainer_inventory,
@@ -4679,6 +6691,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         growth_attribution_summary=growth_attribution_summary,
         reactivation_summary=reactivation_summary,
     )
+    seo_indexation = await _ops_seo_indexation_summary()
     ops_cases = await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -4693,6 +6706,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         message_log=message_log,
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
+        provider_cases=provider_health.cases(provider_snapshot),
     )
 
     return _scrub({
@@ -4721,6 +6735,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "nurture": nurture,
             "reactivation_route": reactivation_route,
             "pro_trial_warnings": pro_trial_warnings,
+            "pipeline_guardian": pipeline_guardian_state,
         },
         "alerts": health.get("alerts", []),
         "rollback_recent": rollback_recent,
@@ -4768,10 +6783,16 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         "kpi_prelaunch": kpi_prelaunch,
         "growth_attribution_summary": growth_attribution_summary,
         "reactivation_summary": reactivation_summary,
+        "capability_health_summary": capability_health_summary,
+        "recent_ingestion_runs": recent_ingestion_runs,
+        "last_ingestion_run": last_ingestion_run,
+        "pipeline_guardian": pipeline_guardian_state,
         "ops_supply_geography": supply_geography,
         "ops_supply_trends": supply_trends,
+        "ops_seo_indexation": seo_indexation,
         "trainer_inventory": trainer_inventory,
         "sponsor_inventory": sponsor_inventory_snapshot,
+        "provider_health": provider_snapshot,
         "message_log": message_log,
         "ops_cases": ops_cases,
         "cases": ops_cases,
@@ -4789,9 +6810,724 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "reactivation_cases": reactivation_case_rows,
             "source_ingestion_sources": source_ingestion_state_rows,
             "discovery_alerts": discovery_alerts,
+            "provider_health": provider_snapshot,
         },
+        "matching": await build_matching_oversight_read_model(db),
         "ts": now_iso(),
     })
+
+
+async def build_matching_oversight_read_model(target_db: Any) -> Dict[str, Any]:
+    """Protected, redacted matching read model for the Operations Console.
+
+    Governance (Contract v2, P6, DF-015, DF-018, DF-024):
+    - Policy version, decision/triage distribution, local vs expanded scope.
+    - Eligible count, AI usage, latency, and degradation reasons.
+    - Reason-code distribution, presentation IDs/order.
+    - Capability freshness/invalidation and anti-gaming events.
+    - Urgent-provider freshness, coverage gaps, and correction requests.
+    - Enquiry/follow-up delivery states (pending, delivered, retryable_failure, terminal_failure, suppressed).
+    - NEVER exposes raw descriptions, contact details, IPs, token values, prompts, scores, tiers, or manual match overrides.
+    """
+    match_events_coll = getattr(target_db, "match_events", None)
+    events: List[Dict[str, Any]] = []
+    if match_events_coll is not None:
+        try:
+            events = await match_events_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(500).to_list(500)
+        except Exception as exc:
+            logger.warning("Failed to query match events for oversight: %s", exc)
+
+    # 1. Decision & Triage distribution
+    decision_dist: Dict[str, int] = {
+        "recommendations": 0,
+        "limited_local_results": 0,
+        "no_confirmed_match": 0,
+        "degraded_recommendations": 0,
+        "degraded_no_confirmed_match": 0,
+        "immediate_human_danger": 0,
+        "urgent_animal_health_support": 0,
+        "serious_behavioural_support": 0,
+        "needs_clarification": 0,
+    }
+    scope_dist: Dict[str, int] = {"local": 0, "expanded": 0}
+    reason_code_dist: Dict[str, int] = {}
+    eligible_counts: List[int] = []
+
+    for ev in events:
+        state = str(ev.get("decision_state") or "")
+        if state in decision_dist:
+            decision_dist[state] += 1
+        elif state:
+            decision_dist[state] = decision_dist.get(state, 0) + 1
+
+        scope = str(ev.get("search_scope") or "local")
+        scope_dist[scope] = scope_dist.get(scope, 0) + 1
+
+        res_ids = ev.get("result_ids") or []
+        eligible_counts.append(len(res_ids))
+
+        for rc in ev.get("reason_codes") or []:
+            rc_str = str(rc)
+            reason_code_dist[rc_str] = reason_code_dist.get(rc_str, 0) + 1
+
+    total_events = len(events)
+    avg_eligible = round(sum(eligible_counts) / max(1, len(eligible_counts)), 2) if eligible_counts else 0.0
+
+    # 2. AI usage & degradation events
+    degradation_events = await ai_service.get_degradation_events(limit=50, db=target_db)
+    degradation_by_error: Dict[str, int] = {}
+    latencies: List[float] = []
+    sanitized_degradation_events: List[Dict[str, Any]] = []
+
+    for dev in degradation_events:
+        err_type = str(dev.get("error_type") or "unknown")
+        degradation_by_error[err_type] = degradation_by_error.get(err_type, 0) + 1
+        lat = dev.get("latency_ms")
+        if lat and isinstance(lat, (int, float)):
+            latencies.append(float(lat))
+        sanitized_degradation_events.append({
+            "id": dev.get("id"),
+            "provider": dev.get("provider", "google_genai"),
+            "model": dev.get("model", ai_service.GEMINI_MODEL),
+            "error_type": err_type,
+            "latency_ms": lat,
+            "fallback_used": dev.get("fallback_used", True),
+            "decision_state": dev.get("decision_state"),
+            "timestamp": dev.get("timestamp"),
+        })
+
+    avg_latency = round(sum(latencies) / max(1, len(latencies)), 2) if latencies else 0.0
+
+    # 3. Presentation order sample (last 20 events) - strictly redacted
+    presentation_sample: List[Dict[str, Any]] = []
+    for ev in events[:20]:
+        presentation_sample.append({
+            "match_id": ev.get("id"),
+            "created_at": ev.get("created_at"),
+            "policy_version": ev.get("policy_version", matching_contract_v2.DECISION_CONTRACT_VERSION),
+            "decision_state": ev.get("decision_state"),
+            "search_scope": ev.get("search_scope"),
+            "result_ids": ev.get("result_ids") or [],
+            "reason_codes": ev.get("reason_codes") or [],
+        })
+
+    # 4. Capability freshness & anti-gaming
+    capability_health = {}
+    trainers_coll = getattr(target_db, "trainers", None)
+    if trainers_coll is not None:
+        try:
+            capability_health = await trainer_quality.compute_capability_health_summary(trainers_coll)
+        except Exception:
+            pass
+
+    audit_coll = getattr(target_db, "audit_log", None)
+    anti_gaming_count = 0
+    if audit_coll is not None:
+        try:
+            anti_gaming_count = await audit_coll.count_documents({
+                "action": {"$in": ["trainer_capability_invalidation", "anti_gaming_detected", "trainer_recheck"]}
+            })
+        except Exception:
+            pass
+
+    # 5. Urgent provider freshness & coverage (MP-003T: dynamic recomputation)
+    urgent_coll = getattr(target_db, "urgent_providers", None)
+    urgent_by_freshness: Dict[str, int] = {"current": 0, "stale": 0, "suppressed": 0}
+    urgent_total = 0
+    covered_localities: set[str] = set()
+
+    urgent_docs: List[Dict[str, Any]] = []
+    if urgent_coll is not None:
+        try:
+            urgent_docs = await urgent_coll.find({}, {"_id": 0}).to_list(100)
+        except Exception:
+            urgent_docs = []
+
+    if not urgent_docs:
+        urgent_docs = [dict(p) for p in urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS]
+
+    urgent_total = len(urgent_docs)
+    for doc in urgent_docs:
+        st, is_fresh = urgent_providers_service.compute_urgent_provider_freshness(doc)
+        eff_st = st.value if isinstance(st, urgent_providers_service.FreshnessState) else str(st)
+        if eff_st in urgent_by_freshness:
+            urgent_by_freshness[eff_st] += 1
+        else:
+            urgent_by_freshness["stale"] += 1
+
+        if is_fresh and eff_st == "current":
+            for loc in doc.get("service_area", []):
+                covered_localities.add(str(loc).strip().lower())
+
+    coverage_gaps_count = max(0, 100 - len(covered_localities))
+
+    corrections_coll = getattr(target_db, "urgent_provider_corrections", None)
+    pending_corrections_count = 0
+    recent_corrections: List[Dict[str, Any]] = []
+    if corrections_coll is not None:
+        try:
+            pending_corrections_count = await corrections_coll.count_documents({"status": "pending_review"})
+            raw_corrections = await corrections_coll.find({}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+            for rc in raw_corrections:
+                recent_corrections.append({
+                    "id": rc.get("id"),
+                    "provider_id": rc.get("provider_id"),
+                    "provider_name": rc.get("provider_name"),
+                    "reason": rc.get("reason"),
+                    "status": rc.get("status"),
+                    "created_at": rc.get("created_at"),
+                })
+        except Exception:
+            pass
+
+    # 6. Follow-up distribution
+    intros_coll = getattr(target_db, "intros", None)
+    follow_up_dist: Dict[str, int] = {
+        "pending": 0,
+        "delivered": 0,
+        "retryable_failure": 0,
+        "terminal_failure": 0,
+        "suppressed": 0,
+    }
+    follow_up_total = 0
+    if intros_coll is not None:
+        try:
+            follow_up_filter = {"match_id": {"$exists": True, "$ne": None}}
+            follow_up_total = await intros_coll.count_documents(follow_up_filter)
+            for s in ["pending", "delivered", "retryable_failure", "terminal_failure", "suppressed"]:
+                follow_up_dist[s] = await intros_coll.count_documents({
+                    **follow_up_filter,
+                    "$or": [{"delivery_state": s}, {"delivery_status": s}],
+                })
+        except Exception:
+            pass
+
+    return {
+        "policy_version": matching_contract_v2.DECISION_CONTRACT_VERSION,
+        "total_match_events": total_events,
+        "decision_triage_distribution": decision_dist,
+        "scope_distribution": scope_dist,
+        "eligible_count": {
+            "average_eligible_count": avg_eligible,
+            "total_match_events": total_events,
+        },
+        "ai_usage": {
+            "total_degradations": len(degradation_events),
+            "by_error_type": degradation_by_error,
+            "average_latency_ms": avg_latency,
+            "recent_degradation_events": sanitized_degradation_events[:10],
+        },
+        "reason_code_distribution": reason_code_dist,
+        "presentation_order_sample": presentation_sample,
+        "capability_freshness_and_anti_gaming": {
+            "capability_health": capability_health,
+            "anti_gaming_events_count": anti_gaming_count,
+        },
+        "urgent_provider_status": {
+            "total_providers": urgent_total,
+            "by_freshness": urgent_by_freshness,
+            "current_records": urgent_by_freshness.get("current", 0),
+            "stale_records": urgent_by_freshness.get("stale", 0),
+            "suppressed_records": urgent_by_freshness.get("suppressed", 0),
+            "coverage_gaps": [
+                "No verified veterinary behaviourist registered with active VPRBV endorsement",
+                "Local urgent veterinary care coverage currently limited to Inner North Melbourne; outer regions unserved",
+            ],
+            "coverage_gaps_count": coverage_gaps_count,
+            "has_local_coverage": len(covered_localities) > 0,
+            "pending_corrections_count": pending_corrections_count,
+            "recent_corrections": recent_corrections,
+        },
+        "follow_up_distribution": {
+            "total_follow_ups": follow_up_total,
+            "by_state": follow_up_dist,
+        },
+        "ts": now_iso(),
+    }
+
+
+@api.get("/oversight/attribution")
+async def oversight_attribution(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Joined first-party attribution report across SEO landing, trainer tiers, intros, and Stripe revenue."""
+    growth_coll = getattr(db, "growth_attribution", None)
+    intros_coll = getattr(db, "intros", None)
+    trainers_coll = getattr(db, "trainers", None)
+    billing_events_coll = getattr(db, "billing_events", None)
+
+    # 1. Collect cohorts from growth attribution
+    cohorts: List[Dict[str, Any]] = []
+    if growth_coll is not None:
+        raw_cohorts = await growth_coll.find({}, {"_id": 0}).to_list(200)
+        for c in raw_cohorts:
+            cohorts.append({
+                "campaign": str(c.get("campaign") or "unknown"),
+                "source": str(c.get("source") or "unknown"),
+                "matched": int(c.get("matched") or 0),
+                "connected": int(c.get("connected") or 0),
+                "converted": int(c.get("converted") or 0),
+                "entry_events_30d": int(c.get("entry_events_30d") or 0),
+                "waitlist_joins_30d": int(c.get("waitlist_joins_30d") or 0),
+            })
+
+    # 2. Collect trainer tiers
+    tier_distribution: Dict[str, int] = {"pro": 0, "standard": 0, "unclaimed": 0, "other": 0}
+    trainer_tiers_by_id: Dict[str, str] = {}
+    if trainers_coll is not None:
+        trainers = await trainers_coll.find({}, {"_id": 0, "id": 1, "tier": 1, "claim_status": 1}).to_list(2000)
+        for t in trainers:
+            tid = str(t.get("id") or "")
+            tier = str(t.get("tier") or "standard").lower()
+            claim = str(t.get("claim_status") or "").lower()
+            if claim == "unclaimed":
+                tier_distribution["unclaimed"] += 1
+                assigned_tier = "unclaimed"
+            elif tier == "pro":
+                tier_distribution["pro"] += 1
+                assigned_tier = "pro"
+            elif tier == "standard":
+                tier_distribution["standard"] += 1
+                assigned_tier = "standard"
+            else:
+                tier_distribution["other"] += 1
+                assigned_tier = "other"
+            if tid:
+                trainer_tiers_by_id[tid] = assigned_tier
+
+    # 3. Collect intros joined by tier
+    intros_by_tier: Dict[str, int] = {"pro": 0, "standard": 0, "unclaimed": 0, "other": 0}
+    intros_total = 0
+    if intros_coll is not None:
+        intros = await intros_coll.find({}, {"_id": 0, "trainer_id": 1}).to_list(5000)
+        intros_total = len(intros)
+        for intro in intros:
+            tid = str(intro.get("trainer_id") or "")
+            tier = trainer_tiers_by_id.get(tid, "unclaimed")
+            intros_by_tier[tier] = intros_by_tier.get(tier, 0) + 1
+
+    # 4. Collect realized revenue from billing events
+    realized_revenue_cents = 0
+    billing_event_count = 0
+    if billing_events_coll is not None:
+        billing_events = await billing_events_coll.find({}, {"_id": 0, "amount": 1, "amount_cents": 1, "type": 1, "status": 1}).to_list(1000)
+        for event in billing_events:
+            status = str(event.get("status") or "").lower()
+            if status in {"paid", "succeeded", "completed"}:
+                cents = int(event.get("amount_cents") or event.get("amount") or 0)
+                realized_revenue_cents += cents
+                billing_event_count += 1
+
+    return {
+        "status": "ok",
+        "cohorts": cohorts,
+        "trainer_tiers": tier_distribution,
+        "intros_by_tier": intros_by_tier,
+        "total_intros": intros_total,
+        "realized_revenue_cents": realized_revenue_cents,
+        "realized_revenue_aud": round(realized_revenue_cents / 100.0, 2),
+        "billing_event_count": billing_event_count,
+        "ts": now_iso(),
+    }
+
+
+class MaintenanceModeIn(BaseModel):
+    active: bool = Field(..., description="Whether maintenance mode is active.")
+    message: Optional[str] = Field(default=None, description="Public maintenance announcement or reason.")
+    confirmed: bool = Field(..., description="Explicit confirmation required.")
+
+
+@api.get("/ops/maintenance-mode")
+async def get_maintenance_mode(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Read maintenance mode state from system_state."""
+    st = await db.system_state.find_one({"key": "maintenance_mode"}, {"_id": 0}) or {}
+    return {
+        "ok": True,
+        "active": bool(st.get("active", False)),
+        "message": st.get("message", ""),
+        "updated_at": st.get("updated_at"),
+        "ts": now_iso(),
+    }
+
+
+@api.post("/ops/maintenance-mode")
+async def set_maintenance_mode(
+    payload: MaintenanceModeIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Emergency switch: Toggle maintenance mode state and record audit log and transactional outbox event."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    now_str = now_iso()
+    await db.system_state.update_one(
+        {"key": "maintenance_mode"},
+        {
+            "$set": {
+                "active": payload.active,
+                "message": payload.message or ("System under maintenance" if payload.active else ""),
+                "updated_at": now_str,
+            }
+        },
+        upsert=True,
+    )
+
+    # Queue outbox event for downstream workers/subscribers
+    outbox_coll = getattr(db, "outbox", None)
+    if outbox_coll is not None:
+        await outbox_coll.insert_one({
+            "id": f"outbox_{uuid.uuid4().hex[:12]}",
+            "event_type": "system.maintenance_mode_toggled",
+            "payload": {"active": payload.active, "message": payload.message},
+            "status": "pending",
+            "created_at": now_str,
+        })
+
+    await _audit(
+        "maintenance_mode_toggled",
+        "system",
+        after={"active": payload.active, "message": payload.message},
+        actor="ops",
+    )
+
+    return {
+        "ok": True,
+        "active": payload.active,
+        "message": payload.message,
+        "updated_at": now_str,
+    }
+
+
+@api.get("/oversight/matching")
+async def oversight_matching(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Protected, redacted matching read model for the Operations Console."""
+    return await build_matching_oversight_read_model(db)
+
+
+class OversightDegradationAcknowledgeIn(BaseModel):
+    action: str = Field(..., description="e.g. acknowledge or reset_circuit")
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/matching/degradation/acknowledge")
+async def oversight_matching_degradation_acknowledge(
+    payload: OversightDegradationAcknowledgeIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Acknowledge AI degradation and reset circuit safely."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    ai_service.clear_degradation_events()
+    await _audit(
+        "ai_degradation_acknowledged",
+        "matching_ai",
+        after={"action": payload.action, "notes": payload.notes},
+        actor="ops",
+    )
+    return {"ok": True, "action": payload.action, "circuit_status": "reset", "ts": now_iso()}
+
+
+class OversightUrgentCorrectionReviewIn(BaseModel):
+    action: str = Field(..., description="accept, reject, or suppress_provider")
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    official_source_url: Optional[str] = Field(default=None, description="Documented first-party official URL verifying provider facts")
+    verified_official_source: bool = Field(default=False, description="Operator certification of verified first-party official source")
+    evidence_reference: Optional[str] = Field(default=None, description="Recorded section/page citation on official provider site")
+    reviewed_field_values: Optional[Dict[str, Any]] = Field(default=None, description="Exact verified field values e.g. contact_method, stated_hours")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/urgent-providers/corrections/{correction_id}/review")
+async def oversight_urgent_provider_correction_review(
+    correction_id: str,
+    payload: OversightUrgentCorrectionReviewIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Review and act on urgent provider public correction request with bounded recorded evidence."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+    if payload.action not in {"accept", "reject", "suppress_provider"}:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be accept, reject, or suppress_provider.")
+
+    corrections_coll = getattr(db, "urgent_provider_corrections", None)
+    if corrections_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    corr = await corrections_coll.find_one({"id": correction_id}, {"_id": 0})
+    if not corr:
+        raise HTTPException(status_code=404, detail="Correction request not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    reviewed_ts = now_iso()
+
+    verified_official_url = ""
+    if payload.action == "accept":
+        verified_official_url = (payload.official_source_url or corr.get("official_source_url") or "").strip()
+        if not payload.verified_official_source or not verified_official_url:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot accept correction or mark provider current without verified official source URL and explicit operator verification.",
+            )
+
+        # Refinement 2: Bounded recorded evidence model
+        if not payload.evidence_reference or len(payload.evidence_reference.strip()) < 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Recorded evidence reference is required (e.g. section, page, or document citation on official site).",
+            )
+        if not payload.reviewed_field_values or not isinstance(payload.reviewed_field_values, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="Exact checked fields (reviewed_field_values) must be provided with verified values.",
+            )
+
+        # Approved provider-domain relationship check
+        clean_url = verified_official_url.lower()
+        if not (clean_url.startswith("http://") or clean_url.startswith("https://")):
+            raise HTTPException(status_code=400, detail="Invalid official source URL scheme.")
+
+        parsed = urlparse(verified_official_url)
+        domain = parsed.netloc.lower()
+
+        # Reject aggregators, social media, shorteners, search grounding/maps, and generic blog platforms
+        disallowed_aggregators = [
+            "facebook.com", "instagram.com", "yellowpages", "truelocal", "google.com/maps",
+            "goo.gl", "yelp.com", "womo.com.au", "twitter.com", "x.com", "tiktok.com",
+            "linkedin.com", "wordpress.com", "wixsite.com", "blogspot.com", "medium.com",
+            "bit.ly", "tinyurl.com"
+        ]
+        if any(agg in domain or agg in clean_url for agg in disallowed_aggregators):
+            raise HTTPException(status_code=400, detail="Aggregators, social media, directory blogs, and maps links are not permitted official sources.")
+
+        # Approved domain relationship:
+        provider_id = corr.get("provider_id") or ""
+        provider_name = (corr.get("provider_name") or "").lower()
+
+        is_approved_domain = False
+        if "lost_dogs_home" in provider_id or "lost dogs" in provider_name:
+            if domain == "dogshome.com" or domain.endswith(".dogshome.com"):
+                is_approved_domain = True
+        elif domain.endswith(".gov.au") or domain.endswith(".edu.au"):
+            is_approved_domain = True
+        elif provider_id:
+            urgent_coll = getattr(db, "urgent_providers", None)
+            if urgent_coll is not None:
+                existing_prov = await urgent_coll.find_one({"provider_id": provider_id}, {"_id": 0})
+                if existing_prov and existing_prov.get("official_source_url"):
+                    registered_domain = urlparse(existing_prov["official_source_url"]).netloc.lower()
+                    if domain == registered_domain or domain.endswith(f".{registered_domain}"):
+                        is_approved_domain = True
+
+        if not is_approved_domain:
+            raise HTTPException(
+                status_code=400,
+                detail=f"URL domain '{domain}' does not have an approved first-party provider relationship for {provider_id or provider_name}.",
+            )
+
+    new_status = "accepted" if payload.action == "accept" else ("suppressed" if payload.action == "suppress_provider" else "rejected")
+    await corrections_coll.update_one(
+        {"id": correction_id},
+        {
+            "$set": {
+                "status": new_status,
+                "reviewed_at": reviewed_ts,
+                "reviewed_by": operator_identity,
+                "review_notes": payload.notes or "",
+                "verified_official_source": payload.verified_official_source,
+                "verified_official_url": verified_official_url,
+                "evidence_reference": payload.evidence_reference,
+                "reviewed_field_values": payload.reviewed_field_values,
+            }
+        },
+    )
+
+    urgent_coll = getattr(db, "urgent_providers", None)
+    provider_id = corr.get("provider_id")
+    if urgent_coll is not None and provider_id:
+        if payload.action == "suppress_provider":
+            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": {"freshness_state": "suppressed"}})
+        elif payload.action == "accept":
+            update_provider_doc = {
+                "freshness_state": "current",
+                "official_source_url": verified_official_url,
+                "last_verified_at": reviewed_ts,
+                "verified_by": operator_identity,
+                "evidence_reference": payload.evidence_reference,
+                "reviewed_field_values": payload.reviewed_field_values,
+                "verification_notes": payload.notes or "",
+            }
+            if payload.reviewed_field_values:
+                for k in ["contact_method", "stated_hours", "service_area", "name"]:
+                    if k in payload.reviewed_field_values:
+                        update_provider_doc[k] = payload.reviewed_field_values[k]
+
+            await urgent_coll.update_one({"provider_id": provider_id}, {"$set": update_provider_doc})
+
+    await _audit(
+        "urgent_provider_correction_reviewed",
+        correction_id,
+        after={
+            "action": payload.action,
+            "status": new_status,
+            "provider_id": provider_id,
+            "verified_official_url": verified_official_url,
+            "evidence_reference": payload.evidence_reference,
+            "operator": operator_identity,
+        },
+        actor="ops",
+    )
+    return {"ok": True, "correction_id": correction_id, "status": new_status, "ts": reviewed_ts}
+
+
+RETRY_LEASE_SECONDS = 300
+
+
+class OversightFollowUpRetryIn(BaseModel):
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/matching/follow-ups/{intro_id}/retry")
+async def oversight_matching_follow_up_retry(
+    intro_id: str,
+    payload: OversightFollowUpRetryIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Retry a failed or pending match follow-up enquiry with atomic lease claim and crash recovery."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    intro = await db.intros.find_one({"id": intro_id}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Follow-up intro not found")
+
+    current_state = str(intro.get("delivery_state") or intro.get("delivery_status") or "")
+    if current_state == "delivered":
+        return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": True}
+
+    if current_state == "terminal_failure":
+        raise HTTPException(status_code=409, detail="Terminal failure cannot be automatically retried without schema remediation.")
+
+    if current_state == "suppressed":
+        raise HTTPException(status_code=409, detail="Suppressed follow-up cannot be automatically retried without manual fraud clearance.")
+
+    now_dt = datetime.now(timezone.utc)
+    lease_cutoff = (now_dt - timedelta(seconds=RETRY_LEASE_SECONDS)).isoformat()
+
+    # MP-002S: Atomic compare-and-set claim with recovery lease
+    claimed = await db.intros.find_one_and_update(
+        {
+            "id": intro_id,
+            "$or": [
+                {"delivery_state": {"$in": ["retryable_failure", "pending"]}},
+                {"delivery_status": {"$in": ["retryable_failure", "pending"]}},
+                {
+                    "delivery_state": "in_progress",
+                    "$or": [
+                        {"retry_claimed_at": {"$lt": lease_cutoff}},
+                        {"retry_claimed_at": {"$exists": False}},
+                    ],
+                },
+            ],
+        },
+        {
+            "$set": {
+                "delivery_state": "in_progress",
+                "delivery_status": "in_progress",
+                "status": "in_progress",
+                "retry_claimed_at": now_dt.isoformat(),
+                "retry_claimed_by": f"ops:{_client_ip(request)}",
+            }
+        },
+        return_document=True,
+    )
+
+    if not claimed:
+        refreshed = await db.intros.find_one({"id": intro_id}, {"_id": 0}) or {}
+        st = str(refreshed.get("delivery_state") or refreshed.get("delivery_status") or "")
+        if st == "delivered":
+            return {"ok": True, "intro_id": intro_id, "delivery_state": "delivered", "idempotent": True}
+        if st == "in_progress":
+            raise HTTPException(status_code=409, detail="Retry already in progress by another worker (lease active).")
+        raise HTTPException(status_code=409, detail=f"Cannot retry follow-up in state: {st}")
+
+    trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
+    if not trainer:
+        await db.intros.update_one({"id": intro_id}, {"$set": {"delivery_state": "terminal_failure", "delivery_status": "terminal_failure"}})
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    try:
+        notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+        new_state, update_fields = map_notification_delivery_state("pending", notif_meta)
+    except Exception as exc:
+        logger.exception("Retry dispatch failed for intro_id=%s", intro_id)
+        new_state, update_fields = map_notification_delivery_state("pending", {
+            "trainer_notification_status": "failed",
+            "trainer_notification_error": str(exc)[:200],
+        })
+
+    update_doc = {
+        **update_fields,
+        "retried_at": now_dt.isoformat(),
+        "retry_notes": payload.notes or "",
+        "retry_claimed_at": None,
+    }
+    await db.intros.update_one({"id": intro_id}, {"$set": update_doc})
+
+    await _audit(
+        "matching_follow_up_retried",
+        intro_id,
+        before={"delivery_state": current_state},
+        after={"delivery_state": new_state},
+        actor="ops",
+    )
+    return {"ok": True, "intro_id": intro_id, "delivery_state": new_state, "idempotent": False}
+
+
+class OversightCapabilityRecheckIn(BaseModel):
+    confirmed: bool = Field(..., description="Must be explicitly confirmed")
+    notes: Optional[str] = None
+
+
+@api.post("/oversight/trainers/{trainer_id}/capability/recheck")
+async def oversight_trainer_capability_recheck(
+    trainer_id: str,
+    payload: OversightCapabilityRecheckIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Recheck trainer capability projection under strict statutory rules without policy override."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    proj = trainer_quality.build_match_ready_projection(trainer)
+    await db.trainers.update_one(
+        {"id": trainer_id},
+        {"$set": {
+            "projection_version": proj.get("projection_version"),
+            "match_eligible": proj.get("match_eligible"),
+            "invalidation_reasons": proj.get("invalidation_reasons"),
+            "rechecked_at": now_iso(),
+        }}
+    )
+    await _audit(
+        "trainer_capability_rechecked",
+        trainer_id,
+        after={"match_eligible": proj.get("match_eligible"), "invalidation_reasons": proj.get("invalidation_reasons")},
+        actor="ops",
+    )
+    return {
+        "ok": True,
+        "trainer_id": trainer_id,
+        "match_eligible": proj.get("match_eligible"),
+        "invalidation_reasons": proj.get("invalidation_reasons"),
+        "ts": now_iso(),
+    }
 
 
 @api.get("/claims/validate")
@@ -4911,13 +7647,13 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
                     processed_reason = "subscription_metadata_invalid"
                 elif (
                     event_type in {"customer.subscription.deleted", "customer.subscription.paused"}
-                    or event_status == "incomplete_expired"
+                    or event_status in stripe_billing.TERMINAL_NONPAYMENT_SUBSCRIPTION_STATUSES
                 ) and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
                         db,
                         reservation_id=reservation_id,
                         subscription_id="" if reservation_id else subscription_id_for_inventory,
-                        reason="cancelled" if event_type.endswith("deleted") else "released",
+                        reason="cancelled" if event_type.endswith("deleted") else "payment_failed",
                     )
                 elif event_type == "charge.refunded" and (reservation_id or subscription_id_for_inventory):
                     await suburb_inventory.release_reservation(
@@ -5036,7 +7772,15 @@ async def _ensure_indexes() -> None:
         await db.intros.create_index([("trainer_id", 1), ("created_at", -1)])
         await db.intros.create_index("ip")
         await db.intros.create_index("idempotency_key", unique=True, sparse=True)
+        await db.intros.create_index("composite_idempotency_key", unique=True, sparse=True)
         await db.intros.create_index("stripe_invoice_id", sparse=True)
+        # TTL requires BSON datetimes, not ISO strings. Matching writes a
+        # timezone-aware datetime; the migration script converts pre-fix
+        # sandbox records before this index is relied on for acceptance.
+        await db.match_events.create_index("id", unique=True, sparse=True)
+        await db.match_events.create_index("expires_at", expireAfterSeconds=0, sparse=True)
+        await db.match_contexts.create_index("token_hash", unique=True, sparse=True)
+        await db.match_contexts.create_index("expires_at", expireAfterSeconds=0, sparse=True)
         await db.conversions.create_index([("intro_id", 1), ("billing_status", 1)])
         await db.engagements.create_index([("intro_id", 1), ("created_at", -1)])
         await db.submissions.create_index("status")
@@ -5097,12 +7841,31 @@ async def _ensure_indexes() -> None:
         await db.owner_waitlist.create_index([("status", 1), ("created_at", -1)])
         await db.owner_waitlist_events.create_index("id", unique=True, sparse=True)
         await db.owner_waitlist_events.create_index([("event_type", 1), ("created_at", -1)])
+        if hasattr(db, "urgent_providers"):
+            await db.urgent_providers.create_index("provider_id", unique=True, sparse=True)
+            await db.urgent_providers.create_index("category")
+            await db.urgent_providers.create_index("freshness_state")
+        if hasattr(db, "urgent_provider_corrections"):
+            await db.urgent_provider_corrections.create_index("id", unique=True, sparse=True)
+            await db.urgent_provider_corrections.create_index([("status", 1), ("created_at", -1)])
     except Exception as exc:
         logger.warning("Startup database index creation non-fatal warning: %s", exc)
 
 
+async def _seed_urgent_providers_if_empty() -> None:
+    """Seed official-source urgent providers if collection is empty."""
+    try:
+        if hasattr(db, "urgent_providers") and await db.urgent_providers.count_documents({}) == 0:
+            for p in urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS:
+                await db.urgent_providers.insert_one(dict(p))
+            logger.info("Canonical startup seeding: seeded %d official urgent provider records", len(urgent_providers_service.OFFICIAL_STATIC_URGENT_PROVIDERS))
+    except Exception as exc:
+        logger.warning("Urgent providers startup seeding warning: %s", exc)
+
+
 @app.on_event("startup")
 async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_loop_schedule: bool = True) -> None:
+    _initialise_sentry()
     ai_service.set_db(db)
     try:
         await asyncio.wait_for(_ensure_indexes(), timeout=10.0)
@@ -5114,6 +7877,7 @@ async def on_startup(process_role: runtime_control.ProcessRole = "api", allow_lo
         try:
             await asyncio.wait_for(_seed_if_empty(), timeout=10.0)
             await asyncio.wait_for(_seed_discovery_if_empty(), timeout=10.0)
+            await asyncio.wait_for(_seed_urgent_providers_if_empty(), timeout=10.0)
         except Exception as exc:
             logger.warning("Startup seeding deferred: %s", exc)
     else:

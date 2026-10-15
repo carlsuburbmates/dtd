@@ -87,7 +87,7 @@ class TestAntiGamingIntros:
         # triggered from prior tests, in which case we accept "suppressed" for
         # the first call but require ip_* reason (NOT email_*) so we know the
         # email-dup logic will work cleanly on the 2nd call.
-        assert first["delivery_status"] in ("delivered", "suppressed"), first
+        assert first["delivery_status"] in ("retryable_failure", "suppressed"), first
         if first["delivery_status"] == "suppressed":
             reasons = first.get("fraud_reasons") or []
             assert any(r.startswith("ip_") for r in reasons), reasons

@@ -7,6 +7,32 @@ import server
 from services import stripe_billing
 
 
+def test_construct_webhook_event_returns_plain_dict(monkeypatch):
+    event_data = {"id": "evt_1", "type": "invoice.paid", "data": {"object": {"id": "in_1"}}}
+
+    class ParsedEvent:
+        def to_dict(self):
+            return event_data
+
+    class FakeStripe:
+        class Webhook:
+            @staticmethod
+            def construct_event(**kwargs):
+                assert kwargs["payload"] == b"{}"
+                assert kwargs["sig_header"] == "sig"
+                assert kwargs["secret"] == "whsec_test"
+                return ParsedEvent()
+
+    monkeypatch.setattr(stripe_billing, "webhook_enabled", lambda: True)
+    monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
+    monkeypatch.setattr(stripe_billing, "_webhook_secret", lambda: "whsec_test")
+
+    result = stripe_billing.construct_webhook_event(b"{}", "sig")
+
+    assert result == event_data
+    assert isinstance(result, dict)
+
+
 def test_extract_invoice_id_by_event_type():
     assert stripe_billing.extract_invoice_id("invoice.paid", {"id": "in_123"}) == "in_123"
     assert stripe_billing.extract_invoice_id("charge.refunded", {"invoice": "in_456"}) == "in_456"
@@ -43,10 +69,18 @@ def test_provision_trainer_billing_profile_creates_customer(monkeypatch):
             self.updated.append((filt, update))
 
     fake_db = SimpleNamespace(trainers=_Trainers())
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "billing_enabled", lambda: True)
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
     trainer = {"id": "t_1", "email": "trainer@example.com", "name": "Trainer"}
-    out = asyncio.run(stripe_billing.provision_trainer_billing_profile(fake_db, trainer, consent_granted=True))
+    out = asyncio.run(
+        stripe_billing.provision_trainer_billing_profile(
+            fake_db,
+            trainer,
+            consent_granted=True,
+            consent_version=stripe_billing.billing_terms_version(),
+        )
+    )
     assert out["billing_profile_status"] == "ready"
     assert out["stripe_customer_id"] == "cus_created_123"
 

@@ -91,13 +91,22 @@ def test_only_eligible_pro_checkout_receives_full_stripe_trial(monkeypatch):
                     return SimpleNamespace(id="cs_trial", url="https://checkout.stripe.test/cs_trial")
 
     monkeypatch.setattr(stripe_billing, "_client", lambda: FakeStripe)
+    monkeypatch.setattr(stripe_billing, "checkout_enabled", lambda: True)
     monkeypatch.setattr(
         stripe_billing,
         "provision_trainer_billing_profile",
         lambda *_args, **_kwargs: asyncio.sleep(0, result={"billing_profile_status": "ready", "stripe_customer_id": "cus_1"}),
     )
     trainer = {"id": "trainer_1", "claimed_at": _iso(now - timedelta(days=1))}
-    out = asyncio.run(stripe_billing.create_checkout_session(SimpleNamespace(), trainer, tier="pro"))
+    out = asyncio.run(
+        stripe_billing.create_checkout_session(
+            SimpleNamespace(),
+            trainer,
+            tier="pro",
+            consent_granted=True,
+            consent_version=stripe_billing.billing_terms_version(),
+        )
+    )
     assert out["pro_trial_offered"] is True
     assert calls[0]["subscription_data"]["trial_period_days"] == 30
     assert calls[0]["subscription_data"]["metadata"]["pro_trial_cohort_anchor_at"]

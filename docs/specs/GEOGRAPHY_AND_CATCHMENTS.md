@@ -14,7 +14,7 @@ Each record carries stable identity and display fields sufficient for slug routi
 1. Prefer the production `suburbs` collection when it exactly satisfies the active catalogue contract.
 2. Fail soft to the same versioned static asset when the collection is unavailable or incomplete.
 3. `/api/config` exposes suburb count, catalogue version and actual source.
-4. Do not call fallback use a completed production seed.
+4. Treat fallback use as an open production-seed finding; do not call it a completed production seed.
 5. Seeding is idempotent, preserves unmanaged records unless explicitly governed, and writes audit evidence.
 
 ## Catchments
@@ -22,7 +22,7 @@ Each record carries stable identity and display fields sufficient for slug routi
 - **Suburb:** one canonical locality used for route/filter and sponsorship inventory.
 - **Service radius/area:** a trainer's evidenced travel coverage; it does not change the canonical locality.
 - **Greater Melbourne/Melbourne-Wide:** citywide service/visibility scope, not a synthetic suburb.
-- Fallback expansion may broaden results when local supply is absent but must label the broader scope.
+- For owner matching, expansion may broaden results only when fewer than three trainers pass the local eligibility gates. It must label the broader scope and never describe expanded results as local. Other directory/search fallback rules require their own documented trigger.
 
 ## Sponsorship geography
 

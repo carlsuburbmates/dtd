@@ -4,12 +4,12 @@ import { createRoot } from "react-dom/client";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ to, children, ...props }) => <a href={to} {...props}>{children}</a>,
     useLocation: () => ({ pathname: "/" }),
-}), { virtual: true });
+}));
 
-jest.mock("framer-motion", () => ({
+vi.mock("framer-motion", () => ({
     motion: new Proxy({}, { get: () => ({ children }) => <div>{children}</div> }),
     AnimatePresence: ({ children }) => <>{children}</>,
 }));
@@ -27,6 +27,30 @@ it("exposes a query-free education handoff in desktop navigation, mobile navigat
     const mobileLink = element.querySelector('[data-testid="nav-first-leash-mobile"]');
     expect(mobileLink?.href).toBe("https://learn.dogtrainersdirectory.com.au/");
     expect(mobileLink.hasAttribute("target")).toBe(false);
+    act(() => root.unmount());
+    element.remove();
+});
+
+it("renders neutral directory descriptor without universal review or selection claims", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const root = createRoot(element);
+    act(() => root.render(<PublicFooter />));
+    expect(element.textContent).toContain("Melbourne dog trainer directory");
+    expect(element.textContent).not.toContain("Reviewed trainers");
+    expect(element.textContent).not.toContain("Selected trainers");
+    act(() => root.unmount());
+    element.remove();
+});
+
+it("provides a direct owner matching route in navigation and footer", () => {
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const root = createRoot(element);
+    act(() => root.render(<><PublicHeader /><PublicFooter /></>));
+    expect(element.querySelector('[data-testid="nav-how"]')?.getAttribute("href")).toBe("/#owner-interest");
+    expect(element.querySelector('[data-testid="footer-waitlist"]')?.getAttribute("href")).toBe("/#owner-interest");
+    expect(element.textContent).toContain("Guided matching");
     act(() => root.unmount());
     element.remove();
 });

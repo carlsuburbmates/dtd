@@ -3,16 +3,16 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 
 let mockRouteSearch = new URLSearchParams();
-const mockSetSearch = jest.fn();
+const mockSetSearch = vi.fn();
 
-jest.mock("react-router-dom", () => ({
+vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
     useSearchParams: () => [mockRouteSearch, mockSetSearch],
     useParams: () => ({ suburb: "richmond" }),
-}), { virtual: true });
+}));
 
-jest.mock("@/lib/api", () => ({ api: { get: jest.fn(), post: jest.fn() } }));
-jest.mock("@/components/PublicChrome", () => ({ PublicHeader: () => <header>DTD</header>, PublicFooter: () => <footer>Footer</footer> }));
+vi.mock("@/lib/api", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
+vi.mock("@/components/PublicChrome", () => ({ PublicHeader: () => <header>DTD</header>, PublicFooter: () => <footer>Footer</footer> }));
 
 import Trainers from "./Trainers";
 import SuburbSEO from "./SuburbSEO";

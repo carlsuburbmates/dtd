@@ -6,7 +6,7 @@ import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 
 const NAV = [
     { to: "/trainers", label: "Find a trainer", testid: "nav-trainers" },
-    { to: "/how-it-works", label: "For owners", testid: "nav-how" },
+    { to: "/#owner-interest", label: "Guided matching", testid: "nav-how" },
     { to: FIRST_LEASH_URL, label: "The First Leash", testid: "nav-first-leash", external: true },
     { to: "/trust", label: "Trust & Standards", testid: "nav-trust" },
     { to: "/contact", label: "Support", testid: "nav-support" },
@@ -14,7 +14,7 @@ const NAV = [
 
 function isActive(item, pathname) {
     if (item.to === "/trainers") return pathname === "/trainers" || pathname === "/submit";
-    if (item.to === "/how-it-works") return pathname === "/how-it-works";
+    if (item.to === "/#owner-interest") return pathname === "/";
     return pathname === item.to;
 }
 
@@ -52,16 +52,39 @@ export function PublicHeader() {
                         aria-label="Primary"
                         className="hidden md:flex items-center gap-1.5 text-sm text-[#4A615A] rounded-full border border-white/60 bg-white/40 backdrop-blur-md px-2.5 py-1.5 mt-3 md:mt-0 md:w-fit shadow-[0_4px_20px_-10px_rgba(26,58,50,0.1)]"
                     >
-                        {NAV.map((item) => item.external ? (
-                            <a key={item.to} href={item.to} data-testid={item.testid} className="nav-link relative">{item.label}</a>
-                        ) : (
-                            <Link key={item.to} to={item.to} data-testid={item.testid} className="nav-link relative">
-                                {isActive(item, location.pathname) && (
-                                    <motion.span layoutId="nav-pill" className="absolute inset-0 bg-[#1A3A32] rounded-full -z-10" transition={{ type: "spring", stiffness: 350, damping: 30 }} />
-                                )}
-                                <span className={isActive(item, location.pathname) ? "relative z-10 text-[#F5F2EB]" : "relative z-10"}>{item.label}</span>
-                            </Link>
-                        ))}
+                        {NAV.map((item) => {
+                            const active = isActive(item, location.pathname);
+                            return item.external ? (
+                                <a
+                                    key={item.to}
+                                    href={item.to}
+                                    data-testid={item.testid}
+                                    className="nav-link relative text-[#4A615A] hover:text-[#1A3A32] hover:bg-[#EAE4D7] transition-colors"
+                                >
+                                    <span className="relative z-10 font-medium">{item.label}</span>
+                                </a>
+                            ) : (
+                                <Link
+                                    key={item.to}
+                                    to={item.to}
+                                    data-testid={item.testid}
+                                    className={`nav-link relative transition-colors ${
+                                        active
+                                            ? "active !text-[#F5F2EB] !bg-[#1A3A32] hover:!bg-[#24473D] hover:!text-white shadow-xs font-semibold"
+                                            : "text-[#4A615A] hover:text-[#1A3A32] hover:bg-[#EAE4D7] font-medium"
+                                    }`}
+                                >
+                                    {active && (
+                                        <motion.span
+                                            layoutId="nav-pill"
+                                            className="absolute inset-0 bg-[#1A3A32] rounded-full -z-10"
+                                            transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                                        />
+                                    )}
+                                    <span className="relative z-10">{item.label}</span>
+                                </Link>
+                            );
+                        })}
                     </nav>
 
                     <div className="hidden md:flex items-center gap-3 mt-3 md:mt-0">
@@ -83,11 +106,32 @@ export function PublicHeader() {
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
                             >
-                                {NAV.map((item) => item.external ? (
-                                    <a key={item.to} href={item.to} data-testid={`${item.testid}-mobile`} className="block nav-link">{item.label}</a>
-                                ) : (
-                                    <Link key={item.to} to={item.to} data-testid={`${item.testid}-mobile`} className={`block ${isActive(item, location.pathname) ? "nav-link active" : "nav-link"}`}>{item.label}</Link>
-                                ))}
+                                {NAV.map((item) => {
+                                    const active = isActive(item, location.pathname);
+                                    return item.external ? (
+                                        <a
+                                            key={item.to}
+                                            href={item.to}
+                                            data-testid={`${item.testid}-mobile`}
+                                            className="block nav-link text-[#4A615A] hover:text-[#1A3A32] hover:bg-[#EAE4D7]"
+                                        >
+                                            {item.label}
+                                        </a>
+                                    ) : (
+                                        <Link
+                                            key={item.to}
+                                            to={item.to}
+                                            data-testid={`${item.testid}-mobile`}
+                                            className={`block nav-link ${
+                                                active
+                                                    ? "active !text-[#F5F2EB] !bg-[#1A3A32] hover:!bg-[#24473D] hover:!text-white font-semibold"
+                                                    : "text-[#4A615A] hover:text-[#1A3A32] hover:bg-[#EAE4D7] font-medium"
+                                            }`}
+                                        >
+                                            {item.label}
+                                        </Link>
+                                    );
+                                })}
                                 <motion.div whileTap={{ scale: 0.97 }}>
                                     <Link
                                         to="/submit"
@@ -117,7 +161,7 @@ export function PublicFooter() {
                             Dog Trainers Directory
                         </p>
                         <p className="mt-1 text-sm text-[#6A7973]">
-                            Reviewed trainers for Melbourne
+                            Melbourne dog trainer directory
                         </p>
                         <Link to="/submit" className="btn-primary btn-primary-sm mt-5 inline-flex">
                             Apply
@@ -134,7 +178,7 @@ export function PublicFooter() {
                     <div>
                         <div className="small-caps">Owners</div>
                         <div className="mt-3 grid gap-2 text-sm text-[#4A615A]">
-                            <Link to="/how-it-works#owner-guide-waitlist" data-testid="footer-waitlist" className="footer-link">Waitlist</Link>
+                            <Link to="/#owner-interest" data-testid="footer-waitlist" className="footer-link">Guided matching</Link>
                             <a href={FIRST_LEASH_URL} data-testid="footer-first-leash" className="footer-link">The First Leash</a>
                             <Link to="/faq" data-testid="footer-faq" className="footer-link">FAQ</Link>
                         </div>
