@@ -369,3 +369,11 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** visitors may not receive complete, fact-backed privacy and commercial information. DTD must not invent retention or response-time promises, or claim provider handling that has not been verified.
 - **Why deferred:** substantive privacy/legal policy changes require owner and qualified legal review; runtime data-flow, provider and deletion evidence must first be reconciled.
 - **Next action:** verify live provider/data-flow and hosting/cookie behavior, map retention and access/correction/deletion handling for the persistent collections, then prepare a fact-backed policy draft and exact trial/Terms delta for qualified legal review before public publication.
+
+### DF-037 — Default-branch dependency security alerts need compatibility review
+
+- **Observed/status:** 16 October 2026 — open; GitHub Dependabot reports five open default-branch alerts (two high, three medium).
+- **Evidence:** the read-only Dependabot alert query identified four PyMongo advisories affecting the pinned `pymongo==4.6.3` backend dependency and one PostCSS selector-parser advisory; the frontend lockfile currently resolves `postcss-selector-parser` 6.0.10 and 6.1.4. GitHub reports patched versions, but the compatible Motor/PyMongo pair and actual transitive exposure path were not verified in this audit task.
+- **Impact/uncertainty:** unpatched dependency paths may expose deployed or build-time systems to the reported issues. The repository alert count is current to the query time and may change; branch-specific reachability and deployed-image contents remain unverified.
+- **Why deferred:** this security issue is outside the supplied public-site audit scope, and changing the async MongoDB driver pair needs a separate compatibility check before deployment.
+- **Next action:** map each alert to the active dependency and deployed image, confirm a compatible patched Motor/PyMongo pair, then update the frontend lockfile and backend requirements with targeted tests and sandbox verification.
