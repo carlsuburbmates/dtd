@@ -28,7 +28,7 @@ vi.mock("@/components/PublicChrome", () => ({
 }));
 
 vi.mock("@/components/OwnerWaitlistForm", () => ({
-    default: () => <div>Waitlist</div>,
+    default: ({ formTestId }) => <div data-testid={formTestId}>Waitlist</div>,
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -91,12 +91,16 @@ describe("Home page matching test", () => {
         api.get.mockReturnValueOnce(new Promise((resolve) => { resolveConfig = resolve; }));
         await act(async () => { root.render(<Home />); });
         expect(container.querySelector("[data-testid='owner-options-loading']")).not.toBeNull();
+        expect(container.querySelector("[data-testid='hero-owner-cta']")?.textContent).toBe("Checking owner options…");
+        expect(container.querySelector("[data-testid='hero-trainer-cta']")).toBeNull();
         expect(container.querySelector("[data-testid='home-owner-waitlist-form']")).toBeNull();
         expect(container.querySelector("[data-testid='owner-match-form']")).toBeNull();
         await act(async () => {
             resolveConfig({ data: { public_matching_enabled: true, public_launch_phase: "live_matching", trainer_onboarding_open: true, suburbs: ["Richmond"] } });
         });
         expect(container.querySelector("[data-testid='owner-match-form']")).not.toBeNull();
+        expect(container.querySelector("[data-testid='hero-owner-cta']")?.textContent).toBe("Find a trainer for your dog");
+        expect(container.querySelector("[data-testid='hero-trainer-cta']")).not.toBeNull();
     });
 
     it("makes the owner hero CTA lead directly to guided matching", async () => {
@@ -104,6 +108,29 @@ describe("Home page matching test", () => {
         const cta = container.querySelector("[data-testid='hero-owner-cta']");
         expect(cta?.getAttribute("href")).toBe("/#owner-interest");
         expect(cta?.textContent).toContain("Find a trainer for your dog");
+    });
+
+    it("labels the owner CTA as interest registration when matching is disabled", async () => {
+        api.get.mockResolvedValueOnce({
+            data: {
+                public_matching_enabled: false,
+                public_launch_phase: "supply_first",
+                trainer_onboarding_open: true,
+                suburbs: [],
+            },
+        });
+        await act(async () => { root.render(<Home />); });
+        expect(container.querySelector("[data-testid='hero-owner-cta']")?.textContent).toBe("Register owner interest");
+        expect(container.querySelector("[data-testid='home-owner-waitlist-form']")).not.toBeNull();
+    });
+
+    it("routes the owner CTA to the service notice when configuration fails", async () => {
+        api.get.mockRejectedValueOnce(new Error("offline"));
+        await act(async () => { root.render(<Home />); });
+        expect(container.querySelector("[data-testid='hero-owner-cta']")?.textContent).toBe("View service notice");
+        expect(container.querySelector("[data-testid='hero-trainer-cta']")).toBeNull();
+        expect(container.textContent).toContain("Service Notice");
+        expect(container.querySelector("[data-testid='home-owner-waitlist-form']")).not.toBeNull();
     });
 
     it("renders match results with structured questionnaire, stores context token, and preserves URL privacy", async () => {

@@ -51,7 +51,7 @@ export default function Home() {
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
     const [publicConfigLoaded, setPublicConfigLoaded] = useState(false);
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
-    const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(true);
+    const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(false);
     const [matchSuburbs, setMatchSuburbs] = useState([]);
 
     // Structured questionnaire fields (Contract v2 Section 2)
@@ -256,6 +256,14 @@ export default function Home() {
         }
     };
 
+    const ownerHeroCtaLabel = !publicConfigLoaded
+        ? "Checking owner options…"
+        : publicMatchingEnabled
+            ? "Find a trainer for your dog"
+            : publicLaunchPhase === "service_unavailable"
+                ? "View service notice"
+                : "Register owner interest";
+
     return (
         <div className="App public-page min-h-screen flex flex-col relative overflow-x-clip bg-[#FAFAF7]">
             <PublicHeader />
@@ -303,7 +311,7 @@ export default function Home() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.9, delay: 0.28, ease: [0.2, 0.8, 0.2, 1] }}
                         >
-                            {trainerOnboardingOpen && (
+                            {publicConfigLoaded && trainerOnboardingOpen && (
                                 <motion.div whileTap={{ scale: 0.97 }}>
                                     <Link to="/submit" className="btn-primary text-base px-8 py-4 w-full sm:w-auto shadow-2xl" data-testid="hero-trainer-cta">
                                         Join the trainer network
@@ -311,7 +319,7 @@ export default function Home() {
                                 </motion.div>
                             )}
                             <motion.div whileTap={{ scale: 0.97 }}>
-                                <Link to="/#owner-interest" className="inline-flex items-center justify-center text-base px-8 py-4 w-full sm:w-auto rounded-full border border-white/40 text-white hover:bg-white/10 transition-colors" data-testid="hero-owner-cta">Find a trainer for your dog</Link>
+                                <Link to="/#owner-interest" aria-busy={!publicConfigLoaded} className="inline-flex items-center justify-center text-base px-8 py-4 w-full sm:w-auto rounded-full border border-white/40 text-white hover:bg-white/10 transition-colors" data-testid="hero-owner-cta">{ownerHeroCtaLabel}</Link>
                             </motion.div>
                         </motion.div>
                         <motion.div
