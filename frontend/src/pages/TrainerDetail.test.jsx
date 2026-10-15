@@ -172,6 +172,44 @@ describe("TrainerDetail ownership claim", () => {
         view.cleanup();
     });
 
+    it("holds a legacy radius setting until the trainer chooses a supported service area", async () => {
+        const legacyRadiusTrainer = { ...trainer, catchment_type: "radius" };
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1"
+                ? legacyRadiusTrainer
+                : path === "/trainers/trainer_1/capabilities/prefill"
+                    ? { prefilled: { catchment_type: "radius", serviced_suburbs: ["Richmond"] } }
+                    : { public_matching_enabled: false },
+        }));
+        api.post
+            .mockResolvedValueOnce({ data: { claim_event_id: "claim_radius", status: "pending_verification", masked_destination: "s***@dogs.com.au" } })
+            .mockResolvedValueOnce({ data: { ok: true, claim_status: "claimed", session: { token: "claim-session-radius" } } });
+
+        const view = renderDetail();
+        await settle();
+        act(() => view.container.querySelector("[data-testid='claim-profile-open']").click());
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-email']"), "owner@dogs.com.au"));
+        await act(async () => view.container.querySelector("[data-testid='claim-start']").click());
+        act(() => changeValue(view.container.querySelector("[data-testid='claim-otp']"), "123456"));
+        await act(async () => view.container.querySelector("[data-testid='claim-verify']").click());
+        await settle();
+
+        const catchment = view.container.querySelector("[data-testid='claim-catchment-type']");
+        const legacyOption = [...catchment.options].find((option) => option.value === "radius");
+        expect(catchment.value).toBe("radius");
+        expect(legacyOption.disabled).toBe(true);
+        expect(view.container.textContent).toContain("Distance-based matching is not currently supported.");
+
+        act(() => view.container.querySelector("[data-testid='claim-confirm-statement']").click());
+        await act(async () => {
+            view.container.querySelector("[data-testid='claim-capabilities-step']")
+                .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        });
+        expect(view.container.textContent).toContain("Choose specific served suburbs or Melbourne-Wide coverage.");
+        expect(api.post).toHaveBeenCalledTimes(2);
+        view.cleanup();
+    });
+
     it("preserves conservative false defaults when delivery constraints are left untouched", async () => {
         api.post
             .mockResolvedValueOnce({ data: { claim_event_id: "claim_unprefilled", status: "pending_verification", masked_destination: "s***@dogs.com.au" } })

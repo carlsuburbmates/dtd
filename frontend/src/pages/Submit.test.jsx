@@ -42,6 +42,12 @@ function changeValue(element, value) {
     element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function changeSelect(element, value) {
+    const descriptor = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value");
+    descriptor.set.call(element, value);
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("Submit page validation and submission test", () => {
     let container;
     let root;
@@ -92,6 +98,20 @@ describe("Submit page validation and submission test", () => {
         const options = [...container.querySelectorAll("[data-testid='submit-catchment-type'] option")];
         expect(options.map((option) => option.value)).toEqual(["specific_suburbs", "melbourne_wide"]);
         expect(container.textContent).toContain("Distance-based matching is not currently supported.");
+    });
+
+    it("switches cleanly between nominated suburbs and Melbourne-Wide coverage", async () => {
+        await act(async () => { root.render(<Submit />); });
+        const catchment = container.querySelector("[data-testid='submit-catchment-type']");
+        expect(container.querySelector("[data-testid='submit-serviced-suburbs']")).not.toBeNull();
+
+        act(() => changeSelect(catchment, "melbourne_wide"));
+        expect(catchment.value).toBe("melbourne_wide");
+        expect(container.querySelector("[data-testid='submit-serviced-suburbs']")).toBeNull();
+
+        act(() => changeSelect(catchment, "specific_suburbs"));
+        expect(catchment.value).toBe("specific_suburbs");
+        expect(container.querySelector("[data-testid='submit-serviced-suburbs']")).not.toBeNull();
     });
 
     it("validates ABN length and submits successfully when valid", async () => {
