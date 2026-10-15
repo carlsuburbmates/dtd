@@ -350,17 +350,17 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-034 — Public homepage owner journey flashes before launch config resolves
 
-- **Observed/status:** 16 October 2026 — local UI repair implemented; developer-sandbox acceptance pending.
-- **Evidence:** the supplied live audit observed both guided matching and waitlist on the same public root. Source initializes matching disabled and immediately renders the waitlist while `/api/config` loads; current production config reports `public_matching_enabled=true` and `public_launch_phase=live_matching`. The local homepage now renders a labeled loading state until config succeeds or fails, then selects one journey.
-- **Impact/uncertainty:** visitors no longer see the initial waitlist flash in the local candidate. Matching and failure-state behavior still require browser verification against the developer sandbox.
-- **Next action:** deploy the audited frontend commit to the developer sandbox; verify matching, waitlist and config-failure outcomes at desktop and mobile widths without submitting a real request.
+- **Observed/status:** 16 October 2026 — `DONE` in developer sandbox; production remains unchanged.
+- **Evidence:** commit `26c6fbe` deployed to Cloud Run `dtd-web-dev-00011-dwf` at 100% traffic. The served bundle contains the isolated API origin `https://dtd-api-dev-625222421634.australia-southeast1.run.app`. Chrome on the canonical developer URL showed `Checking current options` while config loaded, then resolved to the guided matching form; no request was submitted. A deferred-config regression test and failure-state tests cover loading and config error behavior.
+- **Impact/uncertainty:** the live normal-config path no longer renders a waitlist before config resolves. Desktop accessibility-tree verification passed; a mobile viewport check was unavailable in the selected Computer Use surface.
+- **Next action:** retain the existing tests for loading and config failure; separately verify responsive behavior when a mobile browser viewport is available.
 
 ### DF-035 — Trainer radius catchment was selectable without a supported radius definition
 
-- **Observed/status:** 16 October 2026 — local UI repair implemented; developer-sandbox acceptance pending.
-- **Evidence:** the live audit selected “Distance Radius from Suburb” but found no centre or distance controls. Decision Contract v2 prohibits radius matching until canonical coordinates and a separately verified geo policy exist. The unsupported option is removed from new trainer submissions and claimed-profile capability editing; a legacy radius declaration is visibly marked unsupported and blocked from confirmation until changed. Supported suburb and Melbourne-Wide choices remain.
-- **Impact/uncertainty:** the public UI no longer invites a radius declaration that cannot be represented or used safely. Existing legacy catchment values are not migrated or deleted by this change.
-- **Next action:** verify both trainer forms in the developer sandbox and keep radius matching disabled until a reviewed geo policy is adopted.
+- **Observed/status:** 16 October 2026 — `PARTIAL` in developer sandbox; production remains unchanged.
+- **Evidence:** commit `26c6fbe` deployed to `dtd-web-dev-00011-dwf` at 100% traffic. Chrome on sandbox `/submit` showed only `Specific Nominated Suburbs` and `Melbourne-Wide Coverage`, with the notice “Distance-based matching is not currently supported.” No radius control is offered. Regression tests cover the claimed-profile editor; that authenticated path was not exercised in the live sandbox. Matching Decision Contract v2 prohibits radius until canonical coordinates and a separately verified geo policy exist.
+- **Impact/uncertainty:** new submissions cannot declare unsupported radius coverage. Existing legacy radius values are not migrated or deleted; claimed-profile confirmation remains verified by local tests, not live sandbox interaction.
+- **Next action:** verify the authenticated trainer capability editor in a sandbox account and keep radius matching disabled until a reviewed geo policy is adopted.
 
 ### DF-036 — Public privacy, trial and support disclosures need source reconciliation and review
 
