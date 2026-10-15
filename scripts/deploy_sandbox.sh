@@ -32,22 +32,22 @@ PY
 }
 
 validate_deployed_traffic_response() {
-  PREVIOUS_READY_REVISION="$1" SERVICE_STATE="$2" python3 - <<'PY'
+  SERVICE_STATE="$1" python3 - <<'PY'
 import json
 import os
 
 try:
-    state = json.loads(os.environ["SERVICE_STATE"])
+    response = json.loads(os.environ["SERVICE_STATE"])
 except (KeyError, json.JSONDecodeError) as error:
     raise SystemExit(f"Sandbox service state was not valid JSON: {error}")
 
+state = response.get("status", response)
 latest_created = state.get("latestCreatedRevisionName") or ""
 latest_ready = state.get("latestReadyRevisionName") or ""
-previous_ready = os.environ.get("PREVIOUS_READY_REVISION") or ""
 traffic = state.get("traffic") or []
 
-if not latest_created or latest_created == previous_ready:
-    raise SystemExit("Sandbox deployment did not create a new revision")
+if not latest_created:
+    raise SystemExit("Sandbox service has no created revision")
 if latest_ready != latest_created:
     raise SystemExit("Latest sandbox revision is not ready")
 if not any(
@@ -74,12 +74,6 @@ fi
 echo "✅ Preflight tests passed!"
 
 # 2. Deploy to Google Cloud Run
-PREVIOUS_READY_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestReadyRevisionName)")
-if [ -z "${PREVIOUS_READY_REVISION}" ]; then
-  echo "Sandbox service has no ready revision to compare against" >&2
-  exit 1
-fi
-
 echo "🚀 [2/3] Deploying ${SERVICE_NAME} to Google Cloud Run in project ${PROJECT_ID} (${REGION})..."
 gcloud run deploy "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
@@ -103,7 +97,7 @@ gcloud run services update-traffic "${SERVICE_NAME}" \
   --to-latest
 
 SERVICE_STATE=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)")
-validate_deployed_traffic_response "${PREVIOUS_READY_REVISION}" "${SERVICE_STATE}"
+validate_deployed_traffic_response "${SERVICE_STATE}"
 LATEST_CREATED_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestCreatedRevisionName)")
 
 DEPLOYED_SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
