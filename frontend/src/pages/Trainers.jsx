@@ -100,7 +100,10 @@ export default function Trainers() {
                             </button>
                         ) : null}
                     </div>
-                    <div className="mt-5 flex flex-wrap gap-2" aria-label="Specialty filters">{CATEGORIES.map(([value, label]) => <button key={label} type="button" onClick={() => updateFilter("category", value)} className={category === value ? "btn-primary" : "btn-ghost"} aria-pressed={category === value}>{label}</button>)}</div>
+                    <div className="mt-5">
+                        <p className="mb-2 text-xs text-[#5C6D59]">Specialty filter — choose one.</p>
+                        <div className="flex flex-wrap gap-2" role="group" aria-label="Specialty filters">{CATEGORIES.map(([value, label]) => <button key={label} type="button" onClick={() => updateFilter("category", value)} className={category === value ? "btn-primary" : "btn-ghost"} aria-pressed={category === value}>{label}</button>)}</div>
+                    </div>
                 </section>
                 {loading ? <div className="mt-10 text-[#5C6D59]" data-testid="directory-loading">Loading trainers…</div> : null}
                 {!loading && error ? <section className="card-public p-6 mt-10" role="alert" data-testid="directory-error"><div className="flex items-center gap-2 text-[#9B4F31]"><AlertTriangle className="h-4 w-4" />Directory unavailable</div><p className="mt-3 text-[#4A615A]">{error}</p><button type="button" className="btn-primary mt-5" onClick={() => updateFilter("category", category)}>Try again</button></section> : null}

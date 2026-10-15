@@ -347,3 +347,25 @@ These entries are verified observations requiring follow-up, not approved produc
   3. Replaced naive 5-second timestamp delta with authoritative occurrence fingerprinting (`_case_occurrence_fingerprint`), preventing false recurrence on static data and snapshot rewrites while conservatively deferring un-tracked cases to Phase 2.
   4. Enforced temporal validation on AI degradation events: missing or unparseable timestamps never enter 1h burst or 24h persistent rolling windows; unrecovered failures alert with explicit `unknown` age.
 - **Residual gate:** Production promotion remains a separate owner gate. Phase 2 remains blocked pending owner authorization.
+
+### DF-034 — Public homepage owner journey flashes before launch config resolves
+
+- **Observed/status:** 16 October 2026 — local UI repair implemented; developer-sandbox acceptance pending.
+- **Evidence:** the supplied live audit observed both guided matching and waitlist on the same public root. Source initializes matching disabled and immediately renders the waitlist while `/api/config` loads; current production config reports `public_matching_enabled=true` and `public_launch_phase=live_matching`. The local homepage now renders a labeled loading state until config succeeds or fails, then selects one journey.
+- **Impact/uncertainty:** visitors no longer see the initial waitlist flash in the local candidate. Matching and failure-state behavior still require browser verification against the developer sandbox.
+- **Next action:** deploy the audited frontend commit to the developer sandbox; verify matching, waitlist and config-failure outcomes at desktop and mobile widths without submitting a real request.
+
+### DF-035 — Trainer radius catchment was selectable without a supported radius definition
+
+- **Observed/status:** 16 October 2026 — local UI repair implemented; developer-sandbox acceptance pending.
+- **Evidence:** the live audit selected “Distance Radius from Suburb” but found no centre or distance controls. Decision Contract v2 prohibits radius matching until canonical coordinates and a separately verified geo policy exist. The unsupported option is removed from new trainer submissions and claimed-profile capability editing; a legacy radius declaration is visibly marked unsupported and blocked from confirmation until changed. Supported suburb and Melbourne-Wide choices remain.
+- **Impact/uncertainty:** the public UI no longer invites a radius declaration that cannot be represented or used safely. Existing legacy catchment values are not migrated or deleted by this change.
+- **Next action:** verify both trainer forms in the developer sandbox and keep radius matching disabled until a reviewed geo policy is adopted.
+
+### DF-036 — Public privacy, trial and support disclosures need source reconciliation and review
+
+- **Observed/status:** 16 October 2026 — open; no substantive policy or legal copy change made.
+- **Evidence:** the supplied public-site audit found the Privacy page omits specific retention, access/correction/deletion routes, service-provider/overseas handling and cookie/analytics disclosures; it also found the Pro trial absent from Terms and no support response-time commitment. The current source and provider/data-flow evidence were not reconciled into a complete publication-ready policy during this pass.
+- **Impact/uncertainty:** visitors may not receive complete, fact-backed privacy and commercial information. DTD must not invent retention or response-time promises, or claim provider handling that has not been verified.
+- **Why deferred:** substantive privacy/legal policy changes require owner and qualified legal review; runtime data-flow, provider and deletion evidence must first be reconciled.
+- **Next action:** inventory actual collection, persistence, processors, analytics/cookies, retention and deletion behavior; prepare a fact-backed draft and exact trial/terms delta for owner/legal review before public publication.

@@ -7,7 +7,7 @@ import PublicArt from "@/components/PublicArt";
 const TIERS = [
     {
         name: "Free Core Listing",
-        price: "$0",
+        price: "A$0",
         cadence: "forever",
         description: "Essential directory listing for Melbourne dog trainers.",
         highlight: false,
@@ -18,13 +18,13 @@ const TIERS = [
             "Zero per-intro fees or commissions",
             "Listed in primary suburb directory",
         ],
-        ctaText: "Claim your profile",
-        ctaHref: "/trainers",
+        ctaText: "Ask about a free listing",
+        ctaHref: "/contact?plan=core",
         ctaPrimary: false,
     },
     {
         name: "Pro Trainer",
-        price: "$19",
+        price: "A$19",
         cadence: "per month",
         priceDetail: "or A$149/year",
         description: "Optional higher visibility in directory browsing for a claimed trainer profile.",
@@ -36,13 +36,13 @@ const TIERS = [
             "Public booking link when supplied",
             "Diagnostic matching remains fit-first",
         ],
-        ctaText: "Get Pro placement",
-        ctaHref: "/trainers",
+        ctaText: "Ask about Pro",
+        ctaHref: "/contact?plan=pro",
         ctaPrimary: true,
     },
     {
         name: "Suburb Sponsor",
-        price: "$39",
+        price: "A$39",
         cadence: "per month",
         description: "One of two sponsored visibility placements in a served Greater Melbourne suburb.",
         highlight: false,
@@ -52,13 +52,13 @@ const TIERS = [
             "Prominent local directory visibility",
             "Two sponsor placements available per suburb",
         ],
-        ctaText: "Sponsor a suburb",
-        ctaHref: "/trainers",
+        ctaText: "Ask about suburb sponsorship",
+        ctaHref: "/contact?plan=suburb-sponsor",
         ctaPrimary: false,
     },
     {
         name: "Melbourne-Wide",
-        price: "$199",
+        price: "A$199",
         cadence: "per month",
         description: "One of five citywide sponsored visibility positions across Greater Melbourne.",
         highlight: false,
@@ -69,8 +69,8 @@ const TIERS = [
             "Diagnostic matching remains fit-first",
             "Five citywide positions available",
         ],
-        ctaText: "Contact for regional",
-        ctaHref: "/contact",
+        ctaText: "Ask about Melbourne-Wide",
+        ctaHref: "/contact?plan=melbourne-wide",
         ctaPrimary: false,
     },
 ];
@@ -123,7 +123,7 @@ export default function Pricing() {
                                     <div className="font-medium text-sm text-[#5C6D59]">{tier.name}</div>
                                     <div className="mt-3 flex items-baseline gap-1">
                                         <span className="font-serif text-4xl font-bold text-[#1A3A32]">{tier.price}</span>
-                                        <span className="text-xs text-[#5C6D59]">/{tier.cadence}</span>
+                                        <span className="text-xs text-[#5C6D59]">{tier.cadence === "forever" ? "" : `/${tier.cadence}`}</span>
                                     </div>
                                     {tier.priceDetail ? <div className="mt-1 text-xs text-[#5C6D59]">{tier.priceDetail}</div> : null}
                                     <p className="text-xs text-[#4A615A] mt-2 leading-relaxed min-h-[36px]">{tier.description}</p>

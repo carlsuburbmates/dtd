@@ -1,8 +1,20 @@
 import React from "react";
+import { useSearchParams } from "react-router-dom";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import { Mail, HelpCircle } from "lucide-react";
 
 export default function Contact() {
+    const [searchParams] = useSearchParams();
+    const planNames = {
+        core: "Free Core Listing",
+        pro: "Pro Trainer",
+        "suburb-sponsor": "Suburb Sponsorship",
+        "melbourne-wide": "Melbourne-Wide",
+    };
+    const selectedPlan = planNames[searchParams.get("plan") || ""] || "";
+    const contactHref = selectedPlan
+        ? `mailto:info@dogtrainersdirectory.com.au?subject=${encodeURIComponent(`DTD enquiry: ${selectedPlan}`)}`
+        : "mailto:info@dogtrainersdirectory.com.au";
     return (
         <div className="App min-h-screen flex flex-col">
             <PublicHeader />
@@ -19,6 +31,11 @@ export default function Contact() {
                         <p className="text-dtd-content text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto">
                             Whether you're an owner looking for guidance on using the platform, or a trainer with onboarding questions, our team is ready.
                         </p>
+                        {selectedPlan ? (
+                            <p className="mt-5 mx-auto max-w-2xl rounded-xl border border-dtd-border bg-white px-5 py-4 text-sm text-dtd-content" role="status" data-testid="contact-selected-plan">
+                                You selected <strong>{selectedPlan}</strong>. This is an enquiry only; it does not start a subscription or charge. Email DTD to ask about the next available step.
+                            </p>
+                        ) : null}
                     </div>
                 </section>
 
@@ -33,7 +50,7 @@ export default function Contact() {
                             <p className="text-dtd-content mb-6 leading-relaxed">
                                 For onboarding, technical support, billing enquiries, or general questions about Dog Trainers Directory.
                             </p>
-                            <a href="mailto:info@dogtrainersdirectory.com.au" data-testid="contact-email" className="btn-primary inline-flex w-full justify-center">
+                            <a href={contactHref} data-testid="contact-email" className="btn-primary inline-flex w-full justify-center">
                                 info@dogtrainersdirectory.com.au
                             </a>
                         </article>

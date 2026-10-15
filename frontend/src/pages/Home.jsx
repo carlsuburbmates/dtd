@@ -49,6 +49,7 @@ export default function Home() {
     const location = useLocation();
     const [search] = useSearchParams();
     const [publicMatchingEnabled, setPublicMatchingEnabled] = useState(false);
+    const [publicConfigLoaded, setPublicConfigLoaded] = useState(false);
     const [publicLaunchPhase, setPublicLaunchPhase] = useState("supply_first");
     const [trainerOnboardingOpen, setTrainerOnboardingOpen] = useState(true);
     const [matchSuburbs, setMatchSuburbs] = useState([]);
@@ -105,6 +106,7 @@ export default function Home() {
                 setTrainerOnboardingOpen(Boolean(config.trainer_onboarding_open ?? false));
                 const suburbs = Array.isArray(config.suburbs) ? config.suburbs : [];
                 setMatchSuburbs(suburbs);
+                setPublicConfigLoaded(true);
             })
             .catch(() => {
                 if (!active) return;
@@ -112,6 +114,7 @@ export default function Home() {
                 setPublicLaunchPhase("service_unavailable");
                 setTrainerOnboardingOpen(false);
                 setMatchSuburbs([]);
+                setPublicConfigLoaded(true);
             });
         return () => {
             active = false;
@@ -378,19 +381,25 @@ export default function Home() {
                         viewport={{ once: true, margin: "-100px" }}
                         transition={{ duration: 0.7, delay: 0.1 }}
                     >
-                        <div className="small-caps text-[#5C6D59]">{publicMatchingEnabled ? "For owners" : "For dog owners"}</div>
+                        <div className="small-caps text-[#5C6D59]">{!publicConfigLoaded ? "Checking availability" : publicMatchingEnabled ? "For owners" : "For dog owners"}</div>
                         <h2 className="text-4xl font-serif text-[#1A3A32]">
-                            {publicMatchingEnabled ? "Find trainers" : (publicLaunchPhase === "service_unavailable" ? "Service Notice" : "Register interest")}
+                            {!publicConfigLoaded ? "Checking current options" : publicMatchingEnabled ? "Find trainers" : (publicLaunchPhase === "service_unavailable" ? "Service Notice" : "Register interest")}
                         </h2>
                         <p className="text-[#4A615A] leading-relaxed font-light text-lg max-w-md">
-                            {publicMatchingEnabled
+                            {!publicConfigLoaded
+                                ? "Checking whether guided matching or interest registration is currently available."
+                                : publicMatchingEnabled
                                 ? "Share the practical details and see up to three trainer profiles that meet the matching rules for your request."
                                 : (publicLaunchPhase === "service_unavailable"
                                     ? "Matching services are currently unavailable while configuration is verified. Please leave your details to register interest."
                                     : "Register your interest so DTD can understand where trainer coverage is needed most in Melbourne.")}
                         </p>
                         <div className="mt-6">
-                            {publicMatchingEnabled ? (
+                            {!publicConfigLoaded ? (
+                                <div className="max-w-md rounded-2xl border border-[#E5DFD3] bg-white p-6 text-sm text-[#4A615A]" role="status" aria-live="polite" data-testid="owner-options-loading">
+                                    Loading current owner options…
+                                </div>
+                            ) : publicMatchingEnabled ? (
                                 <form onSubmit={runMatch} className="space-y-5 max-w-xl" data-testid="owner-match-form">
                                     {/* 1. Suburb or Postcode */}
                                     <div>

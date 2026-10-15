@@ -61,7 +61,6 @@ const TRAINING_PHILOSOPHY_OPTIONS = [
 
 const CATCHMENT_OPTIONS = [
     { id: "specific_suburbs", label: "Specific Nominated Suburbs" },
-    { id: "radius", label: "Distance Radius from Suburb" },
     { id: "melbourne_wide", label: "Melbourne-Wide Coverage" },
 ];
 
@@ -387,6 +386,10 @@ export default function TrainerDetail() {
 
     const submitCapabilityConfirmation = async (event) => {
         if (event) event.preventDefault();
+        if (confirmedCaps.catchment_type === "radius") {
+            setConfirmError("Choose specific served suburbs or Melbourne-Wide coverage. Distance-based matching is not currently supported.");
+            return;
+        }
         if (!confirmStatement) {
             setConfirmError("Please affirm the confirmation statement to declare capabilities.");
             return;
@@ -810,14 +813,16 @@ export default function TrainerDetail() {
                                     </label>
                                     <select
                                         value={confirmedCaps.catchment_type}
-                                        onChange={(e) => setConfirmedCaps((prev) => ({ ...prev, catchment_type: e.target.value }))}
+                                        onChange={(e) => { setConfirmedCaps((prev) => ({ ...prev, catchment_type: e.target.value })); setConfirmError(""); }}
                                         className="w-full text-xs p-2 rounded-lg border border-[#E5DFD3] bg-white text-[#2A443B]"
                                         data-testid="claim-catchment-type"
                                     >
+                                        {confirmedCaps.catchment_type === "radius" ? <option value="radius" disabled>Legacy distance setting — choose a supported area</option> : null}
                                         {CATCHMENT_OPTIONS.map((opt) => (
                                             <option key={opt.id} value={opt.id}>{opt.label}</option>
                                         ))}
                                     </select>
+                                    <p className="mt-2 text-[11px] text-[#5C6D59]">Distance-based matching is not currently supported. Choose specific served suburbs or Melbourne-Wide coverage.</p>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">

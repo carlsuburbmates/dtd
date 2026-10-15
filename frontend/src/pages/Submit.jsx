@@ -46,7 +46,6 @@ const TRAINING_PHILOSOPHY_OPTIONS = [
 
 const CATCHMENT_OPTIONS = [
     { id: "specific_suburbs", label: "Specific Nominated Suburbs" },
-    { id: "radius", label: "Distance Radius from Suburb" },
     { id: "melbourne_wide", label: "Melbourne-Wide Coverage" },
 ];
 
@@ -460,6 +459,7 @@ export default function Submit() {
                                     />
                                 </div>
                             )}
+                            <p className="mt-2 text-xs text-[#5C6D59]">Choose specific served suburbs or declare Melbourne-Wide coverage. Distance-based matching is not currently supported.</p>
                         </div>
 
                         <div className="sm:col-span-2 space-y-2 mt-1">

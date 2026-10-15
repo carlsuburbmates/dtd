@@ -86,6 +86,19 @@ describe("Home page matching test", () => {
         expect(links.every((link) => !link.hasAttribute("target"))).toBe(true);
     });
 
+    it("does not flash the waitlist while public configuration is pending", async () => {
+        let resolveConfig;
+        api.get.mockReturnValueOnce(new Promise((resolve) => { resolveConfig = resolve; }));
+        await act(async () => { root.render(<Home />); });
+        expect(container.querySelector("[data-testid='owner-options-loading']")).not.toBeNull();
+        expect(container.querySelector("[data-testid='home-owner-waitlist-form']")).toBeNull();
+        expect(container.querySelector("[data-testid='owner-match-form']")).toBeNull();
+        await act(async () => {
+            resolveConfig({ data: { public_matching_enabled: true, public_launch_phase: "live_matching", trainer_onboarding_open: true, suburbs: ["Richmond"] } });
+        });
+        expect(container.querySelector("[data-testid='owner-match-form']")).not.toBeNull();
+    });
+
     it("makes the owner hero CTA lead directly to guided matching", async () => {
         await act(async () => { root.render(<Home />); });
         const cta = container.querySelector("[data-testid='hero-owner-cta']");

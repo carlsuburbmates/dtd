@@ -87,6 +87,13 @@ describe("Submit page validation and submission test", () => {
         expect(container.textContent).toContain("A valid 11-digit Australian Business Number (ABN) is required.");
     });
 
+    it("offers only service-area options supported by the matching contract", async () => {
+        await act(async () => { root.render(<Submit />); });
+        const options = [...container.querySelectorAll("[data-testid='submit-catchment-type'] option")];
+        expect(options.map((option) => option.value)).toEqual(["specific_suburbs", "melbourne_wide"]);
+        expect(container.textContent).toContain("Distance-based matching is not currently supported.");
+    });
+
     it("validates ABN length and submits successfully when valid", async () => {
         api.post.mockResolvedValueOnce({
             data: {
