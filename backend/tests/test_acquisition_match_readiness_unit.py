@@ -583,6 +583,7 @@ def test_trainer_submission_creates_validated_capabilities(monkeypatch):
         catchment_type="specific_suburbs",
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
 
     res = asyncio.run(server.create_submission(payload))

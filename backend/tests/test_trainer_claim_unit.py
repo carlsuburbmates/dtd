@@ -163,6 +163,7 @@ def test_submission_persists_profile_fields_without_self_claiming(monkeypatch):
         claim_status="claimed",
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
     response = asyncio.run(server.create_submission(payload))
     trainer = next(row for row in fake_db.trainers.rows if row["id"] == response["trainer_id"])
@@ -172,6 +173,31 @@ def test_submission_persists_profile_fields_without_self_claiming(monkeypatch):
     assert trainer["training_philosophy"] == "Evidence led"
     assert trainer["specialties"] == ["Puppies"]
     assert trainer["gallery_images"] == ["https://example.com/image.jpg"]
+
+
+def test_submission_requires_terms_before_scoring_or_writes(monkeypatch):
+    fake_db = _fake_db({"id": "existing"})
+    monkeypatch.setattr(server, "db", fake_db)
+    monkeypatch.setattr(
+        server.ai_service,
+        "score_trainer",
+        lambda _payload: pytest.fail("submission scoring must not run before terms acceptance"),
+    )
+    payload = server.SubmissionIn(
+        name="Trainer One",
+        suburb="Carlton",
+        consent_public_listing=True,
+        consent_information_accuracy=True,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.create_submission(payload))
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "Accept the terms to continue submission."
+    assert fake_db.trainers.rows == [{"id": "existing"}]
+    assert fake_db.submissions.rows == []
+    assert fake_db.submissions.inserted == []
 
 
 def test_claim_start_masks_destination_and_never_persists_raw_code(monkeypatch):

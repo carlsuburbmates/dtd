@@ -298,6 +298,7 @@ def test_submission_and_trainer_creation_persists_expanded_profile_fields(monkey
         consent_information_accuracy=True,
         tier="claimed",  # Submitter tries to self-assert claimed
         claim_status="claimed",  # Submitter tries to self-assert claimed
+        consent_intro_billing_terms=True,
     )
 
     result = asyncio.run(server.create_submission(payload))
@@ -1012,6 +1013,7 @@ def test_submission_with_already_claimed_abn_creates_held_dispute(monkeypatch):
         abn="51 824 753 556",
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
 
     result = asyncio.run(server.create_submission(payload))
@@ -1092,6 +1094,7 @@ def test_submission_with_existing_unclaimed_trainer_enriches_without_duplicate(m
         training_philosophy="Positive reinforcement with evidence-led boundaries",
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
 
     result = asyncio.run(server.create_submission(payload))

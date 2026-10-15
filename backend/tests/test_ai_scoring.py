@@ -637,6 +637,7 @@ async def test_submission_with_gemini_099_does_not_publish_and_returns_held_stat
         serviced_suburbs=["Richmond", "South Yarra"],
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
 
     result = await server.create_submission(payload)
@@ -840,6 +841,7 @@ async def test_statutory_abn_verification_allows_publication_and_verified_status
         serviced_suburbs=["Richmond"],
         consent_public_listing=True,
         consent_information_accuracy=True,
+        consent_intro_billing_terms=True,
     )
 
     result = await server.create_submission(payload)

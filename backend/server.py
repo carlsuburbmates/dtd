@@ -4501,6 +4501,8 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     """Submit a real Melbourne trainer; publish only with active ABR evidence and the quality gate."""
+    if not payload.consent_intro_billing_terms:
+        raise HTTPException(status_code=400, detail="Accept the terms to continue submission.")
     if not payload.consent_public_listing or not payload.consent_information_accuracy:
         raise HTTPException(status_code=400, detail="Consent required for public listing.")
 
