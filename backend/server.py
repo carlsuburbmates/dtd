@@ -42,6 +42,7 @@ from google.auth.transport import requests as google_auth_requests
 from google.oauth2 import id_token as google_id_token
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 try:
@@ -195,11 +196,13 @@ OPS_CASE_ALLOWED_STATES = {
     "detected",
     "acknowledged",
     "investigating",
+    "recovering",
+    "resolved",
+    "dismissed",
+    "reopened",
     "actioned",
     "monitoring",
-    "resolved",
     "deferred",
-    "dismissed",
     "escalated_to_owner_override",
     "escalated_to_technical_owner",
 }
@@ -1384,6 +1387,7 @@ async def _message_log_rows(limit: int = 120) -> List[Dict[str, Any]]:
         rows.append(
             {
                 "id": str(event.get("id") or new_id()),
+                "dispatch_id": str(event.get("dispatch_id") or ""),
                 "created_at": event.get("created_at"),
                 "target_kind": target_kind or "unknown",
                 "target_id": target_id,
@@ -1420,6 +1424,7 @@ def _build_message_case(row: Dict[str, Any]) -> Dict[str, Any]:
         "summary": f"Delivery status is {status}. Review message history before trusting the workflow state.",
         "severity": severity,
         "state": state,
+        "operational_state": state,
         "owner": "",
         "detected_at": row.get("created_at"),
         "last_updated_at": row.get("created_at"),
@@ -1440,6 +1445,212 @@ def _build_message_case(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group attempt-level notification and outreach events into stable, correlated incidents.
+
+    Workstream A Implementation:
+    - Distinguishes event ID, dispatch ID, attempt ID, incident ID, and root-cause grouping.
+    - Multiple retry attempts of a single dispatch generate at most ONE incident.
+    - Terminal success on any attempt clears/resolves prior retry failures of that dispatch.
+    - Independent dispatches (even to the same recipient) remain distinct incidents.
+    - Shared provider failures (e.g. Resend HTTP 500/503) are tagged with root-cause group.
+    - Legacy events lacking dispatch_id are correlated conservatively by (kind, target_kind, target_id, to_email, 300s window).
+    """
+    if not message_log:
+        return []
+
+    dispatch_groups: Dict[str, List[Dict[str, Any]]] = {}
+    sorted_events = sorted(message_log, key=lambda e: str(e.get("created_at") or ""))
+
+    for event in sorted_events:
+        explicit_dispatch_id = str(event.get("dispatch_id") or "").strip()
+        if explicit_dispatch_id:
+            group_key = f"auth:{explicit_dispatch_id}"
+            if group_key not in dispatch_groups:
+                dispatch_groups[group_key] = []
+            dispatch_groups[group_key].append(event)
+        else:
+            kind = str(event.get("kind") or "")
+            t_kind = str(event.get("target_kind") or "")
+            t_id = str(event.get("target_id") or "")
+            to_email = str(event.get("to_email") or event.get("recipient") or "")
+            evt_time_str = str(event.get("created_at") or "")
+
+            matched_group = None
+            try:
+                evt_dt = datetime.fromisoformat(evt_time_str) if evt_time_str else None
+            except Exception:
+                evt_dt = None
+
+            if (kind or t_id) and to_email:
+                for g_key, g_events in dispatch_groups.items():
+                    if not g_key.startswith("inf:"):
+                        continue
+                    first_evt = g_events[0]
+                    first_to_email = str(first_evt.get("to_email") or first_evt.get("recipient") or "")
+                    if (
+                        str(first_evt.get("kind") or "") == kind
+                        and str(first_evt.get("target_kind") or "") == t_kind
+                        and str(first_evt.get("target_id") or "") == t_id
+                        and first_to_email == to_email
+                    ):
+                        first_time_str = str(first_evt.get("created_at") or "")
+                        try:
+                            first_dt = datetime.fromisoformat(first_time_str) if first_time_str else None
+                        except Exception:
+                            first_dt = None
+                        if evt_dt and first_dt and abs((evt_dt - first_dt).total_seconds()) <= 300:
+                            matched_group = g_key
+                            break
+
+            if matched_group:
+                dispatch_groups[matched_group].append(event)
+            else:
+                group_key = f"inf:{event.get('id') or len(dispatch_groups)}"
+                dispatch_groups[group_key] = [event]
+
+    provider_outage_counts: Dict[str, int] = {}
+    pending_incidents_data: List[Dict[str, Any]] = []
+
+    for g_key, g_events in dispatch_groups.items():
+        g_events.sort(key=lambda x: (int(x.get("attempt") or 0), str(x.get("created_at") or "")))
+
+        # Terminal success on any attempt clears prior transient retry errors
+        has_success = any(
+            str(e.get("status") or "").lower() in {"sent", "delivered", "ok"}
+            or (200 <= int(e.get("http_status") or 0) < 300)
+            for e in g_events
+        )
+        if has_success:
+            continue
+
+        latest_event = g_events[-1]
+        earliest_event = g_events[0]
+        is_auth = g_key.startswith("auth:")
+        dispatch_id = g_key.partition(":")[2]
+        correlation_type = "authoritative" if is_auth else ("inferred" if len(g_events) > 1 else "legacy_standalone")
+
+        constituent_ids = [str(e.get("id") or "") for e in g_events if e.get("id")]
+        attempt_count = len(g_events)
+        last_attempt = max(int(e.get("attempt") or 1) for e in g_events)
+        last_status = str(latest_event.get("status") or "failed")
+        last_http_status = int(latest_event.get("http_status") or 0)
+        last_error = str(latest_event.get("error") or "")
+        provider = str(latest_event.get("provider") or "resend")
+
+        root_cause_group = ""
+        if last_http_status >= 500 or "timeout" in last_error.lower() or "50" in last_error:
+            root_cause_group = f"provider_outage:{provider}:{last_http_status or '5xx'}"
+            provider_outage_counts[root_cause_group] = provider_outage_counts.get(root_cause_group, 0) + 1
+        elif "api_key" in last_error.lower():
+            root_cause_group = f"provider_auth:{provider}"
+            provider_outage_counts[root_cause_group] = provider_outage_counts.get(root_cause_group, 0) + 1
+
+        pending_incidents_data.append({
+            "dispatch_id": dispatch_id,
+            "correlation_type": correlation_type,
+            "constituent_ids": constituent_ids,
+            "attempt_count": attempt_count,
+            "last_attempt": last_attempt,
+            "last_status": last_status,
+            "last_http_status": last_http_status,
+            "last_error": last_error,
+            "provider": provider,
+            "root_cause_group": root_cause_group,
+            "latest_event": latest_event,
+            "earliest_event": earliest_event,
+        })
+
+    incidents: List[Dict[str, Any]] = []
+    for data in pending_incidents_data:
+        latest_event = data["latest_event"]
+        earliest_event = data["earliest_event"]
+        dispatch_id = data["dispatch_id"]
+        attempt_count = data["attempt_count"]
+        last_status = data["last_status"]
+        last_http_status = data["last_http_status"]
+        last_error = data["last_error"]
+        provider = data["provider"]
+        root_cause_group = data["root_cause_group"]
+        correlation_type = data["correlation_type"]
+        constituent_ids = data["constituent_ids"]
+
+        canonical_user_type = latest_event.get("canonical_user_type") or "Trainer / business submitter"
+        case_type = "owner_follow_up_case" if canonical_user_type == "Dog owner" else "trainer_communications_case"
+
+        fp = f"message:{dispatch_id}:{attempt_count}:{last_status}:{last_http_status}:{last_error[:40]}"
+        entity_label = latest_event.get("entity_label") or "unknown"
+        kind_label = humanize_case_token(latest_event.get("kind") or "message")
+        title = f"{kind_label} · {entity_label}"
+        if attempt_count > 1:
+            title += f" ({attempt_count} attempts failed)"
+
+        summary = f"Delivery status is {last_status} across {attempt_count} attempt(s)."
+        if root_cause_group and provider_outage_counts.get(root_cause_group, 0) > 1:
+            total_affected = provider_outage_counts[root_cause_group]
+            summary += f" Part of correlated {provider} incident ({total_affected} dispatches affected)."
+
+        detail_rows = [
+            {"label": "Workflow", "value": latest_event.get("workflow") or "communications"},
+            {"label": "Target type", "value": latest_event.get("target_kind") or "unknown"},
+            {"label": "Delivery status", "value": last_status},
+            {"label": "Provider", "value": provider or "unknown"},
+            {"label": "Attempts", "value": f"{attempt_count} (all failed)" if attempt_count > 1 else 1},
+            {"label": "HTTP status", "value": last_http_status},
+            {"label": "Dispatch ID", "value": dispatch_id},
+            {"label": "Correlation", "value": correlation_type},
+        ]
+        if last_error:
+            detail_rows.append({"label": "Error diagnostic", "value": last_error})
+        if root_cause_group:
+            detail_rows.append({"label": "Root cause group", "value": root_cause_group})
+            if provider_outage_counts.get(root_cause_group, 0) > 1:
+                detail_rows.append({"label": "Correlated dispatches", "value": provider_outage_counts[root_cause_group]})
+        if len(constituent_ids) > 1:
+            sample_ids = ", ".join(constituent_ids[:3]) + (f" (+{len(constituent_ids)-3} more)" if len(constituent_ids) > 3 else "")
+            detail_rows.append({"label": "Constituent event IDs", "value": sample_ids})
+
+        case_id = f"message:{dispatch_id}"
+        if correlation_type == "legacy_standalone" and constituent_ids:
+            case_id = f"message:{constituent_ids[0]}"
+
+        incidents.append(
+            {
+                "case_id": case_id,
+                "dispatch_id": dispatch_id,
+                "constituent_event_ids": constituent_ids,
+                "correlation_type": correlation_type,
+                "root_cause_group": root_cause_group,
+                "case_type": case_type,
+                "canonical_user_type": canonical_user_type,
+                "workflow": latest_event.get("workflow") or "communications",
+                "entity_type": latest_event.get("target_kind") or "message",
+                "entity_id": latest_event.get("target_id") or latest_event.get("id"),
+                "title": title,
+                "summary": summary,
+                "severity": "high",
+                "state": "detected",
+                "operational_state": "detected",
+                "owner": "",
+                "detected_at": earliest_event.get("created_at"),
+                "last_updated_at": latest_event.get("created_at"),
+                "occurrence_fingerprint": fp,
+                "source_refs": [
+                    {"kind": latest_event.get("source_kind") or "notification_event", "id": eid}
+                    for eid in constituent_ids[:5]
+                ],
+                "risk_reason_codes": [f"notification_{last_status}"],
+                "recommended_next_step": "Review provider delivery telemetry and recipient contact.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": detail_rows,
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
+    return incidents
+
+
 def _normalize_ops_case_state(raw_state: str) -> str:
     token = str(raw_state or "").strip().lower()
     return token if token in OPS_CASE_ALLOWED_STATES else ""
@@ -1455,13 +1666,28 @@ def _normalize_ops_case_note(raw_note: Optional[str]) -> str:
     return note[:500]
 
 
-async def _load_ops_case_state_map(case_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+async def _load_ops_case_state_map(case_ids: List[str], case_aliases: Optional[Dict[str, List[str]]] = None) -> Dict[str, Dict[str, Any]]:
     states_coll = getattr(db, "ops_case_states", None)
     if states_coll is None or not case_ids:
         return {}
     try:
-        rows = await states_coll.find({"case_id": {"$in": sorted(case_ids)}}, {"_id": 0}).to_list(max(1, len(case_ids)))
-        return {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+        all_lookup_ids = set(case_ids)
+        if case_aliases:
+            for c_id, aliases in case_aliases.items():
+                all_lookup_ids.update(aliases)
+        rows = await states_coll.find({"case_id": {"$in": sorted(all_lookup_ids)}}, {"_id": 0}).to_list(max(1, len(all_lookup_ids)))
+        lookup_map = {str(row.get("case_id") or ""): row for row in rows if row.get("case_id")}
+
+        final_map: Dict[str, Dict[str, Any]] = {}
+        for c_id in case_ids:
+            if c_id in lookup_map:
+                final_map[c_id] = lookup_map[c_id]
+            elif case_aliases and c_id in case_aliases:
+                for alias in case_aliases[c_id]:
+                    if alias in lookup_map:
+                        final_map[c_id] = lookup_map[alias]
+                        break
+        return final_map
     except Exception:
         return {}
 
@@ -1471,12 +1697,10 @@ def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
 
     Returns a unique string if the case type has authoritative occurrence
     identity (event ID, counter, error code, status transition).
-    Returns None if the case type lacks distinct occurrence tracking in Phase 1.
     """
     if not isinstance(case, dict):
         return None
 
-    # Check if case already carries an explicit occurrence_fingerprint
     explicit_fp = case.get("occurrence_fingerprint")
     if explicit_fp:
         return str(explicit_fp)
@@ -1484,12 +1708,27 @@ def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
     case_type = str(case.get("case_type") or "")
     case_id = str(case.get("case_id") or "")
 
+    if case_type in {"trainer_communications_case", "owner_follow_up_case"}:
+        dispatch_id = str(case.get("dispatch_id") or case.get("entity_id") or "")
+        attempts = str(case.get("attempt_count") or 1)
+        delivery_status = str(case.get("delivery_status") or "failed")
+        http_status = str(case.get("http_status") or 0)
+        err = str(case.get("last_error") or "")[:40]
+        return f"message:{dispatch_id}:{attempts}:{delivery_status}:{http_status}:{err}"
+
     if case_type == "loop_health_case":
         details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
         status = details.get("Status", "")
         mode = details.get("Execution mode", "")
         reason = str(case.get("summary") or "")
-        return f"{case_id}:{status}:{mode}:{reason}"
+        failures = details.get("Consecutive failures", "")
+        return f"{case_id}:{status}:{mode}:{failures}:{reason}"
+
+    if case_type == "loop_governance_case":
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        affected = details.get("Affected tasks", "")
+        mode = details.get("Runtime mode", "")
+        return f"{case_id}:{affected}:{mode}"
 
     if case_type == "source_ingestion_case":
         details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
@@ -1499,12 +1738,12 @@ def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
 
     if case_type == "ai_degradation_case":
         entity_id = str(case.get("entity_id") or "")
-        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        reasons = "-".join(sorted(str(c) for c in (case.get("risk_reason_codes") or [])))
         return f"{case_id}:{entity_id}:{reasons}"
 
     if case_type == "fraud_suppression_case":
         intro_id = str(case.get("entity_id") or "")
-        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        reasons = "-".join(sorted(str(c) for c in (case.get("risk_reason_codes") or [])))
         return f"{case_id}:{intro_id}:{reasons}"
 
     if case_type in {"trainer_claim_case", "abn_verification_case", "submission_case", "trainer_reactivation_case"}:
@@ -1521,19 +1760,47 @@ def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
         op_reason = details.get("Operational diagnostic", "")
         return f"{case_id}:{entity_id}:{op_status}:{op_reason}"
 
-    # Phase 1 case type lacks distinct occurrence identity
+    if case_type in {"billing_recovery_case", "subscription_billing_case"}:
+        entity_id = str(case.get("entity_id") or "")
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        b_status = details.get("Subscription billing status") or details.get("Status") or ""
+        return f"{case_id}:{entity_id}:{b_status}"
+
     return None
 
 
 def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     case_fp = case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(case)
+    operational_state = str(case.get("operational_state") or case.get("state") or "detected")
+
+    # If the case is verified resolved by automatic recovery
+    if operational_state == "resolved":
+        merged = dict(case)
+        merged["occurrence_fingerprint"] = case_fp
+        merged["state"] = "resolved"
+        merged["operational_state"] = "resolved"
+        merged["recurred"] = False
+        merged["recovery_verified"] = True
+        merged["review"] = {
+            "state": str(override.get("state") or "resolved") if override else "resolved",
+            "operational_state": "resolved",
+            "owner": str(override.get("owner") or "") if override else "",
+            "note": str(override.get("note") or "") if override else "",
+            "updated_at": case.get("last_updated_at") or case.get("detected_at"),
+            "recurrence_tracking": "fingerprint_verified" if case_fp else "legacy_untracked",
+            "history": list(override.get("history") or []) if override else [],
+        }
+        return merged
+
     if not override:
         return {
             **case,
             "occurrence_fingerprint": case_fp,
+            "operational_state": operational_state,
             "recurred": False,
             "review": {
                 "state": str(case.get("state") or "detected"),
+                "operational_state": operational_state,
                 "owner": str(case.get("owner") or ""),
                 "note": "",
                 "updated_at": case.get("last_updated_at") or case.get("detected_at"),
@@ -1545,11 +1812,6 @@ def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any
     merged = dict(case)
     merged["occurrence_fingerprint"] = case_fp
     override_state = str(override.get("state") or "")
-
-    # Safe recurrence detection:
-    # Requires authoritative event identity / fingerprint comparison.
-    # Where Phase 1 lacks distinct occurrence IDs, do NOT claim reliable recurrence
-    # or fabricate occurrences; preserve visibility of unresolved critical conditions conservatively.
     acknowledged_fp = override.get("occurrence_fingerprint")
     sev = str(case.get("severity") or "").lower()
 
@@ -1560,6 +1822,7 @@ def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any
 
     if is_recurred:
         merged["state"] = "detected"
+        merged["operational_state"] = "reopened"
         merged["recurred"] = True
         orig_title = str(case.get("title") or "")
         if " (Recurred)" not in orig_title:
@@ -1574,6 +1837,7 @@ def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any
         merged["last_updated_at"] = case.get("last_updated_at") or now_iso()
         merged["review"] = {
             "state": "detected",
+            "operational_state": "reopened",
             "recurred": True,
             "owner": str(override.get("owner") or ""),
             "note": str(override.get("note") or ""),
@@ -1583,12 +1847,14 @@ def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any
         }
     else:
         merged["state"] = override_state or merged.get("state")
+        merged["operational_state"] = operational_state
         merged["recurred"] = False
         merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
         merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
         tracking_mode = "fingerprint_verified" if case_fp else "deferred_to_phase2"
         merged["review"] = {
             "state": merged.get("state"),
+            "operational_state": operational_state,
             "owner": str(override.get("owner") or ""),
             "note": str(override.get("note") or ""),
             "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
@@ -2121,14 +2387,22 @@ async def _ops_case_rows(
             }
         )
 
-    for row in message_log:
-        status = str(row.get("status") or "").lower()
-        if status in {"failed", "error", "bounced"}:
-            cases.append(_build_message_case(row))
+    message_incidents = _correlate_message_incidents(message_log)
+    cases.extend(message_incidents)
 
     cases.extend(provider_cases or [])
 
-    overrides = await _load_ops_case_state_map([str(case.get("case_id") or "") for case in cases if case.get("case_id")])
+    case_aliases: Dict[str, List[str]] = {}
+    for c in cases:
+        c_id = str(c.get("case_id") or "")
+        constituent_ids = c.get("constituent_event_ids") or []
+        if constituent_ids:
+            case_aliases[c_id] = [f"message:{eid}" for eid in constituent_ids]
+
+    overrides = await _load_ops_case_state_map(
+        [str(case.get("case_id") or "") for case in cases if case.get("case_id")],
+        case_aliases=case_aliases,
+    )
     cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
     cases.sort(key=_sort_case_priority)
     return cases[:150]
@@ -3095,72 +3369,160 @@ async def run_trainer_ingest_job(
     return await _execute_trainer_ingest_pipeline(payload=payload, trigger="cloud_scheduler")
 
 
+ENGINE_TICK_LEASE_KEY = "engine_tick_lease"
+ENGINE_TICK_LEASE_TTL_S = 180
+
+
 @api.post("/internal/jobs/engine-tick")
 async def run_engine_tick_job(
     authorization: str = Header(default="", alias="Authorization"),
 ) -> Dict[str, Any]:
     """Authenticated, serverless execution boundary for autonomous engine loops.
 
-    Solves Cloud Run scale-to-zero background task starvation (DF-006).
+    Solves Cloud Run scale-to-zero background task starvation (DF-006 / DF-029).
     Allows external Cloud Scheduler or monitoring ping to trigger a deterministic
     batch execution of autonomous loops safely.
     """
     _require_cloud_scheduler_oidc(authorization)
+
+    now_epoch = time.time()
+    lease_expires_epoch = now_epoch + ENGINE_TICK_LEASE_TTL_S
+    now_ts = now_iso()
+    runner_id = f"engine_tick:{int(now_epoch)}:{os.getpid()}"
+
+    system_state_coll = getattr(db, "system_state", None)
+    if system_state_coll is not None:
+        try:
+            lease_doc = await system_state_coll.find_one_and_update(
+                {
+                    "key": ENGINE_TICK_LEASE_KEY,
+                    "$or": [
+                        {"expires_at_epoch": {"$lte": now_epoch}},
+                        {"expires_at_epoch": {"$exists": False}},
+                    ],
+                },
+                {
+                    "$set": {
+                        "key": ENGINE_TICK_LEASE_KEY,
+                        "owner_id": runner_id,
+                        "acquired_at": now_ts,
+                        "expires_at_epoch": lease_expires_epoch,
+                        "ttl_s": ENGINE_TICK_LEASE_TTL_S,
+                    }
+                },
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            lease_doc = await system_state_coll.find_one({"key": ENGINE_TICK_LEASE_KEY}, {"_id": 0})
+
+        if lease_doc is None:
+            lease_doc = await system_state_coll.find_one({"key": ENGINE_TICK_LEASE_KEY}, {"_id": 0})
+
+        if not (lease_doc and lease_doc.get("owner_id") == runner_id and float(lease_doc.get("expires_at_epoch") or 0) > now_epoch):
+            logger.warning("engine-tick skipped: lease held by %s until %s", (lease_doc or {}).get("owner_id"), (lease_doc or {}).get("expires_at_epoch"))
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "lease_held",
+                "held_by": (lease_doc or {}).get("owner_id"),
+                "expires_at_epoch": (lease_doc or {}).get("expires_at_epoch"),
+                "ts": now_ts,
+            }
+
+    started_time = time.time()
     results: Dict[str, Any] = {}
 
-    # 1. Ranking calculation
-    try:
-        from services.engine import recompute_ranking
-        ranking_res = await recompute_ranking(db)
-        results["ranking"] = {"status": "ok", "result": ranking_res}
-    except Exception as exc:
-        results["ranking"] = {"status": "error", "error": str(exc)}
+    async def _execute_loop_step(name: str, coroutine_fn):
+        step_start = time.time()
+        try:
+            res = await coroutine_fn()
+            results[name] = {"status": "ok", "result": res, "duration_ms": round((time.time() - step_start) * 1000, 2)}
+            if system_state_coll is not None:
+                await system_state_coll.update_one(
+                    {"key": name},
+                    {
+                        "$set": {
+                            "execution_owner": "cloud_scheduler",
+                            "last_run": now_iso(),
+                            "last_status": "ok",
+                        }
+                    },
+                    upsert=True,
+                )
+        except Exception as exc:
+            logger.exception("Engine tick loop step %s failed: %s", name, exc)
+            results[name] = {"status": "error", "error": str(exc), "duration_ms": round((time.time() - step_start) * 1000, 2)}
+            if system_state_coll is not None:
+                await system_state_coll.update_one(
+                    {"key": name},
+                    {
+                        "$set": {
+                            "execution_owner": "cloud_scheduler",
+                            "last_run": now_iso(),
+                            "last_status": "error",
+                            "last_error": str(exc),
+                        }
+                    },
+                    upsert=True,
+                )
 
-    # 2. Inferred conversion promotion
     try:
-        from services.engine import promote_inferred_conversions
-        infer_res = await promote_inferred_conversions(db)
-        results["inference"] = {"status": "ok", "result": infer_res}
-    except Exception as exc:
-        results["inference"] = {"status": "error", "error": str(exc)}
+        from services.engine import (
+            recompute_ranking,
+            promote_inferred_conversions,
+            update_health,
+            maintain_sponsor_inventory,
+            run_growth_nurture,
+            run_reactivation_routing,
+        )
 
-    # 3. Health check & anomaly state
-    try:
-        from services.engine import update_health
-        health_res = await update_health(db)
-        results["health"] = {"status": "ok", "result": health_res}
-    except Exception as exc:
-        results["health"] = {"status": "error", "error": str(exc)}
+        await _execute_loop_step("ranking", lambda: recompute_ranking(db))
+        await _execute_loop_step("inference", lambda: promote_inferred_conversions(db))
+        await _execute_loop_step("health", lambda: update_health(db))
+        await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
+        await _execute_loop_step("nurture", lambda: run_growth_nurture(db))
+        await _execute_loop_step("reactivation_route", lambda: run_reactivation_routing(db))
+    finally:
+        total_duration_ms = round((time.time() - started_time) * 1000, 2)
+        has_error = any(step.get("status") == "error" for step in results.values())
+        overall_status = "partial_error" if has_error else "ok"
+        completed_ts = now_iso()
 
-    # 4. Sponsor inventory expiry release
-    try:
-        from services.engine import maintain_sponsor_inventory
-        sponsor_res = await maintain_sponsor_inventory(db)
-        results["sponsor_inventory"] = {"status": "ok", "result": sponsor_res}
-    except Exception as exc:
-        results["sponsor_inventory"] = {"status": "error", "error": str(exc)}
+        if system_state_coll is not None:
+            try:
+                await system_state_coll.update_one(
+                    {"key": "engine_tick"},
+                    {
+                        "$set": {
+                            "key": "engine_tick",
+                            "last_run": completed_ts,
+                            "execution_owner": "cloud_scheduler",
+                            "last_status": overall_status,
+                            "duration_ms": total_duration_ms,
+                            "results": results,
+                        }
+                    },
+                    upsert=True,
+                )
+            except Exception:
+                logger.exception("Failed to record engine_tick summary in system_state")
 
-    # 5. Growth nurture cohort updates
-    try:
-        from services.engine import run_growth_nurture
-        nurture_res = await run_growth_nurture(db)
-        results["nurture"] = {"status": "ok", "result": nurture_res}
-    except Exception as exc:
-        results["nurture"] = {"status": "error", "error": str(exc)}
-
-    # 6. Reactivation lifecycle routing
-    try:
-        from services.engine import run_reactivation_routing
-        reactivation_res = await run_reactivation_routing(db)
-        results["reactivation_route"] = {"status": "ok", "result": reactivation_res}
-    except Exception as exc:
-        results["reactivation_route"] = {"status": "error", "error": str(exc)}
+            try:
+                await system_state_coll.update_one(
+                    {"key": ENGINE_TICK_LEASE_KEY, "owner_id": runner_id},
+                    {"$set": {"expires_at_epoch": 0, "released_at": completed_ts}},
+                )
+            except Exception:
+                logger.exception("Failed to release engine tick lease %s", runner_id)
 
     return {
-        "ok": True,
+        "ok": not has_error,
         "job": "engine-tick",
+        "status": overall_status,
         "results": results,
-        "ts": now_iso(),
+        "duration_ms": total_duration_ms,
+        "ts": completed_ts,
     }
 
 
@@ -6313,7 +6675,21 @@ async def update_oversight_case_review(
     current_cases = await _current_ops_cases()
     current_case = next((row for row in current_cases if str(row.get("case_id") or "") == case_id), None)
     if not current_case:
+        current_case = next(
+            (
+                row
+                for row in current_cases
+                if case_id in (row.get("case_aliases") or [])
+                or case_id in (row.get("constituent_event_ids") or [])
+                or f"message:{case_id}" == str(row.get("case_id") or "")
+                or str(row.get("dispatch_id") or "") == case_id
+            ),
+            None,
+        )
+    if not current_case:
         raise HTTPException(status_code=404, detail="Ops case not found.")
+
+    target_case_id = str(current_case.get("case_id") or case_id)
 
     # Workstream D: Guard against casual dismissal of high-severity incidents
     if normalized_state == "dismissed" and str(current_case.get("severity") or "").lower() == "high":
@@ -6327,7 +6703,15 @@ async def update_oversight_case_review(
     if states_coll is None:
         raise HTTPException(status_code=503, detail="Ops case state store unavailable.")
 
-    before = await states_coll.find_one({"case_id": case_id}, {"_id": 0}) or {}
+    before = await states_coll.find_one({"case_id": target_case_id}, {"_id": 0}) or {}
+    if (
+        before.get("state") == normalized_state
+        and (before.get("owner") or "") == owner
+        and (before.get("note") or "") == note
+    ):
+        merged_case = _merge_ops_case_state(current_case, before)
+        return _scrub({"ok": True, "case": merged_case})
+
     updated_at = now_iso()
     history = list(before.get("history") or [])
     history.append(
@@ -6342,7 +6726,7 @@ async def update_oversight_case_review(
     history = history[-OPS_CASE_HISTORY_LIMIT:]
     current_fp = current_case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(current_case)
     after = {
-        "case_id": case_id,
+        "case_id": target_case_id,
         "case_type": current_case.get("case_type"),
         "workflow": current_case.get("workflow"),
         "entity_type": current_case.get("entity_type"),
@@ -6354,8 +6738,8 @@ async def update_oversight_case_review(
         "history": history,
         "occurrence_fingerprint": current_fp,
     }
-    await states_coll.update_one({"case_id": case_id}, {"$set": after}, upsert=True)
-    await _audit("ops_case_review_updated", case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
+    await states_coll.update_one({"case_id": target_case_id}, {"$set": after}, upsert=True)
+    await _audit("ops_case_review_updated", target_case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
     merged_case = _merge_ops_case_state(current_case, after)
     return _scrub({"ok": True, "case": merged_case})
 

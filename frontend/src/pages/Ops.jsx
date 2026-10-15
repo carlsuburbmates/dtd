@@ -66,9 +66,9 @@ const PAGE_INTROS = {
 };
 
 const QUEUE_GROUPS = [
-    { key: "needs_review", label: "Needs review", states: ["detected", "notified"] },
+    { key: "needs_review", label: "Needs review", states: ["detected", "notified", "reopened"] },
     { key: "acknowledged", label: "Acknowledged", states: ["acknowledged"] },
-    { key: "in_progress", label: "In progress", states: ["investigating", "actioned"] },
+    { key: "in_progress", label: "In progress", states: ["investigating", "actioned", "recovering"] },
     { key: "monitoring", label: "Monitoring", states: ["monitoring"] },
     { key: "escalated", label: "Escalated", states: ["escalated_to_owner_override", "escalated_to_technical_owner"] },
     { key: "resolved_recently", label: "Resolved recently", states: ["resolved", "deferred", "dismissed"] },
@@ -82,6 +82,8 @@ const REVIEW_STATE_OPTIONS = [
     "resolved",
     "deferred",
     "dismissed",
+    "recovering",
+    "reopened",
     "escalated_to_owner_override",
     "escalated_to_technical_owner",
     "detected",
@@ -188,12 +190,12 @@ function normalizeCaseQueueState(row) {
     if (caseType === "trainer_communications_case" || caseId.startsWith("message:")) {
         const details = Array.isArray(row?.detail_rows) ? row.detail_rows : [];
         const deliveryStatus = String(details.find((d) => d.label === "Delivery status")?.value || "").toLowerCase();
-        if (deliveryStatus === "sent" && ["detected", "notified"].includes(state)) {
+        if (deliveryStatus === "sent" && ["detected", "notified", "reopened"].includes(state)) {
             return "monitoring";
         }
     }
     // Safety guard: Static provider governance cases should be in monitoring, not needs_review
-    if (caseType === "provider_governance_case" && ["detected", "notified"].includes(state)) {
+    if (caseType === "provider_governance_case" && ["detected", "notified", "reopened"].includes(state)) {
         return "monitoring";
     }
     return state;
@@ -1805,7 +1807,7 @@ function SeoIndexationView({ seoIndexation }) {
 function isOpenFailedMessageCase(caseRow) {
     if (
         caseRow?.case_type !== "trainer_communications_case"
-        || !["detected", "notified"].includes(caseRow.state)
+        || !["detected", "notified", "reopened"].includes(caseRow.state)
     ) return false;
     const details = Array.isArray(caseRow.detail_rows) ? caseRow.detail_rows : [];
     const deliveryStatus = String(details.find((row) => row.label === "Delivery status")?.value || "").toLowerCase();
@@ -1862,7 +1864,12 @@ function MessagesView({ messages, cases = [], onSelectView, onRefresh }) {
                         {messages.length ? messages.map((row) => {
                             const isFailedIntro = (row.workflow === "match_intro" || row.workflow === "matching") && (String(row?.status || "").toLowerCase() === "failed" || String(row?.status || "").toLowerCase() === "error");
                             const introId = row.intro_id || row.target_id || (row.entity_id && row.entity_id.startsWith("intro_") ? row.entity_id : null);
-                            const linkedCase = cases.find((c) => c.case_id === `message:${row.id}`);
+                            const linkedCase = cases.find((c) =>
+                                c.case_id === `message:${row.id}` ||
+                                (row.dispatch_id && c.case_id === `message:${row.dispatch_id}`) ||
+                                (c.constituent_event_ids || []).includes(row.id) ||
+                                (c.case_aliases || []).includes(`message:${row.id}`)
+                            );
 
                             return (
                                 <tr key={row.id} className="border-t border-[#1E2A27]">
@@ -1911,7 +1918,11 @@ function MessagesView({ messages, cases = [], onSelectView, onRefresh }) {
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-[#152B1E] text-[#529E72] border border-[#1E4D30]">
                                                 Resolved in queue
                                             </span>
-                                        ) : linkedCase && (linkedCase.state === "detected" || linkedCase.state === "notified") ? (
+                                        ) : linkedCase?.state === "recovering" ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-[#1E2E2A] text-[#D9B36C] border border-[#2A3935]">
+                                                Recovering
+                                            </span>
+                                        ) : linkedCase && ["detected", "notified", "reopened"].includes(linkedCase.state) ? (
                                             <button
                                                 type="button"
                                                 onClick={() => onSelectView && onSelectView("work_queue")}

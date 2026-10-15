@@ -51,6 +51,7 @@ async def _record_event(
     attempt: int,
     status: str,
     http_status: int,
+    dispatch_id: str = "",
     provider_id: str = "",
     error: str = "",
 ) -> None:
@@ -63,6 +64,7 @@ async def _record_event(
         await notif_coll.insert_one(
             {
                 "id": event_id,
+                "dispatch_id": dispatch_id or event_id,
                 "kind": kind,
                 "target_kind": target_kind,
                 "target_id": target_id,
@@ -88,10 +90,18 @@ async def _send_with_retry(
     subject: str,
     html: str,
 ) -> Dict[str, Any]:
+    import uuid
+
+    dispatch_id = _build_id(
+        "dsp",
+        f"{kind}|{target_kind}|{target_id}|{to_email}|{now_iso()}|{uuid.uuid4().hex[:8]}",
+    )
+
     key = _api_key()
     if not key:
         await _record_event(
             db,
+            dispatch_id=dispatch_id,
             kind=kind,
             target_kind=target_kind,
             target_id=target_id,
@@ -101,7 +111,7 @@ async def _send_with_retry(
             http_status=0,
             error="no_resend_api_key",
         )
-        return {"status": "skipped", "attempts": 0, "reason": "no_resend_api_key"}
+        return {"status": "skipped", "attempts": 0, "dispatch_id": dispatch_id, "reason": "no_resend_api_key"}
 
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     reply_to_email = _reply_to_email()
@@ -129,6 +139,7 @@ async def _send_with_retry(
     if is_test and not is_live and not is_patched:
         await _record_event(
             db,
+            dispatch_id=dispatch_id,
             kind=kind,
             target_kind=target_kind,
             target_id=target_id,
@@ -138,7 +149,7 @@ async def _send_with_retry(
             http_status=200,
             provider_id="mock_test_resend_id",
         )
-        return {"status": "sent", "attempts": 1, "provider_id": "mock_test_resend_id"}
+        return {"status": "sent", "attempts": 1, "dispatch_id": dispatch_id, "provider_id": "mock_test_resend_id"}
 
     for attempt in range(1, attempts + 1):
         try:
@@ -152,6 +163,7 @@ async def _send_with_retry(
             if ok:
                 await _record_event(
                     db,
+                    dispatch_id=dispatch_id,
                     kind=kind,
                     target_kind=target_kind,
                     target_id=target_id,
@@ -161,10 +173,11 @@ async def _send_with_retry(
                     http_status=resp.status_code,
                     provider_id=provider_id,
                 )
-                return {"status": "sent", "attempts": attempt, "provider_id": provider_id}
+                return {"status": "sent", "attempts": attempt, "dispatch_id": dispatch_id, "provider_id": provider_id}
             last_error = f"http_{resp.status_code}"
             await _record_event(
                 db,
+                dispatch_id=dispatch_id,
                 kind=kind,
                 target_kind=target_kind,
                 target_id=target_id,
@@ -179,6 +192,7 @@ async def _send_with_retry(
             last_error = str(exc)[:240]
             await _record_event(
                 db,
+                dispatch_id=dispatch_id,
                 kind=kind,
                 target_kind=target_kind,
                 target_id=target_id,
@@ -189,7 +203,7 @@ async def _send_with_retry(
                 error=last_error,
             )
 
-    return {"status": "failed", "attempts": attempts, "error": last_error or "unknown"}
+    return {"status": "failed", "attempts": attempts, "dispatch_id": dispatch_id, "error": last_error or "unknown"}
 
 
 def _safe_text(value: Optional[str]) -> str:
