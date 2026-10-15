@@ -99,6 +99,65 @@ def test_suppressed_intro_is_logged_without_notifying_trainer(monkeypatch):
     assert events.rows[0]["error"] == "fraud_or_duplicate_suppression"
 
 
+def test_resend_auth_failure_is_not_retried(monkeypatch):
+    calls = []
+
+    def fake_post(*_args, **_kwargs):
+        calls.append(1)
+        return SimpleNamespace(status_code=401, json=lambda: {"message": "Invalid API key"})
+
+    events = _EventsCollection()
+    monkeypatch.setenv("RESEND_API_KEY", "rk_test")
+    monkeypatch.setenv("NOTIFY_RETRY_ATTEMPTS", "3")
+    monkeypatch.setattr(notifications.requests, "post", fake_post)
+
+    result = asyncio.run(notifications._send_with_retry(
+        SimpleNamespace(notification_events=events),
+        target_kind="test",
+        target_id="auth_failure",
+        kind="test_notification",
+        to_email="delivered@resend.dev",
+        subject="Auth failure test",
+        html="<p>Test</p>",
+    ))
+
+    assert result["status"] == "failed"
+    assert result["attempts"] == 1
+    assert len(calls) == 1
+    assert len(events.rows) == 1
+    assert events.rows[0]["http_status"] == 401
+
+
+def test_delivery_log_failure_does_not_resend_provider_accepted_message(monkeypatch):
+    calls = []
+
+    def fake_post(*_args, **_kwargs):
+        calls.append(1)
+        return SimpleNamespace(status_code=200, json=lambda: {"id": "re_accepted"})
+
+    class _BrokenEventsCollection:
+        async def insert_one(self, _doc):
+            raise RuntimeError("database unavailable")
+
+    monkeypatch.setenv("RESEND_API_KEY", "rk_test")
+    monkeypatch.setenv("NOTIFY_RETRY_ATTEMPTS", "3")
+    monkeypatch.setattr(notifications.requests, "post", fake_post)
+
+    result = asyncio.run(notifications._send_with_retry(
+        SimpleNamespace(notification_events=_BrokenEventsCollection()),
+        target_kind="test",
+        target_id="logging_failure",
+        kind="test_notification",
+        to_email="delivered@resend.dev",
+        subject="Accepted message test",
+        html="<p>Test</p>",
+    ))
+
+    assert result["status"] == "sent"
+    assert result["provider_id"] == "re_accepted"
+    assert len(calls) == 1
+
+
 def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
     sent_payload = {}
 

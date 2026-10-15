@@ -196,10 +196,8 @@ OPS_CASE_ALLOWED_STATES = {
     "detected",
     "acknowledged",
     "investigating",
-    "recovering",
     "resolved",
     "dismissed",
-    "reopened",
     "actioned",
     "monitoring",
     "deferred",
@@ -1454,7 +1452,8 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
     - Terminal success on any attempt clears/resolves prior retry failures of that dispatch.
     - Independent dispatches (even to the same recipient) remain distinct incidents.
     - Shared provider failures (e.g. Resend HTTP 500/503) are tagged with root-cause group.
-    - Legacy events lacking dispatch_id are correlated conservatively by (kind, target_kind, target_id, to_email, 300s window).
+    - Legacy events without dispatch_id remain separate because recipient/time similarity
+      cannot prove that two sends are retries of the same dispatch.
     """
     if not message_log:
         return []
@@ -1462,7 +1461,7 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
     dispatch_groups: Dict[str, List[Dict[str, Any]]] = {}
     sorted_events = sorted(message_log, key=lambda e: str(e.get("created_at") or ""))
 
-    for event in sorted_events:
+    for event_index, event in enumerate(sorted_events):
         explicit_dispatch_id = str(event.get("dispatch_id") or "").strip()
         if explicit_dispatch_id:
             group_key = f"auth:{explicit_dispatch_id}"
@@ -1470,44 +1469,12 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
                 dispatch_groups[group_key] = []
             dispatch_groups[group_key].append(event)
         else:
-            kind = str(event.get("kind") or "")
-            t_kind = str(event.get("target_kind") or "")
-            t_id = str(event.get("target_id") or "")
-            to_email = str(event.get("to_email") or event.get("recipient") or "")
-            evt_time_str = str(event.get("created_at") or "")
-
-            matched_group = None
-            try:
-                evt_dt = datetime.fromisoformat(evt_time_str) if evt_time_str else None
-            except Exception:
-                evt_dt = None
-
-            if (kind or t_id) and to_email:
-                for g_key, g_events in dispatch_groups.items():
-                    if not g_key.startswith("inf:"):
-                        continue
-                    first_evt = g_events[0]
-                    first_to_email = str(first_evt.get("to_email") or first_evt.get("recipient") or "")
-                    if (
-                        str(first_evt.get("kind") or "") == kind
-                        and str(first_evt.get("target_kind") or "") == t_kind
-                        and str(first_evt.get("target_id") or "") == t_id
-                        and first_to_email == to_email
-                    ):
-                        first_time_str = str(first_evt.get("created_at") or "")
-                        try:
-                            first_dt = datetime.fromisoformat(first_time_str) if first_time_str else None
-                        except Exception:
-                            first_dt = None
-                        if evt_dt and first_dt and abs((evt_dt - first_dt).total_seconds()) <= 300:
-                            matched_group = g_key
-                            break
-
-            if matched_group:
-                dispatch_groups[matched_group].append(event)
-            else:
-                group_key = f"inf:{event.get('id') or len(dispatch_groups)}"
-                dispatch_groups[group_key] = [event]
+            # No authoritative dispatch identity: preserve each event as its own
+            # incident. Similar recipient and timestamp values do not establish retry
+            # identity, and grouping them can hide a failure behind another send's
+            # success.
+            group_key = f"legacy:{event.get('id') or hashlib.sha256(json.dumps(event, sort_keys=True, default=str).encode()).hexdigest()}:{event_index}"
+            dispatch_groups[group_key] = [event]
 
     provider_outage_counts: Dict[str, int] = {}
     pending_incidents_data: List[Dict[str, Any]] = []
@@ -1527,7 +1494,7 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
         latest_event = g_events[-1]
         earliest_event = g_events[0]
         is_auth = g_key.startswith("auth:")
-        dispatch_id = g_key.partition(":")[2]
+        dispatch_id = g_key.partition(":")[2] if g_key.startswith("auth:") else ""
         correlation_type = "authoritative" if is_auth else ("inferred" if len(g_events) > 1 else "legacy_standalone")
 
         constituent_ids = [str(e.get("id") or "") for e in g_events if e.get("id")]
@@ -1610,9 +1577,7 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
             sample_ids = ", ".join(constituent_ids[:3]) + (f" (+{len(constituent_ids)-3} more)" if len(constituent_ids) > 3 else "")
             detail_rows.append({"label": "Constituent event IDs", "value": sample_ids})
 
-        case_id = f"message:{dispatch_id}"
-        if correlation_type == "legacy_standalone" and constituent_ids:
-            case_id = f"message:{constituent_ids[0]}"
+        case_id = f"message:{dispatch_id}" if dispatch_id else f"message:{constituent_ids[0] if constituent_ids else hashlib.sha256(json.dumps(latest_event, sort_keys=True, default=str).encode()).hexdigest()}"
 
         aliases = [f"message:{eid}" for eid in constituent_ids]
         aliases.extend(constituent_ids)
@@ -3388,7 +3353,10 @@ async def run_trainer_ingest_job(
 
 
 ENGINE_TICK_LEASE_KEY = "engine_tick_lease"
-ENGINE_TICK_LEASE_TTL_S = 180
+# The verified developer Cloud Run request timeout is 300 seconds. Keep a two-minute
+# cushion so a running request cannot lose its lease before Cloud Run ends it; revisit
+# this value alongside any service timeout increase.
+ENGINE_TICK_LEASE_TTL_S = 420
 
 
 @api.post("/internal/jobs/engine-tick")
@@ -3406,9 +3374,13 @@ async def run_engine_tick_job(
     now_epoch = time.time()
     lease_expires_epoch = now_epoch + ENGINE_TICK_LEASE_TTL_S
     now_ts = now_iso()
-    runner_id = f"engine_tick:{int(now_epoch)}:{os.getpid()}"
+    # Every invocation needs a unique owner token. Second-resolution timestamps
+    # let concurrent requests from one process mistake the same lease for theirs.
+    runner_id = f"engine_tick:{uuid.uuid4().hex}"
 
     system_state_coll = getattr(db, "system_state", None)
+    if system_state_coll is None:
+        raise HTTPException(status_code=503, detail="Engine tick lease store unavailable.")
     if system_state_coll is not None:
         try:
             lease_doc = await system_state_coll.find_one_and_update(
@@ -6435,19 +6407,36 @@ async def _get_provider_telemetry(message_log: Optional[List[Dict[str, Any]]] = 
         telemetry["atlas_connected"] = None
 
     if message_log:
-        for msg in message_log:
-            st = str(msg.get("status") or msg.get("delivery_status") or "").lower()
-            if any(term in st for term in ["auth_failed", "unauthorized", "401", "403"]):
+        provider_events = [
+            (index, msg)
+            for index, msg in enumerate(message_log)
+            if str(msg.get("provider") or "resend").lower() == "resend"
+        ]
+
+        def _provider_event_time(item):
+            raw_time = item[1].get("created_at")
+            try:
+                parsed = raw_time if isinstance(raw_time, datetime) else datetime.fromisoformat(str(raw_time))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone.utc)
+                return parsed.astimezone(timezone.utc), item[0]
+            except (TypeError, ValueError):
+                return datetime.min.replace(tzinfo=timezone.utc), item[0]
+
+        if provider_events:
+            _, latest = max(provider_events, key=_provider_event_time)
+            status = str(latest.get("status") or latest.get("delivery_status") or "").lower()
+            http_status = int(latest.get("http_status") or 0)
+            if http_status in {401, 403} or any(term in status for term in ("auth_failed", "unauthorized", "401", "403")):
                 telemetry["resend_status"] = "auth_failure"
-                break
-            elif any(term in st for term in ["rate_limited", "429"]):
+            elif http_status == 429 or any(term in status for term in ("rate_limited", "429")):
                 telemetry["resend_status"] = "rate_limited"
-                break
-            elif any(term in st for term in ["failed", "server_error", "500", "502", "503"]):
-                telemetry["resend_status"] = "service_error"
-                break
-            elif any(term in st for term in ["sent", "delivered", "accepted", "202"]):
+            elif 200 <= http_status < 300 or any(term in status for term in ("sent", "delivered", "accepted")):
                 telemetry["resend_status"] = "ok"
+            elif http_status >= 500 or any(term in status for term in ("failed", "server_error", "500", "502", "503")):
+                telemetry["resend_status"] = "service_error"
+            else:
+                telemetry["resend_status"] = "unknown"
 
     # Correction B: Sentry configuration present is unverified without event delivery evidence
     global _LAST_SENTRY_EVENT_VERIFIED
@@ -6726,10 +6715,12 @@ async def update_oversight_case_review(
         raise HTTPException(status_code=503, detail="Ops case state store unavailable.")
 
     before = await states_coll.find_one({"case_id": target_case_id}, {"_id": 0}) or {}
+    current_fp = current_case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(current_case)
     if (
         before.get("state") == normalized_state
         and (before.get("owner") or "") == owner
         and (before.get("note") or "") == note
+        and (before.get("occurrence_fingerprint") or "") == (current_fp or "")
     ):
         merged_case = _merge_ops_case_state(current_case, before)
         return _scrub({"ok": True, "case": merged_case})
@@ -6746,7 +6737,6 @@ async def update_oversight_case_review(
         }
     )
     history = history[-OPS_CASE_HISTORY_LIMIT:]
-    current_fp = current_case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(current_case)
     after = {
         "case_id": target_case_id,
         "case_type": current_case.get("case_type"),

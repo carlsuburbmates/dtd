@@ -318,6 +318,40 @@ def test_two_independent_dispatches_to_same_recipient_remain_distinct():
     assert case_ids == {"message:disp_order_1", "message:disp_order_2"}
 
 
+def test_legacy_events_do_not_merge_or_hide_failure_behind_success():
+    t0 = datetime.now(timezone.utc)
+    shared = {
+        "workflow": "match_intro",
+        "target_kind": "trainer",
+        "target_id": "tr_legacy",
+        "to_email": "same_trainer@example.com",
+        "kind": "intro_notification",
+        "attempt": 1,
+    }
+    incidents = server._correlate_message_incidents([
+        {
+            **shared,
+            "id": "legacy_failure",
+            "status": "failed",
+            "http_status": 401,
+            "error": "Unauthorized",
+            "created_at": t0.isoformat(),
+        },
+        {
+            **shared,
+            "id": "legacy_success",
+            "status": "sent",
+            "http_status": 202,
+            "created_at": (t0 + timedelta(seconds=10)).isoformat(),
+        },
+    ])
+
+    assert len(incidents) == 1
+    assert incidents[0]["case_id"] == "message:legacy_failure"
+    assert {row["label"]: row["value"] for row in incidents[0]["detail_rows"]}["HTTP status"] == 401
+    assert incidents[0]["correlation_type"] == "legacy_standalone"
+
+
 def test_provider_outage_root_cause_grouping_across_trainers():
     t0 = datetime.now(timezone.utc)
     msg_log = [
@@ -379,13 +413,49 @@ def test_fingerprint_recurrence_detection():
     assert "(Recurred)" in merged_recurred["title"]
 
 
+def test_provider_telemetry_uses_latest_resend_event_not_old_auth_failure():
+    telemetry = asyncio.run(server._get_provider_telemetry([
+        {
+            "provider": "resend",
+            "status": "sent",
+            "http_status": 200,
+            "created_at": "2026-10-15T19:09:31+00:00",
+        },
+        {
+            "provider": "resend",
+            "status": "failed",
+            "http_status": 401,
+            "created_at": "2026-10-11T13:43:06+00:00",
+        },
+    ]))
+    assert telemetry["resend_status"] == "ok"
+
+
 def test_high_severity_dismissal_validation():
-    current_case = {
-        "case_id": "message:disp_high",
-        "severity": "high",
-        "state": "detected",
-    }
-    assert len("Investigated and mitigated") >= 5
+    async def _test():
+        orig_db = server.db
+        server.db = _MockDB(ops_case_states=_MockCollection(), audit_log=_MockCollection())
+        with patch.object(
+            server,
+            "_current_ops_cases",
+            AsyncMock(return_value=[{"case_id": "message:disp_high", "severity": "high", "state": "detected", "occurrence_fingerprint": "fp_high"}]),
+        ):
+            try:
+                await server.update_oversight_case_review(
+                    "message:disp_high",
+                    server.OpsCaseReviewIn(state="dismissed", owner="Carl", note=""),
+                )
+            except server.HTTPException as exc:
+                assert exc.status_code == 400
+                assert "requires an explanatory review note" in exc.detail
+            else:
+                raise AssertionError("High-severity dismissal without a note must be rejected")
+        server.db = orig_db
+
+    asyncio.run(_test())
+    assert server._normalize_ops_case_state("recovering") == ""
+    assert server._normalize_ops_case_state("reopened") == ""
+    assert server._normalize_ops_case_state("investigating") == "investigating"
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +511,13 @@ def test_update_oversight_case_review_idempotency_and_alias():
             history_len_after = len(mock_states.rows[0]["history"])
             assert history_len_before == history_len_after, "Idempotent update must not duplicate history"
 
+            # The same review details must acknowledge a genuinely new occurrence.
+            server._current_ops_cases.return_value[0]["occurrence_fingerprint"] = "fp_new_occurrence"
+            res_recurrence = await server.update_oversight_case_review("message:disp_existing", payload)
+            assert res_recurrence["ok"] is True
+            assert mock_states.rows[0]["occurrence_fingerprint"] == "fp_new_occurrence"
+            assert len(mock_states.rows[0]["history"]) == history_len_before + 1
+
         server.db = orig_db
 
     asyncio.run(_test())
@@ -472,6 +549,23 @@ def test_engine_tick_lease_acquisition_and_skipping():
             assert res["skipped"] is True
             assert res["reason"] == "lease_held"
 
+        server.db = orig_db
+
+    asyncio.run(_test())
+
+
+def test_engine_tick_fails_closed_without_lease_store():
+    async def _test():
+        orig_db = server.db
+        server.db = SimpleNamespace()
+        with patch.object(server, "_require_cloud_scheduler_oidc", return_value=None):
+            try:
+                await server.run_engine_tick_job(authorization="Bearer mock")
+            except server.HTTPException as exc:
+                assert exc.status_code == 503
+                assert exc.detail == "Engine tick lease store unavailable."
+            else:
+                raise AssertionError("Engine tick must not run without its distributed lease store")
         server.db = orig_db
 
     asyncio.run(_test())

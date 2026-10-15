@@ -6,11 +6,14 @@ Verifies live runtime behavior on Cloud Run revision dtd-api-dev:
 2. Workstream A: Incident correlation (retry attempts grouped, terminal success clears).
 3. Workstream B & E: Incident lifecycle, dismissal safeguards, and recurrence verification.
 4. Workstream C: Verified recovery, alias resolution, and review idempotency.
-5. Workstream D: Serverless background scheduling & DF-029 engine-tick telemetry.
+5. Workstream D: Read-only scheduler presence check. The live engine tick is never
+   triggered by this script because it can send real reactivation notifications.
 6. Workstream F: Read-only oversight invariant (zero database writes).
 7. Zero-trace cleanup of disposable test fixtures.
 
-Safe for developer sandbox (dogtrainersdirectory-dev / dtd_sandbox).
+Fixture checks are scoped to dogtrainersdirectory-dev / dtd_sandbox. The engine-tick
+execution gate remains blocked until per-loop bounds and side-effect-safe acceptance
+are implemented.
 """
 from __future__ import annotations
 
@@ -322,42 +325,15 @@ def main() -> int:
         # Gate 5: Workstream D - Serverless Background Scheduling & Engine Tick
         # ------------------------------------------------------------------
         print("\n--- Gate 5: Workstream D - Serverless Background Scheduling (DF-029) ---")
-        # Trigger Cloud Scheduler job execution
-        sched_run_cmd = [
-            "gcloud", "scheduler", "jobs", "run", "dtd-engine-tick-cron",
-            f"--project={PROJECT_ID}", "--location=australia-southeast1"
-        ]
-        subprocess.check_call(sched_run_cmd)
-        print("  ✓ Cloud Scheduler job dtd-engine-tick-cron invoked successfully.")
-
-        # Verify system_state records in MongoDB sandbox
-        engine_tick_doc = db.system_state.find_one({"key": "engine_tick"})
-        assert engine_tick_doc is not None, "system_state must contain key 'engine_tick'"
-        assert engine_tick_doc.get("execution_owner") == "cloud_scheduler", f"Expected execution_owner 'cloud_scheduler', got {engine_tick_doc.get('execution_owner')}"
-        assert engine_tick_doc.get("last_status") == "ok", f"Expected last_status 'ok', got {engine_tick_doc.get('last_status')}"
-
-        last_run_str = str(engine_tick_doc.get("last_run") or "")
-        assert last_run_str, "last_run must be recorded"
-        tick_dt = datetime.fromisoformat(last_run_str)
-        now_utc = datetime.now(timezone.utc)
-        age_seconds = abs((now_utc - tick_dt).total_seconds())
-        assert age_seconds <= 300, f"engine_tick last_run was {age_seconds}s ago, expected <= 300s"
-        print(f"  ✓ engine_tick telemetry verified in system_state: status={engine_tick_doc.get('last_status')}, last_run={last_run_str} ({round(age_seconds, 1)}s ago), duration={engine_tick_doc.get('duration_ms')}ms")
-
-        # Verify individual loops updated
-        ranking_doc = db.system_state.find_one({"key": "ranking"})
-        assert ranking_doc is not None and ranking_doc.get("execution_owner") == "cloud_scheduler"
-        health_doc = db.system_state.find_one({"key": "health"})
-        assert health_doc is not None and health_doc.get("execution_owner") == "cloud_scheduler"
-        print("  ✓ Autonomous loops (ranking, health, etc.) verified running under execution_owner 'cloud_scheduler'")
-
-        # Verify distributed lease is released
-        lease_doc = db.system_state.find_one({"key": "engine_tick_lease"})
-        if lease_doc:
-            assert float(lease_doc.get("expires_at_epoch") or 0) <= now_utc.timestamp(), "engine_tick_lease must be released after execution"
-            print(f"  ✓ Distributed lease release verified: released_at={lease_doc.get('released_at')}")
-
-        results["Gate 5 - Workstream D: Serverless Scheduling & Engine Tick (DF-029)"] = "PASS"
+        # Deliberately do not execute the scheduler. The engine tick runs production-like
+        # loop functions and may send reactivation emails to real trainers. Its effects
+        # are not fenced to this test_run_id, so a successful API response is not a safe
+        # acceptance test.
+        results["Gate 5 - Workstream D: Serverless Scheduling & Engine Tick (DF-029)"] = (
+            "BLOCKED: live engine-tick execution can send real notifications; "
+            "per-loop bounds and side-effect-safe acceptance are not implemented"
+        )
+        print(f"  ! {results['Gate 5 - Workstream D: Serverless Scheduling & Engine Tick (DF-029)']}")
 
         # ------------------------------------------------------------------
         # Gate 6: Read-only Oversight Invariant (Zero DB Writes)
@@ -387,35 +363,39 @@ def main() -> int:
         # ------------------------------------------------------------------
         print("\n--- Gate 7: Zero-Trace Fixture Cleanup ---")
         cleanup_report = {}
+        cleanup_ok = True
         for coll_name, ids in inserted_ids.items():
             if not ids:
                 continue
             coll = db[coll_name]
-            if coll_name == "notification_events":
-                res = coll.delete_many({"id": {"$in": ids}})
-                cleanup_report[coll_name] = res.deleted_count
-            elif coll_name == "ops_case_states":
-                res = coll.delete_many({"case_id": {"$in": ids}})
-                cleanup_report[coll_name] = res.deleted_count
-            elif coll_name == "audit_log":
-                from bson import ObjectId
-                valid_oids = []
-                for _id in ids:
-                    try:
-                        valid_oids.append(ObjectId(_id))
-                    except Exception:
-                        pass
-                if valid_oids:
-                    res = coll.delete_many({"_id": {"$in": valid_oids}})
-                    cleanup_report[coll_name] = res.deleted_count
+            try:
+                if coll_name == "notification_events":
+                    selector = {"id": {"$in": ids}}
+                elif coll_name == "ops_case_states":
+                    selector = {"case_id": {"$in": ids}}
+                else:
+                    continue
+                deleted = coll.delete_many(selector).deleted_count
+                remaining = coll.count_documents(selector)
+                cleanup_report[coll_name] = {"deleted": deleted, "remaining": remaining}
+                cleanup_ok = cleanup_ok and remaining == 0
+            except Exception as exc:  # noqa: BLE001
+                cleanup_report[coll_name] = {"error": type(exc).__name__}
+                cleanup_ok = False
 
         # Clean any audit_log entries created by this test run
-        res_audit = db.audit_log.delete_many({"target": {"$regex": test_run_id}})
-        if res_audit.deleted_count:
-            cleanup_report["audit_log_regex"] = res_audit.deleted_count
+        audit_selector = {"target": {"$regex": test_run_id}}
+        try:
+            deleted_audit = db.audit_log.delete_many(audit_selector).deleted_count
+            remaining_audit = db.audit_log.count_documents(audit_selector)
+            cleanup_report["audit_log"] = {"deleted": deleted_audit, "remaining": remaining_audit}
+            cleanup_ok = cleanup_ok and remaining_audit == 0
+        except Exception as exc:  # noqa: BLE001
+            cleanup_report["audit_log"] = {"error": type(exc).__name__}
+            cleanup_ok = False
 
         print(f"  ✓ Cleanup completed: {cleanup_report}")
-        results["Gate 7 - Zero-Trace Fixture Disposal"] = "PASS"
+        results["Gate 7 - Zero-Trace Fixture Disposal"] = "PASS" if cleanup_ok else "FAIL: fixture records remain or cleanup errored"
         client.close()
 
     print("\n=== Final Phase 2 Sandbox Acceptance Gate Results ===")
