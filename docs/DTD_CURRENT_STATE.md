@@ -347,6 +347,14 @@ These entries are verified observations requiring follow-up, not approved produc
   1. `/api/health` returned HTTP 200 with database available (`{"ok": true, "service": "dog-trainers-directory-match-engine", "database": "available"}`).
   2. Live matching acceptance runner (`scripts/run_sandbox_matching_acceptance.sh`) passed against deployed sandbox: `{"ok": true, "sandbox_project": "dogtrainersdirectory-dev", "match_persisted": true, "ops_visible": true, "raw_description_stored": false}`, followed by clean fixture disposal.
   3. Authenticated `/api/oversight` inspection executed side-effect free (DF-032) and verified Phase 1 queue filtering and occurrence fingerprinting on live sandbox records.
+  4. Automated 7-Gate Phase 1 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase1.py`) executed against live sandbox deployment `dtd-api-dev-00026-pzc`:
+     - *Gate 1 (Noise Elimination / Success Excluded):* **PASS** — Successful HTTP 202 delivery excluded from Ops cases.
+     - *Gate 2 (Genuine Failures Remain Visible):* **PASS** — Failed delivery and AI degradation cases surfaced as actionable incidents.
+     - *Gate 3 (Operational vs Governance Classification):* **PASS** — Provider governance cases classified in monitoring (low); provider operational failures in detected.
+     - *Gate 4 (Administrative Review & Occurrence Fingerprint):* **PASS** — High-severity dismissal without note >= 5 chars rejected (HTTP 400); valid dismissal persisted; recurrence protection confirmed across refresh.
+     - *Gate 5 (Audit Integrity & Read-Only Oversight Contract, DF-032):* **PASS** — Zero writes on `GET /api/oversight`; immutable `audit_log` records created on review updates.
+     - *Gate 6 (Production Isolation):* **PASS** — Isolated to `dogtrainersdirectory-dev` / `dtd_sandbox`; production independently verified healthy and untouched.
+     - *Gate 7 (Zero-Trace Fixture Disposal):* **PASS** — 100% synthetic test documents purged from collections.
 - **Repairs:**
   1. Replaced blanket 24h loop threshold with cadence-aware bounded grace periods (`bounded_grace_seconds`) across 45s, 60s, 10m, 6h, and 24h loop schedules, distinguishing native daemons from external schedulers and handling clock skew, maintenance, and unknown cadences.
   2. Aligned provider operational status to evidence-first rules: MongoDB Atlas requires recent operation telemetry within 300s (defaulting to `unknown`, not `operational`); Resend derives status from outbound dispatches; Sentry defaults to `unknown` until event ingestion is verified.
