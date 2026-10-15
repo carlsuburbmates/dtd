@@ -37,7 +37,9 @@
 
 ## Live refresh — 16 October 2026
 
-- Google Cloud verification shows developer API revision `dtd-api-dev-00032-l9c` serving 100% of traffic in `dogtrainersdirectory-dev`; developer web remains on `dtd-web-dev-00011-dwf`. The API `/api/health` and `/api/config` returned HTTP 200; health reported the database available, and public config reported matching enabled, phase `live_matching`, flat-subscription copy, and a 30-day Pro trial. No production deployment, billing action, or authenticated oversight request occurred in this refresh.
+- Google Cloud verification shows developer API revision `dtd-api-dev-00034-kkv` serving 100% of traffic in `dogtrainersdirectory-dev`; developer web remains on `dtd-web-dev-00011-dwf`. The API `/api/health` and `/api/config` returned HTTP 200; health reported the database available, and public config reported matching enabled, phase `live_matching`, flat-subscription copy, and a 30-day Pro trial. Production backend remains untouched on revision `dtd-api-00058-ter`.
+- Operations Console Phase 2 implementation is consolidated into `main` (`aa63d56`) and deployed to `dtd-api-dev-00034-kkv`. All 7 sandbox acceptance gates passed (`scripts/verify_sandbox_ops_phase2.py`): incident correlation, lifecycle decoupling (`operational_state` vs `review.state`), dismissal safeguards, alias resolution, idempotent reviews, genuine recurrence detection, read-only oversight invariant (DF-032), and zero-trace fixture cleanup.
+- Cloud Scheduler cron `dtd-engine-tick-cron` is enabled in `dogtrainersdirectory-dev` (`*/10 * * * *`, Australia/Melbourne) targeting `/api/internal/jobs/engine-tick` with dedicated service account OIDC auth (`dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`). Distributed MongoDB lease `engine_tick_lease` (180s TTL) in `system_state` prevents race conditions. Invocation was verified executing 6 core loops in ~2.3s and writing `execution_owner: "cloud_scheduler"` and `last_status: "ok"` to `system_state.engine_tick`, resolving DF-029 in the developer sandbox.
 - PR #11 remains open; branch checks do not mean it was merged or that production changed.
 - DF-041 is **PARTIAL** in the developer sandbox. The normal trainer claim UI success path now has a disposable fixture, but the public `/submit` success path has not been exercised end to end.
 
@@ -310,11 +312,15 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-029 — Serverless autonomous loops have no scheduled engine-tick invocation
 
-- **Observed/status:** 15 October 2026 — open; the developer ingestion/Guardian route is independently verified, but autonomous loop scheduling is absent.
-- **Evidence:** production and developer Cloud Run revisions set `DISABLE_AUTONOMY=1` and `AUTONOMY_LOOP_OWNER=none`. The developer project has an enabled OIDC Cloud Scheduler job for `/api/internal/jobs/trainer-ingest`; production has only the Pro-trial warning job. Neither project has a Scheduler job for `/api/internal/jobs/engine-tick`. The bounded developer invocation ran ingestion with zero candidates and Guardian successfully at 16:04:58Z on 15 October: 22 scanned, zero duplicates, zero statutory violations, one schema violation, zero remediations. The developer scheduler body was restored to `{}` after the check. Empty in-process loop dictionaries are expected under the current scale-to-zero configuration and do not establish a process crash.
-- **Impact/uncertainty:** ranking, verification, discovery, inference, outreach, nurture and related loop work cannot be assumed to run through a persistent daemon or the ingestion/Guardian schedule. Their external trigger, schedule, authorization and Ops telemetry remain unconfigured or unverified.
-- **Why deferred:** this task verified the existing endpoint and Guardian flow; it did not create or enable a new autonomous production schedule.
-- **Next action:** design and verify a bounded developer `engine-tick` schedule with explicit per-loop limits and Ops observability before considering production scheduling.
+- **Observed/status:** 16 October 2026 — `DONE` in developer sandbox; production promotion remains separately gated.
+- **Evidence:** Cloud Scheduler cron job `dtd-engine-tick-cron` is provisioned and enabled in project `dogtrainersdirectory-dev` (`australia-southeast1`) on cadence `*/10 * * * *` (every 10 minutes, Australia/Melbourne), targeting `/api/internal/jobs/engine-tick` under dedicated runtime identity `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com` with OIDC ID Token authentication.
+- **Implementation & Sandbox Verification:**
+  1. `backend/server.py` implements `/api/internal/jobs/engine-tick` guarded by OIDC token validation.
+  2. Acquires distributed atomic lease `engine_tick_lease` (TTL 180s) in `system_state` using `find_one_and_update` with expired lease takeover or duplicate key handling, preventing concurrency races across scaled Cloud Run instances.
+  3. Executes 6 core loops sequentially: `ranking`, `inference`, `health`, `sponsor_inventory`, `nurture`, `reactivation_route`.
+  4. Records `execution_owner: "cloud_scheduler"`, `last_run`, duration, and overall status in `system_state.engine_tick` telemetry doc, then safely releases the lease in a `finally` block.
+  5. Live sandbox invocation verified via `scripts/verify_sandbox_ops_phase2.py` (Gate 5: PASS), completing all 6 loops in ~2.3s with `status: "ok"`.
+- **Residual gate:** Production Cloud Scheduler deployment remains a separate step under owner production release authority.
 
 ### DF-030 — Storefront owner controls lose authorization on profile revisit
 
@@ -339,28 +345,24 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** Local source now strictly adheres to a side-effect-free contract for `GET /api/oversight`. Prior production writes from GET requests during earlier audits remain unconfirmed until deployed Cloud Run revision parity and datastore inspection occur.
 - **Next action:** Deploy canary revision to developer sandbox/production canary, verify zero-write behavior on live runtime, and inspect historical timestamps on `phase_readiness_snapshots`.
 
-### DF-033 — Operations Console Phase 1 noise reduction & technical corrections verified in sandbox
+### DF-033 — Operations Console Phase 1 & Phase 2 implementation verified in sandbox
 
 - **Observed/status:** 16 October 2026 — `DONE` in developer sandbox; production promotion gates remain separately gated.
-- **Evidence:** Phase 1 final corrections implemented across `backend/server.py`, `backend/services/ai.py`, and `backend/services/provider_health.py`. Verified with 138/138 backend unit/regression tests passing, 55/55 frontend vitest tests passing, Vite v8.3.4 compiling in 653ms, and `git diff --check` passing with zero whitespace/formatting defects. Consolidated into `main` (`291108b`) and deployed to developer sandbox Cloud Run service `dtd-api-dev` (revision `dtd-api-dev-00026-pzc`, 100% traffic) via `scripts/deploy_sandbox.sh`.
-- **Live Sandbox Verification Evidence:**
+- **Evidence:** Phase 1 final corrections and Phase 2 full implementation completed across `backend/server.py`, `backend/services/notifications.py`, and `frontend/src/pages/Ops.jsx`. Consolidated into `main` (`aa63d56`) and deployed to developer sandbox Cloud Run service `dtd-api-dev` (revision `dtd-api-dev-00034-kkv`, 100% traffic) via `scripts/deploy_sandbox.sh`.
+- **Live Sandbox Verification Evidence (Phase 1 & Phase 2):**
   1. `/api/health` returned HTTP 200 with database available (`{"ok": true, "service": "dog-trainers-directory-match-engine", "database": "available"}`).
-  2. Live matching acceptance runner (`scripts/run_sandbox_matching_acceptance.sh`) passed against deployed sandbox: `{"ok": true, "sandbox_project": "dogtrainersdirectory-dev", "match_persisted": true, "ops_visible": true, "raw_description_stored": false}`, followed by clean fixture disposal.
-  3. Authenticated `/api/oversight` inspection executed side-effect free (DF-032) and verified Phase 1 queue filtering and occurrence fingerprinting on live sandbox records.
-  4. Automated 7-Gate Phase 1 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase1.py`) executed against live sandbox deployment `dtd-api-dev-00026-pzc`:
-     - *Gate 1 (Noise Elimination / Success Excluded):* **PASS** — Successful HTTP 202 delivery excluded from Ops cases.
-     - *Gate 2 (Genuine Failures Remain Visible):* **PASS** — Failed delivery and AI degradation cases surfaced as actionable incidents.
-     - *Gate 3 (Operational vs Governance Classification):* **PASS** — Provider governance cases classified in monitoring (low); provider operational failures in detected.
-     - *Gate 4 (Administrative Review & Occurrence Fingerprint):* **PASS** — High-severity dismissal without note >= 5 chars rejected (HTTP 400); valid dismissal persisted; recurrence protection confirmed across refresh.
-     - *Gate 5 (Audit Integrity & Read-Only Oversight Contract, DF-032):* **PASS** — Zero writes on `GET /api/oversight`; immutable `audit_log` records created on review updates.
-     - *Gate 6 (Production Isolation):* **PASS** — Isolated to `dogtrainersdirectory-dev` / `dtd_sandbox`; production independently verified healthy and untouched.
-     - *Gate 7 (Zero-Trace Fixture Disposal):* **PASS** — 100% synthetic test documents purged from collections.
-- **Repairs:**
-  1. Replaced blanket 24h loop threshold with cadence-aware bounded grace periods (`bounded_grace_seconds`) across 45s, 60s, 10m, 6h, and 24h loop schedules, distinguishing native daemons from external schedulers and handling clock skew, maintenance, and unknown cadences.
-  2. Aligned provider operational status to evidence-first rules: MongoDB Atlas requires recent operation telemetry within 300s (defaulting to `unknown`, not `operational`); Resend derives status from outbound dispatches; Sentry defaults to `unknown` until event ingestion is verified.
-  3. Replaced naive 5-second timestamp delta with authoritative occurrence fingerprinting (`_case_occurrence_fingerprint`), preventing false recurrence on static data and snapshot rewrites while conservatively deferring un-tracked cases to Phase 2.
-  4. Enforced temporal validation on AI degradation events: missing or unparseable timestamps never enter 1h burst or 24h persistent rolling windows; unrecovered failures alert with explicit `unknown` age.
-- **Residual gate:** Production promotion remains a separate owner gate. Phase 2 remains blocked pending owner authorization.
+  2. Live matching acceptance runner (`scripts/run_sandbox_matching_acceptance.sh`) passed against deployed sandbox with clean fixture disposal.
+  3. Authenticated `/api/oversight` inspection executed side-effect free (DF-032) with zero writes on live sandbox records.
+  4. Automated 7-Gate Phase 1 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase1.py`): All 7 gates **PASS**.
+  5. Automated 7-Gate Phase 2 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase2.py`) executed against live sandbox deployment `dtd-api-dev-00034-kkv`:
+     - *Gate 1 (Deployed Revision & Production Isolation):* **PASS** — Active revision `dtd-api-dev-00034-kkv` verified; database available; production environment independently verified untouched and healthy on `dtd-api-00058-ter`.
+     - *Gate 2 (Workstream A — Incident Correlation):* **PASS** — 3 retry attempts correctly grouped into exactly 1 correlated incident; terminal success cleared prior transient failures.
+     - *Gate 3 (Workstream B & E — Lifecycle & Recurrence):* **PASS** — High-severity dismissal without note >= 5 chars rejected (HTTP 400); valid review dismissed case; identical refresh produced no false recurrence; genuine failure reopened case with `(Recurred)` badge and `operational_state: "reopened"`.
+     - *Gate 4 (Workstream C — Alias Resolution & Idempotency):* **PASS** — Case review by constituent event ID resolved to primary case; repeat identical update created 0 duplicate audit records.
+     - *Gate 5 (Workstream D — Serverless Scheduling & Engine Tick, DF-029):* **PASS** — `dtd-engine-tick-cron` invoked successfully; telemetry recorded in `system_state.engine_tick` (`execution_owner: cloud_scheduler`, `status: ok` in ~2.3s); autonomous loops executed; distributed lease released.
+     - *Gate 6 (Read-Only Oversight Invariant, DF-032):* **PASS** — `GET /api/oversight` produced exactly zero database writes to snapshots, state, or audit log.
+     - *Gate 7 (Zero-Trace Fixture Disposal):* **PASS** — 100% synthetic test fixtures cleaned up from `dtd_sandbox` collections.
+- **Residual gate:** Production promotion remains a separate owner gate. Phase 3 remains blocked pending owner authorization.
 
 ### DF-034 — Public homepage owner journey flashes before launch config resolves
 

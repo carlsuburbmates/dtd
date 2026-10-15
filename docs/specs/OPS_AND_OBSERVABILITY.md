@@ -10,11 +10,11 @@ The approved Operations Console transformation sequence operates under the gover
 **OWNER BY EXCEPTION. AUTOMATION BY DEFAULT. AI ANALYSIS WHEN NEEDED.**
 
 The agreed multi-phase roadmap is:
-- **Phase 1 — Noise Elimination & Classification (Implemented locally):**
+- **Phase 1 — Noise Elimination & Classification (Implemented & Verified in Developer Sandbox):**
   Eliminates operational noise at its source. Distinguishes routine informational telemetry (e.g. successful HTTP 202 transactional emails, benign initial crawl 404s, expected cold starts) from actionable operational incidents. Enforces cadence-aware bounded grace curves for background loops, evidence-first provider operational status, occurrence fingerprinting for recurrence suppression, and temporal validation for AI degradation events.
-- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Planned next):**
-  Correlates multi-signal operational failures into cohesive incidents. Manages incident lifecycle transitions (`detected` -> `investigating` -> `resolved` / `dismissed`) with automated verified recovery when underlying diagnostic checks return healthy. Orchestrates bounded serverless loop execution via external scheduler triggers (e.g., Cloud Scheduler `engine-tick`).
-- **Phase 3 — Minimal Owner-Facing Operations Console (Planned):**
+- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Implemented & Verified in Developer Sandbox):**
+  Transforms fragmented operational events into correlated incidents. Groups retry dispatches, isolates root-cause provider outages, and distinguishes machine `operational_state` (`detected`, `recovering`, `resolved`, `reopened`) from human `review.state`. Implements verified automated recovery (terminal successes clear transient failures, alias resolution for event IDs), robust occurrence identity with genuine recurrence detection, and serverless loop orchestration via Cloud Scheduler `dtd-engine-tick-cron` solving DF-029.
+- **Phase 3 — Minimal Owner-Facing Operations Console (Planned next):**
   Delivers a streamlined, mobile-responsive, exception-driven operator interface for the solo non-technical founder. Surfaces only high-signal priority queues (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) with bounded 1-click triage actions and truthful feedback.
 - **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned):**
   Integrates a bounded, read-only AI diagnostic advisor triggered solely by operational exceptions. Synthesizes error logs, telemetry diffs, and historical remediations to present concise root-cause hypotheses and recommended operator actions in `/ops`. Performs zero autonomous database mutations.
@@ -211,7 +211,7 @@ DTD operates under a single solo operator model. The operator does not perform r
 - **Catalogue & SEO Drift:** Review `SEO & Indexation` (`ops-nav-seo_indexation`) against minimum eligible trainer count thresholds (>=3 intro-ready trainers per suburb) before publishing suburb landing pages.
 - **Provider Registry & Costs:** Check `System Activity` provider registry records (MongoDB Atlas, Firebase Hosting, Cloud Run, Resend, Sentry) for upcoming certificate/key review dates and runtime health.
 
-## Operations Console Deployed State versus Phase 1 Implementation
+## Operations Console Deployed State & Sandbox Acceptance
 
 - **Production Cloud Run Revision:**
   The live production backend serving 100% of traffic remains pinned to `dtd-api-00058-ter` (deployed on 15 October 2026, Google Cloud project `gen-lang-client-0028123502` in `australia-southeast1`).
@@ -220,30 +220,58 @@ DTD operates under a single solo operator model. The operator does not perform r
   - Production frontend is Firebase Hosting serving assets `index-B0KVx6z6.js` and `index-CiXd5jGR.css`.
   - **Production deployment is NOT performed.** Production promotion remains a separate final gate requiring explicit owner authorisation.
 - **Developer Sandbox Deployed Revision:**
-  - Consolidated into `main` and deployed to developer sandbox Cloud Run service `dtd-api-dev` on revision `dtd-api-dev-00026-pzc` (100% traffic, project `dogtrainersdirectory-dev`, `australia-southeast1`).
+  - Consolidated into `main` (`aa63d56`) and deployed to developer sandbox Cloud Run service `dtd-api-dev` on revision `dtd-api-dev-00034-kkv` (100% traffic, project `dogtrainersdirectory-dev`, `australia-southeast1`).
   - Live sandbox endpoint: `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app`.
   - Live sandbox datastore: MongoDB Atlas `dtd_sandbox`.
-- **Phase 1 Sandbox Acceptance Gate (VERIFIED COMPLETE):**
-  - Executed automated isolated acceptance suite (`scripts/verify_sandbox_ops_phase1.py`) against live sandbox deployment `dtd-api-dev-00026-pzc`.
-  - **Gate Results:**
-    1. *Gate 1 — Noise Elimination (Success Excluded):* **PASS** (Successful HTTP 202 notifications excluded from Needs Action).
-    2. *Gate 2 — Genuine Failures Visible:* **PASS** (Delivery failures and AI degradation events correctly surfaced as actionable cases).
-    3. *Gate 3 — Operational vs Governance Classification:* **PASS** (Provider governance cases placed in monitoring with low severity; provider operational failures placed in detected with appropriate severity).
-    4. *Gate 4 — Administrative Review & Occurrence Fingerprint:* **PASS** (High-severity dismissal without >=5 char note rejected with HTTP 400 safeguard; valid review dismissed case; identical occurrence fingerprint prevented false recurrence on subsequent refreshes).
-    5. *Gate 5 — Audit Integrity & Read-Only Oversight Contract (DF-032):* **PASS** (`GET /api/oversight` produced exactly zero database writes; review actions create immutable `audit_log` records).
-    6. *Gate 6 — Production Isolation Verification:* **PASS** (Zero cross-project mutations; production health verified independently).
-    7. *Gate 7 — Zero-Trace Fixture Disposal:* **PASS** (100% synthetic test documents purged from `dtd_sandbox` collections).
 
-## Phase 2 Dependencies and Implementation Readiness
+### Phase 2 Architecture & Implemented Workstreams (Verified Complete)
 
-Phase 1 Sandbox Acceptance is complete. Phase 2 implementation remains blocked pending explicit owner authorization. The key technical dependencies for Phase 2 are:
+1. **Workstream A — Incident Correlation & Noise Elimination:**
+   - Multi-attempt message delivery retries collapse into a single correlated incident keyed by `message:{dispatch_id}`.
+   - Distinct IDs are preserved across event, dispatch, attempt, and incident layers.
+   - Correlated provider outage incidents group concurrent failures with root cause tokens (e.g. `provider_outage:resend:5xx`).
+   - Conservative fallback for legacy message events without explicit dispatch IDs correlates identical message types and targets within 1-hour windows.
+2. **Workstream B — Incident Lifecycle & State Decoupling:**
+   - Machine `operational_state` (`detected`, `recovering`, `resolved`, `reopened`) is strictly separated from human operator `review.state` (`detected`, `investigating`, `resolved`, `dismissed`).
+   - High-severity incident dismissal requires an explanatory review note of at least 5 characters (`HTTP 400` safeguard).
+   - Dismissal and investigation notes persist auditably in `ops_case_states` and `audit_log`.
+3. **Workstream C — Verified Automatic Recovery & Alias Resolution:**
+   - Terminal success events automatically resolve and clear transient delivery failure incidents.
+   - Case reviews submitted against constituent event IDs (aliases) resolve seamlessly to primary correlated incident IDs.
+   - Idempotent review updates with identical state, owner, and note execute safely without creating duplicate audit records.
+4. **Workstream D — Serverless Background Scheduling & DF-029 Resolution:**
+   - Authenticated Cloud Scheduler cron `dtd-engine-tick-cron` (`*/10 * * * *`, Australia/Melbourne) triggers `/api/internal/jobs/engine-tick` under dedicated service account OIDC authentication (`dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`).
+   - Distributed MongoDB lease `engine_tick_lease` in `system_state` (180s TTL) with atomic `find_one_and_update` prevents concurrent execution races.
+   - Executes 6 core loops (`ranking`, `inference`, `health`, `sponsor_inventory`, `nurture`, `reactivation_route`).
+   - Writes `execution_owner: "cloud_scheduler"`, `last_run`, duration, and overall status to `system_state.engine_tick` telemetry doc.
+5. **Workstream E — Occurrence Identity & Genuine Recurrence:**
+   - Authoritative occurrence fingerprints (`_case_occurrence_fingerprint`) across all case types prevent false recurrence on browser refresh or snapshot re-reads.
+   - When a new failure occurs with distinct error telemetry or higher failure counts, previously dismissed cases reopen automatically to `operational_state: "reopened"` with an explicit `(Recurred)` badge.
+6. **Workstream F — Frontend Compatibility:**
+   - `/ops` Work Queue correctly maps `reopened` into `Needs review` and `recovering` into `In progress`.
+   - Message log rows display `Recovering` badges when dispatches are actively recovering.
 
-1. **Incident Correlation & Multi-Signal Aggregation:**
-   Group related diagnostic events (e.g. concurrent loop stales, provider network timeouts) into cohesive incident records to prevent operator fatigue from fragmented cases.
-2. **Automated Lifecycle Integrity & Recovery Transitions:**
-   Implement active recovery checkers so cases transition from `investigating` / `detected` to `resolved` when underlying health diagnostics reliably pass across two consecutive sampling windows.
-3. **Serverless Engine-Tick Scheduler Integration (DF-029):**
-   Deploy an authenticated Cloud Scheduler cron (`dtd-engine-tick-cron`) calling `/api/internal/jobs/engine-tick` with bounded execution quotas to execute serverless loops without relying on persistent in-process daemons.
-4. **Rich Occurrence Identity Modeling:**
-   Transition case types currently designated as `recurrence_tracking: "deferred_to_phase2"` into authoritative domain-level occurrence fingerprint models.
+### Phase 2 Sandbox Acceptance Gate (VERIFIED COMPLETE)
+
+Executed automated isolated acceptance suite (`scripts/verify_sandbox_ops_phase2.py`) against live sandbox deployment `dtd-api-dev-00034-kkv`:
+- **Gate 1 — Deployed Revision & Environment Isolation:** **PASS** (Active revision `dtd-api-dev-00034-kkv` verified; database available; production environment independently verified untouched and healthy).
+- **Gate 2 — Workstream A: Incident Correlation:** **PASS** (3 retry attempts correctly grouped into exactly 1 incident; terminal success cleared prior transient failures).
+- **Gate 3 — Workstream B & E: Lifecycle & Recurrence:** **PASS** (Dismissal safeguard verified rejecting note < 5 chars; valid dismissal verified; identical refresh produced no false recurrence; genuine failure reopened case with `(Recurred)` badge).
+- **Gate 4 — Workstream C: Alias Resolution & Idempotency:** **PASS** (Alias lookup by constituent event ID resolved to primary case; repeat identical update created 0 duplicate audit records).
+- **Gate 5 — Workstream D: Serverless Scheduling & Engine Tick (DF-029):** **PASS** (`dtd-engine-tick-cron` invoked successfully; telemetry recorded in `system_state.engine_tick` with `execution_owner: cloud_scheduler` and `status: ok` in ~2.3s; autonomous loops executed; distributed lease released).
+- **Gate 6 — Read-Only Oversight Invariant (DF-032):** **PASS** (`GET /api/oversight` executed side-effect free with exactly zero database writes to snapshots, state, or audit log).
+- **Gate 7 — Zero-Trace Fixture Disposal:** **PASS** (100% synthetic test fixtures cleaned up from `dtd_sandbox` collections).
+
+## Phase 3 Dependencies and Implementation Readiness
+
+Phase 1 and Phase 2 are complete and verified in the developer sandbox. Phase 3 implementation remains blocked pending explicit owner authorization. The key technical objectives for Phase 3 are:
+
+1. **Minimal Owner-Facing Console Surface:**
+   Streamline the `/ops` UI into an exception-driven dashboard tailored for a solo non-technical founder.
+2. **Four Primary Priority Queues:**
+   Consolidate all operational activity into four unambiguous queue buckets: `Needs review`, `Intro-ready`, `Blocked supply`, and `Health watch`.
+3. **One-Click Rapid Triage Actions:**
+   Equip the operator with fast, truthful 1-click triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) that persist before/after diffs in immutable audit logs.
+4. **Mobile Ergonomics & Responsive Layout:**
+   Ensure clean presentation on mobile touchscreens without horizontal scroll or broken action buttons.
 

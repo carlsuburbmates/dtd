@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -322,6 +323,10 @@ def main() -> int:
         # Gate 5: Workstream D - Serverless Background Scheduling & Engine Tick
         # ------------------------------------------------------------------
         print("\n--- Gate 5: Workstream D - Serverless Background Scheduling (DF-029) ---")
+        # Record baseline last_run before invoking
+        baseline_tick = db.system_state.find_one({"key": "engine_tick"})
+        baseline_last_run = str((baseline_tick or {}).get("last_run") or "")
+
         # Trigger Cloud Scheduler job execution
         sched_run_cmd = [
             "gcloud", "scheduler", "jobs", "run", "dtd-engine-tick-cron",
@@ -330,17 +335,29 @@ def main() -> int:
         subprocess.check_call(sched_run_cmd)
         print("  ✓ Cloud Scheduler job dtd-engine-tick-cron invoked successfully.")
 
-        # Verify system_state records in MongoDB sandbox
-        engine_tick_doc = db.system_state.find_one({"key": "engine_tick"})
+        # Wait up to 30 seconds for the asynchronous Cloud Scheduler execution to complete
+        start_wait = time.time()
+        engine_tick_doc = None
+        while time.time() - start_wait < 30:
+            doc = db.system_state.find_one({"key": "engine_tick"})
+            lease_doc = db.system_state.find_one({"key": "engine_tick_lease"})
+            lease_expires = float((lease_doc or {}).get("expires_at_epoch") or 0)
+            now_epoch = time.time()
+            if doc and str(doc.get("last_run") or "") != baseline_last_run and lease_expires <= now_epoch:
+                engine_tick_doc = doc
+                break
+            time.sleep(2)
+
+        if not engine_tick_doc:
+            engine_tick_doc = db.system_state.find_one({"key": "engine_tick"})
+
         assert engine_tick_doc is not None, "system_state must contain key 'engine_tick'"
         assert engine_tick_doc.get("execution_owner") == "cloud_scheduler", f"Expected execution_owner 'cloud_scheduler', got {engine_tick_doc.get('execution_owner')}"
         assert engine_tick_doc.get("last_status") == "ok", f"Expected last_status 'ok', got {engine_tick_doc.get('last_status')}"
 
         last_run_str = str(engine_tick_doc.get("last_run") or "")
-        assert last_run_str, "last_run must be recorded"
         tick_dt = datetime.fromisoformat(last_run_str)
-        now_utc = datetime.now(timezone.utc)
-        age_seconds = abs((now_utc - tick_dt).total_seconds())
+        age_seconds = abs((datetime.now(timezone.utc) - tick_dt).total_seconds())
         assert age_seconds <= 300, f"engine_tick last_run was {age_seconds}s ago, expected <= 300s"
         print(f"  ✓ engine_tick telemetry verified in system_state: status={engine_tick_doc.get('last_status')}, last_run={last_run_str} ({round(age_seconds, 1)}s ago), duration={engine_tick_doc.get('duration_ms')}ms")
 
@@ -352,6 +369,7 @@ def main() -> int:
         print("  ✓ Autonomous loops (ranking, health, etc.) verified running under execution_owner 'cloud_scheduler'")
 
         # Verify distributed lease is released
+        now_utc = datetime.now(timezone.utc)
         lease_doc = db.system_state.find_one({"key": "engine_tick_lease"})
         if lease_doc:
             assert float(lease_doc.get("expires_at_epoch") or 0) <= now_utc.timestamp(), "engine_tick_lease must be released after execution"
