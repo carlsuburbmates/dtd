@@ -354,6 +354,8 @@ describe("Ops auth transition", () => {
 
         expect(view.container.textContent).toContain("Decision needed");
         expect(view.container.textContent).toContain("Reviewer name");
+        expect(Array.from(stateSelect.options).map((option) => option.value)).not.toContain("recovering");
+        expect(Array.from(stateSelect.options).map((option) => option.value)).not.toContain("reopened");
 
         await act(async () => {
             setFieldValue(stateSelect, "investigating");

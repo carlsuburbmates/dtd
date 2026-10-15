@@ -82,8 +82,6 @@ const REVIEW_STATE_OPTIONS = [
     "resolved",
     "deferred",
     "dismissed",
-    "recovering",
-    "reopened",
     "escalated_to_owner_override",
     "escalated_to_technical_owner",
     "detected",

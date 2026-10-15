@@ -12,8 +12,8 @@ The approved Operations Console transformation sequence operates under the gover
 The agreed multi-phase roadmap is:
 - **Phase 1 — Noise Elimination & Classification (Implemented locally):**
   Eliminates operational noise at its source. Distinguishes routine informational telemetry (e.g. successful HTTP 202 transactional emails, benign initial crawl 404s, expected cold starts) from actionable operational incidents. Enforces cadence-aware bounded grace curves for background loops, evidence-first provider operational status, occurrence fingerprinting for recurrence suppression, and temporal validation for AI degradation events.
-- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Planned next):**
-  Correlates multi-signal operational failures into cohesive incidents. Manages incident lifecycle transitions (`detected` -> `investigating` -> `resolved` / `dismissed`) with automated verified recovery when underlying diagnostic checks return healthy. Orchestrates bounded serverless loop execution via external scheduler triggers (e.g., Cloud Scheduler `engine-tick`).
+- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (In progress):**
+  Source code now includes incident correlation, persisted review history, and an authenticated serverless engine-tick endpoint. Automated verified recovery after two consecutive healthy diagnostic windows and a bounded, configured external schedule remain incomplete. Do not claim Phase 2 accepted until those paths are implemented and sandbox-verified.
 - **Phase 3 — Minimal Owner-Facing Operations Console (Planned):**
   Delivers a streamlined, mobile-responsive, exception-driven operator interface for the solo non-technical founder. Surfaces only high-signal priority queues (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) with bounded 1-click triage actions and truthful feedback.
 - **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned):**
@@ -236,14 +236,14 @@ DTD operates under a single solo operator model. The operator does not perform r
 
 ## Phase 2 Dependencies and Implementation Readiness
 
-Phase 1 Sandbox Acceptance is complete. Phase 2 implementation remains blocked pending explicit owner authorization. The key technical dependencies for Phase 2 are:
+Phase 1 Sandbox Acceptance is complete. Phase 2 is in progress in source and has not been accepted in the developer sandbox. The key technical dependencies for Phase 2 are:
 
 1. **Incident Correlation & Multi-Signal Aggregation:**
    Group related diagnostic events (e.g. concurrent loop stales, provider network timeouts) into cohesive incident records to prevent operator fatigue from fragmented cases.
 2. **Automated Lifecycle Integrity & Recovery Transitions:**
-   Implement active recovery checkers so cases transition from `investigating` / `detected` to `resolved` when underlying health diagnostics reliably pass across two consecutive sampling windows.
+   Implement active recovery checkers so cases transition from `investigating` / `detected` to `resolved` when underlying health diagnostics reliably pass across two consecutive sampling windows. Until then, only an operator review may change the manual case state; `recovering` and `reopened` are not operator-selectable states.
 3. **Serverless Engine-Tick Scheduler Integration (DF-029):**
-   Deploy an authenticated Cloud Scheduler cron (`dtd-engine-tick-cron`) calling `/api/internal/jobs/engine-tick` with bounded execution quotas to execute serverless loops without relying on persistent in-process daemons.
+   After per-loop execution quotas and request-timeout bounds are verified, configure an authenticated Cloud Scheduler cron (`dtd-engine-tick-cron`) calling `/api/internal/jobs/engine-tick` to execute serverless loops without relying on persistent in-process daemons.
 4. **Rich Occurrence Identity Modeling:**
    Transition case types currently designated as `recurrence_tracking: "deferred_to_phase2"` into authoritative domain-level occurrence fingerprint models.
 
