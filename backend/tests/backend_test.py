@@ -240,6 +240,7 @@ class TestSubmissions:
             "source_evidence_url": "https://example.test/unverified-evidence",
             "consent_public_listing": True,
             "consent_information_accuracy": True,
+            "consent_intro_billing_terms": True,
         }
         r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
@@ -255,6 +256,7 @@ class TestSubmissions:
             "suburb": "Carlton",
             "consent_public_listing": True,
             "consent_information_accuracy": True,
+            "consent_intro_billing_terms": True,
         }
         r = session.post(f"{API}/submissions", json=payload, timeout=90)
         assert r.status_code == 200, r.text
