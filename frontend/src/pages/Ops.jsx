@@ -170,19 +170,39 @@ function toneClass(kind, value) {
         if (normalized === "medium") return "bg-[#403423] text-[#F4E2B5]";
         return "bg-[#1F3A34] text-[#BEE0D7]";
     }
-    if (normalized.includes("escalated") || normalized === "warn" || normalized === "attention_needed" || normalized === "failed") {
+    if (normalized.includes("escalated") || normalized === "warn" || normalized === "attention_needed" || normalized === "failed" || normalized === "failing") {
         return "bg-[#4A201C] text-[#F8D9D3]";
     }
-    if (normalized === "monitoring" || normalized === "investigating" || normalized === "actioned" || normalized === "notified") {
+    if (normalized === "monitoring" || normalized === "investigating" || normalized === "actioned" || normalized === "notified" || normalized === "missing_owner" || normalized === "missing owner") {
         return "bg-[#403423] text-[#F4E2B5]";
     }
     return "bg-[#1F3A34] text-[#BEE0D7]";
 }
 
+function normalizeCaseQueueState(row) {
+    const state = String(row?.state || "");
+    const caseType = String(row?.case_type || "");
+    const caseId = String(row?.case_id || "");
+
+    // Safety guard: Routine sent messages should never be in needs_review
+    if (caseType === "trainer_communications_case" || caseId.startsWith("message:")) {
+        const details = Array.isArray(row?.detail_rows) ? row.detail_rows : [];
+        const deliveryStatus = String(details.find((d) => d.label === "Delivery status")?.value || "").toLowerCase();
+        if (deliveryStatus === "sent" && ["detected", "notified"].includes(state)) {
+            return "monitoring";
+        }
+    }
+    // Safety guard: Static provider governance cases should be in monitoring, not needs_review
+    if (caseType === "provider_governance_case" && ["detected", "notified"].includes(state)) {
+        return "monitoring";
+    }
+    return state;
+}
+
 function queueGroups(cases) {
     return QUEUE_GROUPS.map((group) => ({
         ...group,
-        rows: cases.filter((row) => group.states.includes(String(row?.state || ""))),
+        rows: cases.filter((row) => group.states.includes(normalizeCaseQueueState(row))),
     }));
 }
 
@@ -229,6 +249,7 @@ function quickReviewChoices(selectedCase) {
             { value: "monitoring", label: "Monitor" },
             { value: "escalated_to_technical_owner", label: "Escalate" },
             { value: "resolved", label: "Resolved" },
+            { value: "dismissed", label: "Dismiss" },
         ];
     }
     return [
@@ -236,6 +257,7 @@ function quickReviewChoices(selectedCase) {
         { value: "investigating", label: "Review now" },
         { value: "monitoring", label: "Monitor" },
         { value: "resolved", label: "Resolved" },
+        { value: "dismissed", label: "Dismiss" },
     ];
 }
 
@@ -438,10 +460,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
     const matchingOversight = snap.matching || {};
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const unhealthyLoops = Object.values(loops || {}).filter((meta) => String(meta?.status || "ok") !== "ok").length;
-    const failedMessages = messages.filter((row) => {
-        const status = String(row?.status || "").toLowerCase();
-        return status === "failed" || status === "error" || Number(row?.http_status || 0) >= 400;
-    }).length;
+    const unreviewedFailedMessages = opsCases.filter(isOpenFailedMessageCase).length;
     const sentMessages = messages.filter((row) => String(row?.status || "").toLowerCase() === "sent").length;
     const lifecycleIssues = billingCases.length + reactivationCases.length + asArray(sponsorInventory.exceptions).length;
     const demandGapCount = asArray(supplyGeography.demand_gaps).length;
@@ -485,8 +504,8 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
         },
         messages: {
             eyebrow: "Delivery issues",
-            value: formatShortNumber(failedMessages),
-            note: failedMessages ? "Review failed deliveries before trusting the downstream workflow state." : `${formatShortNumber(sentMessages)} recent sends succeeded.`,
+            value: formatShortNumber(unreviewedFailedMessages),
+            note: unreviewedFailedMessages ? `${formatShortNumber(unreviewedFailedMessages)} unreviewed failure${unreviewedFailedMessages === 1 ? "" : "s"} in Work Queue.` : `${formatShortNumber(sentMessages)} recent sends succeeded.`,
         },
         billing_reactivation: {
             eyebrow: "Open issues",
@@ -666,7 +685,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         {activeView === "seo_indexation" ? <SeoIndexationView seoIndexation={seoIndexation} /> : null}
 
                         {activeView === "messages" ? (
-                            <MessagesView messages={messages} onRefresh={onRefresh} />
+                            <MessagesView messages={messages} cases={opsCases} onSelectView={setActiveView} onRefresh={onRefresh} />
                         ) : null}
 
                         {activeView === "billing_reactivation" ? (
@@ -1242,6 +1261,11 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
 
     const saveReview = useCallback(async () => {
         if (!selectedCase) return;
+        if (draftState === "dismissed" && String(selectedCase.severity || "").toLowerCase() === "high" && note.trim().length < 5) {
+            setSaveError("Dismissing a high-severity operational case requires an explanatory review note of at least 5 characters.");
+            toast.error("Review note required for high-severity dismissal");
+            return;
+        }
         setSaving(true);
         setSaveError("");
         try {
@@ -1253,8 +1277,9 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
             toast.success("Case review saved");
             await onRefresh?.();
         } catch (err) {
-            setSaveError("Review could not be saved. Try again after refreshing the page.");
-            toast.error("Review could not be saved");
+            const detailMsg = err?.response?.data?.detail || "Review could not be saved. Try again after refreshing the page.";
+            setSaveError(detailMsg);
+            toast.error(detailMsg);
         } finally {
             setSaving(false);
         }
@@ -1262,10 +1287,15 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
 
     const executeQuickAction = useCallback(async (targetState, defaultNote) => {
         if (!selectedCase) return;
-        setSaving(true);
-        setSaveError("");
         const reviewOwner = owner.trim() || "Owner";
         const reviewNote = note.trim() || defaultNote || `Actioned as ${targetState} by ${reviewOwner}`;
+        if (targetState === "dismissed" && String(selectedCase.severity || "").toLowerCase() === "high" && reviewNote.trim().length < 5) {
+            setSaveError("Dismissing a high-severity operational case requires an explanatory review note of at least 5 characters.");
+            toast.error("Review note required for high-severity dismissal");
+            return;
+        }
+        setSaving(true);
+        setSaveError("");
         try {
             await opsApi.post(`/oversight/cases/${encodeURIComponent(selectedCase.case_id)}`, {
                 state: targetState,
@@ -1275,8 +1305,9 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
             toast.success(`Case marked as ${targetState}`);
             await onRefresh?.();
         } catch (err) {
-            setSaveError("Review could not be saved. Try again after refreshing the page.");
-            toast.error("Review could not be saved");
+            const detailMsg = err?.response?.data?.detail || "Review could not be saved. Try again after refreshing the page.";
+            setSaveError(detailMsg);
+            toast.error(detailMsg);
         } finally {
             setSaving(false);
         }
@@ -1319,11 +1350,22 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                             <XCircle className="w-3.5 h-3.5 text-[#E57373]" /> Dismiss
                         </button>
                     </div>
+                    {selectedCase.recurred && (
+                        <div className="rounded-2xl border border-[#7E4541] bg-[#2E1817] p-3 text-xs text-[#FFCDD2] font-mono flex items-center gap-2" data-testid="ops-case-recurred-banner">
+                            <AlertTriangle className="w-4 h-4 text-[#E57373] shrink-0" />
+                            <span>This incident was previously dismissed or resolved, but has recurred with fresh runtime events. Re-investigation required.</span>
+                        </div>
+                    )}
                     <div>
                         <div className="flex flex-wrap items-center gap-2">
                             <Badge label={humanizeToken(selectedCase.severity)} kind="severity" />
                             <Badge label={stateLabel(selectedCase.state)} kind="state" />
                             <Badge label={caseDecisionLabel(selectedCase)} kind="decision" />
+                            {selectedCase.recurred && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-[#542F2C] text-[#FFCDD2] border border-[#E57373]" data-testid="ops-case-recurred-badge">
+                                    <AlertTriangle className="w-3 h-3 text-[#E57373]" /> Recurred
+                                </span>
+                            )}
                         </div>
                         <h2 className="font-serif text-2xl tracking-tight mt-3">{selectedCase.title}</h2>
                         <p className="text-sm text-[#C9C2B1] mt-2">{selectedCase.summary}</p>
@@ -1760,27 +1802,48 @@ function SeoIndexationView({ seoIndexation }) {
     );
 }
 
-function MessagesView({ messages }) {
+function isOpenFailedMessageCase(caseRow) {
+    if (
+        caseRow?.case_type !== "trainer_communications_case"
+        || !["detected", "notified"].includes(caseRow.state)
+    ) return false;
+    const details = Array.isArray(caseRow.detail_rows) ? caseRow.detail_rows : [];
+    const deliveryStatus = String(details.find((row) => row.label === "Delivery status")?.value || "").toLowerCase();
+    const httpStatus = Number(details.find((row) => row.label === "HTTP status")?.value || 0);
+    return ["failed", "error"].includes(deliveryStatus) || httpStatus >= 400;
+}
+
+function MessagesView({ messages, cases = [], onSelectView, onRefresh }) {
     const sentCount = messages.filter((row) => String(row?.status || "").toLowerCase() === "sent").length;
-    const failedCount = messages.filter((row) => {
-        const status = String(row?.status || "").toLowerCase();
-        return status === "failed" || status === "error" || Number(row?.http_status || 0) >= 400;
-    }).length;
-    const workflowCount = new Set(messages.map((row) => String(row?.workflow || "").trim()).filter(Boolean)).size;
+    const openFailedCount = cases.filter(isOpenFailedMessageCase).length;
+    const totalCount = messages.length;
+
     return (
         <section className="admin-card p-5 mt-4">
             <PageHeader title="Messages" description={PAGE_INTROS.messages} />
             <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <SummaryCard title="Successful sends" value={sentCount} note="Recent outgoing messages that reached a sent state." />
-                <SummaryCard title="Delivery issues" value={failedCount} note={failedCount ? "Review these before trusting the workflow outcome." : "No visible delivery failures in this sample."} />
-                <SummaryCard title="Workflows touched" value={workflowCount} note="Distinct workflows represented in the recent log." />
+                <SummaryCard title="Successful sends" value={sentCount} note="Outgoing system emails that reached a confirmed sent state." />
+                <SummaryCard
+                    title="Open delivery issues"
+                    value={openFailedCount}
+                    note={openFailedCount ? "Unresolved delivery failures requiring attention in the Work Queue." : "All recent delivery issues have been reviewed or dismissed."}
+                />
+                <SummaryCard title="Total messages logged" value={totalCount} note="Read-only audit trail of recent outgoing notifications." />
             </div>
-            {failedCount ? (
-                <div className="mt-4 rounded-3xl border border-[#5B2B27] bg-[#2B1715] px-4 py-3 text-sm text-[#F8D9D3]">
-                    Delivery failures are a trust signal. Review the affected workflow before assuming the contact step completed safely.
-                </div>
-            ) : null}
-            <p className="text-sm text-[#8B9E98] font-mono mt-4">Every recent outgoing message in one readable list, grouped by workflow and delivery result.</p>
+
+            <div className="mt-4 rounded-2xl border border-[#2A3935] bg-[#16221F] px-4 py-3 text-xs text-[#8B9E98] leading-relaxed">
+                <span className="text-[#C9C2B1] font-mono uppercase tracking-wider block mb-1">Audit log notice</span>
+                This tab is an audit record of all past email dispatches. Delivery failures automatically open a review case in your{" "}
+                <button
+                    type="button"
+                    onClick={() => onSelectView && onSelectView("work_queue")}
+                    className="text-[#D9B36C] underline hover:text-[#E5C17D] transition"
+                >
+                    Work Queue
+                </button>
+                , where you can inspect errors, acknowledge, resolve, or dismiss them.
+            </div>
+
             <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[940px] text-sm">
                     <thead className="text-left text-[#8B9E98] font-mono uppercase tracking-[0.18em] text-[11px]">
@@ -1799,6 +1862,8 @@ function MessagesView({ messages }) {
                         {messages.length ? messages.map((row) => {
                             const isFailedIntro = (row.workflow === "match_intro" || row.workflow === "matching") && (String(row?.status || "").toLowerCase() === "failed" || String(row?.status || "").toLowerCase() === "error");
                             const introId = row.intro_id || row.target_id || (row.entity_id && row.entity_id.startsWith("intro_") ? row.entity_id : null);
+                            const linkedCase = cases.find((c) => c.case_id === `message:${row.id}`);
+
                             return (
                                 <tr key={row.id} className="border-t border-[#1E2A27]">
                                     <td className="py-3 pr-3 text-[#8B9E98]">{formatDateTime(row.created_at)}</td>
@@ -1838,7 +1903,27 @@ function MessagesView({ messages }) {
                                                 <RotateCcw className="h-3 w-3" />
                                                 Retry
                                             </button>
-                                        ) : "—"}
+                                        ) : linkedCase?.state === "dismissed" ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-[#1E2E2A] text-[#8B9E98] border border-[#2A3935]">
+                                                Dismissed in queue
+                                            </span>
+                                        ) : linkedCase?.state === "resolved" ? (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-[#152B1E] text-[#529E72] border border-[#1E4D30]">
+                                                Resolved in queue
+                                            </span>
+                                        ) : linkedCase && (linkedCase.state === "detected" || linkedCase.state === "notified") ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => onSelectView && onSelectView("work_queue")}
+                                                className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono bg-[#2B1715] text-[#F8D9D3] border border-[#5B2B27] hover:bg-[#3D1E1B] transition"
+                                            >
+                                                Review in queue &rarr;
+                                            </button>
+                                        ) : String(row?.status || "").toLowerCase() === "sent" ? (
+                                            <span className="text-xs text-[#529E72] font-mono">Delivered</span>
+                                        ) : (
+                                            <span className="text-xs text-[#8B9E98] font-mono">Logged</span>
+                                        )}
                                     </td>
                                 </tr>
                             );
@@ -2067,9 +2152,9 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHea
     const loopRows = Object.entries(loops || {});
     const providers = asArray(providerHealth?.providers);
     const providerExceptions = providers.filter((row) => row?.autonomy_status === "not_accepted").length;
-    const unhealthyLoops = loopRows.filter(([, meta]) => String(meta?.status || "ok") !== "ok").length;
+    const unhealthyLoops = loopRows.filter(([, meta]) => !["ok", "disabled"].includes(String(meta?.status || "ok"))).length;
     const staleLoopNames = loopRows
-        .filter(([, meta]) => String(meta?.status || "ok") !== "ok")
+        .filter(([, meta]) => ["escalate", "investigate", "failing"].includes(String(meta?.status || "")))
         .map(([key]) => humanizeToken(key))
         .slice(0, 3);
 
@@ -2110,7 +2195,9 @@ function SystemActivityView({ loops, alerts, sourceIngestionSources, providerHea
                                 {loopRows.map(([key, meta]) => (
                                     <tr key={key} className="border-t border-[#1E2A27]">
                                         <td className="py-3 pr-3">{humanizeToken(key)}</td>
-                                        <td className="py-3 pr-3"><Badge label={humanizeToken(meta.status)} kind="state" /></td>
+                                        <td className="py-3 pr-3">
+                                            <Badge label={meta?.status === "missing_owner" ? "Missing Owner" : humanizeToken(meta?.status)} kind="state" />
+                                        </td>
                                         <td className="py-3 pr-3 text-[#8B9E98]">
                                             {meta.age_s == null ? "Unknown" : `${formatShortNumber(meta.age_s)} sec old`}
                                         </td>

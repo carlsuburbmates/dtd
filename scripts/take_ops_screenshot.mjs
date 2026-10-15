@@ -83,6 +83,31 @@ async function main() {
         fs.writeFileSync(desktopPath, Buffer.from(resDesktop.result.data, "base64"));
         console.log("Saved desktop screenshot:", desktopPath);
 
+        // Click on Messages tab
+        console.log("Navigating to Messages view...");
+        await send("Runtime.evaluate", {
+            expression: `
+                const msgBtn = document.querySelector('[data-testid="ops-nav-messages"]');
+                if (msgBtn) msgBtn.click();
+            `
+        });
+        await sleep(2000);
+
+        console.log("Capturing Messages view screenshot...");
+        const resMsg = await send("Page.captureScreenshot", { format: "png" });
+        const msgPath = `${ARTIFACT_DIR}/ops_messages_view.png`;
+        fs.writeFileSync(msgPath, Buffer.from(resMsg.result.data, "base64"));
+        console.log("Saved messages view screenshot:", msgPath);
+
+        // Switch back to overview for laptop resize
+        await send("Runtime.evaluate", {
+            expression: `
+                const ovBtn = document.querySelector('[data-testid="ops-nav-overview"]');
+                if (ovBtn) ovBtn.click();
+            `
+        });
+        await sleep(1000);
+
         // Resize to 1200x800 and capture
         console.log("Capturing Laptop (1200x800) screenshot...");
         await send("Emulation.setDeviceMetricsOverride", {
@@ -98,13 +123,12 @@ async function main() {
         console.log("Saved laptop screenshot:", laptopPath);
 
         ws.close();
+    } catch (err) {
+        console.error("Error during screenshot:", err);
     } finally {
         chrome.kill();
         console.log("Chrome terminated.");
     }
 }
 
-main().catch(err => {
-    console.error("Error:", err);
-    process.exit(1);
-});
+main().catch(console.error);

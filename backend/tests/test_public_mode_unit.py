@@ -303,7 +303,18 @@ def _fake_oversight_db():
                 "http_status": 202,
                 "provider": "resend",
                 "created_at": "2026-05-20T00:00:00+00:00",
-            }
+            },
+            {
+                "id": "note_2",
+                "target_kind": "submission",
+                "target_id": "sub_1",
+                "kind": "submission_update",
+                "status": "failed",
+                "attempt": 2,
+                "http_status": 500,
+                "provider": "resend",
+                "created_at": "2026-05-19T23:00:00+00:00",
+            },
         ]
     )
     outreach_events = _Collection(

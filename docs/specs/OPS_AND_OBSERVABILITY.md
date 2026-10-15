@@ -4,6 +4,23 @@
 
 DTD has one non-technical operator. `/ops` is the single action and evidence surface. It should prioritise exceptions, explain impact and provide the smallest safe next action.
 
+## Operations Console Transformation Roadmap
+
+The approved Operations Console transformation sequence operates under the governing principle:
+**OWNER BY EXCEPTION. AUTOMATION BY DEFAULT. AI ANALYSIS WHEN NEEDED.**
+
+The agreed multi-phase roadmap is:
+- **Phase 1 — Noise Elimination & Classification (Implemented locally):**
+  Eliminates operational noise at its source. Distinguishes routine informational telemetry (e.g. successful HTTP 202 transactional emails, benign initial crawl 404s, expected cold starts) from actionable operational incidents. Enforces cadence-aware bounded grace curves for background loops, evidence-first provider operational status, occurrence fingerprinting for recurrence suppression, and temporal validation for AI degradation events.
+- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Planned next):**
+  Correlates multi-signal operational failures into cohesive incidents. Manages incident lifecycle transitions (`detected` -> `investigating` -> `resolved` / `dismissed`) with automated verified recovery when underlying diagnostic checks return healthy. Orchestrates bounded serverless loop execution via external scheduler triggers (e.g., Cloud Scheduler `engine-tick`).
+- **Phase 3 — Minimal Owner-Facing Operations Console (Planned):**
+  Delivers a streamlined, mobile-responsive, exception-driven operator interface for the solo non-technical founder. Surfaces only high-signal priority queues (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) with bounded 1-click triage actions and truthful feedback.
+- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned):**
+  Integrates a bounded, read-only AI diagnostic advisor triggered solely by operational exceptions. Synthesizes error logs, telemetry diffs, and historical remediations to present concise root-cause hypotheses and recommended operator actions in `/ops`. Performs zero autonomous database mutations.
+- **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Planned):**
+  Introduces strictly gated, idempotent automated recovery routines for well-understood transient faults (e.g., automated cache flushing, bounded task retries, stale claim expirations), requiring prior operator review and explicit feature-flag gating.
+
 ## Required operating picture
 
 - Public posture and commercial gates.
@@ -30,9 +47,36 @@ An action shown in `/ops` must exist end to end. Mutating actions require:
 
 Old specifications that list approve/reject/merge/delist/cancel/refund as available do not make those controls real. Implement the approved bounded action or remove the claim.
 
+### Case review semantics, occurrence fingerprinting and invariants (Phase 1)
+
+1. **Read-Only Oversight Contract (DF-032):**
+   `GET /api/oversight` is strictly side-effect free. It reads system state, loop health, message logs, and existing review cases without creating, updating, or deleting any database records (e.g. `_read_launch_phase_state()` and `_read_phase_transition_decisions()` replace all former snapshot upsert logic).
+2. **Domain Entity Immutability:**
+   Operator triage actions (Resolve, Acknowledge, Dismiss via `POST /ops/cases/{case_id}/review`) persist state strictly in `ops_case_states` and `audit_log`. They never mutate underlying business tables (`submissions`, `trainers`, `subscriptions`, `message_log`).
+3. **Occurrence Fingerprinting & Recurrence Prevention:**
+   Recurrence detection is evaluated strictly against authoritative occurrence fingerprints (`_case_occurrence_fingerprint`), NOT fragile read timestamps or query re-runs. Snapshot rewrites or re-reads with identical fingerprints remain dismissed or resolved. Where occurrence identity is absent or unmodeled in Phase 1, recurrence tracking is explicitly marked `recurrence_tracking: "deferred_to_phase2"` to guarantee review integrity without false alerts.
+
 ## Automation contract
 
 Each loop exposes owner, cadence/trigger, input cohort, last run, last success, failure count, next action and retry/fallback. A deployed function without scheduling evidence is not an active automation. Repeated failures become an operator case rather than disappearing into logs.
+
+### Background loop freshness and scheduling contract (Phase 1)
+
+1. **Cadence-Aware Bounded Grace Curves:**
+   Blanket 24-hour thresholds are eliminated. Grace periods are derived as a bounded function of the authoritative loop interval (`bounded_grace_seconds()`):
+   - 45s health / metrics loops: 30s grace (stale at >75s).
+   - 60s ranking / scoring loops: 30s grace (stale at >90s).
+   - 10m discovery / feed loops: 150s grace (stale at >12.5m).
+   - 6h verification / ingestion / reactivation loops: 2,160s (36m) grace (stale at >6.6h).
+   - 24h pro trial warnings: 3,600s (1h) grace (stale at >25h).
+2. **Execution Priority & Status Matrix:**
+   - **Failing loops:** Alert immediately (`status: "fail"` / `health: "failing"`), bypassing grace periods.
+   - **Maintenance pause:** `maintenance_paused` when maintenance mode is active.
+   - **Unknown cadences:** Flagged as `unknown_cadence` requiring cadence definition.
+   - **Serverless Missing Owner (DF-029):** When in-process daemons are disabled (`DISABLE_AUTONOMY=1` or `AUTONOMY_LOOP_OWNER=none`), loops without external scheduled runs report `missing_owner` (not crashed or stale).
+   - **Startup Grace:** In-process daemon loops receive a 60s startup grace window from process boot (`startup_pending`).
+   - **Clock Skew:** Future timestamps beyond 60s are caught and isolated as `clock_skew`.
+   - **Daemon vs External Schedulers:** External schedulers with elapsed runs within bounded grace show `ok`, transitioning to `investigate` and `escalate` as grace multiplies.
 
 ## Financial safety
 
@@ -46,6 +90,22 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 - Sentry must initialise in the process actually serving production requests before being called active.
 - First-party attribution remains privacy-bounded and is not operational authority; Stripe and DTD persistence remain the sources of truth for monetisation reporting.
 - Add charts only where they reduce operator effort; a second operator system is not allowed.
+
+### Database and external provider health verification (Phase 1)
+
+1. **MongoDB Atlas Health:**
+   Operational status is never inferred from client object instantiation. It requires active operation telemetry within the past 300 seconds (`_record_db_op_success()`). If unobserved, it reports `unknown`; on recent database errors, it reports `unavailable`.
+2. **Resend Email Delivery:**
+   Status is derived from actual outbound dispatches recorded in `message_log`. Routine successful dispatches (HTTP 202) remain in message history for auditability, but never generate Ops cases. Delivery failures, bounces, or 4xx/5xx responses generate actionable incident cases.
+3. **Sentry Error Tracking:**
+   Defaults to `unknown` with known gap `"production canary event unverified"` until verified event delivery to the Sentry ingestion endpoint is confirmed.
+
+### AI degradation telemetry and temporal contracts (Phase 1)
+
+1. **Temporal Validation:**
+   AI degradation events with missing or malformed timestamps are strictly prevented from entering rolling 1-hour burst or 24-hour persistent failure windows.
+2. **Actionable Diagnostic Alerts:**
+   Unrecovered degradation events with missing timestamps remain visible as actionable high-severity incidents with explicit `detected_at: "unknown"`, `Timestamp status: missing_or_malformed`, and `Age: unknown`.
 
 ## Matching and urgent-support operating contract
 
@@ -150,4 +210,29 @@ DTD operates under a single solo operator model. The operator does not perform r
 ### Weekly Responsibilities
 - **Catalogue & SEO Drift:** Review `SEO & Indexation` (`ops-nav-seo_indexation`) against minimum eligible trainer count thresholds (>=3 intro-ready trainers per suburb) before publishing suburb landing pages.
 - **Provider Registry & Costs:** Check `System Activity` provider registry records (MongoDB Atlas, Firebase Hosting, Cloud Run, Resend, Sentry) for upcoming certificate/key review dates and runtime health.
+
+## Operations Console Deployed State versus Phase 1 Implementation
+
+- **Production Cloud Run Revision:**
+  The live production backend serving 100% of traffic is `dtd-api-00058-ter` (deployed on 15 October 2026, Google Cloud project `gen-lang-client-0028123502` in `australia-southeast1`).
+  - Runtime administrative passcode (`ADMIN_PASS`) is mounted to Secret Manager secret `dtd-admin-pass` version 3 (`enabled`), with version 2 (`disabled`).
+  - Production datastore is MongoDB Atlas cluster `DTD` (`dtd` database).
+  - Production frontend is Firebase Hosting serving assets `index-B0KVx6z6.js` and `index-CiXd5jGR.css`.
+- **Phase 1 Release Candidate (Local Working Tree & Branch):**
+  - All Phase 1 noise elimination, bounded loop grace periods, read-only oversight (DF-032), domain entity immutability, occurrence fingerprinting, provider telemetry verification, and AI timestamp validation changes are implemented locally on branch `feature/matching-implementation` and covered by automated regression test suites.
+  - **Phase 1 changes are NOT deployed to production.**
+  - Progression requires developer sandbox verification via `scripts/deploy_sandbox.sh` before any production cutover consideration.
+
+## Phase 2 Dependencies and Subsequent Work
+
+Phase 2 remains blocked pending sandbox verification of Phase 1. The key technical dependencies for Phase 2 are:
+
+1. **Incident Correlation & Multi-Signal Aggregation:**
+   Group related diagnostic events (e.g. concurrent loop stales, provider network timeouts) into cohesive incident records to prevent operator fatigue from fragmented cases.
+2. **Automated Lifecycle Integrity & Recovery Transitions:**
+   Implement active recovery checkers so cases transition from `investigating` / `detected` to `resolved` when underlying health diagnostics reliably pass across two consecutive sampling windows.
+3. **Serverless Engine-Tick Scheduler Integration (DF-029):**
+   Deploy an authenticated Cloud Scheduler cron (`dtd-engine-tick-cron`) calling `/api/internal/jobs/engine-tick` with bounded execution quotas to execute serverless loops without relying on persistent in-process daemons.
+4. **Rich Occurrence Identity Modeling:**
+   Transition case types currently designated as `recurrence_tracking: "deferred_to_phase2"` into authoritative domain-level occurrence fingerprint models.
 

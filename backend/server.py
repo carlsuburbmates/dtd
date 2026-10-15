@@ -78,6 +78,24 @@ try:
 except Exception:  # noqa: BLE001
     ObjectId = None
 
+_PROCESS_START_DT: datetime = datetime.now(timezone.utc)
+_LAST_DB_OP_AT: Optional[datetime] = None
+_LAST_DB_ERROR: Optional[str] = None
+_LAST_DB_ERROR_AT: Optional[datetime] = None
+_LAST_SENTRY_EVENT_VERIFIED: bool = False
+
+
+def _record_db_op_success() -> None:
+    global _LAST_DB_OP_AT
+    _LAST_DB_OP_AT = datetime.now(timezone.utc)
+
+
+def _record_db_op_failure(err: Any) -> None:
+    global _LAST_DB_ERROR, _LAST_DB_ERROR_AT
+    _LAST_DB_ERROR = str(err)
+    _LAST_DB_ERROR_AT = datetime.now(timezone.utc)
+
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -1448,31 +1466,135 @@ async def _load_ops_case_state_map(case_ids: List[str]) -> Dict[str, Dict[str, A
         return {}
 
 
+def _case_occurrence_fingerprint(case: Dict[str, Any]) -> Optional[str]:
+    """Derive an authoritative occurrence identity fingerprint for a case.
+
+    Returns a unique string if the case type has authoritative occurrence
+    identity (event ID, counter, error code, status transition).
+    Returns None if the case type lacks distinct occurrence tracking in Phase 1.
+    """
+    if not isinstance(case, dict):
+        return None
+
+    # Check if case already carries an explicit occurrence_fingerprint
+    explicit_fp = case.get("occurrence_fingerprint")
+    if explicit_fp:
+        return str(explicit_fp)
+
+    case_type = str(case.get("case_type") or "")
+    case_id = str(case.get("case_id") or "")
+
+    if case_type == "loop_health_case":
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        status = details.get("Status", "")
+        mode = details.get("Execution mode", "")
+        reason = str(case.get("summary") or "")
+        return f"{case_id}:{status}:{mode}:{reason}"
+
+    if case_type == "source_ingestion_case":
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        failures = details.get("Consecutive failures", "")
+        err = details.get("Last error", "")
+        return f"{case_id}:{failures}:{err}"
+
+    if case_type == "ai_degradation_case":
+        entity_id = str(case.get("entity_id") or "")
+        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        return f"{case_id}:{entity_id}:{reasons}"
+
+    if case_type == "fraud_suppression_case":
+        intro_id = str(case.get("entity_id") or "")
+        reasons = "-".join(str(c) for c in (case.get("risk_reason_codes") or []))
+        return f"{case_id}:{intro_id}:{reasons}"
+
+    if case_type in {"trainer_claim_case", "abn_verification_case", "submission_case", "trainer_reactivation_case"}:
+        entity_id = str(case.get("entity_id") or "")
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        status = details.get("Status") or details.get("ABN status") or details.get("Last notification status") or ""
+        updated = details.get("Updated") or str(case.get("last_updated_at") or "")
+        return f"{case_id}:{entity_id}:{status}:{updated}"
+
+    if case_type in {"provider_operational_case", "provider_governance_case"}:
+        entity_id = str(case.get("entity_id") or "")
+        details = {str(r.get("label")): str(r.get("value")) for r in (case.get("detail_rows") or []) if isinstance(r, dict)}
+        op_status = details.get("Operational status", "")
+        op_reason = details.get("Operational diagnostic", "")
+        return f"{case_id}:{entity_id}:{op_status}:{op_reason}"
+
+    # Phase 1 case type lacks distinct occurrence identity
+    return None
+
+
 def _merge_ops_case_state(case: Dict[str, Any], override: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    case_fp = case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(case)
     if not override:
         return {
             **case,
+            "occurrence_fingerprint": case_fp,
+            "recurred": False,
             "review": {
                 "state": str(case.get("state") or "detected"),
                 "owner": str(case.get("owner") or ""),
                 "note": "",
                 "updated_at": case.get("last_updated_at") or case.get("detected_at"),
+                "recurrence_tracking": "fingerprint_verified" if case_fp else "deferred_to_phase2",
                 "history": [],
             },
         }
 
     merged = dict(case)
+    merged["occurrence_fingerprint"] = case_fp
     override_state = str(override.get("state") or "")
-    merged["state"] = override_state or merged.get("state")
-    merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
-    merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
-    merged["review"] = {
-        "state": merged.get("state"),
-        "owner": str(override.get("owner") or ""),
-        "note": str(override.get("note") or ""),
-        "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
-        "history": list(override.get("history") or []),
-    }
+
+    # Safe recurrence detection:
+    # Requires authoritative event identity / fingerprint comparison.
+    # Where Phase 1 lacks distinct occurrence IDs, do NOT claim reliable recurrence
+    # or fabricate occurrences; preserve visibility of unresolved critical conditions conservatively.
+    acknowledged_fp = override.get("occurrence_fingerprint")
+    sev = str(case.get("severity") or "").lower()
+
+    is_recurred = False
+    if override_state in {"dismissed", "resolved"} and sev in {"high", "medium"}:
+        if case_fp and acknowledged_fp and case_fp != acknowledged_fp:
+            is_recurred = True
+
+    if is_recurred:
+        merged["state"] = "detected"
+        merged["recurred"] = True
+        orig_title = str(case.get("title") or "")
+        if " (Recurred)" not in orig_title:
+            merged["title"] = f"{orig_title} (Recurred)"
+        merged["recommended_next_step"] = (
+            f"Incident recurred with new event evidence after prior {override_state}; re-investigate root cause and telemetry."
+        )
+        codes = list(merged.get("risk_reason_codes") or [])
+        if "incident_recurred" not in codes:
+            codes.append("incident_recurred")
+        merged["risk_reason_codes"] = codes
+        merged["last_updated_at"] = case.get("last_updated_at") or now_iso()
+        merged["review"] = {
+            "state": "detected",
+            "recurred": True,
+            "owner": str(override.get("owner") or ""),
+            "note": str(override.get("note") or ""),
+            "updated_at": merged["last_updated_at"],
+            "recurrence_tracking": "fingerprint_verified",
+            "history": list(override.get("history") or []),
+        }
+    else:
+        merged["state"] = override_state or merged.get("state")
+        merged["recurred"] = False
+        merged["owner"] = str(override.get("owner") or merged.get("owner") or "")
+        merged["last_updated_at"] = override.get("updated_at") or merged.get("last_updated_at")
+        tracking_mode = "fingerprint_verified" if case_fp else "deferred_to_phase2"
+        merged["review"] = {
+            "state": merged.get("state"),
+            "owner": str(override.get("owner") or ""),
+            "note": str(override.get("note") or ""),
+            "updated_at": override.get("updated_at") or merged.get("last_updated_at") or merged.get("detected_at"),
+            "recurrence_tracking": tracking_mode,
+            "history": list(override.get("history") or []),
+        }
     return merged
 
 
@@ -1574,7 +1696,10 @@ async def _ops_case_rows(
             }
         )
 
+    DISCOVERY_BACKLOG_ATTENTION_THRESHOLD = int(os.environ.get("DISCOVERY_BACKLOG_ATTENTION_THRESHOLD", "50"))
     if int(discovery_summary.get("pending") or 0) > 0:
+        pending_count = int(discovery_summary.get("pending") or 0)
+        is_backlog = pending_count >= DISCOVERY_BACKLOG_ATTENTION_THRESHOLD
         cases.append(
             {
                 "case_id": "discovery:pending",
@@ -1583,19 +1708,20 @@ async def _ops_case_rows(
                 "workflow": "discovery intake",
                 "entity_type": "discovery_queue",
                 "entity_id": "pending",
-                "title": "Discovery queue awaiting review",
-                "summary": f"{int(discovery_summary.get('pending') or 0)} discovery candidates remain pending.",
-                "severity": "low",
-                "state": "detected",
+                "title": "Discovery queue awaiting review" if not is_backlog else f"Discovery queue backlog · {pending_count} pending",
+                "summary": f"{pending_count} discovery candidates remain pending.",
+                "severity": "medium" if is_backlog else "low",
+                "state": "detected" if is_backlog else "monitoring",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
                 "source_refs": [{"kind": "discovery_summary", "id": "pending"}],
-                "risk_reason_codes": ["discovery_pending"],
-                "recommended_next_step": "Review discovery backlog and confirm sources are still appropriate.",
+                "risk_reason_codes": ["discovery_backlog" if is_backlog else "discovery_pending"],
+                "recommended_next_step": "Review discovery backlog when expanding regional coverage." if not is_backlog else "Triage pending discovery items to prevent regional intake stall.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
-                    {"label": "Pending discovery items", "value": int(discovery_summary.get("pending") or 0)},
+                    {"label": "Pending discovery items", "value": pending_count},
+                    {"label": "Attention threshold", "value": DISCOVERY_BACKLOG_ATTENTION_THRESHOLD},
                     {"label": "Promoted", "value": int(discovery_summary.get("promoted") or 0)},
                     {"label": "Discarded", "value": int(discovery_summary.get("discarded") or 0)},
                 ],
@@ -1615,14 +1741,14 @@ async def _ops_case_rows(
                 "entity_id": "suppressed",
                 "title": "Delisted identities blocked from re-ingestion",
                 "summary": f"{int(discovery_summary.get('suppressed') or 0)} discovery candidates matched the delisting suppression register.",
-                "severity": "medium",
-                "state": "detected",
+                "severity": "low",
+                "state": "monitoring",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
                 "source_refs": [{"kind": "discovery_summary", "id": "suppressed"}],
                 "risk_reason_codes": ["discovery_delisted_identity_suppressed"],
-                "recommended_next_step": "Confirm suppression is expected; do not re-publish without technical-owner review.",
+                "recommended_next_step": "Automated suppression active; confirm suppression remains intended.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
                     {"label": "Suppressed discovery items", "value": int(discovery_summary.get("suppressed") or 0)},
@@ -1633,9 +1759,45 @@ async def _ops_case_rows(
             }
         )
 
+    # Workstream A: Aggregate serverless loops with missing execution owners (DF-029) into a single governance case
+    missing_owner_loops = [k for k, meta in loop_statuses.items() if str(meta.get("status") or "") == "missing_owner"]
+    if missing_owner_loops:
+        cases.append(
+            {
+                "case_id": "autonomy:missing_scheduled_owner",
+                "case_type": "loop_governance_case",
+                "canonical_user_type": "Autonomous system actor",
+                "workflow": "system activity",
+                "entity_type": "autonomy_scheduler",
+                "entity_id": "missing_scheduled_owner",
+                "title": f"Autonomy loops unowned · {len(missing_owner_loops)} serverless tasks need scheduler",
+                "summary": (
+                    f"Background daemons disabled on serverless runtime without configured external scheduler (DF-029). "
+                    f"Affects: {', '.join(sorted(missing_owner_loops))}."
+                ),
+                "severity": "low",
+                "state": "monitoring",
+                "owner": "",
+                "detected_at": now_iso(),
+                "last_updated_at": now_iso(),
+                "source_refs": [{"kind": "architecture_constraint", "id": "DF-029"}],
+                "risk_reason_codes": ["autonomy_serverless_unowned", "DF-029"],
+                "recommended_next_step": "Configure Cloud Scheduler to invoke /api/internal/jobs/engine-tick on schedule (per DF-029).",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Affected tasks", "value": ", ".join(sorted(missing_owner_loops))},
+                    {"label": "Runtime mode", "value": "serverless (scaled to zero)"},
+                    {"label": "Architectural finding", "value": "DF-029"},
+                    {"label": "Endpoint ready", "value": "/api/internal/jobs/engine-tick"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+
     for key, status_meta in loop_statuses.items():
         loop_status = str(status_meta.get("status") or "ok")
-        if loop_status == "ok":
+        if loop_status in {"ok", "disabled", "not_scheduled", "missing_owner", "maintenance_paused", "startup_pending"}:
             continue
         severity = "high" if loop_status == "escalate" else "medium"
         cases.append(
@@ -1647,12 +1809,13 @@ async def _ops_case_rows(
                 "entity_type": "loop",
                 "entity_id": key,
                 "title": f"{humanize_case_token(key)} needs review",
-                "summary": f"Loop status is {humanize_case_token(loop_status)}.",
+                "summary": status_meta.get("reason") or f"Loop status is {humanize_case_token(loop_status)}.",
                 "severity": severity,
                 "state": "detected",
                 "owner": "",
                 "detected_at": now_iso(),
                 "last_updated_at": now_iso(),
+                "occurrence_fingerprint": f"loop:{key}:{status_meta.get('status')}:{status_meta.get('execution_mode')}",
                 "source_refs": [{"kind": "loop_status", "id": key}],
                 "risk_reason_codes": [f"loop_{loop_status}"],
                 "recommended_next_step": "Inspect system activity and escalate if the loop stays stale.",
@@ -1660,6 +1823,8 @@ async def _ops_case_rows(
                 "detail_rows": [
                     {"label": "Loop", "value": key},
                     {"label": "Status", "value": loop_status},
+                    {"label": "Execution owner", "value": status_meta.get("execution_owner", "unknown")},
+                    {"label": "Execution mode", "value": status_meta.get("execution_mode", "unknown")},
                     {"label": "Age (seconds)", "value": status_meta.get("age_s")},
                     {"label": "Escalates after (seconds)", "value": status_meta.get("stale_after_s")},
                 ],
@@ -1919,8 +2084,9 @@ async def _ops_case_rows(
 
     for row in source_ingestion_state_rows:
         failures = int(row.get("consecutive_failures") or 0)
-        has_error = bool(row.get("last_error") or row.get("last_error_code"))
-        if failures <= 0 and not row.get("suppressed_until") and not has_error:
+        is_suppressed = bool(row.get("suppressed_until"))
+        has_error = bool(row.get("last_error") or row.get("last_error_code")) if failures > 0 else False
+        if failures <= 0 and not is_suppressed and not has_error:
             continue
         err_msg = str(row.get("last_error") or f"{row.get('source_url') or 'Source'} has {failures} consecutive failures.")
         risk_code = str(row.get("last_error_code") or "source_ingestion_failures")
@@ -1956,7 +2122,8 @@ async def _ops_case_rows(
         )
 
     for row in message_log:
-        if str(row.get("status") or "") in {"failed", "sent"}:
+        status = str(row.get("status") or "").lower()
+        if status in {"failed", "error", "bounced"}:
             cases.append(_build_message_case(row))
 
     cases.extend(provider_cases or [])
@@ -1982,29 +2149,193 @@ def _loop_interval_seconds() -> Dict[str, int]:
     }
 
 
+def bounded_grace_seconds(interval_s: int) -> int:
+    """Calculate bounded grace period based on loop cadence."""
+    if interval_s <= 0:
+        return 0
+    if interval_s <= 60:
+        return max(int(interval_s * 0.5), 30)
+    if interval_s <= 3600:
+        return min(max(int(interval_s * 0.25), 60), 900)
+    return min(max(int(interval_s * 0.1), 900), 3600)
+
+
 def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Dict[str, Any]:
     interval_s = int(_loop_interval_seconds().get(loop_key) or 0)
     last_run = str(loop.get("last_run") or "")
+    consecutive_failures = int(loop.get("consecutive_failures") or 0)
+    last_error = loop.get("last_error")
     try:
         last_dt = datetime.fromisoformat(last_run) if last_run else None
+        if last_dt and last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
     except Exception:  # noqa: BLE001
         last_dt = None
-    age_s = None
-    status = "warn"
-    if last_dt and interval_s > 0:
-        age_s = max(0, int((now_dt - last_dt).total_seconds()))
-        if age_s <= interval_s:
-            status = "ok"
-        elif age_s <= interval_s * 2:
-            status = "investigate"
+
+    # Priority 1: Real execution failures are never masked by serverless, maintenance, or disabled flags
+    if consecutive_failures > 0 or last_error:
+        status = "escalate" if consecutive_failures >= 3 else "investigate"
+        age_s = max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None
+        return {
+            "status": status,
+            "interval_s": interval_s,
+            "age_s": age_s,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s) if interval_s > 0 else None,
+            "execution_owner": "failing",
+            "execution_mode": "failing",
+            "reason": f"Loop failing: {last_error or f'{consecutive_failures} consecutive failures'}",
+        }
+
+    # Priority 2: Maintenance mode boundary
+    if os.environ.get("MAINTENANCE_MODE") == "1":
+        return {
+            "status": "maintenance_paused",
+            "interval_s": interval_s,
+            "age_s": max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None,
+            "stale_after_s": None,
+            "execution_owner": "maintenance",
+            "execution_mode": "maintenance_paused",
+            "reason": "Autonomy loops paused during active maintenance mode",
+        }
+
+    # Priority 3: Unknown cadence (unconfigured interval)
+    if interval_s <= 0:
+        return {
+            "status": "unknown_cadence",
+            "interval_s": 0,
+            "age_s": max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None,
+            "stale_after_s": None,
+            "execution_owner": "none",
+            "execution_mode": "unconfigured_cadence",
+            "reason": f"Loop '{loop_key}' has no configured cadence; interval unknown",
+        }
+
+    # Priority 4: Missing last_run boundary
+    if not last_dt:
+        is_serverless_disabled = (
+            os.environ.get("DISABLE_AUTONOMY") == "1"
+            or os.environ.get("AUTONOMY_LOOP_OWNER") == "none"
+        )
+        if is_serverless_disabled:
+            return {
+                "status": "missing_owner",
+                "interval_s": interval_s,
+                "age_s": None,
+                "stale_after_s": None,
+                "execution_owner": "none",
+                "execution_mode": "unowned_serverless",
+                "reason": "Serverless daemon disabled; no external scheduler configured (DF-029)",
+            }
+
+        # Check process startup grace for in-process daemon (within 60s of process start)
+        startup_elapsed = (now_dt - _PROCESS_START_DT).total_seconds()
+        if 0 <= startup_elapsed <= 60:
+            return {
+                "status": "startup_pending",
+                "interval_s": interval_s,
+                "age_s": None,
+                "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+                "execution_owner": "startup",
+                "execution_mode": "startup_grace",
+                "reason": f"Process started {int(startup_elapsed)}s ago; initial loop run pending",
+            }
+
+        return {
+            "status": "investigate",
+            "interval_s": interval_s,
+            "age_s": None,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+            "execution_owner": "in_process",
+            "execution_mode": "daemon_pending",
+            "reason": "In-process loop has not executed yet",
+        }
+
+    # Priority 5: Clock skew / future timestamp check
+    skew_s = (last_dt - now_dt).total_seconds()
+    if skew_s > 30:
+        return {
+            "status": "investigate",
+            "interval_s": interval_s,
+            "age_s": 0,
+            "stale_after_s": interval_s + bounded_grace_seconds(interval_s),
+            "execution_owner": "clock_skew",
+            "execution_mode": "clock_skew",
+            "reason": f"Loop timestamp is {int(skew_s)}s in the future (clock skew detected)",
+        }
+
+    age_s = max(0, int((now_dt - last_dt).total_seconds()))
+    grace_s = bounded_grace_seconds(interval_s)
+    stale_after_s = interval_s + grace_s
+    escalate_after_s = (interval_s * 2) + grace_s
+
+    # Priority 6: Serverless execution vs In-process daemon
+    is_serverless_disabled = (
+        os.environ.get("DISABLE_AUTONOMY") == "1"
+        or os.environ.get("AUTONOMY_LOOP_OWNER") == "none"
+    )
+
+    if is_serverless_disabled:
+        if age_s <= stale_after_s:
+            return {
+                "status": "ok",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler",
+                "reason": f"Executed via external scheduler within cadence ({age_s}s <= {stale_after_s}s)",
+            }
+        elif age_s <= escalate_after_s:
+            return {
+                "status": "investigate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler_delayed",
+                "reason": f"External scheduler run delayed ({age_s}s > {stale_after_s}s, grace {grace_s}s)",
+            }
         else:
-            status = "escalate"
-    return {
-        "status": status,
-        "interval_s": interval_s,
-        "age_s": age_s,
-        "stale_after_s": interval_s * 2 if interval_s > 0 else None,
-    }
+            return {
+                "status": "escalate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "scheduler",
+                "execution_mode": "external_scheduler_stale",
+                "reason": f"External scheduler run stale ({age_s}s > {escalate_after_s}s, interval {interval_s}s)",
+            }
+    else:
+        if age_s <= stale_after_s:
+            return {
+                "status": "ok",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon",
+                "reason": f"In-process daemon fresh ({age_s}s <= {stale_after_s}s)",
+            }
+        elif age_s <= escalate_after_s:
+            return {
+                "status": "investigate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon_delayed",
+                "reason": f"In-process daemon delayed ({age_s}s > {stale_after_s}s, grace {grace_s}s)",
+            }
+        else:
+            return {
+                "status": "escalate",
+                "interval_s": interval_s,
+                "age_s": age_s,
+                "stale_after_s": stale_after_s,
+                "execution_owner": "in_process",
+                "execution_mode": "daemon_stalled",
+                "reason": f"In-process daemon stalled ({age_s}s > {escalate_after_s}s)",
+            }
 
 
 def humanize_case_token(value: str) -> str:
@@ -2289,6 +2620,27 @@ async def _ensure_phase_transition_baseline(
     }
     await coll.insert_one(baseline)
     return [baseline]
+
+
+async def _read_phase_transition_decisions() -> List[Dict[str, Any]]:
+    coll = getattr(db, "phase_transition_decisions", None)
+    if coll is None:
+        return []
+    existing = await coll.find({}, {"_id": 0}).to_list(20)
+    if existing:
+        existing.sort(key=lambda row: str(row.get("decided_at") or ""), reverse=True)
+    return existing
+
+
+async def _get_read_only_phase_runtime_records() -> Dict[str, Any]:
+    phase_state = await _read_launch_phase_state()
+    readiness_snapshot = await _build_phase_readiness_snapshot(phase_state)
+    phase_decisions = await _read_phase_transition_decisions()
+    return {
+        "phase_state": phase_state,
+        "readiness_snapshot": readiness_snapshot,
+        "phase_decisions": phase_decisions,
+    }
 
 
 async def _refresh_phase_runtime_records() -> Dict[str, Any]:
@@ -5681,6 +6033,52 @@ async def get_seo(slug: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+async def _get_provider_telemetry(message_log: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    telemetry: Dict[str, Any] = {}
+    now_dt = datetime.now(timezone.utc)
+
+    # Correction B: Authoritative recent operation evidence for MongoDB Atlas.
+    # Do NOT declare operational solely because getattr(db, "client", None) is not None.
+    # Check for recent successful operations or recent failure within 300s.
+    global _LAST_DB_OP_AT, _LAST_DB_ERROR, _LAST_DB_ERROR_AT
+    if _LAST_DB_ERROR_AT and _LAST_DB_OP_AT and _LAST_DB_ERROR_AT > _LAST_DB_OP_AT:
+        if (now_dt - _LAST_DB_ERROR_AT).total_seconds() <= 300:
+            telemetry["atlas_connected"] = False
+            telemetry["atlas_error"] = _LAST_DB_ERROR
+    elif _LAST_DB_OP_AT and (now_dt - _LAST_DB_OP_AT).total_seconds() <= 300:
+        telemetry["atlas_connected"] = True
+        telemetry["atlas_last_op_at"] = _LAST_DB_OP_AT.isoformat()
+    else:
+        # No authoritative recent operation signal in observation window -> unknown
+        telemetry["atlas_connected"] = None
+
+    if message_log:
+        for msg in message_log:
+            st = str(msg.get("status") or msg.get("delivery_status") or "").lower()
+            if any(term in st for term in ["auth_failed", "unauthorized", "401", "403"]):
+                telemetry["resend_status"] = "auth_failure"
+                break
+            elif any(term in st for term in ["rate_limited", "429"]):
+                telemetry["resend_status"] = "rate_limited"
+                break
+            elif any(term in st for term in ["failed", "server_error", "500", "502", "503"]):
+                telemetry["resend_status"] = "service_error"
+                break
+            elif any(term in st for term in ["sent", "delivered", "accepted", "202"]):
+                telemetry["resend_status"] = "ok"
+
+    # Correction B: Sentry configuration present is unverified without event delivery evidence
+    global _LAST_SENTRY_EVENT_VERIFIED
+    if _LAST_SENTRY_EVENT_VERIFIED:
+        telemetry["sentry_status"] = "verified"
+    elif _SENTRY_INITIALIZED:
+        telemetry["sentry_status"] = "initialized_unverified"
+    elif os.environ.get("SENTRY_DSN"):
+        telemetry["sentry_status"] = "unverified"
+
+    return telemetry
+
+
 async def _current_ops_cases() -> List[Dict[str, Any]]:
     discovery_summary = {
         "pending": await db.discovery_queue.count_documents({"status": "pending"}),
@@ -5703,6 +6101,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
     pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
+    _record_db_op_success()
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
     source_ingestion_state_rows.sort(
@@ -5801,11 +6200,79 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     message_log = await _message_log_rows()
     ai_degradation_cases = await ai_service.get_ops_degradation_cases(db=db)
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
-    provider_snapshot = provider_health.snapshot()
+    provider_telemetry = await _get_provider_telemetry(message_log)
+    provider_snapshot = provider_health.snapshot(telemetry=provider_telemetry)
+
+    intros_coll = getattr(db, "intros", None)
+    fraud_cases_raw = await intros_coll.find(
+        {"$or": [{"delivery_status": "suppressed"}, {"billing_status": "suppressed"}]},
+        {"_id": 0, "id": 1, "trainer_id": 1, "delivery_status": 1, "fraud_status": 1, "fraud_reasons": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(50).to_list(50) if intros_coll is not None and hasattr(intros_coll, "find") else []
+    fraud_suppression_cases = [
+        {
+            "intro_id": row.get("id"),
+            "trainer_id": row.get("trainer_id"),
+            "delivery_status": row.get("delivery_status") or "suppressed",
+            "fraud_status": row.get("fraud_status") or "suppressed",
+            "fraud_reasons": row.get("fraud_reasons") or [],
+            "created_at": row.get("created_at"),
+        }
+        for row in fraud_cases_raw
+    ]
+
+    claim_events_coll = getattr(db, "claim_events", None)
+    claim_cases = await claim_events_coll.find(
+        {"status": {"$nin": ["verified", "superseded"]}},
+        {"_id": 0, "id": 1, "trainer_id": 1, "status": 1, "reason": 1, "delivery_status": 1, "delivery_error": 1, "method": 1, "masked_destination": 1, "attempts": 1, "profile_claim_status": 1, "created_at": 1, "updated_at": 1},
+    ).sort("updated_at", -1).limit(50).to_list(50) if claim_events_coll is not None and hasattr(claim_events_coll, "find") else []
+
+    abn_degradation_cases: List[Dict[str, Any]] = []
+    if not (os.environ.get("ABR_GUID") or "").strip():
+        abn_degradation_cases.append(
+            {
+                "id": "system_abr_guid_missing",
+                "name": "ABR Web Services",
+                "abn": "",
+                "abn_status": "abr_guid_missing",
+                "abn_verification_reason": "ABR_GUID is not configured in the environment.",
+                "abn_checked_at": now_iso(),
+                "created_at": now_iso(),
+            }
+        )
+    if trainers_coll is not None and hasattr(trainers_coll, "find"):
+        trainer_degraded = await trainers_coll.find(
+            {
+                "$or": [
+                    {
+                        "abn_status": {
+                            "$in": [
+                                "abr_unavailable",
+                                "degraded",
+                                "abr_guid_missing",
+                                "abr_maintenance",
+                                "abr_network_error",
+                                "pending_verification",
+                                "invalid_checksum",
+                                "checksum_failed",
+                                "invalid_length",
+                                "unverified",
+                            ]
+                        }
+                    },
+                    {"abn": {"$ne": "", "$exists": True}, "abn_verified": False},
+                ]
+            },
+            {"_id": 0, "id": 1, "name": 1, "abn": 1, "abn_status": 1, "abn_verification_reason": 1, "abn_checked_at": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(50).to_list(50)
+        abn_degradation_cases.extend(trainer_degraded)
+
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
         loop_statuses=loop_statuses,
+        fraud_suppression_cases=fraud_suppression_cases,
+        claim_cases=claim_cases,
+        abn_degradation_cases=abn_degradation_cases,
         billing_recovery_case_rows=billing_recovery_case_rows,
         subscription_billing_case_rows=subscription_billing_case_rows,
         reactivation_case_rows=reactivation_case_rows,
@@ -5846,6 +6313,14 @@ async def update_oversight_case_review(
     if not current_case:
         raise HTTPException(status_code=404, detail="Ops case not found.")
 
+    # Workstream D: Guard against casual dismissal of high-severity incidents
+    if normalized_state == "dismissed" and str(current_case.get("severity") or "").lower() == "high":
+        if len(note) < 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Dismissing a high-severity operational case requires an explanatory review note of at least 5 characters.",
+            )
+
     states_coll = getattr(db, "ops_case_states", None)
     if states_coll is None:
         raise HTTPException(status_code=503, detail="Ops case state store unavailable.")
@@ -5863,6 +6338,7 @@ async def update_oversight_case_review(
         }
     )
     history = history[-OPS_CASE_HISTORY_LIMIT:]
+    current_fp = current_case.get("occurrence_fingerprint") or _case_occurrence_fingerprint(current_case)
     after = {
         "case_id": case_id,
         "case_type": current_case.get("case_type"),
@@ -5874,6 +6350,7 @@ async def update_oversight_case_review(
         "note": note,
         "updated_at": updated_at,
         "history": history,
+        "occurrence_fingerprint": current_fp,
     }
     await states_coll.update_one({"case_id": case_id}, {"$set": after}, upsert=True)
     await _audit("ops_case_review_updated", case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
@@ -5888,7 +6365,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     This route is read-only. The wider Ops surface may still persist bounded
     Layer 1 review-state history through dedicated review endpoints.
     """
-    phase_runtime = await _refresh_phase_runtime_records()
+    phase_runtime = await _get_read_only_phase_runtime_records()
     phase_state = phase_runtime["phase_state"]
     readiness_snapshot = phase_runtime["readiness_snapshot"]
     phase_decisions = phase_runtime["phase_decisions"]
@@ -6204,8 +6681,9 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     }
     trainer_inventory = await _trainer_inventory_rows()
     sponsor_inventory_snapshot = await suburb_inventory.ops_snapshot(db)
-    provider_snapshot = provider_health.snapshot()
     message_log = await _message_log_rows()
+    provider_telemetry = await _get_provider_telemetry(message_log)
+    provider_snapshot = provider_health.snapshot(telemetry=provider_telemetry)
     supply_geography = await _ops_supply_geography_summary(trainer_inventory, waitlist_summary)
     supply_trends = await _ops_supply_trend_summary(
         trainer_inventory=trainer_inventory,

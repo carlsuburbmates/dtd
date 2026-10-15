@@ -249,49 +249,263 @@ async def get_degradation_events(
     return events[:limit]
 
 
+AI_FALLBACK_BURST_WINDOW_S = int(os.environ.get("AI_FALLBACK_BURST_WINDOW_S", "3600"))
+AI_FALLBACK_BURST_THRESHOLD = int(os.environ.get("AI_FALLBACK_BURST_THRESHOLD", "3"))
+AI_FALLBACK_PERSISTENT_WINDOW_S = int(os.environ.get("AI_FALLBACK_PERSISTENT_WINDOW_S", "86400"))
+AI_FALLBACK_PERSISTENT_THRESHOLD = int(os.environ.get("AI_FALLBACK_PERSISTENT_THRESHOLD", "5"))
+STALE_DEGRADATION_MAX_AGE_S = int(os.environ.get("AI_STALE_DEGRADATION_MAX_AGE_S", "86400"))
+
+# Backwards compatibility aliases
+DEGRADATION_WINDOW_S = AI_FALLBACK_BURST_WINDOW_S
+SUSTAINED_DEGRADATION_THRESHOLD = AI_FALLBACK_BURST_THRESHOLD
+
+
 async def get_ops_degradation_cases(
     limit: int = 50,
     db: Optional[Any] = None,
+    *,
+    window_s: Optional[int] = None,
+    sustained_threshold: Optional[int] = None,
+    burst_window_s: Optional[int] = None,
+    burst_threshold: Optional[int] = None,
+    persistent_window_s: Optional[int] = None,
+    persistent_threshold: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Format recent degradation events into /ops exception case objects."""
+    """Format recent degradation events into /ops exception case objects.
+
+    Implements outcome-aware classification with provisional thresholds:
+      - Service failures (fallback unrecovered) -> high severity, detected state immediately.
+      - Sustained burst degradation (>= 3 in 1h window) -> correlated aggregate case (detected).
+      - Persistent low-volume degradation (>= 5 in 24h window) -> aggregate case (detected, medium severity).
+      - Isolated recovered fallbacks (< 3 in 1h, < 5 in 24h) -> low severity, monitoring state.
+      - Stale recovered events (> 24h) are excluded from active cases.
+    """
     events = await get_degradation_events(limit=limit, db=db)
-    cases: List[Dict[str, Any]] = []
+    if not events:
+        return []
+
+    burst_win_s = burst_window_s if burst_window_s is not None else (window_s if window_s is not None else AI_FALLBACK_BURST_WINDOW_S)
+    burst_thresh = burst_threshold if burst_threshold is not None else (sustained_threshold if sustained_threshold is not None else AI_FALLBACK_BURST_THRESHOLD)
+    pers_win_s = persistent_window_s if persistent_window_s is not None else AI_FALLBACK_PERSISTENT_WINDOW_S
+    pers_thresh = persistent_threshold if persistent_threshold is not None else AI_FALLBACK_PERSISTENT_THRESHOLD
+    now_dt = datetime.now(timezone.utc)
+
+    unrecovered_cases: List[Dict[str, Any]] = []
+    burst_recovered_events: List[Dict[str, Any]] = []
+    persistent_recovered_events: List[Dict[str, Any]] = []
+
     for ev in events:
+        ts_str = str(ev.get("timestamp") or ev.get("created_at") or "").strip()
+        ev_dt = None
+        timestamp_valid = False
+        age_s = None
+        if ts_str:
+            try:
+                ev_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                if ev_dt.tzinfo is None:
+                    ev_dt = ev_dt.replace(tzinfo=timezone.utc)
+                delta_s = (now_dt - ev_dt).total_seconds()
+                # Validate against clock skew / future timestamps (> 60s in future)
+                if delta_s >= -60.0:
+                    age_s = max(0.0, delta_s)
+                    timestamp_valid = True
+            except Exception:
+                ev_dt = None
+                timestamp_valid = False
+                age_s = None
+
+        # Check recovery status
+        is_recovered = bool(ev.get("recovered", True) and ev.get("fallback_used", True))
+
+        if not is_recovered:
+            # Category C: Service failure — unrecovered (alerts immediately at high severity)
+            # Unrecovered failures with invalid/missing timestamps must remain visible as
+            # actionable diagnostic cases with age explicitly classified as 'unknown',
+            # without inflating rolling burst counts on repeated reads.
+            det_at = ts_str if timestamp_valid else "unknown"
+            detail_rows = [
+                {"label": "Provider", "value": "Google Gemini"},
+                {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
+                {"label": "Error type", "value": ev.get("error_type") or "unknown"},
+                {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                {"label": "Fallback used", "value": str(ev.get("fallback_used", False)).lower()},
+                {"label": "Recovered", "value": "false"},
+                {"label": "Timestamp status", "value": "valid" if timestamp_valid else "missing_or_malformed"},
+                {"label": "Age", "value": f"{int(age_s)}s" if age_s is not None else "unknown"},
+            ]
+            unrecovered_cases.append(
+                {
+                    "case_id": f"ai_degradation:{ev.get('id')}",
+                    "case_type": "ai_degradation_case",
+                    "canonical_user_type": "System / AI Integration",
+                    "workflow": "AI scoring and matching",
+                    "entity_type": "ai_service",
+                    "entity_id": ev.get("id"),
+                    "title": f"AI service failure · {str(ev.get('error_type', 'unrecovered')).replace('_', ' ').title()}",
+                    "summary": (
+                        ev.get("message")
+                        or "AI provider and deterministic fallback both failed; request could not be completed safely."
+                    ),
+                    "severity": "high",
+                    "state": "detected",
+                    "owner": "",
+                    "detected_at": det_at,
+                    "last_updated_at": det_at,
+                    "occurrence_fingerprint": f"ai_fail:{ev.get('id')}:{ev.get('error_code')}",
+                    "source_refs": [{"kind": "ai_service", "id": ev.get("model", GEMINI_MODEL)}],
+                    "risk_reason_codes": [ev.get("error_code") or "AI_UNRECOVERED_FAILURE"],
+                    "recommended_next_step": "Investigate AI service and deterministic fallback failures immediately.",
+                    "responsibility_layer": "Layer 1 — Normal Ops",
+                    "detail_rows": detail_rows,
+                    "linked_paths": [],
+                    "audit_refs": [],
+                }
+            )
+        else:
+            # Recovered events: ONLY events with trustworthy temporal evidence may contribute
+            # to rolling time windows (1h burst / 24h persistent).
+            if not timestamp_valid or age_s is None:
+                # Missing or unparseable timestamps do not enter rolling burst/persistent windows
+                continue
+
+            # Ignore stale recovered events (> 24h)
+            if age_s > STALE_DEGRADATION_MAX_AGE_S:
+                continue
+            if age_s <= pers_win_s:
+                persistent_recovered_events.append(ev)
+            if age_s <= burst_win_s:
+                burst_recovered_events.append(ev)
+
+    cases: List[Dict[str, Any]] = list(unrecovered_cases)
+
+    # Check for sustained burst degradation in the 1h window
+    if len(burst_recovered_events) >= burst_thresh:
+        err_types = sorted(set(str(e.get("error_type") or "error") for e in burst_recovered_events))
+        has_rate_limit = any(e.get("error_type") == "rate_limit" for e in burst_recovered_events)
+        sev = "high" if len(burst_recovered_events) >= 5 or has_rate_limit else "medium"
+        latest_ts = burst_recovered_events[0].get("timestamp") or now_dt.isoformat()
+        earliest_ts = burst_recovered_events[-1].get("timestamp") or latest_ts
+
+        all_error_codes = [e.get("error_code") for e in burst_recovered_events if e.get("error_code")]
+        unique_codes = sorted(set(all_error_codes)) if all_error_codes else ["AI_DEGRADATION"]
+
         cases.append(
             {
-                "case_id": f"ai_degradation:{ev.get('id')}",
+                "case_id": "ai_degradation:sustained",
                 "case_type": "ai_degradation_case",
                 "canonical_user_type": "System / AI Integration",
                 "workflow": "AI scoring and matching",
                 "entity_type": "ai_service",
-                "entity_id": ev.get("id"),
-                "title": f"AI provider degradation · {str(ev.get('error_type', '')).replace('_', ' ').title()}",
+                "entity_id": "gemini_sustained",
+                "title": f"Sustained AI provider degradation · {len(burst_recovered_events)} events",
                 "summary": (
-                    ev.get("message")
-                    or "AI provider experienced an operational disruption; deterministic fallback engaged."
+                    f"AI provider fallback engaged {len(burst_recovered_events)} times recently "
+                    f"({', '.join(err_types)}); deterministic fallback active without user disruption."
                 ),
-                "severity": "high" if ev.get("error_type") in {"unavailable_service", "rate_limit"} else "medium",
+                "severity": sev,
                 "state": "detected",
                 "owner": "",
-                "detected_at": ev.get("timestamp"),
-                "last_updated_at": ev.get("timestamp"),
-                "source_refs": [{"kind": "ai_service", "id": ev.get("model", "gemini-1.5-flash")}],
-                "risk_reason_codes": [ev.get("error_code") or "AI_DEGRADATION"],
-                "recommended_next_step": (
-                    "Verify Gemini API quota, billing tier, and health status; deterministic fallback remains active."
-                ),
+                "detected_at": earliest_ts,
+                "last_updated_at": latest_ts,
+                "occurrence_fingerprint": f"ai_burst:{len(burst_recovered_events)}:{latest_ts}",
+                "source_refs": [{"kind": "ai_service", "id": GEMINI_MODEL}],
+                "risk_reason_codes": ["ai_sustained_degradation"] + unique_codes,
+                "recommended_next_step": "Verify Gemini API quota, billing tier, and health status; deterministic fallback remains active.",
                 "responsibility_layer": "Layer 1 — Normal Ops",
                 "detail_rows": [
                     {"label": "Provider", "value": "Google Gemini"},
-                    {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
-                    {"label": "Error type", "value": ev.get("error_type") or "unknown"},
-                    {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                    {"label": "Model", "value": GEMINI_MODEL},
+                    {"label": "Recent events (1h)", "value": len(burst_recovered_events)},
+                    {"label": "Error types", "value": ", ".join(err_types)},
                     {"label": "Fallback used", "value": "true"},
+                    {"label": "Service state", "value": "deterministic_fallback_active"},
                 ],
                 "linked_paths": [],
                 "audit_refs": [],
             }
         )
+    # Check for persistent low-volume degradation across the 24h window
+    elif len(persistent_recovered_events) >= pers_thresh:
+        err_types = sorted(set(str(e.get("error_type") or "error") for e in persistent_recovered_events))
+        latest_ts = persistent_recovered_events[0].get("timestamp") or now_dt.isoformat()
+        earliest_ts = persistent_recovered_events[-1].get("timestamp") or latest_ts
+
+        all_error_codes = [e.get("error_code") for e in persistent_recovered_events if e.get("error_code")]
+        unique_codes = sorted(set(all_error_codes)) if all_error_codes else ["AI_DEGRADATION"]
+
+        cases.append(
+            {
+                "case_id": "ai_degradation:persistent_low_volume",
+                "case_type": "ai_degradation_case",
+                "canonical_user_type": "System / AI Integration",
+                "workflow": "AI scoring and matching",
+                "entity_type": "ai_service",
+                "entity_id": "gemini_persistent_low_volume",
+                "title": f"Persistent low-volume AI fallback · {len(persistent_recovered_events)} events in 24h",
+                "summary": (
+                    f"AI fallback engaged {len(persistent_recovered_events)} times across 24h "
+                    f"({', '.join(err_types)}) without burst threshold; indicates ongoing intermittent provider instability."
+                ),
+                "severity": "medium",
+                "state": "detected",
+                "owner": "",
+                "detected_at": earliest_ts,
+                "last_updated_at": latest_ts,
+                "occurrence_fingerprint": f"ai_pers:{len(persistent_recovered_events)}:{latest_ts}",
+                "source_refs": [{"kind": "ai_service", "id": GEMINI_MODEL}],
+                "risk_reason_codes": ["ai_persistent_degradation"] + unique_codes,
+                "recommended_next_step": "Review provider quota, network timeouts, and model error patterns across recent cycles.",
+                "responsibility_layer": "Layer 1 — Normal Ops",
+                "detail_rows": [
+                    {"label": "Provider", "value": "Google Gemini"},
+                    {"label": "Model", "value": GEMINI_MODEL},
+                    {"label": "Events (24h)", "value": len(persistent_recovered_events)},
+                    {"label": "Error types", "value": ", ".join(err_types)},
+                    {"label": "Fallback used", "value": "true"},
+                    {"label": "Service state", "value": "deterministic_fallback_active"},
+                ],
+                "linked_paths": [],
+                "audit_refs": [],
+            }
+        )
+    else:
+        # Category A: Isolated successfully recovered degradation events (monitoring state)
+        for ev in persistent_recovered_events:
+            cases.append(
+                {
+                    "case_id": f"ai_degradation:{ev.get('id')}",
+                    "case_type": "ai_degradation_case",
+                    "canonical_user_type": "System / AI Integration",
+                    "workflow": "AI scoring and matching",
+                    "entity_type": "ai_service",
+                    "entity_id": ev.get("id"),
+                    "title": f"AI fallback engaged · {str(ev.get('error_type', '')).replace('_', ' ').title()}",
+                    "summary": (
+                        ev.get("message")
+                        or "AI provider experienced an operational disruption; deterministic fallback engaged."
+                    ),
+                    "severity": "low",
+                    "state": "monitoring",
+                    "owner": "",
+                    "detected_at": ev.get("timestamp") or now_dt.isoformat(),
+                    "last_updated_at": ev.get("timestamp") or now_dt.isoformat(),
+                    "occurrence_fingerprint": f"ai_recov:{ev.get('id')}:{ev.get('timestamp')}",
+                    "source_refs": [{"kind": "ai_service", "id": ev.get("model", GEMINI_MODEL)}],
+                    "risk_reason_codes": [ev.get("error_code") or "AI_DEGRADATION"],
+                    "recommended_next_step": "Telemetry logged; isolated fallback recovered request deterministically.",
+                    "responsibility_layer": "Layer 1 — Normal Ops",
+                    "detail_rows": [
+                        {"label": "Provider", "value": "Google Gemini"},
+                        {"label": "Model", "value": ev.get("model") or GEMINI_MODEL},
+                        {"label": "Error type", "value": ev.get("error_type") or "unknown"},
+                        {"label": "Operation", "value": ev.get("operation") or "unknown"},
+                        {"label": "Fallback used", "value": "true"},
+                    ],
+                    "linked_paths": [],
+                    "audit_refs": [],
+                }
+            )
+
     return cases
 
 

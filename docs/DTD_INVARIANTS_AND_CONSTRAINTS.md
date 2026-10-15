@@ -34,6 +34,10 @@ These rules apply in every phase. A proposed feature that conflicts with one req
 16. DTD is operated by one non-technical founder. Prefer bounded automation, low maintenance and exception-driven operations.
 17. Every material workflow is assessed end to end: UI → API → persisted state → notification/fallback → `/ops`.
 18. Mutating operator actions require authentication, confirmation, idempotency and an audit record. Financial actions fail closed.
+    - 18a. Read-only oversight: `GET /api/oversight` and monitoring inspections are strictly side-effect free, performing zero database writes (DF-032).
+    - 18b. Domain entity immutability: Operator triage actions persist state strictly in `ops_case_states` and `audit_log`, never mutating underlying business entities (`submissions`, `trainers`, `subscriptions`, `message_log`).
+    - 18c. Occurrence fingerprinting: Recurrence detection requires authoritative occurrence identity (`_case_occurrence_fingerprint`), preventing false alerts on aggregate re-reads or snapshot rewrites. Where identity is unmodeled, recurrence tracking is explicitly deferred.
+    - 18d. Evidence-first provider health: Operational status requires active telemetry (e.g. verified database operation within 300s, outbound dispatches, verified event ingestion). Health is never inferred from client object presence.
 19. Local code, deployment, provider configuration and live behavior are distinct evidence states. Never infer one from another.
 
 ## Documentation governance
