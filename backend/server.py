@@ -1614,9 +1614,17 @@ def _correlate_message_incidents(message_log: List[Dict[str, Any]]) -> List[Dict
         if correlation_type == "legacy_standalone" and constituent_ids:
             case_id = f"message:{constituent_ids[0]}"
 
+        aliases = [f"message:{eid}" for eid in constituent_ids]
+        aliases.extend(constituent_ids)
+        if dispatch_id:
+            aliases.append(dispatch_id)
+            aliases.append(f"message:{dispatch_id}")
+        aliases = sorted(list(set(aliases)))
+
         incidents.append(
             {
                 "case_id": case_id,
+                "case_aliases": aliases,
                 "dispatch_id": dispatch_id,
                 "constituent_event_ids": constituent_ids,
                 "correlation_type": correlation_type,
@@ -2395,9 +2403,19 @@ async def _ops_case_rows(
     case_aliases: Dict[str, List[str]] = {}
     for c in cases:
         c_id = str(c.get("case_id") or "")
+        aliases = list(c.get("case_aliases") or [])
         constituent_ids = c.get("constituent_event_ids") or []
-        if constituent_ids:
-            case_aliases[c_id] = [f"message:{eid}" for eid in constituent_ids]
+        for eid in constituent_ids:
+            aliases.append(eid)
+            aliases.append(f"message:{eid}")
+        dispatch_id = str(c.get("dispatch_id") or "")
+        if dispatch_id:
+            aliases.append(dispatch_id)
+            aliases.append(f"message:{dispatch_id}")
+        if aliases:
+            resolved_aliases = sorted(list(set(aliases)))
+            case_aliases[c_id] = resolved_aliases
+            c["case_aliases"] = resolved_aliases
 
     overrides = await _load_ops_case_state_map(
         [str(case.get("case_id") or "") for case in cases if case.get("case_id")],
@@ -6675,14 +6693,18 @@ async def update_oversight_case_review(
     current_cases = await _current_ops_cases()
     current_case = next((row for row in current_cases if str(row.get("case_id") or "") == case_id), None)
     if not current_case:
+        stripped_id = case_id[len("message:"):] if case_id.startswith("message:") else case_id
         current_case = next(
             (
                 row
                 for row in current_cases
                 if case_id in (row.get("case_aliases") or [])
+                or stripped_id in (row.get("case_aliases") or [])
                 or case_id in (row.get("constituent_event_ids") or [])
+                or stripped_id in (row.get("constituent_event_ids") or [])
                 or f"message:{case_id}" == str(row.get("case_id") or "")
                 or str(row.get("dispatch_id") or "") == case_id
+                or str(row.get("dispatch_id") or "") == stripped_id
             ),
             None,
         )
