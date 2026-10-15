@@ -6,6 +6,18 @@ source "${repo_root}/scripts/deploy_sandbox.sh"
 
 validate_health_response '{"ok":true,"database":"available"}'
 
+validate_deployed_traffic_response 'dtd-api-dev-00027-yob' '{"latestCreatedRevisionName":"dtd-api-dev-00028-ttz","latestReadyRevisionName":"dtd-api-dev-00028-ttz","traffic":[{"revisionName":"dtd-api-dev-00028-ttz","percent":100}]}'
+
+for state in \
+  '{"latestCreatedRevisionName":"dtd-api-dev-00027-yob","latestReadyRevisionName":"dtd-api-dev-00027-yob","traffic":[{"revisionName":"dtd-api-dev-00027-yob","percent":100}]}' \
+  '{"latestCreatedRevisionName":"dtd-api-dev-00028-ttz","latestReadyRevisionName":"dtd-api-dev-00027-yob","traffic":[{"revisionName":"dtd-api-dev-00027-yob","percent":100}]}' \
+  '{"latestCreatedRevisionName":"dtd-api-dev-00028-ttz","latestReadyRevisionName":"dtd-api-dev-00028-ttz","traffic":[{"revisionName":"dtd-api-dev-00027-yob","percent":100}]}'; do
+  if validate_deployed_traffic_response 'dtd-api-dev-00027-yob' "${state}" >/dev/null 2>&1; then
+    echo "Expected sandbox traffic validation to reject: ${state}" >&2
+    exit 1
+  fi
+done
+
 for response in '{"ok":false,"database":"available"}' '{"ok":true,"database":"unavailable"}' 'not-json'; do
   if validate_health_response "${response}" >/dev/null 2>&1; then
     echo "Expected sandbox health validation to reject: ${response}" >&2

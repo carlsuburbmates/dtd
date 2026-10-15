@@ -31,6 +31,33 @@ if health.get("ok") is not True or health.get("database") != "available":
 PY
 }
 
+validate_deployed_traffic_response() {
+  PREVIOUS_READY_REVISION="$1" SERVICE_STATE="$2" python3 - <<'PY'
+import json
+import os
+
+try:
+    state = json.loads(os.environ["SERVICE_STATE"])
+except (KeyError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Sandbox service state was not valid JSON: {error}")
+
+latest_created = state.get("latestCreatedRevisionName") or ""
+latest_ready = state.get("latestReadyRevisionName") or ""
+previous_ready = os.environ.get("PREVIOUS_READY_REVISION") or ""
+traffic = state.get("traffic") or []
+
+if not latest_created or latest_created == previous_ready:
+    raise SystemExit("Sandbox deployment did not create a new revision")
+if latest_ready != latest_created:
+    raise SystemExit("Latest sandbox revision is not ready")
+if not any(
+    route.get("revisionName") == latest_created and int(route.get("percent") or 0) == 100
+    for route in traffic
+):
+    raise SystemExit("Latest sandbox revision is not receiving 100 percent of traffic")
+PY
+}
+
 main() {
 if [ "$#" -ne 0 ]; then
   echo "Usage: bash scripts/deploy_sandbox.sh" >&2
@@ -47,6 +74,12 @@ fi
 echo "✅ Preflight tests passed!"
 
 # 2. Deploy to Google Cloud Run
+PREVIOUS_READY_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestReadyRevisionName)")
+if [ -z "${PREVIOUS_READY_REVISION}" ]; then
+  echo "Sandbox service has no ready revision to compare against" >&2
+  exit 1
+fi
+
 echo "🚀 [2/3] Deploying ${SERVICE_NAME} to Google Cloud Run in project ${PROJECT_ID} (${REGION})..."
 gcloud run deploy "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
@@ -64,6 +97,15 @@ gcloud run deploy "${SERVICE_NAME}" \
 
 # 3. Post-deployment verification
 echo "📡 [3/3] Verifying deployed endpoint..."
+gcloud run services update-traffic "${SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --to-latest
+
+SERVICE_STATE=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)")
+validate_deployed_traffic_response "${PREVIOUS_READY_REVISION}" "${SERVICE_STATE}"
+LATEST_CREATED_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestCreatedRevisionName)")
+
 DEPLOYED_SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
 if [ -z "${DEPLOYED_SERVICE_URL}" ]; then
   echo "Sandbox Cloud Run service returned no URL" >&2
@@ -73,7 +115,7 @@ echo "Sandbox URL: ${DEPLOYED_SERVICE_URL}"
 
 HEALTH_RESPONSE=$(curl --fail --silent --show-error --location --max-time 15 "${DEPLOYED_SERVICE_URL}/api/health")
 validate_health_response "${HEALTH_RESPONSE}"
-echo "✅ Sandbox health verified: API is healthy and its database is available."
+echo "✅ Sandbox revision ${LATEST_CREATED_REVISION} serves 100% traffic; API health and database availability are verified."
 
 echo "🎉 Sandbox API deployment and health verification complete."
 echo "ℹ️ Scheduler and IAM bootstrap are intentionally separate: bash scripts/setup_sandbox_ingestion.sh"
