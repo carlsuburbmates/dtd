@@ -214,18 +214,29 @@ DTD operates under a single solo operator model. The operator does not perform r
 ## Operations Console Deployed State versus Phase 1 Implementation
 
 - **Production Cloud Run Revision:**
-  The live production backend serving 100% of traffic is `dtd-api-00058-ter` (deployed on 15 October 2026, Google Cloud project `gen-lang-client-0028123502` in `australia-southeast1`).
+  The live production backend serving 100% of traffic remains pinned to `dtd-api-00058-ter` (deployed on 15 October 2026, Google Cloud project `gen-lang-client-0028123502` in `australia-southeast1`).
   - Runtime administrative passcode (`ADMIN_PASS`) is mounted to Secret Manager secret `dtd-admin-pass` version 3 (`enabled`), with version 2 (`disabled`).
   - Production datastore is MongoDB Atlas cluster `DTD` (`dtd` database).
   - Production frontend is Firebase Hosting serving assets `index-B0KVx6z6.js` and `index-CiXd5jGR.css`.
-- **Phase 1 Release Candidate (Local Working Tree & Branch):**
-  - All Phase 1 noise elimination, bounded loop grace periods, read-only oversight (DF-032), domain entity immutability, occurrence fingerprinting, provider telemetry verification, and AI timestamp validation changes are implemented locally on branch `feature/matching-implementation` and covered by automated regression test suites.
-  - **Phase 1 changes are NOT deployed to production.**
-  - Progression requires developer sandbox verification via `scripts/deploy_sandbox.sh` before any production cutover consideration.
+  - **Production deployment is NOT performed.** Production promotion remains a separate final gate requiring explicit owner authorisation.
+- **Developer Sandbox Deployed Revision:**
+  - Consolidated into `main` and deployed to developer sandbox Cloud Run service `dtd-api-dev` on revision `dtd-api-dev-00026-pzc` (100% traffic, project `dogtrainersdirectory-dev`, `australia-southeast1`).
+  - Live sandbox endpoint: `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app`.
+  - Live sandbox datastore: MongoDB Atlas `dtd_sandbox`.
+- **Phase 1 Sandbox Acceptance Gate (VERIFIED COMPLETE):**
+  - Executed automated isolated acceptance suite (`scripts/verify_sandbox_ops_phase1.py`) against live sandbox deployment `dtd-api-dev-00026-pzc`.
+  - **Gate Results:**
+    1. *Gate 1 — Noise Elimination (Success Excluded):* **PASS** (Successful HTTP 202 notifications excluded from Needs Action).
+    2. *Gate 2 — Genuine Failures Visible:* **PASS** (Delivery failures and AI degradation events correctly surfaced as actionable cases).
+    3. *Gate 3 — Operational vs Governance Classification:* **PASS** (Provider governance cases placed in monitoring with low severity; provider operational failures placed in detected with appropriate severity).
+    4. *Gate 4 — Administrative Review & Occurrence Fingerprint:* **PASS** (High-severity dismissal without >=5 char note rejected with HTTP 400 safeguard; valid review dismissed case; identical occurrence fingerprint prevented false recurrence on subsequent refreshes).
+    5. *Gate 5 — Audit Integrity & Read-Only Oversight Contract (DF-032):* **PASS** (`GET /api/oversight` produced exactly zero database writes; review actions create immutable `audit_log` records).
+    6. *Gate 6 — Production Isolation Verification:* **PASS** (Zero cross-project mutations; production health verified independently).
+    7. *Gate 7 — Zero-Trace Fixture Disposal:* **PASS** (100% synthetic test documents purged from `dtd_sandbox` collections).
 
-## Phase 2 Dependencies and Subsequent Work
+## Phase 2 Dependencies and Implementation Readiness
 
-Phase 2 remains blocked pending sandbox verification of Phase 1. The key technical dependencies for Phase 2 are:
+Phase 1 Sandbox Acceptance is complete. Phase 2 implementation remains blocked pending explicit owner authorization. The key technical dependencies for Phase 2 are:
 
 1. **Incident Correlation & Multi-Signal Aggregation:**
    Group related diagnostic events (e.g. concurrent loop stales, provider network timeouts) into cohesive incident records to prevent operator fatigue from fragmented cases.
