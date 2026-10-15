@@ -60,6 +60,8 @@ If `.codex/skill-policy.toml` exists, it controls routing behavior.
 
 The owner's instructions in this session and prior turns are continuing authority for the work they specify. Complete ordinary implementation, tests, documentation, commits, remote branch sync and developer-sandbox verification when those steps are part of an authorised workflow. Do not request a second yes for the same action. An external system being involved is not, by itself, a new approval gate.
 
+**Autonomous completion mandate (`LOCKED`):** Do not pause to ask approval from the owner if you know for a fact that an action is the only safe, unambiguous path to finish an authorised or long-standing piece of work (such as deploying an audited commit to the developer sandbox, running end-to-end acceptance checks, consolidating branches, or updating documentation). Proceed directly through execution to completion and report verified results.
+
 Resolve the exact target and effects before consequential actions. Ask once, at the point of action, only for genuinely new authority or an unavoidable provider/platform credential or action-time confirmation. Do not infer a password, OTP or other credential from the owner's project ownership. If an authentication challenge requires the owner, prepare the exact flow, continue independent work, and ask them to complete it in the local trusted UI; never request a secret in chat.
 
 ## 5) Execution Workflow Expectations
