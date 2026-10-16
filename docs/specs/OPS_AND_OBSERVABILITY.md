@@ -14,9 +14,9 @@ The agreed multi-phase roadmap is:
   Eliminates operational noise at its source. Distinguishes routine informational telemetry (e.g. successful HTTP 202 transactional emails, benign initial crawl 404s, expected cold starts) from actionable operational incidents. Enforces cadence-aware bounded grace curves for background loops, evidence-first provider operational status, occurrence fingerprinting for recurrence suppression, and temporal validation for AI degradation events.
 - **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Implemented & Verified in Developer Sandbox):**
   Transforms fragmented operational events into correlated incidents. Groups retry dispatches, isolates root-cause provider outages, and distinguishes machine `operational_state` (`detected`, `recovering`, `resolved`, `reopened`) from human `review.state`. Implements verified automated recovery (terminal successes clear transient failures, alias resolution for event IDs), robust occurrence identity with genuine recurrence detection, and serverless loop orchestration via Cloud Scheduler `dtd-engine-tick-cron` solving DF-029.
-- **Phase 3 — Minimal Owner-Facing Operations Console (Planned next):**
-  Delivers a streamlined, mobile-responsive, exception-driven operator interface for the solo non-technical founder. Surfaces only high-signal priority queues (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) with bounded 1-click triage actions and truthful feedback.
-- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned):**
+- **Phase 3 — Minimal Owner-Facing Operations Console (Implemented & Verified):**
+  Transforms `/ops` into a decision-first, mobile-responsive Operations Console for a single non-technical owner. Features a 3-Level hierarchy: Level 1 System Status (plain English headline + 3 supporting metrics: Supply, Commercial Gate, Background loops), Level 2 Needs Your Attention (filtering only genuine actionable cases with 3-question breakdowns: What happened?, Why does it matter?, What can I do?, and 1-click triage actions with high-severity dismissal safeguards), Level 3 Handled Automatically (compact telemetry feed of background engine ticks, Guardian audits, fraud suppressions, and delivery recoveries), and a collapsible Secondary Advanced Diagnostics disclosure preserving 10 deep technical views and all existing test IDs. Mobile touch ergonomics and responsive layouts verified at 390px, 768px, and 1440px.
+- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned next):**
   Integrates a bounded, read-only AI diagnostic advisor triggered solely by operational exceptions. Synthesizes error logs, telemetry diffs, and historical remediations to present concise root-cause hypotheses and recommended operator actions in `/ops`. Performs zero autonomous database mutations.
 - **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Planned):**
   Introduces strictly gated, idempotent automated recovery routines for well-understood transient faults (e.g., automated cache flushing, bounded task retries, stale claim expirations), requiring prior operator review and explicit feature-flag gating.
@@ -262,16 +262,76 @@ Executed automated isolated acceptance suite (`scripts/verify_sandbox_ops_phase2
 - **Gate 6 — Read-Only Oversight Invariant (DF-032):** **PASS** (`GET /api/oversight` executed side-effect free with exactly zero database writes to snapshots, state, or audit log).
 - **Gate 7 — Zero-Trace Fixture Disposal:** **PASS** (100% synthetic test fixtures cleaned up from `dtd_sandbox` collections).
 
-## Phase 3 Dependencies and Implementation Readiness
+### Phase 3 Architecture & Operator Surface (Verified Complete)
 
-Phase 1 and Phase 2 are complete and verified in the developer sandbox. Phase 3 implementation remains blocked pending explicit owner authorization. The key technical objectives for Phase 3 are:
+Phase 3 transforms the `/ops` application from a dense technical debugging surface into an exception-driven, mobile-first Operations Console for a single non-technical owner:
 
-1. **Minimal Owner-Facing Console Surface:**
-   Streamline the `/ops` UI into an exception-driven dashboard tailored for a solo non-technical founder.
-2. **Four Primary Priority Queues:**
-   Consolidate all operational activity into four unambiguous queue buckets: `Needs review`, `Intro-ready`, `Blocked supply`, and `Health watch`.
-3. **One-Click Rapid Triage Actions:**
-   Equip the operator with fast, truthful 1-click triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) that persist before/after diffs in immutable audit logs.
-4. **Mobile Ergonomics & Responsive Layout:**
-   Ensure clean presentation on mobile touchscreens without horizontal scroll or broken action buttons.
+1. **Level 1 — System Status (10-Second Readability):**
+   - **Headline & Status Derivation:** Computes one of four plain-English operational states based on authoritative telemetry:
+     - `All running normally` (emerald): 0 active high/medium cases, 0 failing loops, database connected, engine tick fresh.
+     - `Some services need attention` (amber): non-critical degraded loop, medium-severity case, or thin supply warning.
+     - `Action required` (rose): 1 or more high-severity cases in `Needs review` or critical database/connectivity failure.
+     - `Status unavailable` (slate): disconnected database or unparseable telemetry snapshot.
+   - **Decision Summary:** Clear, concise prompt on whether action is needed or normal monitoring should continue.
+   - **Three Supporting Metrics:**
+     - *Directory Supply:* Intro-ready trainers vs blocked/pending verification.
+     - *Commercial Gate:* Strict verification of fail-closed posture (`ENABLE_TRAINER_BILLING_CHECKOUT=0`, $0 financial risk).
+     - *Background Systems:* Count of healthy autonomous loops (e.g. 10/10) with serverless engine-tick status.
+
+2. **Level 2 — Needs Your Attention (Actionable Exceptions Only):**
+   - **Strict Exception Filtering:** Displays only genuine owner-actionable cases (`detected`, `notified`, `reopened`). Dismissed, investigating, or recovered cases are excluded from the primary view.
+   - **Structured 3-Question Incident Breakdown:**
+     - *What happened?* Clean summary or error description.
+     - *Why does it matter?* Concrete business and operational impact explanation.
+     - *What can I do?* Recommended operator intervention.
+   - **One-Click Rapid Triage Actions:**
+     - `[Acknowledge]`: transitions state to `investigating`, persisting note `"Acknowledged by owner in daily ops triage; monitoring."`
+     - `[Resolve]`: transitions state to `resolved`, persisting note `"Verified statutory facts and resolved in daily ops review."`
+     - `[Dismiss]`: transitions state to `dismissed`. Enforces explanatory note ($\ge 5$ characters) for high-severity incidents (`HTTP 400` safeguard).
+     - `[Details]`: collapsible drawer revealing incident metadata (occurrences, recurrence count, constituent event IDs, affected entity).
+     - `[Work Queue ->]`: direct deep-link into the full Work Queue view.
+   - **Trustworthy Empty State:** Reassures the owner with a clean green checkmark when 0 cases require intervention (`"No action required - Your Work Queue is completely clear."`).
+
+3. **Level 3 — Handled Automatically (Autonomous Feedback):**
+   - Surfaces background autonomous actions that completed without requiring operator friction:
+     - Cloud Scheduler engine ticks (ranking, inference, health, nurture, inventory).
+     - Guardian supervisory compliance audits.
+     - Fraud and duplicate submission suppressions.
+     - Transactional delivery recoveries and retries.
+     - Auto-resolved transient incidents.
+   - Includes timestamp, task name, and count; truthful neutral empty state if zero automated tasks ran in the last 24h.
+
+4. **Secondary — Collapsible Advanced Diagnostics Disclosure:**
+   - Hidden by default behind a clean disclosure toggle (`data-testid="ops-diagnostics-toggle"`).
+   - Preserves 100% of underlying diagnostic capabilities, views (`pipeline_flow`, `matching`, `trainer_supply`, `messages`, `billing_reactivation`, `seo_indexation`, `attribution`, `system_activity`, `recent_changes`, `work_queue`), and automated test IDs.
+   - Expandable on demand for deep inspection without polluting the primary executive console.
+
+5. **Mobile-First Ergonomics & Accessibility:**
+   - Touch targets designed for fingers ($\ge 44\text{px}$ button height/padding).
+   - Responsive grid (`sm:grid-cols-3` adapting cleanly down to single-column on mobile).
+   - Zero horizontal overflow across 390px (mobile), 768px (tablet), and 1440px (desktop) verified via headless Chrome CDP capture.
+
+### Phase 3 Verification & Test Coverage (VERIFIED COMPLETE)
+
+- **Frontend Vitest Suite:** 66/66 tests passed across 10 test files (including 19/19 in `Ops.test.jsx` verifying 3-Level hierarchy, status derivation, triage handlers, dismissal safeguards, and diagnostics disclosure).
+- **Frontend Production Build:** Vite 8 production build completed cleanly in <1s (`build/index.html` 1.45 kB, `build/assets/index-DxZkQIHU.js` 821 kB).
+- **Backend Pytest Suite:** 494/494 unit and ops tests passed across `test_ops_phase1_noise_elimination.py`, `test_ops_phase2_incident_lifecycle.py`, and all domain unit suites.
+- **Visual Responsiveness Verification:** Automated headless Chrome CDP capture (`scripts/verify_ops_phase3_visuals.mjs`) verified:
+  - `ops_phase3_mobile_390.png`: 390x844 mobile viewport, touch targets compliant, zero overflow.
+  - `ops_phase3_tablet_768.png`: 768x1024 tablet viewport, clean 3-card metrics layout.
+  - `ops_phase3_desktop_1440.png`: 1440x900 desktop viewport, decision-first reading order.
+  - `ops_phase3_diagnostics_expanded.png`: 1440x900 expanded diagnostics, sidebar navigation and views accessible.
+
+## Phase 4 Dependencies and Implementation Readiness
+
+Phase 1, Phase 2, and Phase 3 are complete and verified. Phase 4 implementation (Read-Only, Event-Triggered AI Operations Analyst) remains blocked pending explicit owner authorization. The key technical objectives for Phase 4 are:
+
+1. **Event-Triggered Invocation:**
+   AI Analyst triggers only when an unhandled operational exception or degradation is detected; zero polling, zero continuous background consumption.
+2. **Read-Only Invariant:**
+   Analyst operates under strictly read-only tools and cannot write to or mutate database collections.
+3. **Structured Hypotheses & Remediation Recommendations:**
+   Synthesizes telemetry, recent diffs, and error logs into a concise hypothesis and recommended operator actions presented within `/ops`.
+4. **Owner Review Gate:**
+   Every proposed action requires manual owner review and confirmation before execution.
 

@@ -692,4 +692,203 @@ describe("Ops auth transition", () => {
             view.cleanup();
         }
     });
+
+    describe("Phase 3 - Mobile-First 3-Level Operations Console", () => {
+        it("renders Level 1 'All running normally' status when no actionable cases and loops healthy", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [],
+                    provider_health: { status: "normal" },
+                    ops_investigation: { loop_statuses: { health: { status: "ok" } } },
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level1 = view.container.querySelector("[data-testid='ops-level1-system-status']");
+            expect(level1).not.toBeNull();
+            expect(level1.textContent).toContain("All systems running normally");
+            expect(level1.textContent).toContain("All running normally");
+            expect(level1.textContent).toContain("Directory Supply");
+            expect(level1.textContent).toContain("Commercial Gate");
+            expect(level1.textContent).toContain("Background Systems");
+
+            const level2Empty = view.container.querySelector("[data-testid='ops-attention-empty']");
+            expect(level2Empty).not.toBeNull();
+            expect(level2Empty.textContent).toContain("No action required");
+
+            view.cleanup();
+        });
+
+        it("renders Level 1 'Action required' and Level 2 3-question breakdown when high-severity incident is detected", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "delivery:intro_99",
+                            case_type: "intro_delivery_failure",
+                            workflow: "intro delivery",
+                            title: "Intro Delivery Failed to Trainer",
+                            summary: "Failed to dispatch introduction email due to provider timeout.",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T08:00:00Z",
+                            recommended_next_step: "Review trainer contact and retry introduction dispatch.",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level1 = view.container.querySelector("[data-testid='ops-level1-system-status']");
+            expect(level1.textContent).toContain("Action required on high-priority items");
+            expect(level1.textContent).toContain("Action required");
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-delivery:intro_99']");
+            expect(caseCard).not.toBeNull();
+            expect(caseCard.textContent).toContain("Intro Delivery Failed to Trainer");
+            expect(caseCard.textContent).toContain("What happened:");
+            expect(caseCard.textContent).toContain("Failed to dispatch introduction email");
+            expect(caseCard.textContent).toContain("Why it matters:");
+            expect(caseCard.textContent).toContain("What to do:");
+            expect(caseCard.textContent).toContain("Review trainer contact and retry introduction dispatch.");
+
+            view.cleanup();
+        });
+
+        it("enforces dismissal safeguard on high-severity case in Level 2 console triage", async () => {
+            const postSpy = jest.spyOn(opsApi, "post");
+            getSpy.mockResolvedValue({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "delivery:intro_101",
+                            workflow: "intro delivery",
+                            title: "High Severity Incident",
+                            summary: "Critical failure",
+                            severity: "high",
+                            state: "detected",
+                        },
+                    ],
+                },
+            });
+
+            const promptSpy = jest.spyOn(window, "prompt");
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const dismissBtn = view.container.querySelector("[data-testid='ops-case-quick-dismiss-delivery:intro_101']");
+            expect(dismissBtn).not.toBeNull();
+
+            // 1. Owner cancels prompt -> aborts, no post call
+            promptSpy.mockReturnValueOnce(null);
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).not.toHaveBeenCalled();
+
+            // 2. Owner enters short note (<5 chars) -> aborts with error toast
+            promptSpy.mockReturnValueOnce("bad");
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).not.toHaveBeenCalled();
+            expect(mockToastError).toHaveBeenCalledWith(
+                expect.stringContaining("at least 5 characters")
+            );
+
+            // 3. Owner enters valid note -> executes dismissal
+            postSpy.mockResolvedValueOnce({ data: { ok: true } });
+            promptSpy.mockReturnValueOnce("Verified safe test event dismissal.");
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+            expect(postSpy).toHaveBeenCalledWith(
+                "/oversight/cases/delivery%3Aintro_101",
+                expect.objectContaining({
+                    state: "dismissed",
+                    note: "Verified safe test event dismissal.",
+                })
+            );
+            expect(mockToastSuccess).toHaveBeenCalledWith("Case marked as dismissed");
+
+            postSpy.mockRestore();
+            promptSpy.mockRestore();
+            view.cleanup();
+        });
+
+        it("renders Level 3 verified automated actions feed and truthful neutral empty state", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    handled_automatically: [
+                        {
+                            id: "auto-1",
+                            title: "Pipeline Guardian Routine Audit",
+                            summary: "Completed automated integrity audit across trainer listings.",
+                            timestamp: "2026-10-16T09:00:00Z",
+                            status: "completed",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level3 = view.container.querySelector("[data-testid='ops-level3-handled-automatically']");
+            expect(level3).not.toBeNull();
+            expect(level3.textContent).toContain("Handled Automatically");
+            expect(level3.textContent).toContain("Pipeline Guardian Routine Audit");
+            expect(level3.textContent).toContain("Completed automated integrity audit across trainer listings.");
+            expect(level3.textContent).toContain("completed");
+
+            view.cleanup();
+        });
+
+        it("toggles the Advanced Diagnostics disclosure", async () => {
+            getSpy.mockResolvedValueOnce({ data: validSnapshot });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const toggleBtn = view.container.querySelector("[data-testid='ops-diagnostics-toggle']");
+            expect(toggleBtn).not.toBeNull();
+            expect(toggleBtn.textContent).toContain("Show Advanced Diagnostics");
+
+            await act(async () => {
+                toggleBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(toggleBtn.textContent).toContain("Hide Advanced Diagnostics");
+
+            view.cleanup();
+        });
+    });
 });
