@@ -18,8 +18,8 @@ The agreed multi-phase roadmap is:
   Transforms `/ops` into a decision-first, mobile-responsive Operations Console for a single non-technical owner. Features a 3-Level hierarchy: Level 1 System Status (plain English headline + 3 supporting metrics: Supply, Commercial Gate, Background loops), Level 2 Needs Your Attention (filtering only genuine actionable cases with 3-question breakdowns: What happened?, Why does it matter?, What can I do?, and 1-click triage actions with high-severity dismissal safeguards), Level 3 Handled Automatically (compact telemetry feed of background engine ticks, Guardian audits, fraud suppressions, and delivery recoveries), and a collapsible Secondary Advanced Diagnostics disclosure preserving 10 deep technical views and all existing test IDs. Mobile touch ergonomics and responsive layouts verified at 390px, 768px, and 1440px.
 - **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Implemented & Verified in Developer Sandbox):**
   Integrates an intelligent, read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`). Investigates genuine operational exceptions on-demand or during scheduled engine-ticks with zero polling. Enforces strict evidence sanitization and PII redaction, structured output validation, per-occurrence deduplication, daily budget ceilings ($0 risk), manual cooldowns, and a strict read-only boundary with zero mutation authority over operational data or directory collections. Live verified across all 9 acceptance gates in `dogtrainersdirectory-dev`.
-- **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Planned next):**
-  Introduces strictly gated, idempotent automated recovery routines for well-understood transient faults (e.g., automated cache flushing, bounded task retries, stale claim expirations), requiring prior operator review and explicit feature-flag gating.
+- **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Implemented & Verified in Developer Sandbox):**
+  Introduces strictly controlled, bounded, deterministic automatic recovery routines for safe operational failures under strict multi-layer safeguards (default-disabled posture `OPS_SELF_HEALING_ENABLED=0`, production hard-block, separate per-routine feature flags, atomic distributed claiming preventing concurrent execution, downstream verified recovery, daily budget ceilings, cooldowns, zero business data mutations, and strict isolation from the read-only Gemini AI Analyst).
 
 ## Required operating picture
 
@@ -412,14 +412,67 @@ Deployed to developer sandbox `dogtrainersdirectory-dev` and verified live end-t
   - Expanded AI Analysis View (1440x1200): `ops_live_phase4_ai_analysis_expanded.png`
 - **Zero-Trace Cleanup:** `PASS`. All disposable test fixtures and investigations were deleted completely from `dtd_sandbox`.
 
-## Phase 5 Dependencies and Implementation Readiness (Planned next)
+## Phase 5 — Controlled Automation & Self-Healing Recovery (Implemented & Verified in Developer Sandbox)
 
-Phase 1, Phase 2, Phase 3, and Phase 4 are complete and verified in the developer sandbox. Phase 5 implementation (Controlled Automation & Self-Healing Recovery) remains blocked pending explicit owner authorization. The key technical objectives for Phase 5 are:
+### 1. Architectural Philosophy & Governing Boundaries
 
-1. **Strictly Gated Self-Healing:**
-   Gated, idempotent automated recovery routines for well-understood transient faults (e.g. bounded email delivery retries, stale claim lock expirations, cache flushes).
-2. **Explicit Operator Feature Flags:**
-   Each autonomous healing routine must be separately enabled via operator configuration, defaulting to off.
-3. **Audit Trail Completeness:**
-   Every automated recovery action writes an immutable audit record to `audit_log` with actor `system:auto_recovery`.
+Phase 5 introduces strictly bounded, idempotent automatic recovery ("self-healing") for operational failures that can be corrected deterministically, safely, and with verifiable outcomes.
+
+**Safety Invariants & Governance Principles:**
+1. **Owner by Exception, Automation by Default:** The owner should not spend time manually intervening in trivial, mechanical faults (e.g. expired background job locks or transient HTTP 429 backpressure).
+2. **Safe Defaults (Default-Disabled Posture):** All self-healing routines are disabled by default (`OPS_SELF_HEALING_ENABLED=0`).
+3. **Production Hard-Block:** In production (`is_production_environment() == True`), all automatic recovery routines are unconditionally hard-blocked. Production activation requires explicit, separate future owner authorization.
+4. **Separate Routine Gating:** Each recovery routine is governed by its own independent feature flag (`OPS_RECOVERY_LEASE_ENABLED`, `OPS_RECOVERY_CLAIM_LOCK_ENABLED`, `OPS_RECOVERY_NOTIFICATION_ENABLED`).
+5. **No Business Mutations:** Self-healing never alters listing ownership, ABN verification status, public directory visibility, or customer billing.
+6. **Atomic Distributed Claiming:** Every recovery execution claims an atomic lease in `ops_recovery_executions` with TTL, preventing race conditions or duplicate concurrent executions.
+7. **Downstream Verified Recovery:** A recovery is not declared successful until a dedicated verification function (`fn_verify`) inspects downstream state and confirms the problem is genuinely resolved.
+8. **Failure Isolation, Cooldown & Ceilings:** Max 2 attempts ceiling per incident, 300s cooldown between attempts, and a global daily budget limit (20 recoveries/day).
+9. **Strict AI Isolation:** The Gemini AI Analyst (Phase 4) is advisory-only with zero mutation authority and cannot execute self-healing routines.
+10. **Zero-Trace Observability:** Verified recoveries automatically surface in the Operations Console Level 3 "Handled Automatically" feed, providing clear transparency to the owner.
+
+---
+
+### 2. Approved Recovery Routines Registry
+
+| Routine ID | Title | Scope | Feature Flag | Max Attempts | Cooldown | Invariant & Mutation Boundaries |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `routine:background_job_lease_recovery` | Engine-Tick Lease Recovery | Loop health & background job stalls | `OPS_RECOVERY_LEASE_ENABLED` | 2 | 300s | CAS clear of expired `engine_tick_lease` in `system_state`. Never steals active lease (`expires_at > now`). |
+| `routine:stale_claim_lock_recovery` | Stale Claim Lock Recovery | Abandoned OTP claims | `OPS_RECOVERY_CLAIM_LOCK_ENABLED` | 2 | 300s | Marks expired OTP claim as `expired` and clears transient `claim_in_progress` lock. Never transfers listing ownership or edits statutory records. |
+| `routine:transient_notification_retry` | Transient Notification Delivery Retry | Transient delivery failures (429, 503, timeout) | `OPS_RECOVERY_NOTIFICATION_ENABLED` | 2 | 300s | Bounded re-dispatch for transient backpressure. Permanent errors (401, 400, 404, 422) strictly rejected. Sandbox-only. |
+
+---
+
+### 3. API & Console Integration
+
+- `GET /api/oversight/recovery/status`: Read-only configuration summary returning environment status, feature flags, registered routines, and limits.
+- `POST /api/oversight/recovery/evaluate`: Dry-run evaluation endpoint checking if a specific incident is eligible for an approved recovery routine.
+- `POST /api/oversight/cases/{case_id:path}/recover`: Authenticated endpoint executing recovery under atomic claiming, verification, and audit logging.
+- `GET /api/oversight`: Handled Automatically summary includes verified recoveries at the top (`category: "auto_recovery"`, `status: "completed"`).
+- `/ops` Console UI: Case cards display recovery badges (`Auto-Recovered`, `Recovering...`, `Recovery Exhausted`) and detailed execution history in the side drawer.
+
+---
+
+### 4. Developer Sandbox Live Deployment & Acceptance Verification (VERIFIED COMPLETE)
+
+Deployed to developer sandbox `dogtrainersdirectory-dev` and verified live end-to-end via automated acceptance suite (`scripts/verify_sandbox_ops_phase5.py` and `scripts/verify_sandbox_ops_phase5_live_ui.mjs`):
+- **Sandbox Backend Service:** `dtd-api-dev` serving Cloud Run revision `dtd-api-dev-00047-kfd` at 100% traffic (`https://dtd-api-dev-625222421634.australia-southeast1.run.app`).
+- **Sandbox Frontend Service:** `dtd-web-dev` serving Cloud Run revision `dtd-web-dev-00018-98h` at 100% traffic (`https://dtd-web-dev-625222421634.australia-southeast1.run.app`).
+- **Production Isolation:** Production backend `dtd-api` remains strictly locked to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`. Zero production mutations, zero live charges, zero external communications.
+
+**Acceptance Gate Matrix (Live Sandbox):**
+- **Gate A — Safe Default-Disabled Posture:** `PASS`. `self_healing_globally_enabled: False` by default; recovery evaluation while disabled returns `eligible: False`.
+- **Gate B — Routine Eligibility Boundaries:** `PASS`. Permanent errors (HTTP 401 invalid credentials) are strictly rejected (`eligible: False`), and direct recovery requests return HTTP 422.
+- **Gate C — Dry-Run & Idempotency:** `PASS`. Dry-run recovery returned `status: "dry_run"` with zero mutations to MongoDB.
+- **Gate D — Distributed Concurrency Control:** `PASS`. Active worker lease in `ops_recovery_executions` correctly blocked concurrent execution with HTTP 409 (`"Another worker is currently executing recovery for this incident."`).
+- **Gate E & F — Real Sandbox Recovery Execution & Verified Resolution:** `PASS`. Recovery execution returned `status: "verified_recovery"`. Downstream verification confirmed:
+  - Claim marked `status: "expired"` with `recovered_by` execution ID.
+  - Trainer transient `claim_in_progress` lock released; `owner_user_id` remained `None`; statutory verification untouched.
+  - `ops_recovery_executions` record marked `status: "verified"` with immutable timestamp and evidence.
+  - `ops_case_states` marked `state: "resolved"` with `auto_resolved: True`.
+- **Gate G — Failure Handling, Cooldown & Max Attempts:** `PASS`. Cooldown active correctly returned HTTP 409 (`"Recovery in cooldown. Please wait 298s before retrying."`); max attempts ceiling (2/2) correctly returned HTTP 400 (`"Max recovery attempts reached (2/2). Owner escalation required."`).
+- **Gate H — AI Separation (Zero Mutation Authority):** `PASS`. Verified that Gemini AI Analyst has zero mutation tools attached and is strictly read-only advisory.
+- **Gate I — Operations Console UX & Handled Automatically Feed:** `PASS`. Verified recovery rendered in Level 3 Handled Automatically feed (`Self-Healed: Stale Claim Lock Recovery`, `status: "completed"`).
+- **Gate J — Production Isolation:** `PASS`. Production revision `dtd-api-00058-ter` confirmed untouched.
+- **Gate K — Zero-Trace Cleanup & Reset Posture:** `PASS`. All synthetic test records were removed from MongoDB Atlas; Cloud Run environment variables restored to default-disabled (`OPS_SELF_HEALING_ENABLED=0`); live status confirmed `self_healing_globally_enabled: False`.
+
 

@@ -1314,6 +1314,21 @@ function OverviewView({
                                                     <AlertTriangle className="w-3 h-3 text-[#E57373]" /> Recurred
                                                 </span>
                                             )}
+                                            {caseItem.auto_recovery_status === "verified" && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#14261F] text-[#4ADE80] border border-[#234E42]" data-testid="ops-case-recovery-verified-badge">
+                                                    <CheckCircle className="w-3 h-3 text-[#4ADE80]" /> Auto-Recovered
+                                                </span>
+                                            )}
+                                            {caseItem.auto_recovery_status === "executing" && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#2A2314] text-[#F4E2B5] border border-[#4D3A1B]" data-testid="ops-case-recovery-executing-badge">
+                                                    <RefreshCw className="w-3 h-3 animate-spin text-[#D9B36C]" /> Recovering...
+                                                </span>
+                                            )}
+                                            {caseItem.auto_recovery_status === "exhausted" && (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]" data-testid="ops-case-recovery-exhausted-badge">
+                                                    <AlertOctagon className="w-3 h-3 text-[#E57373]" /> Recovery Exhausted
+                                                </span>
+                                            )}
                                         </div>
                                         <span className="text-xs font-mono text-[#8B9E98]">
                                             {formatDateTime(caseItem.detected_at)}
@@ -1398,6 +1413,7 @@ function OverviewView({
                                     {/* Expandable Case Details */}
                                     {isExpanded && (
                                         <div className="mt-3 pt-3 border-t border-white/5 space-y-3 text-xs font-mono text-[#8B9E98]">
+                                            <AutoRecoveryCard caseItem={caseItem} onRefresh={onRefresh} />
                                             <AiAnalysisCard caseItem={caseItem} onRefresh={onRefresh} />
                                             {asArray(caseItem.detail_rows).length > 0 && (
                                                 <div className="grid gap-1 pt-2 border-t border-white/5">
@@ -1740,6 +1756,21 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                                     <AlertTriangle className="w-3 h-3 text-[#E57373]" /> Recurred
                                 </span>
                             )}
+                            {selectedCase.auto_recovery_status === "verified" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-[#14261F] text-[#4ADE80] border border-[#234E42]" data-testid="ops-detail-recovery-verified-badge">
+                                    <CheckCircle className="w-3 h-3 text-[#4ADE80]" /> Auto-Recovered
+                                </span>
+                            )}
+                            {selectedCase.auto_recovery_status === "executing" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-[#2A2314] text-[#F4E2B5] border border-[#4D3A1B]" data-testid="ops-detail-recovery-executing-badge">
+                                    <RefreshCw className="w-3 h-3 animate-spin text-[#D9B36C]" /> Recovering...
+                                </span>
+                            )}
+                            {selectedCase.auto_recovery_status === "exhausted" && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-semibold bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]" data-testid="ops-detail-recovery-exhausted-badge">
+                                    <AlertOctagon className="w-3 h-3 text-[#E57373]" /> Recovery Exhausted
+                                </span>
+                            )}
                         </div>
                         <h2 className="font-serif text-2xl tracking-tight mt-3">{selectedCase.title}</h2>
                         <p className="text-sm text-[#C9C2B1] mt-2">{selectedCase.summary}</p>
@@ -1760,6 +1791,7 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                         ]}
                     />
                     <DetailRowsCard title="Case details" rows={selectedCase.detail_rows} />
+                    <AutoRecoveryCard caseItem={selectedCase} onRefresh={onRefresh} />
                     <AiAnalysisCard caseItem={selectedCase} onRefresh={onRefresh} />
                     <KeyValueBlock
                         title="Evidence"
@@ -2751,6 +2783,108 @@ function KeyValueBlock({ title, rows }) {
                         <div className="text-sm text-right text-[#F5F2EB]">{value}</div>
                     </div>
                 ))}
+            </div>
+        </div>
+    );
+}
+
+function AutoRecoveryCard({ caseItem, onRefresh }) {
+    const [recovering, setRecovering] = useState(false);
+
+    if (!caseItem?.case_id) return null;
+
+    const routineId = caseItem.auto_recovery_routine;
+    const status = caseItem.auto_recovery_status || "none";
+    const attempts = caseItem.auto_recovery_attempts || 0;
+
+    const handleTriggerRecovery = async () => {
+        setRecovering(true);
+        try {
+            const res = await opsApi.post(`/oversight/cases/${encodeURIComponent(caseItem.case_id)}/recover`);
+            if (res?.data?.ok) {
+                toast.success("Recovery routine executed and verified successfully.");
+                if (onRefresh) onRefresh();
+            } else {
+                toast.error(res?.data?.reason || "Recovery did not complete.");
+            }
+        } catch (err) {
+            const detail = err?.response?.data?.detail || "Recovery trigger failed.";
+            toast.error(detail);
+        } finally {
+            setRecovering(false);
+        }
+    };
+
+    const isEligibleCandidate = (
+        routineId ||
+        caseItem.case_type === "trainer_claim_case" ||
+        caseItem.case_type === "trainer_communications_case" ||
+        String(caseItem.case_id || "").includes("engine_tick") ||
+        String(caseItem.summary || "").toLowerCase().includes("lease")
+    );
+
+    if (!isEligibleCandidate && status === "none") return null;
+
+    return (
+        <div className="mt-3 p-4 rounded-2xl border border-[#1E3A2E] bg-[#0E1A16] space-y-3" data-testid={`ops-auto-recovery-${caseItem.case_id}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-[#4ADE80]" />
+                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#F5F2EB]">
+                        Autonomous Self-Healing
+                    </span>
+                    {status === "verified" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#14261F] text-[#4ADE80] border border-[#234E42]" data-testid="ops-recovery-status-verified">
+                            Verified Resolution
+                        </span>
+                    )}
+                    {status === "executing" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#2A2314] text-[#F4E2B5] border border-[#4D3A1B]" data-testid="ops-recovery-status-executing">
+                            Recovery in Progress
+                        </span>
+                    )}
+                    {status === "exhausted" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]" data-testid="ops-recovery-status-exhausted">
+                            Attempts Exhausted · Escalated
+                        </span>
+                    )}
+                    {status === "failed" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]" data-testid="ops-recovery-status-failed">
+                            Recovery Blocked / Failed
+                        </span>
+                    )}
+                </div>
+
+                {status !== "verified" && (
+                    <button
+                        type="button"
+                        disabled={recovering}
+                        onClick={handleTriggerRecovery}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg bg-[#14261F] hover:bg-[#1D3A2F] text-[#4ADE80] border border-[#234E42] transition disabled:opacity-50"
+                        data-testid="ops-recovery-trigger-button"
+                    >
+                        <RotateCcw className={`w-3 h-3 ${recovering ? "animate-spin text-[#4ADE80]" : ""}`} />
+                        <span>{recovering ? "Executing..." : "Run Safe Recovery"}</span>
+                    </button>
+                )}
+            </div>
+
+            <div className="text-xs font-mono text-[#8B9E98] leading-relaxed">
+                {status === "verified" ? (
+                    <span className="text-[#BEE0D7]">
+                        This incident was autonomously resolved and verified by routine <code className="text-[#F5F2EB]">{routineId || "deterministic_recovery"}</code>. Downstream invariants verified clean.
+                    </span>
+                ) : status === "executing" ? (
+                    <span>Recovery routine is currently running in background engine-tick with atomic distributed lease.</span>
+                ) : status === "exhausted" ? (
+                    <span className="text-[#FCA5A5]">
+                        Maximum recovery attempts ({attempts}/2) reached without verified resolution. Safeguard ceiling held; requires manual owner review.
+                    </span>
+                ) : (
+                    <span>
+                        Eligible for bounded, idempotent recovery routine under developer-sandbox safeguards. Trigger above or await scheduled engine tick.
+                    </span>
+                )}
             </div>
         </div>
     );

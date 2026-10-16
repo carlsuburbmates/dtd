@@ -73,8 +73,10 @@ from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
 try:
     from services import ops_analyst
+    from services import ops_recovery
 except ImportError:
     from backend.services import ops_analyst
+    from backend.services import ops_recovery
 
 matching_ai_adapter: Optional[Any] = None
 
@@ -2430,6 +2432,10 @@ async def _ops_case_rows(
         cases = await ops_analyst.enrich_cases_with_investigations(db, cases)
     except Exception as e:
         logger.debug("Failed to enrich cases with investigations: %s", e)
+    try:
+        cases = await ops_recovery.enrich_cases_with_recovery_status(db, cases)
+    except Exception as e:
+        logger.debug("Failed to enrich cases with recovery status: %s", e)
     cases.sort(key=_sort_case_priority)
     return cases[:150]
 
@@ -2442,6 +2448,7 @@ def _loop_interval_seconds() -> Dict[str, int]:
         "inference": autonomy.INFERENCE_INTERVAL_S,
         "health": autonomy.HEALTH_INTERVAL_S,
         "ops_ai_analyst": 600,
+        "ops_self_healing": 600,
         "source_ingestion": autonomy.SOURCE_INGEST_INTERVAL_S,
         "outreach": autonomy.OUTREACH_INTERVAL_S,
         "nurture": autonomy.NURTURE_INTERVAL_S,
@@ -3516,6 +3523,17 @@ async def run_engine_tick_job(
             return await ops_analyst.run_scheduled_investigations(db, active_cases, max_batch=2)
 
         await _execute_loop_step("ops_ai_analyst", _run_scheduled_analyst)
+
+        async def _run_scheduled_recovery_step():
+            active_cases = await _current_ops_cases()
+            return await ops_recovery.run_scheduled_recovery(
+                db,
+                active_cases,
+                audit_fn=_audit,
+                max_batch=2,
+            )
+
+        await _execute_loop_step("ops_self_healing", _run_scheduled_recovery_step)
     finally:
         total_duration_ms = round((time.time() - started_time) * 1000, 2)
         has_error = any(step.get("status") == "error" for step in results.values())
@@ -6833,6 +6851,93 @@ async def request_case_investigation(
     })
 
 
+@api.get("/oversight/recovery/status")
+async def ops_recovery_status(_: None = Depends(require_oversight)) -> Dict[str, Any]:
+    """Read-only summary of Phase 5 autonomous recovery configuration and status."""
+    return _scrub(ops_recovery.get_recovery_status_summary())
+
+
+@api.post("/oversight/recovery/evaluate")
+async def ops_recovery_evaluate(
+    payload: Dict[str, Any],
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Evaluate whether an incident is eligible for an approved recovery routine (dry-run)."""
+    case_id = payload.get("case_id")
+    if not case_id:
+        raise HTTPException(status_code=400, detail="case_id required")
+    current_cases = await _current_ops_cases()
+    stripped_id = str(case_id).strip()
+    current_case = next(
+        (
+            row
+            for row in current_cases
+            if str(row.get("case_id") or "") == case_id
+            or str(row.get("case_id") or "") == stripped_id
+            or case_id in (row.get("case_aliases") or [])
+            or stripped_id in (row.get("case_aliases") or [])
+            or case_id in (row.get("constituent_event_ids") or [])
+            or stripped_id in (row.get("constituent_event_ids") or [])
+            or f"message:{case_id}" == str(row.get("case_id") or "")
+            or str(row.get("dispatch_id") or "") == case_id
+            or str(row.get("dispatch_id") or "") == stripped_id
+        ),
+        None,
+    )
+    if not current_case:
+        raise HTTPException(status_code=404, detail="Ops case not found.")
+
+    res = await ops_recovery.evaluate_incident_recovery(db, current_case)
+    return _scrub(res)
+
+
+@api.post("/oversight/cases/{case_id:path}/recover")
+async def ops_recover_case(
+    case_id: str,
+    dry_run: bool = Query(False),
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Trigger bounded, deterministic recovery for an eligible case under strict safeguards."""
+    current_cases = await _current_ops_cases()
+    stripped_id = case_id.strip()
+    current_case = next(
+        (
+            row
+            for row in current_cases
+            if str(row.get("case_id") or "") == case_id
+            or str(row.get("case_id") or "") == stripped_id
+            or case_id in (row.get("case_aliases") or [])
+            or stripped_id in (row.get("case_aliases") or [])
+            or case_id in (row.get("constituent_event_ids") or [])
+            or stripped_id in (row.get("constituent_event_ids") or [])
+            or f"message:{case_id}" == str(row.get("case_id") or "")
+            or str(row.get("dispatch_id") or "") == case_id
+            or str(row.get("dispatch_id") or "") == stripped_id
+        ),
+        None,
+    )
+    if not current_case:
+        raise HTTPException(status_code=404, detail="Ops case not found.")
+
+    res = await ops_recovery.attempt_recovery(
+        db,
+        current_case,
+        dry_run=dry_run,
+        audit_fn=_audit,
+    )
+    if not res.get("ok"):
+        status_code = 400
+        if res.get("status") in ("concurrency_lock", "cooldown_active"):
+            status_code = 409
+        elif res.get("status") == "ineligible":
+            status_code = 422
+        elif res.get("status") == "daily_limit_exhausted":
+            status_code = 429
+        raise HTTPException(status_code=status_code, detail=res.get("reason") or res.get("error") or "Recovery attempt rejected.")
+
+    return _scrub(res)
+
+
 def _build_handled_automatically_summary(
     pipeline_guardian: Dict[str, Any],
     fraud_cases: List[Dict[str, Any]],
@@ -6841,9 +6946,23 @@ def _build_handled_automatically_summary(
     audit_recent: List[Dict[str, Any]],
     ops_cases: List[Dict[str, Any]],
     loop_statuses: Optional[Dict[str, Any]] = None,
+    recent_recoveries: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Build a truthful, read-only summary of verified automated actions for the non-technical owner."""
     items: List[Dict[str, Any]] = []
+
+    # 0. Verified Auto-Recoveries (Phase 5 Self-Healing)
+    for rec in (recent_recoveries or []):
+        r_title = rec.get("routine_title") or rec.get("routine_id", "Automatic Recovery")
+        c_id = rec.get("case_id", "")
+        items.append({
+            "id": f"handled_recovery_{rec.get('execution_id')}",
+            "category": "auto_recovery",
+            "title": f"Self-Healed: {r_title}",
+            "summary": f"System autonomously resolved and verified incident {c_id} via {r_title}.",
+            "timestamp": rec.get("verified_at") or rec.get("claimed_at") or now_iso(),
+            "status": "completed",
+        })
 
     # 1. Pipeline Guardian integrity audit
     pg_last_run = (
@@ -7283,6 +7402,17 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
         provider_cases=provider_health.cases(provider_snapshot),
     )
 
+    recent_recoveries = []
+    recovery_executions_coll = getattr(db, "ops_recovery_executions", None)
+    if recovery_executions_coll is not None:
+        try:
+            recent_recoveries = await recovery_executions_coll.find(
+                {"status": "verified"},
+                {"_id": 0},
+            ).sort("verified_at", -1).limit(5).to_list(5)
+        except Exception:
+            recent_recoveries = []
+
     return _scrub({
         "throughput": {
             "intros_24h": intros_24,
@@ -7394,6 +7524,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             audit_recent=audit_recent,
             ops_cases=ops_cases,
             loop_statuses=loop_statuses,
+            recent_recoveries=recent_recoveries,
         ),
         "ops_ai_analyst": {
             "enabled": True,
@@ -7401,6 +7532,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             "daily_budget": ops_analyst.OPS_AI_DAILY_BUDGET,
             "total_investigations": len([c for c in ops_cases if c.get("ai_analysis")]),
         },
+        "ops_self_healing": ops_recovery.get_recovery_status_summary(),
         "matching": await build_matching_oversight_read_model(db),
         "ts": now_iso(),
     })

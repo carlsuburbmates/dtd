@@ -1061,5 +1061,112 @@ describe("Ops auth transition", () => {
             view.cleanup();
         });
     });
+
+    describe("Phase 5 — Autonomous Self-Healing & Recovery", () => {
+        it("renders verified auto-recovery badge and Level 3 feed item", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-recovery-verified-case",
+                            case_type: "trainer_claim_case",
+                            workflow: "trainer claim",
+                            title: "Expired Claim Lock",
+                            summary: "Transient OTP lock expired",
+                            severity: "medium",
+                            state: "resolved",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            auto_recovery_status: "verified",
+                            auto_recovery_routine: "routine:stale_claim_lock_recovery",
+                        },
+                    ],
+                    handled_automatically: [
+                        {
+                            id: "handled_recovery_rec_123",
+                            category: "auto_recovery",
+                            title: "Self-Healed: Stale Claim Lock Recovery",
+                            summary: "System autonomously resolved and verified incident test-recovery-verified-case via Stale Claim Lock Recovery.",
+                            timestamp: "2026-10-16T10:05:00Z",
+                            status: "completed",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Check Level 3 Handled Automatically item
+            const handledSection = view.container.querySelector("[data-testid='ops-level3-handled-automatically']");
+            expect(handledSection.textContent).toContain("Self-Healed: Stale Claim Lock Recovery");
+            expect(handledSection.textContent).toContain("System autonomously resolved and verified incident test-recovery-verified-case");
+
+            view.cleanup();
+        });
+
+        it("allows operator to trigger recovery and calls correct API endpoint", async () => {
+            const postSpy = vi.spyOn(opsApi, "post").mockResolvedValueOnce({
+                data: { ok: true, status: "verified_recovery", routine_id: "routine:background_job_lease_recovery" },
+            });
+
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-lease-stall",
+                            case_type: "autonomy_serverless_unowned",
+                            workflow: "operations",
+                            title: "Scheduler Lease Stall",
+                            summary: "Engine tick lease expired",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            auto_recovery_status: "none",
+                            auto_recovery_routine: null,
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-lease-stall']");
+            expect(caseCard).not.toBeNull();
+
+            // Expand details
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const recoveryCard = caseCard.querySelector("[data-testid='ops-auto-recovery-test-lease-stall']");
+            expect(recoveryCard).not.toBeNull();
+            expect(recoveryCard.textContent).toContain("Autonomous Self-Healing");
+
+            const triggerBtn = recoveryCard.querySelector("[data-testid='ops-recovery-trigger-button']");
+            expect(triggerBtn).not.toBeNull();
+            expect(triggerBtn.textContent).toContain("Run Safe Recovery");
+
+            await act(async () => {
+                triggerBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(postSpy).toHaveBeenCalledWith("/oversight/cases/test-lease-stall/recover");
+
+            postSpy.mockRestore();
+            view.cleanup();
+        });
+    });
 });
 

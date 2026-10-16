@@ -55,6 +55,22 @@
     - Gate H (/api/oversight Read-Only Enrichment): `PASS` (oversight endpoint enriches cases with cached AI analysis at $0 extra cost).
     - Gate I (Live UI Acceptance & Screenshots): `PASS` (`AiAnalysisCard` DOM verified rendering in `/ops` across Mobile 390x844, Tablet 768x1024, Desktop 1440x900, and Expanded AI Analysis Detail 1440x1200).
     - Zero-Trace Teardown: `PASS` (100% of test fixtures and synthetic investigations cleaned up).
+- Operations Console Phase 5 implementation and live developer-sandbox acceptance are complete: Introduces strictly controlled, bounded, deterministic automatic recovery routines for safe operational failures under strict multi-layer safeguards (default-disabled posture `OPS_SELF_HEALING_ENABLED=0`, production hard-block, separate per-routine feature flags, atomic distributed claiming in `ops_recovery_executions` preventing duplicate concurrent execution, downstream verified recovery, daily budget ceilings, cooldowns, zero business data mutations, and strict isolation from the read-only Gemini AI Analyst).
+- Phase 5 Verification:
+  - Frontend Vitest: 71/71 tests passed across 10 test files (including 24/24 in `Ops.test.jsx`). Vite production build clean in 637ms.
+  - Backend Pytest: 52/52 ops tests passed across Phase 1, Phase 2, Phase 4, and Phase 5 (`test_ops_phase5_recovery.py`); 592/592 tests passed in the isolated integration suite (`run_isolated_integration_suite.py`).
+  - Live Sandbox Acceptance: 11/11 acceptance gates passed (`scripts/verify_sandbox_ops_phase5.py` and `scripts/verify_sandbox_ops_phase5_live_ui.mjs`) on `dtd-api-dev-00047-kfd` and `dtd-web-dev-00018-98h`:
+    - Gate A (Safe Default-Disabled Posture): `PASS` (`self_healing_globally_enabled: False` by default; recovery evaluation while disabled returns `eligible: False`).
+    - Gate B (Routine Eligibility Boundaries): `PASS` (permanent errors like HTTP 401 rejected with `eligible: False`; recovery attempt returned HTTP 422).
+    - Gate C (Dry-Run & Idempotency): `PASS` (dry run evaluated eligible with zero database mutations).
+    - Gate D (Distributed Concurrency Control): `PASS` (active worker lease in `ops_recovery_executions` blocked concurrent recovery with HTTP 409).
+    - Gate E & F (Real Sandbox Recovery Execution & Verified Resolution): `PASS` (recovery returned `status: "verified_recovery"`; claim marked expired; trainer lock released with zero ownership mutations; `ops_recovery_executions` verified; `ops_case_states` resolved).
+    - Gate G (Failure Handling, Cooldown & Max Attempts): `PASS` (cooldown active returned HTTP 409; max attempts ceiling 2/2 returned HTTP 400).
+    - Gate H (AI Separation): `PASS` (Gemini Analyst confirmed strictly read-only with zero mutation tools attached).
+    - Gate I (Operations Console UX & Handled Automatically Feed): `PASS` (verified auto-recovery rendered in Level 3 Handled Automatically feed: `Self-Healed: Stale Claim Lock Recovery`, `status: "completed"`).
+    - Gate J (Production Isolation): `PASS` (production backend confirmed locked to `dtd-api-00058-ter`).
+    - Gate K (Zero-Trace Cleanup & Reset Posture): `PASS` (100% of test fixtures removed; Cloud Run environment restored to default-disabled; live status confirmed `self_healing_globally_enabled: False`).
+    - Visual Verification Screenshots: Desktop 1440x900 (`ops_live_phase5_desktop_1440.png`), Tablet 768x1024 (`ops_live_phase5_tablet_768.png`), Mobile 390x844 (`ops_live_phase5_mobile_390.png`), and Handled Automatically View (`ops_live_phase5_handled_automatically.png`).
 - Production backend remains strictly locked to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`. Zero production mutations.
 - PR #11 remains open; branch checks do not mean it was merged or that production changed.
 - DF-041 is **PARTIAL** in the developer sandbox. The normal trainer claim UI success path now has a disposable fixture, but the public `/submit` success path has not been exercised end to end.
