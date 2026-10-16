@@ -71,6 +71,10 @@ from services import matching_contract_v2
 from services import urgent_providers as urgent_providers_service
 from services.abr_client import AbrClient
 from services.seed import MELBOURNE_TRAINERS
+try:
+    from services import ops_analyst
+except ImportError:
+    from backend.services import ops_analyst
 
 matching_ai_adapter: Optional[Any] = None
 
@@ -2422,6 +2426,10 @@ async def _ops_case_rows(
         case_aliases=case_aliases,
     )
     cases = [_merge_ops_case_state(case, overrides.get(str(case.get("case_id") or ""))) for case in cases]
+    try:
+        cases = await ops_analyst.enrich_cases_with_investigations(db, cases)
+    except Exception as e:
+        logger.debug("Failed to enrich cases with investigations: %s", e)
     cases.sort(key=_sort_case_priority)
     return cases[:150]
 
@@ -2433,6 +2441,7 @@ def _loop_interval_seconds() -> Dict[str, int]:
         "discovery": autonomy.DISCOVERY_INTERVAL_S,
         "inference": autonomy.INFERENCE_INTERVAL_S,
         "health": autonomy.HEALTH_INTERVAL_S,
+        "ops_ai_analyst": 600,
         "source_ingestion": autonomy.SOURCE_INGEST_INTERVAL_S,
         "outreach": autonomy.OUTREACH_INTERVAL_S,
         "nurture": autonomy.NURTURE_INTERVAL_S,
@@ -3501,6 +3510,12 @@ async def run_engine_tick_job(
         await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
         await _execute_loop_step("nurture", lambda: run_growth_nurture(db))
         await _execute_loop_step("reactivation_route", lambda: run_reactivation_routing(db))
+
+        async def _run_scheduled_analyst():
+            active_cases = await _current_ops_cases()
+            return await ops_analyst.run_scheduled_investigations(db, active_cases, max_batch=2)
+
+        await _execute_loop_step("ops_ai_analyst", _run_scheduled_analyst)
     finally:
         total_duration_ms = round((time.time() - started_time) * 1000, 2)
         has_error = any(step.get("status") == "error" for step in results.values())
@@ -6766,6 +6781,58 @@ async def update_oversight_case_review(
     return _scrub({"ok": True, "case": merged_case})
 
 
+@api.post("/oversight/cases/{case_id:path}/investigate")
+async def request_case_investigation(
+    case_id: str,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Owner-requested AI investigation for a specific operational case.
+
+    ADVISORY ONLY: Strict read-only boundary; does not mutate operational or review state.
+    Enforces daily budget ceiling and manual request cooldown (60s).
+    """
+    current_cases = await _current_ops_cases()
+    current_case = next((row for row in current_cases if str(row.get("case_id") or "") == case_id), None)
+    if not current_case:
+        stripped_id = case_id[len("message:"):] if case_id.startswith("message:") else case_id
+        current_case = next(
+            (
+                row
+                for row in current_cases
+                if case_id in (row.get("case_aliases") or [])
+                or stripped_id in (row.get("case_aliases") or [])
+                or case_id in (row.get("constituent_event_ids") or [])
+                or stripped_id in (row.get("constituent_event_ids") or [])
+                or f"message:{case_id}" == str(row.get("case_id") or "")
+                or str(row.get("dispatch_id") or "") == case_id
+                or str(row.get("dispatch_id") or "") == stripped_id
+            ),
+            None,
+        )
+    if not current_case:
+        raise HTTPException(status_code=404, detail="Ops case not found.")
+
+    res = await ops_analyst.analyze_incident(
+        db,
+        current_case,
+        trigger_reason="manual_request",
+        force_refresh=True,
+    )
+    if not res.get("ok"):
+        status_code = 429 if res.get("status") == "rate_limited" else 400
+        raise HTTPException(status_code=status_code, detail=res.get("error") or "Investigation failed.")
+
+    return _scrub({
+        "ok": True,
+        "investigation_id": res.get("investigation_id"),
+        "case_id": case_id,
+        "status": res.get("status"),
+        "ai_analysis": res.get("analysis"),
+        "model_used": res.get("model_used"),
+        "created_at": res.get("created_at"),
+    })
+
+
 def _build_handled_automatically_summary(
     pipeline_guardian: Dict[str, Any],
     fraud_cases: List[Dict[str, Any]],
@@ -7328,6 +7395,12 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
             ops_cases=ops_cases,
             loop_statuses=loop_statuses,
         ),
+        "ops_ai_analyst": {
+            "enabled": True,
+            "model": os.environ.get("GEMINI_MODEL", "gemini-3.5-flash"),
+            "daily_budget": ops_analyst.OPS_AI_DAILY_BUDGET,
+            "total_investigations": len([c for c in ops_cases if c.get("ai_analysis")]),
+        },
         "matching": await build_matching_oversight_read_model(db),
         "ts": now_iso(),
     })

@@ -16,9 +16,9 @@ The agreed multi-phase roadmap is:
   Transforms fragmented operational events into correlated incidents. Groups retry dispatches, isolates root-cause provider outages, and distinguishes machine `operational_state` (`detected`, `recovering`, `resolved`, `reopened`) from human `review.state`. Implements verified automated recovery (terminal successes clear transient failures, alias resolution for event IDs), robust occurrence identity with genuine recurrence detection, and serverless loop orchestration via Cloud Scheduler `dtd-engine-tick-cron` solving DF-029.
 - **Phase 3 — Minimal Owner-Facing Operations Console (Implemented & Verified):**
   Transforms `/ops` into a decision-first, mobile-responsive Operations Console for a single non-technical owner. Features a 3-Level hierarchy: Level 1 System Status (plain English headline + 3 supporting metrics: Supply, Commercial Gate, Background loops), Level 2 Needs Your Attention (filtering only genuine actionable cases with 3-question breakdowns: What happened?, Why does it matter?, What can I do?, and 1-click triage actions with high-severity dismissal safeguards), Level 3 Handled Automatically (compact telemetry feed of background engine ticks, Guardian audits, fraud suppressions, and delivery recoveries), and a collapsible Secondary Advanced Diagnostics disclosure preserving 10 deep technical views and all existing test IDs. Mobile touch ergonomics and responsive layouts verified at 390px, 768px, and 1440px.
-- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Planned next):**
-  Integrates a bounded, read-only AI diagnostic advisor triggered solely by operational exceptions. Synthesizes error logs, telemetry diffs, and historical remediations to present concise root-cause hypotheses and recommended operator actions in `/ops`. Performs zero autonomous database mutations.
-- **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Planned):**
+- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Implemented & Verified in Developer Sandbox):**
+  Integrates an intelligent, read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`). Investigates genuine operational exceptions on-demand or during scheduled engine-ticks with zero polling. Enforces strict evidence sanitization and PII redaction, structured output validation, per-occurrence deduplication, daily budget ceilings ($0 risk), manual cooldowns, and a strict read-only boundary with zero mutation authority over operational data or directory collections. Live verified across all 9 acceptance gates in `dogtrainersdirectory-dev`.
+- **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Planned next):**
   Introduces strictly gated, idempotent automated recovery routines for well-understood transient faults (e.g., automated cache flushing, bounded task retries, stale claim expirations), requiring prior operator review and explicit feature-flag gating.
 
 ## Required operating picture
@@ -342,16 +342,84 @@ The Phase 3 Operations Console implementation was deployed to the isolated devel
   - Diagnostics Expanded (1440x1200): `ops_live_phase3_diagnostics_expanded.png`
 - **Gate G — Production & Financial Isolation:** `PASS`. Sandbox runtime strictly isolated, commercial checkout gated off, production untouched.
 
-## Phase 4 Dependencies and Implementation Readiness
+### Phase 4 — Read-Only AI Operations Analyst (IMPLEMENTED & VERIFIED IN DEVELOPER SANDBOX)
 
-Phase 1, Phase 2, and Phase 3 are complete and verified. Phase 4 implementation (Read-Only, Event-Triggered AI Operations Analyst) remains blocked pending explicit owner authorization. The key technical objectives for Phase 4 are:
+The Phase 4 AI Operations Analyst introduces an intelligent, read-only diagnostic assistant inside `/ops` that helps the non-technical owner understand and resolve operational exceptions.
 
-1. **Event-Triggered Invocation:**
-   AI Analyst triggers only when an unhandled operational exception or degradation is detected; zero polling, zero continuous background consumption.
-2. **Read-Only Invariant:**
-   Analyst operates under strictly read-only tools and cannot write to or mutate database collections.
-3. **Structured Hypotheses & Remediation Recommendations:**
-   Synthesizes telemetry, recent diffs, and error logs into a concise hypothesis and recommended operator actions presented within `/ops`.
-4. **Owner Review Gate:**
-   Every proposed action requires manual owner review and confirmation before execution.
+#### 1. Architecture & Core Boundaries
+- **Advisory Only (Strict Read-Only Boundary):** The AI Operations Analyst has ZERO mutation authority. It cannot update case operational states, dismiss incidents, edit reviews, modify trainers or submissions, adjust billing states, rotate credentials, or trigger scheduler jobs. Its persisted artifacts reside solely in `ops_ai_investigations`.
+- **Zero Polling & Event-Triggered Execution:**
+  - Automated investigations trigger solely for eligible active incidents (actionable `high`-severity cases or persistent `medium`-severity symptoms) during scheduled serverless background execution (`/api/internal/jobs/engine-tick`).
+  - On-demand investigations trigger solely upon explicit operator request via `POST /api/oversight/cases/{case_id}/investigate`.
+  - Regular page loads or manual refreshes of `GET /api/oversight` perform ZERO external AI calls ($0 inference cost); they read pre-computed cached investigations from `ops_ai_investigations`.
+- **Strict Evidence Minimization & PII Sanitization (`sanitize_text`):**
+  - All raw inputs (error diagnostics, summaries, detail rows) undergo deterministic regex-based redaction before being passed to inference or persisted.
+  - Redacts: Bearer tokens (`[REDACTED_TOKEN]`), Resend API keys (`[REDACTED_RESEND_KEY]`), Stripe secrets (`[REDACTED_STRIPE_KEY]`), generic API keys/secrets (`[REDACTED_SECRET]`), Mongo connection URIs (`[REDACTED_MONGO_URL]`), email addresses (`j***@example.com`), and Australian phone numbers (`[REDACTED_PHONE]`).
+- **Cost-Containment & Abuse Safeguards:**
+  - **Per-Occurrence Deduplication:** Investigations are cached against an evidence signature and `occurrence_fingerprint`. Repeat inquiries for identical occurrences return cached results without re-inference.
+  - **Daily Budget Ceiling:** `OPS_AI_DAILY_BUDGET=50` (default 50 completed calls per calendar day). When exhausted, investigations fail closed into a graceful `budget_exhausted` state without degrading core operations.
+  - **Manual Request Cooldown:** `OPS_AI_MANUAL_COOLDOWN_SECONDS=60` enforces a 60-second debounce per case, returning HTTP 429 to prevent rapid-click budget exhaustion.
+  - **Token & Batch Bounding:** Output tokens bounded (`max_output_tokens=1024`), batch size capped (`max_batch=3` per loop iteration).
+- **Graceful Failure Isolation & Deterministic Fallback:**
+  - Network timeouts (15s ceiling), quota exhaustion, or Vertex AI provider errors degrade gracefully to `deterministic_analyst_fallback` based on known system architecture, ensuring directory operations are never interrupted.
+
+#### 2. Structured JSON Output Schema
+Gemini inference is constrained to a strict JSON response schema:
+```json
+{
+  "summary": "1-2 sentence plain-language summary of what failed",
+  "root_cause_classification": "confirmed | likely | possible | unknown",
+  "root_cause_hypothesis": "Technical hypothesis identifying likely cause",
+  "supporting_evidence": ["Bullet points of verified evidence"],
+  "evidence_gaps": ["Unverified aspects or missing data"],
+  "confidence_score": 0.95,
+  "operational_impact": "Plain-English description of business impact",
+  "recommended_action": "Smallest safe action the owner should take",
+  "requires_owner_intervention": true,
+  "safety_and_governance_notes": "Advisory reminder of read-only scope"
+}
+```
+
+#### 3. API & Console Integration
+- `POST /api/oversight/cases/{case_id:path}/investigate`: Authenticated endpoint (`require_oversight`) for owner-requested investigation.
+- `GET /api/oversight`: Includes `ops_ai_analyst` status object in root payload (`enabled`, `model`, `daily_budget`, `total_investigations`), and attaches `ai_investigation_status`, `ai_investigation_id`, and `ai_analysis` to case items.
+- `/ops` Console UI (`AiAnalysisCard`):
+  - Displays classification badge (`Confirmed Cause`, `Likely Cause`, `Unknown Cause`).
+  - Summarizes hypothesis and operational impact in plain language.
+  - Lists supporting evidence bullets.
+  - Highlights recommended operator next steps.
+  - Provides a 1-click "Request Updated Analysis" button with cooldown and loading state.
+
+#### 4. Developer Sandbox Live Deployment & Acceptance Verification (VERIFIED COMPLETE)
+
+Deployed to developer sandbox `dogtrainersdirectory-dev` and verified live end-to-end via automated acceptance suite (`scripts/verify_sandbox_ops_phase4.py` and `scripts/verify_sandbox_ops_phase4_live_ui.mjs`):
+- **Sandbox Backend Service:** `dtd-api-dev` serving Cloud Run revision `dtd-api-dev-00038-s6w` at 100% traffic (`https://dtd-api-dev-625222421634.australia-southeast1.run.app`).
+- **Sandbox Frontend Service:** `dtd-web-dev` serving Cloud Run revision `dtd-web-dev-00016-b2d` at 100% traffic (`https://dtd-web-dev-625222421634.australia-southeast1.run.app`).
+- **Production Isolation:** Production backend `dtd-api` remains strictly locked to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`. Zero production mutations, zero live charges, zero external communications.
+
+**Acceptance Gate Matrix (Live Sandbox):**
+- **Gate A — Real Incident Trigger:** `PASS`. Synthetic high-severity failure fixture (`test-p4-...`) successfully entered the pipeline and was detected in `/api/oversight`.
+- **Gate B & D — Live Gemini Inference with Structured Schema:** `PASS`. Live Vertex AI inference (`gemini-3.5-flash`) returned valid structured JSON with `root_cause_classification: "confirmed"`, accurate hypothesis, supporting evidence list, and recommended action.
+- **Gate C — Deduplication & Caching:** `PASS`. Verified that exactly 1 investigation document was persisted in MongoDB; repeat requests returned cached results without redundant inference ($0 extra cost).
+- **Gate E — Evidence Minimization & Sanitization:** `PASS`. Verified that raw API keys, bearer tokens, and client email addresses were redacted (`[REDACTED_RESEND_KEY]`) before entering inference or storage.
+- **Gate F — Strict Read-Only Invariant:** `PASS`. Zero mutations occurred in `ops_case_states`, `trainers`, `submissions`, or core directory collections.
+- **Gate G — Manual Request Cooldown:** `PASS`. Rapid repeat requests within 60s cooldown returned HTTP 429 (`"Analysis recently requested. Please wait Xs before refreshing."`).
+- **Gate H — /api/oversight Read-Only Enrichment:** `PASS`. `GET /api/oversight` automatically enriched eligible cases with cached AI analysis documents.
+- **Gate I — Live UI Acceptance & Screenshots:** `PASS`. Headless Chrome CDP live inspection verified `AiAnalysisCard` DOM rendering, Confirmed Cause badge, hypothesis, recommendation, and action button across viewports:
+  - Mobile (390x844): `ops_live_phase4_mobile_390.png`
+  - Tablet (768x1024): `ops_live_phase4_tablet_768.png`
+  - Desktop (1440x900): `ops_live_phase4_desktop_1440.png`
+  - Expanded AI Analysis View (1440x1200): `ops_live_phase4_ai_analysis_expanded.png`
+- **Zero-Trace Cleanup:** `PASS`. All disposable test fixtures and investigations were deleted completely from `dtd_sandbox`.
+
+## Phase 5 Dependencies and Implementation Readiness (Planned next)
+
+Phase 1, Phase 2, Phase 3, and Phase 4 are complete and verified in the developer sandbox. Phase 5 implementation (Controlled Automation & Self-Healing Recovery) remains blocked pending explicit owner authorization. The key technical objectives for Phase 5 are:
+
+1. **Strictly Gated Self-Healing:**
+   Gated, idempotent automated recovery routines for well-understood transient faults (e.g. bounded email delivery retries, stale claim lock expirations, cache flushes).
+2. **Explicit Operator Feature Flags:**
+   Each autonomous healing routine must be separately enabled via operator configuration, defaulting to off.
+3. **Audit Trail Completeness:**
+   Every automated recovery action writes an immutable audit record to `audit_log` with actor `system:auto_recovery`.
 

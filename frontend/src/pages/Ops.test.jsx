@@ -890,5 +890,176 @@ describe("Ops auth transition", () => {
 
             view.cleanup();
         });
+
+        it("renders the AI Operations Analyst card inside expanded case details", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-case-1",
+                            case_type: "trainer_communications_case",
+                            workflow: "communications",
+                            title: "Message Delivery Failed",
+                            summary: "HTTP 401 Unauthorized from Resend",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "completed",
+                            ai_investigation_id: "inv-12345",
+                            ai_model_used: "gemini-3.5-flash",
+                            ai_analysis: {
+                                summary: "Transactional message delivery failed due to provider authentication error.",
+                                root_cause_classification: "confirmed",
+                                root_cause_hypothesis: "Resend returned HTTP 401 Unauthorized, indicating an invalid API key.",
+                                supporting_evidence: [
+                                    "HTTP status 401 recorded for message.",
+                                    "Secret Manager key version requires validation.",
+                                ],
+                                recommended_action: "Verify and rotate Secret Manager secret dtd-resend-api-key.",
+                                requires_owner_intervention: true,
+                                confidence_score: 0.95,
+                            },
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-case-1']");
+            expect(caseCard).not.toBeNull();
+
+            // Click Details toggle button
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            expect(detailsBtn).not.toBeNull();
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            // Verify AI analysis section rendered
+            const aiCard = caseCard.querySelector("[data-testid='ops-ai-analysis-test-ai-case-1']");
+            expect(aiCard).not.toBeNull();
+            expect(aiCard.textContent).toContain("AI Operations Analyst");
+            expect(aiCard.textContent).toContain("Confirmed Cause");
+            expect(aiCard.textContent).toContain("Transactional message delivery failed due to provider authentication error.");
+            expect(aiCard.textContent).toContain("Resend returned HTTP 401 Unauthorized, indicating an invalid API key.");
+            expect(aiCard.textContent).toContain("Verify and rotate Secret Manager secret dtd-resend-api-key.");
+            expect(aiCard.textContent).toContain("gemini-3.5-flash");
+
+            view.cleanup();
+        });
+
+        it("dispatches investigation request when clicking request button", async () => {
+            const postSpy = jest.spyOn(opsApi, "post").mockResolvedValueOnce({
+                data: {
+                    ok: true,
+                    investigation_id: "inv-999",
+                    status: "completed",
+                    ai_analysis: {
+                        summary: "Fresh analysis result",
+                        root_cause_classification: "likely",
+                        root_cause_hypothesis: "Plausible failure in provider pipeline.",
+                        supporting_evidence: ["Recent timeout observed."],
+                        recommended_action: "Wait for next verified recovery.",
+                    },
+                },
+            });
+
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-case-req",
+                            case_type: "trainer_submission_case",
+                            workflow: "trainer submission",
+                            title: "Held Submission",
+                            summary: "Submission held for ABN verification",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "pending",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-case-req']");
+            expect(caseCard).not.toBeNull();
+
+            // Click Details toggle button
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const requestBtn = caseCard.querySelector("[data-testid='ops-ai-request-button']");
+            expect(requestBtn).not.toBeNull();
+            expect(requestBtn.textContent).toContain("Run AI Investigation");
+
+            await act(async () => {
+                requestBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(postSpy).toHaveBeenCalledWith("/oversight/cases/test-ai-case-req/investigate");
+
+            postSpy.mockRestore();
+            view.cleanup();
+        });
+
+        it("displays graceful state when daily budget is exhausted", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-budget",
+                            case_type: "trainer_submission_case",
+                            workflow: "trainer submission",
+                            title: "Held Submission",
+                            summary: "Submission held for ABN verification",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "budget_exhausted",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-budget']");
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const aiCard = caseCard.querySelector("[data-testid='ops-ai-analysis-test-ai-budget']");
+            expect(aiCard.textContent).toContain("Daily Budget Enforced ($0 Risk)");
+            expect(aiCard.textContent).toContain("Daily AI investigation budget reached. Deterministic operational telemetry remains fully functional.");
+
+            view.cleanup();
+        });
     });
 });
+

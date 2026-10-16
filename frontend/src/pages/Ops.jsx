@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import {
     setAdminPass,
     getAdminPass,
@@ -1397,9 +1397,10 @@ function OverviewView({
 
                                     {/* Expandable Case Details */}
                                     {isExpanded && (
-                                        <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs font-mono text-[#8B9E98]">
+                                        <div className="mt-3 pt-3 border-t border-white/5 space-y-3 text-xs font-mono text-[#8B9E98]">
+                                            <AiAnalysisCard caseItem={caseItem} onRefresh={onRefresh} />
                                             {asArray(caseItem.detail_rows).length > 0 && (
-                                                <div className="grid gap-1">
+                                                <div className="grid gap-1 pt-2 border-t border-white/5">
                                                     {caseItem.detail_rows.map((row) => (
                                                         <div key={row.label} className="flex justify-between">
                                                             <span>{row.label}:</span>
@@ -1759,6 +1760,7 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                         ]}
                     />
                     <DetailRowsCard title="Case details" rows={selectedCase.detail_rows} />
+                    <AiAnalysisCard caseItem={selectedCase} onRefresh={onRefresh} />
                     <KeyValueBlock
                         title="Evidence"
                         rows={[
@@ -2750,6 +2752,147 @@ function KeyValueBlock({ title, rows }) {
                     </div>
                 ))}
             </div>
+        </div>
+    );
+}
+
+function AiAnalysisCard({ caseItem, onRefresh }) {
+    const [requesting, setRequesting] = useState(false);
+    const [cooldownRemaining, setCooldownRemaining] = useState(0);
+
+    const handleRequestInvestigation = async () => {
+        if (!caseItem?.case_id) return;
+        setRequesting(true);
+        try {
+            const res = await opsApi.post(`/oversight/cases/${encodeURIComponent(caseItem.case_id)}/investigate`);
+            if (res?.data?.ok) {
+                toast.success("AI Operations Analyst investigation complete.");
+                if (onRefresh) onRefresh();
+            }
+        } catch (err) {
+            const detail = err?.response?.data?.detail || "AI investigation request failed.";
+            toast.error(detail);
+            if (err?.response?.status === 429) {
+                const match = detail.match(/(\d+)\s*s/);
+                if (match) setCooldownRemaining(parseInt(match[1], 10));
+            }
+        } finally {
+            setRequesting(false);
+        }
+    };
+
+    const status = caseItem?.ai_investigation_status || (caseItem?.ai_analysis ? "completed" : "not_required");
+    const analysis = caseItem?.ai_analysis;
+    const isCompleted = status === "completed" && analysis;
+
+    return (
+        <div className="mt-3 p-4 rounded-2xl border border-[#233530] bg-[#0E1714] space-y-3" data-testid={`ops-ai-analysis-${caseItem?.case_id}`} data-role="ops-ai-analysis-card">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#D9B36C]" />
+                    <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#F5F2EB]">
+                        AI Operations Analyst
+                    </span>
+                    {isCompleted && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${
+                            analysis.root_cause_classification === "confirmed"
+                                ? "bg-[#14261F] text-[#4ADE80] border border-[#234E42]"
+                                : analysis.root_cause_classification === "likely"
+                                ? "bg-[#2A2314] text-[#F4E2B5] border border-[#4D3A1B]"
+                                : "bg-[#1A201E] text-[#C9C2B1] border border-[#2E3B37]"
+                        }`} data-testid="ops-ai-root-cause-badge">
+                            {analysis.root_cause_classification === "confirmed" ? "Confirmed Cause" :
+                             analysis.root_cause_classification === "likely" ? "Likely Cause" : "Unknown Cause"}
+                        </span>
+                    )}
+                    {status === "pending" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#14201D] text-[#8B9E98] border border-[#223530]">
+                            Pending Analysis
+                        </span>
+                    )}
+                    {status === "budget_exhausted" && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]">
+                            Daily Budget Enforced ($0 Risk)
+                        </span>
+                    )}
+                    {(status === "unavailable" || status === "failed") && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-[#2E1817] text-[#FFCDD2] border border-[#7E4541]">
+                            Temporarily Unavailable
+                        </span>
+                    )}
+                </div>
+
+                <button
+                    type="button"
+                    disabled={requesting || cooldownRemaining > 0}
+                    onClick={handleRequestInvestigation}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-lg bg-[#14201D] hover:bg-[#1A2C27] text-[#C9C2B1] hover:text-[#F5F2EB] border border-[#223530] transition disabled:opacity-50"
+                    data-testid="ops-ai-request-button"
+                >
+                    <RefreshCw className={`w-3 h-3 ${requesting ? "animate-spin text-[#D9B36C]" : ""}`} />
+                    <span>
+                        {requesting ? "Investigating..." :
+                         cooldownRemaining > 0 ? `Wait ${cooldownRemaining}s` :
+                         isCompleted ? "Request Updated Analysis" : "Run AI Investigation"}
+                    </span>
+                </button>
+            </div>
+
+            {isCompleted ? (
+                <div className="space-y-2.5 text-xs font-mono">
+                    <div>
+                        <div className="text-sm font-sans font-medium text-[#F5F2EB]">
+                            {analysis.summary}
+                        </div>
+                        <div className="text-xs text-[#C9C2B1] font-mono mt-1 leading-relaxed">
+                            {analysis.root_cause_hypothesis}
+                        </div>
+                    </div>
+
+                    {asArray(analysis.supporting_evidence).length > 0 && (
+                        <div className="space-y-1 pt-1">
+                            <span className="text-[10px] uppercase tracking-wider text-[#8B9E98] block">Supporting Evidence:</span>
+                            <ul className="list-disc list-inside space-y-0.5 text-[#C9C2B1]">
+                                {analysis.supporting_evidence.map((ev, idx) => (
+                                    <li key={idx} className="leading-relaxed">{ev}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {analysis.recommended_action && (
+                        <div className="p-3 rounded-xl bg-[#2A2314]/70 border border-[#D9B36C]/30 text-xs">
+                            <span className="text-[10px] uppercase tracking-wider font-semibold text-[#D9B36C] block">
+                                Recommended Next Step:
+                            </span>
+                            <span className="text-[#F4E2B5] mt-0.5 block font-mono">
+                                {analysis.recommended_action}
+                            </span>
+                        </div>
+                    )}
+
+                    <div className="pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#6C7E77]">
+                        <span>Last updated: {formatDateTime(caseItem.ai_investigation_updated_at || caseItem.detected_at)}</span>
+                        <span>Model: {caseItem.ai_model_used || "gemini-3.5-flash"}</span>
+                    </div>
+                </div>
+            ) : status === "pending" ? (
+                <div className="text-xs font-mono text-[#8B9E98]">
+                    Investigation scheduled for next background engine tick, or click above to run immediately.
+                </div>
+            ) : status === "budget_exhausted" ? (
+                <div className="text-xs font-mono text-[#8B9E98]">
+                    Daily AI investigation budget reached. Deterministic operational telemetry remains fully functional.
+                </div>
+            ) : status === "unavailable" ? (
+                <div className="text-xs font-mono text-[#8B9E98]">
+                    AI analysis service temporarily unavailable. Operational cases remain completely visible.
+                </div>
+            ) : (
+                <div className="text-xs font-mono text-[#8B9E98]">
+                    Routine incident; automated AI investigation not required. Click above to request on-demand analysis.
+                </div>
+            )}
         </div>
     );
 }
