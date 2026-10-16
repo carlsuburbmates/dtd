@@ -286,7 +286,7 @@ Phase 3 transforms the `/ops` application from a dense technical debugging surfa
      - *What can I do?* Recommended operator intervention.
    - **One-Click Rapid Triage Actions:**
      - `[Acknowledge]`: transitions state to `investigating`, persisting note `"Acknowledged by owner in daily ops triage; monitoring."`
-     - `[Resolve]`: transitions state to `resolved`, persisting note `"Verified statutory facts and resolved in daily ops review."`
+     - `[Resolve]`: transitions state to `resolved`, persisting truthful note `"Resolved by owner in daily console review."` or `"Resolved by owner in daily ops review."` (eliminating unperformed statutory verification claims).
      - `[Dismiss]`: transitions state to `dismissed`. Enforces explanatory note ($\ge 5$ characters) for high-severity incidents (`HTTP 400` safeguard).
      - `[Details]`: collapsible drawer revealing incident metadata (occurrences, recurrence count, constituent event IDs, affected entity).
      - `[Work Queue ->]`: direct deep-link into the full Work Queue view.
@@ -315,12 +315,32 @@ Phase 3 transforms the `/ops` application from a dense technical debugging surfa
 
 - **Frontend Vitest Suite:** 66/66 tests passed across 10 test files (including 19/19 in `Ops.test.jsx` verifying 3-Level hierarchy, status derivation, triage handlers, dismissal safeguards, and diagnostics disclosure).
 - **Frontend Production Build:** Vite 8 production build completed cleanly in <1s (`build/index.html` 1.45 kB, `build/assets/index-DxZkQIHU.js` 821 kB).
-- **Backend Pytest Suite:** 494/494 unit and ops tests passed across `test_ops_phase1_noise_elimination.py`, `test_ops_phase2_incident_lifecycle.py`, and all domain unit suites.
+- **Backend Pytest Suite:** 497/497 unit and ops tests passed across `test_ops_phase1_noise_elimination.py`, `test_ops_phase2_incident_lifecycle.py`, and all domain unit suites.
 - **Visual Responsiveness Verification:** Automated headless Chrome CDP capture (`scripts/verify_ops_phase3_visuals.mjs`) verified:
   - `ops_phase3_mobile_390.png`: 390x844 mobile viewport, touch targets compliant, zero overflow.
   - `ops_phase3_tablet_768.png`: 768x1024 tablet viewport, clean 3-card metrics layout.
   - `ops_phase3_desktop_1440.png`: 1440x900 desktop viewport, decision-first reading order.
   - `ops_phase3_diagnostics_expanded.png`: 1440x900 expanded diagnostics, sidebar navigation and views accessible.
+
+### Phase 3 Developer Sandbox Live Deployment & Acceptance Verification (VERIFIED COMPLETE)
+
+The Phase 3 Operations Console implementation was deployed to the isolated developer sandbox (`dogtrainersdirectory-dev`) and verified live end-to-end via headless Chrome CDP against the live URLs:
+- **Sandbox Frontend Service:** `dtd-web-dev` serving Cloud Run revision `dtd-web-dev-00014-922` at 100% traffic (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`). Bundle verified routing API requests to canonical sandbox backend.
+- **Sandbox Backend Service:** `dtd-api-dev` serving Cloud Run revision `dtd-api-dev-00036-jqb` at 100% traffic (`https://dtd-api-dev-x2kdoaemtq-ts.a.run.app`). Preflight and database checks passed.
+- **Production Isolation:** Production backend `dtd-api` remains strictly locked to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`. Zero production mutations, zero external emails, zero live charges.
+
+**Acceptance Gate Matrix (Live Sandbox):**
+- **Gate A — System Status (Overall Operational Posture):** `PASS`. Non-technical owner banner accurately indicates `"Action required on high-priority items"` with decision summary and 3 clear metrics (Directory Supply: 20 intro-ready; Commercial Gate: Fail-Closed Enforced / $0 risk; Background Systems: 3/10 healthy).
+- **Gate B — Needs Your Attention (Actionable Work Queue):** `PASS`. Displays genuine actionable exceptions only. Structured 3-question breakdown (*What happened?*, *Why does it matter?*, *What can I do?*) verified rendering live case cards.
+- **Gate C — Handled Automatically (Autonomous Feedback):** `PASS`. Live telemetry feed displays verified background actions (Guardian audits, scheduled tasks, transient self-healing).
+- **Gate D — Administrative Review & Actions:** `PASS`. Quick triage actions (`[Acknowledge]`, `[Resolve]`, `[Dismiss]`) function correctly. Note wording updated to truthful `"Resolved by owner in daily console review."` / `"Resolved by owner in daily ops review."` without unperformed statutory claims. High-severity dismissal reason safeguard verified.
+- **Gate E — Advanced Diagnostics Disclosure:** `PASS`. Hidden by default (`sidebarVisibleByDefault: false`). Clean toggle button expands all 9 underlying diagnostic views on demand.
+- **Gate F — Responsive Ergonomics & Visual Quality:** `PASS`. Live browser screenshots captured across viewports:
+  - Mobile (390x844): `ops_live_phase3_mobile_390.png`
+  - Tablet (768x1024): `ops_live_phase3_tablet_768.png`
+  - Desktop (1440x900): `ops_live_phase3_desktop_1440.png`
+  - Diagnostics Expanded (1440x1200): `ops_live_phase3_diagnostics_expanded.png`
+- **Gate G — Production & Financial Isolation:** `PASS`. Sandbox runtime strictly isolated, commercial checkout gated off, production untouched.
 
 ## Phase 4 Dependencies and Implementation Readiness
 

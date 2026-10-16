@@ -1114,7 +1114,7 @@ function OverviewView({
                 note = "Dismissed in daily console review.";
             }
         } else if (targetState === "resolved") {
-            note = "Verified statutory facts and resolved in daily ops review.";
+            note = "Resolved by owner in daily console review.";
         } else if (targetState === "investigating") {
             note = "Acknowledged by owner in daily ops triage; monitoring.";
         }
@@ -1698,7 +1698,7 @@ function CaseDetailPanel({ selectedCase, onRefresh }) {
                         <button
                             type="button"
                             disabled={saving}
-                            onClick={() => executeQuickAction("resolved", "Verified statutory facts and resolved in daily ops review.")}
+                            onClick={() => executeQuickAction("resolved", "Resolved by owner in daily ops review.")}
                             className="px-3 py-1.5 text-xs font-mono rounded-xl bg-[#234E42] hover:bg-[#2D6656] text-[#E8F5E9] border border-[#488B73] transition flex items-center gap-1.5"
                             data-testid="ops-case-quick-resolve"
                         >
