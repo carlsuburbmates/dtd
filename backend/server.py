@@ -8569,6 +8569,14 @@ async def _ensure_indexes() -> None:
         if hasattr(db, "urgent_provider_corrections"):
             await db.urgent_provider_corrections.create_index("id", unique=True, sparse=True)
             await db.urgent_provider_corrections.create_index([("status", 1), ("created_at", -1)])
+        ops_ai_coll = getattr(db, "ops_ai_investigations", None)
+        if ops_ai_coll is not None and hasattr(ops_ai_coll, "create_index"):
+            await ops_ai_coll.create_index("case_id")
+            await ops_ai_coll.create_index([("investigated_at", -1)])
+        ops_rec_coll = getattr(db, "ops_recovery_executions", None)
+        if ops_rec_coll is not None and hasattr(ops_rec_coll, "create_index"):
+            await ops_rec_coll.create_index("case_id", unique=True, sparse=True)
+            await ops_rec_coll.create_index([("status", 1), ("updated_at", -1)])
     except Exception as exc:
         logger.warning("Startup database index creation non-fatal warning: %s", exc)
 

@@ -455,4 +455,71 @@ Deployed to developer sandbox `dogtrainersdirectory-dev` and verified live end-t
 - **Gate J — Production Isolation:** `PASS`. Production revision `dtd-api-00058-ter` confirmed untouched.
 - **Gate K — Zero-Trace Cleanup & Reset Posture:** `PASS`. All synthetic test records were removed from MongoDB Atlas; Cloud Run environment variables restored to default-disabled (`OPS_SELF_HEALING_ENABLED=0`); live status confirmed `self_healing_globally_enabled: False`.
 
+---
 
+## Consolidated Production-Readiness Assessment & Release Decision
+
+- **Overall Assessment:** `CONDITIONALLY READY FOR OWNER APPROVAL`
+- **Assessment Date:** 17 October 2026
+- **Verified Baseline Commit SHA:** `2604eee0490bf51943f835ca9654f7d10f526636`
+- **Governing Principle:** **OWNER BY EXCEPTION. AUTOMATION BY DEFAULT. AI ANALYSIS WHEN NEEDED.**
+
+### 1. Release Scope & Payload (Phases 1–5A Consolidated)
+
+The candidate release payload brings the completed Operations Console transformation from the developer sandbox into DTD's production architecture:
+1. **Phase 1 — Noise Elimination & Incident Triage:** Decoupled machine `operational_state` from human operator review, bounded incident deduplication, high-severity dismissal protection requiring explanatory review notes, and audit log persistence in `ops_case_states`.
+2. **Phase 2 — Incident Correlation, Lifecycle & Background Orchestration:** Grouping of multi-attempt retries into single correlated cases (`message:{dispatch_id}`), terminal success auto-resolution, occurrence fingerprinting (`_case_occurrence_fingerprint`) preventing false recurrence on refresh, and `/api/internal/jobs/engine-tick` serverless execution boundary with distributed MongoDB leases (`system_state.engine_tick_lease`).
+3. **Phase 3 — Minimal Owner-Facing Operations Console:** 10-second scan hierarchy, single plain-English status headline, and 1-click triage actions (`Acknowledge`, `Resolve`, `Dismiss`).
+4. **Phase 4 — Read-Only Gemini AI Operations Analyst:** Advisory-only intelligence investigating genuine operational exceptions, bounded input payload (4,000 chars), rate-controlled daily budget ceiling (50/day), 24h fingerprint deduplication, and strictly zero mutation tools or state authority.
+5. **Phase 5 — Controlled Self-Healing Framework:** Bounded, deterministic automatic recovery routines (`lease_recovery`, `claim_lock_recovery`, `notification_retry`) with code-level production hard-block (`is_production_environment() == True`), ensuring self-healing remains **unconditionally disabled** in production.
+6. **Phase 5A — Owner UX Consolidation & Operational Acceptance:** 10-second owner scannability: Level 1 System Status, Level 2 Needs Your Attention (priority-first sorting, compact severity filter pills, bounded 5-item pagination, progressive disclosure), Level 3 Handled Automatically (collapsed by default aggregate summary bar), and Secondary Advanced Diagnostics (collapsed by default, preserving all 10 diagnostic views).
+
+### 2. Production vs. Sandbox Parity Analysis
+
+| Dimension | Developer Sandbox (`dogtrainersdirectory-dev`) | Production (`gen-lang-client-0028123502`) | Parity Status & Release Notes |
+| :--- | :--- | :--- | :--- |
+| **Backend Service** | `dtd-api-dev` (Cloud Run, `australia-southeast1`) | `dtd-api` (Cloud Run, `australia-southeast1`) | **Full Parity.** Identical Python 3.14 / FastAPI runtime, 1 CPU, 1Gi memory, 300s timeout. |
+| **Backend Revision** | `dtd-api-dev-00047-kfd` (100% traffic) | `dtd-api-00058-ter` (100% traffic) | **Ready for Promotion.** Candidate release deploys new revision with zero-traffic canary. |
+| **Frontend Hosting** | Cloud Run (`dtd-web-dev`, Nginx container) | Firebase Hosting (`gen-lang-client-0028123502.web.app` / `dogtrainersdirectory.com.au`) | **Architecturally Reconciled.** Frontend `api.js` is polymorphic: routes to sandbox URL on `dtd-web-dev...run.app` and to same-origin `/api` rewrites on Firebase Hosting. |
+| **Frontend Revision** | `dtd-web-dev-00019-ks5` (100% traffic) | Release `1792053117314000` (Version `f92934ec71003666`) | **Ready for Deployment.** Vite production build compiles clean in 813ms into `frontend/build`. |
+| **Database** | MongoDB Atlas (`dtd_sandbox`) | MongoDB Atlas (`dtd`) | **Compatible.** Startup indexing in `server.py` defensively provisions indexes for `ops_case_states`, `system_state`, `ops_ai_investigations`, and `ops_recovery_executions` without manual migrations. |
+| **Commercial Gate** | `ENABLE_TRAINER_BILLING_CHECKOUT=0` | `ENABLE_TRAINER_BILLING_CHECKOUT=0` | **Identical & Locked.** Zero live charging or refund exposure. |
+| **Self-Healing Posture** | Default-disabled (`OPS_SELF_HEALING_ENABLED=0`) | Code-level hard-blocked (`is_production_environment() == True`) | **Zero Risk.** Self-healing cannot execute in production under any configuration. |
+| **Gemini AI IAM** | `roles/aiplatform.user` on `dtd-api-dev-runtime` | Missing `roles/aiplatform.user` on `dtd-runtime` | **Prerequisite.** If live Vertex AI calls are desired in production, grant `roles/aiplatform.user` to `dtd-runtime`; otherwise fallback operates offline. |
+| **Cloud Scheduler** | `dtd-engine-tick-cron` (`*/10 * * * *`) | `dtd-pro-trial-warnings` (`0 9 * * *`) | **Optional.** Engine-tick cron can be added post-release to automate background loops; absence is non-blocking. |
+
+### 3. Production Rollback Procedures
+
+#### A. Cloud Run Backend Rollback
+- **Target Revision:** `dtd-api-00058-ter` (current healthy production revision serving 100% traffic).
+- **Execution Command:**
+  ```bash
+  gcloud run services update-traffic dtd-api \
+    --project gen-lang-client-0028123502 \
+    --region australia-southeast1 \
+    --to-revisions dtd-api-00058-ter=100
+  ```
+- **Verification:** `curl -s https://dogtrainersdirectory.com.au/api/health` returns `{"ok": true, "database": "available"}`.
+
+#### B. Firebase Hosting Frontend Rollback
+- **Target Version:** `f92934ec71003666` (Release ID: `1792053117314000`, released 2026-10-15T08:31:57Z).
+- **Execution Command:**
+  ```bash
+  firebase hosting:clone gen-lang-client-0028123502:f92934ec71003666 gen-lang-client-0028123502:live \
+    --project gen-lang-client-0028123502
+  ```
+- **Verification:** Inspect `https://dogtrainersdirectory.com.au/` in browser; verify HTTP 200 and previous asset bundle hash.
+
+### 4. Operational Gaps and Prerequisites Matrix
+
+1. **Gemini Vertex AI IAM Binding (Prerequisite for Live AI Inference):**
+   - *Status:* Missing on production project `gen-lang-client-0028123502`.
+   - *Operational Impact:* In production, if Gemini Vertex calls fail due to missing IAM, `services/ai.py` gracefully catches the exception and falls back to deterministic rule-based analysis without interrupting operations or user requests.
+   - *Remediation (Optional Owner Decision):* Grant `roles/aiplatform.user` to `dtd-runtime@gen-lang-client-0028123502.iam.gserviceaccount.com`.
+2. **Cloud Scheduler Engine-Tick (Optional Background Automation):**
+   - *Status:* Provisioned in sandbox; not yet created in production.
+   - *Operational Impact:* Background loops run when visitor traffic arrives or when manually triggered; DF-029 advisory remains visible in `/ops` Work Queue until scheduled cron is active.
+   - *Remediation (Optional Owner Decision):* Create `dtd-engine-tick-cron` with OIDC auth via `dtd-scheduler-invoker@gen-lang-client-0028123502.iam.gserviceaccount.com`.
+3. **Public Trainer Onboarding End-to-End Verification (DF-041):**
+   - *Status:* Sandbox verified with synthetic test fixtures; public production `/submit` flow remains unexercised live.
+   - *Remediation:* Handled in separate product workstream; not an Operations Console blocker.
