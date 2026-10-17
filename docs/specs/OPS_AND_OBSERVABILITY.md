@@ -20,6 +20,8 @@ The agreed multi-phase roadmap is:
   Integrates an intelligent, read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`). Investigates genuine operational exceptions on-demand or during scheduled engine-ticks with zero polling. Enforces strict evidence sanitization and PII redaction, structured output validation, per-occurrence deduplication, daily budget ceilings ($0 risk), manual cooldowns, and a strict read-only boundary with zero mutation authority over operational data or directory collections. Live verified across all 9 acceptance gates in `dogtrainersdirectory-dev`.
 - **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Implemented & Verified in Developer Sandbox):**
   Introduces strictly controlled, bounded, deterministic automatic recovery routines for safe operational failures under strict multi-layer safeguards (default-disabled posture `OPS_SELF_HEALING_ENABLED=0`, production hard-block, separate per-routine feature flags, atomic distributed claiming preventing concurrent execution, downstream verified recovery, daily budget ceilings, cooldowns, zero business data mutations, and strict isolation from the read-only Gemini AI Analyst).
+- **Phase 5A — Owner Experience Consolidation & Operational Acceptance (Implemented & Verified):**
+  Consolidates Phases 1–5 into a unified, exceptionally simple, noise-free mobile-first interface for a single non-technical founder. Reconciles the outdated 11-view daily manual checklist with an exception-driven operating model. Enforces 10-second owner scannability: Level 1 System Status (single plain English headline, zero decorative gauges, calm healthy posture), Level 2 Needs Your Attention (actionable exceptions only, priority-first sorting, bounded pagination and compact filter tabs for 20–30 cases, progressive disclosure for AI analyst and self-healing telemetry, high-severity dismissal protection), Level 3 Handled Automatically (collapsed-by-default truthful aggregate summary of routine passes and verified recoveries, expandable on demand), and Secondary Advanced Diagnostics (collapsed by default, preserving all 10 diagnostic views). Explicitly documents automated coverage across all 14 operational domains and notes residual manual gates.
 
 ## Required operating picture
 
@@ -149,67 +151,45 @@ DTD operates under a single solo operator model. The operator does not perform r
 
 ### Operational Principles
 
-1. **Exception-Driven Review:** Never poll or guess. Only intervene when `/ops` surfaces an exception, degrade flag, or held case.
+1. **Owner by Exception (10-Second Scan):** Never poll or guess. The owner visits `/ops` once daily (or when alerted). In approximately 10 seconds:
+   - *Is DTD operating normally?* (Level 1 Status headline)
+   - *Does anything genuinely require my attention?* (Level 2 Needs Your Attention work queue)
+   - *What has the system already handled automatically?* (Level 3 Handled Automatically summary)
+   If Level 1 is green ("All systems running normally") and Level 2 shows "No action required", the operator's check is complete.
 2. **Fresh Authenticated State:** Always click `[Refresh]` (`data-testid="ops-refresh"`) before making an operational decision. Never act on stale browser memory.
-3. **Bounded 1-Click Mutations:** Use the rapid triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) or specific control triggers. Every mutation records an immutable audit log with reviewer ID, timestamp, and before/after diffs.
+3. **Bounded 1-Click Mutations:** Use the rapid triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) or specific control triggers. Every mutation records an immutable audit log with reviewer ID, timestamp, and before/after diffs. High-severity dismissal requires an explanatory review note.
 4. **Fail-Closed Safety:** Commercial checkouts remain disabled (`ENABLE_TRAINER_BILLING_CHECKOUT=0`) and matching degrades to deterministic fallback upon any provider fault. Never override safety gates without explicit verification.
+5. **Progressive Disclosure:** Action before explanation. Secondary diagnostic views (the 10 technical subsystems) remain collapsed by default and are opened only when investigating a specific anomaly.
 
-### Daily Operator Responsibilities Checklist
+### Operational Domain Coverage Map (14 Domains)
 
-#### Phase 1: Morning Posture & Circuit Safety (P0 - Immediate)
-- **Check Readiness & Posture:**
-  - View `Overview` (`ops-nav-overview`): inspect the 4 top cards (`Needs review`, `Intro-ready`, `Blocked supply`, `Health watch`) and the `Operational Posture & Safety Gates` summary.
-  - Confirm `Commercial Gate`: verify `ENABLE_TRAINER_BILLING_CHECKOUT=0` is reported as inactive and fail-closed until live charging authorization.
-- **Verify Matching Health & Fallbacks:**
-  - View `Matching Engine` (`ops-nav-matching`): check AI degradation telemetry.
-  - If AI degradation or timeout events are detected, inspect the reason codes (e.g. `rate_limit`, `timeout`, `json_malformed`).
-  - If degraded state is confirmed stable under deterministic fallback, trigger `[Acknowledge degradation]` (`ops-ack-degradation`) to register operator acknowledgement.
+The Operations Console comprehensively accounts for all 14 core operational domains, distinguishing automated background handling from residual owner exception gates:
 
-#### Phase 2: Work Queue & Triage Processing (P1 - Priority Daily)
-- **Open Work Queue:**
-  - Navigate to `Work Queue` (`ops-nav-work_queue`) or click `[Review Top Cases]` on the Operator Daily Action Hub (`ops-action-hub`).
-  - Focus on the `Needs review` queue bucket (states `detected` and `notified`).
-- **Trainer Submissions & Claims Triage:**
-  - Select each submission or claim case in the queue.
-  - Review statutory verification items (ABN, business registry match, location match).
-  - Use **1-Click Rapid Triage** in the Case Detail panel:
-    - `[Resolve]` (`ops-case-quick-resolve`): Marks case `resolved` with a standard statutory verification note (`Verified statutory facts and resolved in daily ops review.`).
-    - `[Acknowledge]` (`ops-case-quick-acknowledge`): Marks case `acknowledged` (`Acknowledged in daily ops triage; monitoring.`) if waiting on third-party verification.
-    - `[Dismiss]` (`ops-case-quick-dismiss`): Marks case `dismissed` if duplicate or non-actionable test fixture.
-- **Urgent-Support Directory Review:**
-  - In `Matching Engine` view, inspect pending provider correction/removal submissions.
-  - Click `[Approve & publish correction]` or `[Reject correction]` after verifying Google Places / public directory facts.
+| # | Operational Domain | Automated Handling (Automation by Default) | Owner Exception Gate (Owner by Exception) |
+|---|--------------------|--------------------------------------------|-------------------------------------------|
+| 1 | **Submissions** | Automated ingestion pipeline, deduplication, and initial risk rule scoring. | Manual statutory verification (ABN, business registry) before publishing new trainer listings. |
+| 2 | **Claims** | Automated OTP verification dispatch, claim expiration, and stale lock auto-recovery. | Contested claim review or manual identity escalation. |
+| 3 | **Matching Engine** | Deterministic + Gemini AI fit scoring, search scope expansion, urgent vet triage. | Reviewing high AI degradation alerts or repeated fallback events. |
+| 4 | **Directory Corrections** | Automated Google Places cross-referencing and submission receipt. | Owner approval/rejection of public directory phone/suburb modifications. |
+| 5 | **Notifications** | Transactional delivery via Resend, retry backoffs, and auto-recovery of stalled dispatches. | Persistent delivery failure review (invalid customer email/SMS). |
+| 6 | **Trainer Supply** | Live inventory accounting, intro-ready calculation, and suburb coverage metrics. | Targeted outreach when critical suburb supply is thin. |
+| 7 | **Capability** | Automated profile capability tag indexing and health tracking. | Manual on-demand capability refresh (`ops-recheck-capability`). |
+| 8 | **Demand & Waitlists** | Customer waitlist intake, location grouping, and demand gap computation. | Reviewing unfulfilled demand hotspots in pipeline flow. |
+| 9 | **Commercial & Billing** | Stripe webhook processing, trial tracking, and fail-closed commercial gate enforcement. | Refund approval (`refundSubscription`) and billing reactivation cases. |
+| 10 | **SEO & Indexation** | Canonical 539 Melbourne suburb page evaluation against supply and content thresholds. | Final indexation decision override when thresholds are met. |
+| 11 | **Audit & Security** | Immutable append-only audit logging (`audit_recent`) and admin passcode session expiry. | High-severity dismissal justification note verification. |
+| 12 | **Provider & Background Loops** | 10 background loops orchestrated via Cloud Scheduler `dtd-engine-tick-cron` with atomic leasing. | Provider outage acknowledgement (`ops-ack-degradation`) if upstream provider is degraded. |
+| 13 | **AI Operations Analyst** | Read-only Gemini 3.5 Flash investigation with strict daily budget ($0 risk) and PII redaction. | Reviewing AI root-cause hypotheses and suggested remediation plans. |
+| 14 | **Self-Healing & Recovery** | Bounded deterministic recovery routines (lease clearing, claim unlock, notification retry). | Reviewing exhausted recovery attempts escalated to Level 2. |
 
-#### Phase 3: Outbound Communications & Delivery Verification (P2 - Midday)
-- **Review Message Logs:**
-  - Navigate to `Messages` (`ops-nav-messages`).
-  - Filter for delivery errors (`failed`, `error`, HTTP 4xx/5xx).
-- **Retry Failed Customer Touchpoints:**
-  - For failed outcome follow-ups, click `[Retry follow-up]` (`ops-retry-follow-up-{id}`).
-  - Document provider communication failures without rotating live API keys unless containment is required.
+### Cadence Reconciliation: From Manual Checklist to Exception Triage
 
-#### Phase 4: Supply, Capability Freshness & Demand Gaps (P3 - Afternoon)
-- **Supply Balance & Demand Gaps:**
-  - Navigate to `Trainer Supply` (`ops-nav-trainer_supply`) and `Pipeline Flow` (`ops-nav-pipeline_flow`).
-  - Review `Intro-ready` vs `Blocked supply` counts.
-  - Identify top suburb demand gaps where dog owner waitlist count exceeds verified trainer coverage.
-- **Trainer Capability Refresh:**
-  - If a trainer has updated behavioural declarations, insurance, or council registrations, click `[Re-check capability]` (`ops-recheck-capability-{id}`) to refresh matchable capacity immediately without waiting for scheduled nightly pipelines.
+In earlier revisions, operational documentation specified an 11-step manual checklist requiring the operator to inspect six separate tabs daily (Overview, Matching Engine, Work Queue, Messages, Trainer Supply, Billing).
 
-#### Phase 5: Financial Health, Audits & Close (P4 - End of Day)
-- **Lifecycle & Billing Verification:**
-  - Navigate to `Billing & Reactivation` (`ops-nav-billing_reactivation`).
-  - Verify zero unhandled webhook errors, trial grace-period anomalies, or stale reactivation cases.
-- **Audit Verification:**
-  - Navigate to `Recent Changes` (`ops-nav-recent_changes`).
-  - Confirm every mutation performed during the day has a corresponding immutable audit event (`actor`, `action`, `entity_id`, `ts`).
-- **Background Loop Health:**
-  - Navigate to `System Activity` (`ops-nav-system_activity`).
-  - Confirm all active automation loops (`pipeline_guardian`, `matching_retention`, `waitlist_dispatch`) show healthy recent execution (`status: ok`) and non-stale timestamps.
-
-### Weekly Responsibilities
-- **Catalogue & SEO Drift:** Review `SEO & Indexation` (`ops-nav-seo_indexation`) against minimum eligible trainer count thresholds (>=3 intro-ready trainers per suburb) before publishing suburb landing pages.
-- **Provider Registry & Costs:** Check `System Activity` provider registry records (MongoDB Atlas, Firebase Hosting, Cloud Run, Resend, Sentry) for upcoming certificate/key review dates and runtime health.
+Under Phase 5A, this manual cadence is **fully superseded**:
+- Routine healthy executions across all 14 domains are automatically verified by background guardians and consolidated into **Level 3 (Handled Automatically)**.
+- Telemetry requiring intervention is automatically escalated and surfaced into **Level 2 (Needs Your Attention)** with 3-question structured guidance: *What happened? Why it matters? What to do?*
+- The operator does not navigate across individual tabs during routine daily operations. The 10 secondary diagnostic views are preserved under **Advanced Diagnostics** strictly for deep investigation when an anomaly requires root-cause tracing.
 
 ## Operations Console Deployed State & Sandbox Acceptance
 

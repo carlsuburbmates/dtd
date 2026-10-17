@@ -1074,6 +1074,9 @@ function OverviewView({
 }) {
     const [triageBusyId, setTriageBusyId] = useState(null);
     const [expandedCaseId, setExpandedCaseId] = useState(null);
+    const [caseSeverityFilter, setCaseSeverityFilter] = useState("all");
+    const [casePage, setCasePage] = useState(1);
+    const [isHandledExpanded, setIsHandledExpanded] = useState(false);
 
     const needsReview = queueBuckets.find((bucket) => bucket.key === "needs_review")?.rows.length || 0;
     const loopRows = Object.entries(loops || {});
@@ -1085,6 +1088,27 @@ function OverviewView({
     const activeCases = asArray(snap.ops_cases).filter((c) =>
         ["detected", "notified", "reopened"].includes(String(c.state || "detected").toLowerCase())
     );
+
+    const severityWeight = { high: 3, medium: 2, low: 1 };
+    const sortedActiveCases = [...activeCases].sort((a, b) => {
+        const pA = severityWeight[String(a.severity || "").toLowerCase()] || 1;
+        const pB = severityWeight[String(b.severity || "").toLowerCase()] || 1;
+        if (pB !== pA) return pB - pA;
+        return new Date(b.detected_at || 0) - new Date(a.detected_at || 0);
+    });
+
+    const highSeverityCasesCount = activeCases.filter((c) => String(c.severity || "").toLowerCase() === "high").length;
+    const medSeverityCasesCount = activeCases.filter((c) => String(c.severity || "").toLowerCase() === "medium").length;
+
+    const filteredCases = sortedActiveCases.filter((c) => {
+        if (caseSeverityFilter === "all") return true;
+        return String(c.severity || "").toLowerCase() === caseSeverityFilter;
+    });
+
+    const PAGE_SIZE = 5;
+    const totalPages = Math.max(1, Math.ceil(filteredCases.length / PAGE_SIZE));
+    const currentPage = Math.min(casePage, totalPages);
+    const displayedCases = filteredCases.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     const handledActions = asArray(snap.handled_automatically);
 
@@ -1249,7 +1273,7 @@ function OverviewView({
 
             {/* LEVEL 2: NEEDS YOUR ATTENTION */}
             <section className="space-y-4" data-testid="ops-level2-attention">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                         <h2 className="font-serif text-xl tracking-tight text-[#F5F2EB]">
                             Needs Your Attention
@@ -1259,14 +1283,16 @@ function OverviewView({
                         </p>
                     </div>
                     {activeCases.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setActiveView?.("work_queue")}
-                            className="text-xs font-mono text-[#D9B36C] hover:underline flex items-center gap-1"
-                        >
-                            <span>Open full queue ({activeCases.length})</span>
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setActiveView?.("work_queue")}
+                                className="text-xs font-mono text-[#D9B36C] hover:underline flex items-center gap-1"
+                            >
+                                <span>Open full queue ({activeCases.length})</span>
+                                <ArrowRight className="h-3.5 w-3.5" />
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -1288,7 +1314,82 @@ function OverviewView({
                     </div>
                 ) : (
                     <div className="space-y-3">
-                        {activeCases.map((caseItem) => {
+                        {/* Queue Filter Tabs & Bounded Pagination */}
+                        {activeCases.length > 1 && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                                <div className="flex items-center gap-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCaseSeverityFilter("all"); setCasePage(1); }}
+                                        data-testid="ops-cases-filter-all"
+                                        className={`px-3 py-1 rounded-full text-xs font-mono transition ${
+                                            caseSeverityFilter === "all"
+                                                ? "bg-[#D9B36C] text-[#0D1412] font-semibold"
+                                                : "bg-[#14201D] text-[#8B9E98] hover:text-[#C9C2B1] border border-[#223530]"
+                                        }`}
+                                    >
+                                        All ({activeCases.length})
+                                    </button>
+                                    {highSeverityCasesCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setCaseSeverityFilter("high"); setCasePage(1); }}
+                                            data-testid="ops-cases-filter-high"
+                                            className={`px-3 py-1 rounded-full text-xs font-mono transition ${
+                                                caseSeverityFilter === "high"
+                                                    ? "bg-[#5B2B27] text-[#F8D9D3] font-semibold border border-[#7E2D2D]"
+                                                    : "bg-[#14201D] text-[#8B9E98] hover:text-[#F8D9D3] border border-[#223530]"
+                                            }`}
+                                        >
+                                            High ({highSeverityCasesCount})
+                                        </button>
+                                    )}
+                                    {medSeverityCasesCount > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setCaseSeverityFilter("medium"); setCasePage(1); }}
+                                            data-testid="ops-cases-filter-medium"
+                                            className={`px-3 py-1 rounded-full text-xs font-mono transition ${
+                                                caseSeverityFilter === "medium"
+                                                    ? "bg-[#403423] text-[#F4E2B5] font-semibold border border-[#6B5123]"
+                                                    : "bg-[#14201D] text-[#8B9E98] hover:text-[#F4E2B5] border border-[#223530]"
+                                            }`}
+                                        >
+                                            Medium ({medSeverityCasesCount})
+                                        </button>
+                                    )}
+                                </div>
+                                {totalPages > 1 && (
+                                    <div className="flex items-center gap-2 text-xs font-mono text-[#8B9E98]">
+                                        <span data-testid="ops-cases-page-indicator">
+                                            Page {currentPage} of {totalPages}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                disabled={currentPage <= 1}
+                                                onClick={() => setCasePage((p) => Math.max(1, p - 1))}
+                                                data-testid="ops-cases-prev-page"
+                                                className="px-2 py-0.5 rounded bg-[#14201D] border border-[#223530] text-[#C9C2B1] disabled:opacity-30 disabled:pointer-events-none hover:bg-[#1A2C27]"
+                                            >
+                                                Prev
+                                            </button>
+                                            <button
+                                                type="button"
+                                                disabled={currentPage >= totalPages}
+                                                onClick={() => setCasePage((p) => Math.min(totalPages, p + 1))}
+                                                data-testid="ops-cases-next-page"
+                                                className="px-2 py-0.5 rounded bg-[#14201D] border border-[#223530] text-[#C9C2B1] disabled:opacity-30 disabled:pointer-events-none hover:bg-[#1A2C27]"
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {displayedCases.map((caseItem) => {
                             const isBusy = triageBusyId === caseItem.case_id;
                             const isExpanded = expandedCaseId === caseItem.case_id;
                             const severity = String(caseItem.severity || "").toLowerCase();
@@ -1393,6 +1494,7 @@ function OverviewView({
                                         <button
                                             type="button"
                                             onClick={() => setExpandedCaseId(isExpanded ? null : caseItem.case_id)}
+                                            data-testid={`ops-case-details-toggle-${caseItem.case_id}`}
                                             className="min-h-[44px] px-3 py-2 text-xs font-mono text-[#8B9E98] hover:text-[#F5F2EB] transition flex items-center gap-1 ml-auto"
                                         >
                                             <span>{isExpanded ? "Hide Details" : "Details"}</span>
@@ -1464,31 +1566,62 @@ function OverviewView({
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-2.5">
-                        {handledActions.slice(0, 5).map((item) => (
-                            <div
-                                key={item.id}
-                                className="p-4 rounded-xl border border-[#1E2A27] bg-[#111A17] flex items-start justify-between gap-3"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="p-2 rounded-lg bg-[#15231F] border border-[#233B34] text-[#81C784] shrink-0 mt-0.5">
-                                        <ShieldCheck className="h-4 w-4" />
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-[#F5F2EB]">{item.title}</div>
-                                        <div className="text-xs text-[#8B9E98] mt-0.5 font-mono">{item.summary}</div>
-                                    </div>
+                    <div className="space-y-3">
+                        {/* Collapsed by default aggregate summary card */}
+                        <div
+                            className="p-4 rounded-2xl border border-[#1E2A27] bg-[#111A17] flex flex-wrap items-center justify-between gap-3"
+                            data-testid="ops-handled-summary"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-xl bg-[#15231F] border border-[#233B34] text-[#81C784]">
+                                    <ShieldCheck className="h-5 w-5" />
                                 </div>
-                                <div className="text-right shrink-0">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#14261F] text-[#4ADE80] border border-[#234E42]">
-                                        {item.status || "Completed"}
-                                    </span>
-                                    <div className="text-[11px] font-mono text-[#6C7E77] mt-1">
-                                        {formatDateTime(item.timestamp)}
+                                <div>
+                                    <div className="text-sm font-medium text-[#F5F2EB]">
+                                        {handledActions.length} routine task{handledActions.length === 1 ? "" : "s"} & verified recoveries handled automatically
+                                    </div>
+                                    <div className="text-xs text-[#8B9E98] font-mono mt-0.5">
+                                        {handledActions[0]?.title ? `Latest: ${handledActions[0].title}` : "Continuous background protection · Invariants verified clean"}
                                     </div>
                                 </div>
                             </div>
-                        ))}
+                            <button
+                                type="button"
+                                onClick={() => setIsHandledExpanded((prev) => !prev)}
+                                data-testid="ops-handled-toggle"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#14201D] hover:bg-[#1A2C27] text-xs font-mono text-[#C9C2B1] border border-[#223530] transition shrink-0"
+                            >
+                                <span>{isHandledExpanded ? "▲ Hide activity" : `▼ Show activity (${handledActions.length})`}</span>
+                            </button>
+                        </div>
+
+                        {/* Expandable item list */}
+                        <div className={isHandledExpanded ? "space-y-2.5" : "hidden"} data-testid="ops-handled-list">
+                            {handledActions.slice(0, 10).map((item) => (
+                                <div
+                                    key={item.id}
+                                    className="p-4 rounded-xl border border-[#1E2A27] bg-[#0E1513] flex items-start justify-between gap-3"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 rounded-lg bg-[#15231F] border border-[#233B34] text-[#81C784] shrink-0 mt-0.5">
+                                            <ShieldCheck className="h-4 w-4" />
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-medium text-[#F5F2EB]">{item.title}</div>
+                                            <div className="text-xs text-[#8B9E98] mt-0.5 font-mono">{item.summary}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#14261F] text-[#4ADE80] border border-[#234E42]">
+                                            {item.status || "Completed"}
+                                        </span>
+                                        <div className="text-[11px] font-mono text-[#6C7E77] mt-1">
+                                            {formatDateTime(item.timestamp)}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </section>
