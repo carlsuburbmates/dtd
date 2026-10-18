@@ -118,17 +118,21 @@
 - 5. Practical Non-Technical Owner Escalation Hierarchy:
   - Existing cases in `/ops` refactored to eliminate CLI, Python code, or database instructions.
   - Infrastructure issues display `"Technical assistance may be required."`, clear business impact, explicit `safe_operating_state` (reassuring that DTD directory browsing is safe), and a sanitized technical handoff text.
-- 6. Verification Suite Execution:
+- 6. Live Developer Sandbox Deployment & Decoupled Observability Provisioned:
+  - Developer Sandbox Backend: Built and deployed Cloud Run revision `dtd-api-dev-00048-z2q` serving 100% of traffic in project `dogtrainersdirectory-dev` (`australia-southeast1`). Verified live `/api/health` (HTTP 200, database available) and `/api/health/deep` (HTTP 200, DB latency 3.37ms, scheduler age ~310s, status `fresh`, owner `cloud_scheduler`).
+  - Developer Sandbox Frontend: Built and deployed Cloud Run revision `dtd-web-dev-00020-mzc` serving 100% of traffic. HTML root and API origin routing verified (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`).
+  - Edge Observability Provisioned on Google Cloud: Global multi-region Uptime Check `projects/dogtrainersdirectory-dev/uptimeCheckConfigs/dtd-sandbox-api-edge-uptime-check-T1on-IuZZxc` probing `/api/health` every 5m; notification channel `projects/dogtrainersdirectory-dev/notificationChannels/4089283914703348618` (`admin@dogtrainersdirectory.com.au`); and Alerting Policy `projects/dogtrainersdirectory-dev/alertPolicies/7642136980479273232` (Immediate Owner Escalation).
+- 7. Verification Suite Execution:
   - Isolated backend integration suite: **603 / 603 passed** in 1.46s (`backend/scripts/run_isolated_integration_suite.py`).
   - Targeted operational pytest suite: **120 / 120 passed** in 0.40s across `test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, and `test_public_mode_unit.py`.
-  - Edge monitoring test: **5 / 5 passed** in 2.50s (`scripts/test_edge_monitoring_delivery.py`).
+  - Edge monitoring test: **5 / 5 passed** in 2.50s (`scripts/test_edge_monitoring_delivery.py`) verifying live health, deep diagnostics, container crash and database outage detection, decoupled alert delivery, and failure coverage boundaries.
   - Frontend Vitest suite: **74 / 74 passed** in 1.52s across 10 test files.
   - Frontend production build: Vite v8.3.4 clean production compilation in 689ms (`frontend/build`).
 - Production Boundaries Strictly Respected:
   - Production backend remains locked to `dtd-api-00058-ter` in `gen-lang-client-0028123502`.
   - Production frontend remains served by Firebase Hosting release `1792053117314000` (Version `f92934ec71003666`).
   - Commercial checkout remains fail-closed (`ENABLE_TRAINER_BILLING_CHECKOUT=0`).
-  - Zero production mutations executed. Execution stops at the production authorization gate.
+  - Zero production mutations executed. Execution stops strictly at the production authorization gate.
 
 
 ## Product and deployment
@@ -140,7 +144,7 @@
 - Public phase is `live_matching`; trainer onboarding and public matching are enabled.
 - Stripe webhook handling is enabled on production revision `dtd-api-00058-ter`; checkout remains fail-closed with `ENABLE_TRAINER_BILLING_CHECKOUT=0`. The Pro-trial cohort and broader commercial readiness remain gated pending the separate no-charge live acceptance of the full billing workflow.
 - The First Leash is separately built and deployed at `learn.dogtrainersdirectory.com.au`; both sites return HTTP 200.
-- A secondary developer staging sandbox environment is established on 25 September 2026 under CDR-017. Google Cloud project `dogtrainersdirectory-dev` (Project Number: `625222421634`) is linked to billing account `0104B3-AB5AF0-8F0A01` under the `dogtrainersdirectory.com.au` organisation. Required serverless APIs (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`) are enabled. Cloud Run runs as the dedicated `dtd-api-dev-runtime` identity rather than the default Compute identity; the runtime has the verified Vertex AI User and Secret Manager accessor roles it currently needs. Eight runtime sandbox secrets are provisioned in Secret Manager. A separate MongoDB Atlas project and M0 Free cluster `dtd-sandbox` (AWS Sydney `ap-southeast-2`, engine 8.0.32) is active. As deployed on 16 October 2026, `dtd-api-dev` in `australia-southeast1` serves revision `dtd-api-dev-00027-yob` at 100% traffic with database health available at `https://dtd-api-dev-625222421634.australia-southeast1.run.app`; companion frontend `dtd-web-dev-00011-dwf` is a developer-only surface at 100%, not a production replacement.
+- A secondary developer staging sandbox environment is established on 25 September 2026 under CDR-017. Google Cloud project `dogtrainersdirectory-dev` (Project Number: `625222421634`) is linked to billing account `0104B3-AB5AF0-8F0A01` under the `dogtrainersdirectory.com.au` organisation. Required serverless APIs (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`) are enabled. Cloud Run runs as the dedicated `dtd-api-dev-runtime` identity rather than the default Compute identity; the runtime has the verified Vertex AI User and Secret Manager accessor roles it currently needs. Eight runtime sandbox secrets are provisioned in Secret Manager. A separate MongoDB Atlas project and M0 Free cluster `dtd-sandbox` (AWS Sydney `ap-southeast-2`, engine 8.0.32) is active. As deployed on 18 October 2026, `dtd-api-dev` in `australia-southeast1` serves revision `dtd-api-dev-00048-z2q` at 100% traffic with database health available at `https://dtd-api-dev-625222421634.australia-southeast1.run.app`; companion frontend `dtd-web-dev-00020-mzc` is a developer-only surface at 100%, not a production replacement.
 
 ## Dog-owner workflows
 

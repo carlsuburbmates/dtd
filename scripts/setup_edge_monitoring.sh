@@ -31,7 +31,7 @@ echo "=================================================================="
 
 # 1. Create or Find Email Notification Channel
 echo "🔍 [1/3] Checking Email Notification Channel..."
-CHANNEL_JSON=$(gcloud monitoring channels list --project="${PROJECT_ID}" --filter="type=email AND labels.email_address=${ALERT_EMAIL}" --format="json" 2>/dev/null || echo "[]")
+CHANNEL_JSON=$(gcloud beta monitoring channels list --project="${PROJECT_ID}" --filter="type=email AND labels.email_address=${ALERT_EMAIL}" --format="json" 2>/dev/null || echo "[]")
 CHANNEL_ID=$(echo "${CHANNEL_JSON}" | python3 -c '
 import sys, json
 data = json.load(sys.stdin)
@@ -41,11 +41,11 @@ if isinstance(data, list) and len(data) > 0:
 
 if [ -z "${CHANNEL_ID}" ]; then
   echo "Creating Notification Channel for ${ALERT_EMAIL}..."
-  CHANNEL_NAME=$(gcloud monitoring channels create \
+  CHANNEL_NAME=$(gcloud beta monitoring channels create \
     --project="${PROJECT_ID}" \
     --display-name="DTD Owner Escalation (${ALERT_EMAIL})" \
     --type=email \
-    --channel-content="email_address=${ALERT_EMAIL}" \
+    --channel-labels="email_address=${ALERT_EMAIL}" \
     --format="value(name)")
   CHANNEL_ID="${CHANNEL_NAME}"
   echo "✅ Created Notification Channel: ${CHANNEL_ID}"
@@ -61,12 +61,12 @@ if [ -z "${EXISTING_UPTIME}" ]; then
   echo "Creating Uptime Check '${DISPLAY_NAME}'..."
   gcloud monitoring uptime create "${DISPLAY_NAME}" \
     --project="${PROJECT_ID}" \
-    --display-name="${DISPLAY_NAME}" \
-    --protocol=HTTPS \
-    --hostname="${HOSTNAME}" \
+    --resource-type=uptime-url \
+    --resource-labels="host=${HOSTNAME},project_id=${PROJECT_ID}" \
+    --protocol=https \
     --path="/api/health" \
-    --check-interval=5m \
-    --timeout=10s
+    --period=5 \
+    --timeout=10
   echo "✅ Created Uptime Check."
 else
   echo "✅ Uptime Check exists: ${EXISTING_UPTIME}"
