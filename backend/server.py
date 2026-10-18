@@ -2442,6 +2442,7 @@ async def _ops_case_rows(
 
 def _loop_interval_seconds() -> Dict[str, int]:
     return {
+        "engine_tick": 600,
         "ranking": autonomy.RANKING_INTERVAL_S,
         "verification": autonomy.VERIFICATION_INTERVAL_S,
         "discovery": autonomy.DISCOVERY_INTERVAL_S,
@@ -3232,6 +3233,26 @@ async def health_deep() -> JSONResponse:
         }
     except Exception as exc:
         diagnostics["checks"]["maintenance_mode"] = {"status": "unknown", "error": str(exc)}
+
+    # 5. Background scheduler & engine-tick freshness
+    try:
+        engine_tick_doc = await db.system_state.find_one({"key": "engine_tick"}, {"_id": 0}) or {}
+        last_run_str = str(engine_tick_doc.get("last_run") or "")
+        tick_age_s = None
+        if last_run_str:
+            last_run_dt = datetime.fromisoformat(last_run_str)
+            if last_run_dt.tzinfo is None:
+                last_run_dt = last_run_dt.replace(tzinfo=timezone.utc)
+            tick_age_s = max(0, int((datetime.now(timezone.utc) - last_run_dt).total_seconds()))
+        diagnostics["checks"]["scheduler"] = {
+            "last_run": last_run_str,
+            "age_s": tick_age_s,
+            "status": "fresh" if tick_age_s is not None and tick_age_s <= 1200 else ("delayed_or_stale" if tick_age_s else "unobserved"),
+            "execution_owner": engine_tick_doc.get("execution_owner", "none"),
+            "last_status": engine_tick_doc.get("last_status", "unknown"),
+        }
+    except Exception as exc:
+        diagnostics["checks"]["scheduler"] = {"status": "unknown", "error": str(exc)}
 
     return JSONResponse(status_code=status_code, content=diagnostics)
 
@@ -6526,6 +6547,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
     pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
+    engine_tick = await db.system_state.find_one({"key": "engine_tick"}, {"_id": 0}) or {}
     _record_db_op_success()
     source_ingestion_state_coll = getattr(db, "source_ingestion_state", None)
     source_ingestion_state_rows = await source_ingestion_state_coll.find({}, {"_id": 0}).sort("last_checked_at", -1).limit(100).to_list(100) if source_ingestion_state_coll is not None else []
@@ -6608,6 +6630,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
     loop_statuses = {
         key: _loop_status(key, loop, now_dt=now_dt)
         for key, loop in {
+            "engine_tick": engine_tick,
             "ranking": ranking,
             "pricing": pricing,
             "verification": verification,
@@ -7144,6 +7167,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     nurture = await db.system_state.find_one({"key": "nurture"}, {"_id": 0}) or {}
     reactivation_route = await db.system_state.find_one({"key": "reactivation_route"}, {"_id": 0}) or {}
     pro_trial_warnings = await db.system_state.find_one({"key": "pro_trial_warnings"}, {"_id": 0}) or {}
+    engine_tick = await db.system_state.find_one({"key": "engine_tick"}, {"_id": 0}) or {}
 
     top_trainers = await db.trainers.find(
         {"published": True},
@@ -7370,6 +7394,7 @@ async def oversight(_: None = Depends(require_oversight)) -> Dict[str, Any]:
     loop_statuses = {
         key: _loop_status(key, loop, now_dt=now_dt)
         for key, loop in {
+            "engine_tick": engine_tick,
             "ranking": ranking,
             "verification": verification,
             "discovery": discovery,

@@ -68,6 +68,7 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
    Blanket 24-hour thresholds are eliminated. Grace periods are derived as a bounded function of the authoritative loop interval (`bounded_grace_seconds()`):
    - 45s health / metrics loops: 30s grace (stale at >75s).
    - 60s ranking / scoring loops: 30s grace (stale at >90s).
+   - 10m (600s) engine_tick / master cron loop: 150s grace (stale at >12.5m / 750s).
    - 10m discovery / feed loops: 150s grace (stale at >12.5m).
    - 6h verification / ingestion / reactivation loops: 2,160s (36m) grace (stale at >6.6h).
    - 24h pro trial warnings: 3,600s (1h) grace (stale at >25h).
@@ -101,6 +102,12 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
    Status is derived from actual outbound dispatches recorded in `message_log`. Routine successful dispatches (HTTP 202) remain in message history for auditability, but never generate Ops cases. Delivery failures, bounces, or 4xx/5xx responses generate actionable incident cases.
 3. **Sentry Error Tracking:**
    Defaults to `unknown` with known gap `"production canary event unverified"` until verified event delivery to the Sentry ingestion endpoint is confirmed.
+4. **Deep Health & Scheduler Observability (`/api/health/deep`):**
+   Provides deep dependency diagnostics including database connectivity, system state collection access, Cloud Run environment profile, maintenance mode posture, and background scheduler freshness (`status: "fresh"` if engine-tick age <= 1200s, `"delayed_or_stale"` if older, or `"unobserved"`).
+5. **Decoupled Edge Observability (Monitoring the Monitor):**
+   Eliminates circular dependency where a crashed Cloud Run API cannot display an in-console incident. An external Google Cloud Monitoring uptime check probes `https://dogtrainersdirectory.com.au/api/health` from multiple global edge probes every 5 minutes with zero container compute overhead, firing an external alert directly to `admin@dogtrainersdirectory.com.au` on outage.
+6. **Level 1 Honest Status Contract:**
+   `/ops` Level 1 guarantees honest state reporting: if background loop telemetry is missing or unobserved, it refuses to report "All Running Normally" and instead displays `monitoring_unverified` ("Monitoring telemetry unverified or stale").
 
 ### AI degradation telemetry and temporal contracts (Phase 1)
 

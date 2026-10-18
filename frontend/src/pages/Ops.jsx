@@ -1032,6 +1032,21 @@ function computeConsoleStatus(snap, readiness = {}, loops = {}, alerts = []) {
         };
     }
 
+    if (Object.keys(loopStatuses).length === 0) {
+        return {
+            status: "monitoring_unverified",
+            label: "Monitoring unverified",
+            headline: "Monitoring telemetry unverified or stale",
+            description: "No background loop telemetry was reported in this snapshot. Do not assume background automations are functioning.",
+            tone: "amber",
+            badgeClass: "bg-[#3D2E14] text-[#F4E2B5] border border-[#6B5123]",
+            cardClass: "border-[#4D3A1B] bg-[#18150F]",
+            Icon: AlertTriangle,
+            activeCount: activeCases.length,
+            highCount: 0,
+        };
+    }
+
     return {
         status: "normal",
         label: "All running normally",
