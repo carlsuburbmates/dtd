@@ -8,15 +8,17 @@ This service maintains the `ops_obligations` collection in MongoDB, providing:
 1. Durable capture of all genuine owner-required obligations (verification, delivery, claim, billing, scheduler, provider).
 2. Cadence-aware SLA tracking (due dates).
 3. Automated escalation when an obligation breaches its SLA (overdue detection).
-4. Permanent persistence: obligations never roll off or vanish until explicitly resolved.
-5. Auto-clearing with audit evidence when underlying entities reach valid terminal states.
+4. Evidence-based terminal state verification: absence from a scan NEVER resolves an obligation.
+5. Review state decoupling: Acknowledgment or dismissal does not falsely certify underlying business completion.
+6. Safe recurrence detection: New failures reopen obligations without permanent suppression or flapping.
+7. Non-technical owner escalation hierarchy: Clear practical impact, safe operating state, and sanitized technical handoff.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("dtd.ops_obligations")
 
@@ -83,11 +85,137 @@ def compute_sla(
     }
 
 
+async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple[bool, str]:
+    """Inspect the specific underlying entity in its authoritative datastore.
+    
+    Returns (True, reason) ONLY when verified positive evidence demonstrates that the
+    underlying entity has reached a valid terminal state.
+    Returns (False, reason) if the entity is still active, missing without verification,
+    or if the datastore query encounters an error.
+    """
+    category = obl_doc.get("category", "")
+    entity_id = str(obl_doc.get("entity_id", ""))
+
+    if not entity_id:
+        return False, "Missing entity_id; cannot verify terminal state"
+
+    try:
+        if category == "trainer_verification":
+            submissions_coll = getattr(db, "submissions", None)
+            if submissions_coll is None:
+                return False, "Submissions collection unavailable"
+
+            sub = await submissions_coll.find_one({"id": entity_id}, {"_id": 0})
+            if sub:
+                status = str(sub.get("status") or "").lower()
+                abn_status = str(sub.get("abn_status") or "").lower()
+                if status in ("published", "approved") and abn_status not in ("unverified", "invalid", "degraded", "abr_unavailable"):
+                    return True, f"Submission {entity_id} verified published and ABN validated ({abn_status})"
+                if status in ("rejected", "declined", "withdrawn"):
+                    return True, f"Submission {entity_id} reached terminal state '{status}'"
+                return False, f"Submission {entity_id} remains pending (status: {status}, abn_status: {abn_status})"
+            
+            # If not in submissions, check if already converted to a published trainer
+            trainers_coll = getattr(db, "trainers", None)
+            if trainers_coll is not None:
+                trainer = await trainers_coll.find_one({"$or": [{"id": entity_id}, {"submission_id": entity_id}]}, {"_id": 0})
+                if trainer and trainer.get("status") in ("published", "active"):
+                    return True, f"Trainer {trainer.get('id')} verified published in directory"
+
+            return False, f"Submission {entity_id} record not found; preserving pending obligation"
+
+        elif category == "claim_lock":
+            claim_events_coll = getattr(db, "claim_events", None)
+            trainers_coll = getattr(db, "trainers", None)
+
+            claim_doc = None
+            if claim_events_coll is not None:
+                claim_doc = await claim_events_coll.find_one({"$or": [{"id": entity_id}, {"trainer_id": entity_id}]}, {"_id": 0})
+
+            trainer_doc = None
+            if trainers_coll is not None:
+                t_id = (claim_doc.get("trainer_id") if claim_doc else entity_id)
+                trainer_doc = await trainers_coll.find_one({"id": t_id}, {"_id": 0})
+
+            claim_status = str(claim_doc.get("status") if claim_doc else "").lower()
+            lock_held = bool(trainer_doc.get("claim_in_progress") if trainer_doc else False)
+
+            if claim_status in ("verified", "completed"):
+                return True, f"Profile claim verified and completed for trainer {entity_id}"
+            
+            if (claim_status in ("expired", "cancelled", "released") or not claim_doc) and not lock_held:
+                return True, f"Claim lock released and confirmed inactive (claim status: {claim_status or 'none'}, lock_held: False)"
+
+            return False, f"Claim lock still held or in progress (status: {claim_status}, lock_held: {lock_held})"
+
+        elif category == "client_enquiry":
+            message_log_coll = getattr(db, "message_log", None)
+            if message_log_coll is None:
+                return False, "Message log collection unavailable"
+
+            # Check if any message record with this dispatch_id reached a terminal success state
+            delivered = await message_log_coll.find_one(
+                {
+                    "$or": [{"dispatch_id": entity_id}, {"id": entity_id}],
+                    "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
+                },
+                {"_id": 0, "status": 1, "created_at": 1},
+            )
+            if delivered:
+                return True, f"Message dispatch {entity_id} verified delivered successfully"
+
+            return False, f"No successful delivery recorded for message dispatch {entity_id}"
+
+        elif category == "scheduler":
+            system_state_coll = getattr(db, "system_state", None)
+            if system_state_coll is None:
+                return False, "System state collection unavailable"
+
+            engine_tick_doc = await system_state_coll.find_one({"key": "engine_tick"}, {"_id": 0}) or {}
+            last_run = engine_tick_doc.get("last_run")
+            last_status = str(engine_tick_doc.get("last_status") or "").lower()
+            failures = int(engine_tick_doc.get("consecutive_failures") or 0)
+            
+            run_dt = parse_iso(last_run)
+            age_s = (now_utc() - run_dt).total_seconds() if run_dt else None
+
+            if last_status == "ok" and failures == 0 and age_s is not None and age_s <= 750:
+                return True, f"Engine tick healthy (last run {int(age_s)}s ago, status: ok)"
+
+            return False, f"Engine tick not healthy (status: {last_status}, age: {age_s}s, failures: {failures})"
+
+        elif category == "provider":
+            system_state_coll = getattr(db, "system_state", None)
+            if system_state_coll is None:
+                return False, "System state collection unavailable"
+
+            prov_doc = await system_state_coll.find_one({"key": f"provider:{entity_id}"}, {"_id": 0}) or {}
+            prov_status = str(prov_doc.get("status") or "").lower()
+
+            if prov_status in ("healthy", "ok", "available"):
+                return True, f"Provider {entity_id} operational state verified healthy"
+
+            return False, f"Provider {entity_id} remains degraded or unknown (status: {prov_status})"
+
+        return False, f"No terminal state verification rule defined for category '{category}'"
+
+    except Exception as exc:
+        logger.warning("Exception during terminal state verification for %s: %s", obl_doc.get("obligation_id"), exc)
+        return False, f"Verification query error: {str(exc)}"
+
+
 async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> List[Dict[str, Any]]:
-    """Scan authoritative system state and synchronize the durable `ops_obligations` collection."""
+    """Scan authoritative system state and synchronize the durable `ops_obligations` collection.
+    
+    Enforces Evidence-Based Terminal-State Verification:
+    Absence from a scan NEVER resolves an obligation.
+    Existing obligations remain active until verified positive evidence shows terminal completion
+    or explicit authorized operator review.
+    """
     current_dt = now_dt or now_utc()
     current_iso = current_dt.isoformat()
     active_obligations: Dict[str, Dict[str, Any]] = {}
+    source_status: Dict[str, Dict[str, Any]] = {}
 
     # 1. Trainer Submissions / Verification Obligations
     submissions_coll = getattr(db, "submissions", None)
@@ -101,7 +229,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     ]
                 },
                 {"_id": 0, "id": 1, "business_name": 1, "name": 1, "abn": 1, "abn_status": 1, "created_at": 1},
-            ).to_list(100)
+            ).to_list(500)
             for sub in pending_subs:
                 sub_id = str(sub.get("id") or "")
                 if not sub_id:
@@ -113,13 +241,18 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "category": "trainer_verification",
                     "entity_id": sub_id,
                     "title": f"Review Trainer Submission: {name}",
-                    "required_action": "Inspect ABN verification evidence and approve or reject trainer listing.",
+                    "required_action": "Inspect ABN verification evidence and approve or reject trainer listing in /ops.",
                     "base_severity": "medium",
                     "created_at_source": sub.get("created_at") or current_iso,
                     "metadata": {"abn": sub.get("abn"), "abn_status": sub.get("abn_status")},
+                    "resolution_type": "guided_in_ops",
+                    "technical_assistance_required": False,
+                    "safe_operating_state": "DTD public directory is operating normally. Listing is held pending owner review.",
                 }
+            source_status["trainer_verification"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
             logger.warning("Error reading submissions for obligations: %s", exc)
+            source_status["trainer_verification"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 2. Stale Trainer Profile Claim Locks
     claim_events_coll = getattr(db, "claim_events", None)
@@ -130,13 +263,12 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "status": {"$in": ["initiated", "pending", "otp_sent", "stale", "lock_held"]},
                 },
                 {"_id": 0, "id": 1, "trainer_id": 1, "status": 1, "method": 1, "created_at": 1, "updated_at": 1},
-            ).to_list(50)
+            ).to_list(200)
             for claim in stuck_claims:
                 claim_id = str(claim.get("id") or "")
                 trainer_id = str(claim.get("trainer_id") or "")
                 created_ts = claim.get("created_at") or claim.get("updated_at") or current_iso
                 claim_dt = parse_iso(created_ts) or current_dt
-                # Only flag as obligation if held > 15 minutes
                 if (current_dt - claim_dt).total_seconds() >= 900:
                     obl_id = f"obligation:claim:{claim_id or trainer_id}"
                     active_obligations[obl_id] = {
@@ -148,9 +280,14 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                         "base_severity": "medium",
                         "created_at_source": created_ts,
                         "metadata": {"trainer_id": trainer_id, "claim_status": claim.get("status")},
+                        "resolution_type": "guided_in_ops",
+                        "technical_assistance_required": False,
+                        "safe_operating_state": "Profile remains visible to pet owners; claiming is temporarily locked for edits.",
                     }
+            source_status["claim_lock"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
             logger.warning("Error reading claim events for obligations: %s", exc)
+            source_status["claim_lock"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 3. Failed Message Delivery (Resend / Enquiries)
     message_log_coll = getattr(db, "message_log", None)
@@ -159,7 +296,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             failed_messages = await message_log_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "recipient": 1, "subject": 1, "error": 1, "created_at": 1},
-            ).sort("created_at", -1).limit(50).to_list(50)
+            ).sort("created_at", -1).limit(200).to_list(200)
             for msg in failed_messages:
                 dispatch_id = str(msg.get("dispatch_id") or msg.get("id") or "")
                 if not dispatch_id:
@@ -174,9 +311,14 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "base_severity": "high",
                     "created_at_source": msg.get("created_at") or current_iso,
                     "metadata": {"recipient": msg.get("recipient"), "error": msg.get("error")},
+                    "resolution_type": "guided_in_ops",
+                    "technical_assistance_required": False,
+                    "safe_operating_state": "Website is operating normally; this specific email notification needs retry.",
                 }
+            source_status["client_enquiry"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
             logger.warning("Error reading message log for obligations: %s", exc)
+            source_status["client_enquiry"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 4. Engine Tick Cron / Scheduler Stalls
     system_state_coll = getattr(db, "system_state", None)
@@ -204,7 +346,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "category": "scheduler",
                     "entity_id": "engine_tick",
                     "title": title,
-                    "required_action": "Verify Cloud Scheduler dtd-engine-tick-cron or trigger a manual engine tick in /ops.",
+                    "required_action": "Technical assistance may be required: Cloud Scheduler task is delayed or failing. Public directory continues operating safely.",
                     "base_severity": "high",
                     "created_at_source": tick_last_run or current_iso,
                     "metadata": {
@@ -213,9 +355,15 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                         "age_s": tick_age_s,
                         "failures": tick_failures,
                     },
+                    "resolution_type": "technical_specialist",
+                    "technical_assistance_required": True,
+                    "safe_operating_state": "DTD public directory remains operational; routine background ranking and nurture updates are paused.",
+                    "technical_handoff": f"Engine tick cron has stalled or failed (status: {tick_status}, consecutive failures: {tick_failures}, age: {tick_age_s}s). Check Cloud Scheduler dtd-engine-tick-cron or Cloud Run /api/internal/jobs/engine-tick.",
                 }
+            source_status["scheduler"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
             logger.warning("Error checking scheduler for obligations: %s", exc)
+            source_status["scheduler"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 5. External Provider Outage / Auth Failure
     if system_state_coll is not None and hasattr(system_state_coll, "find_one"):
@@ -228,19 +376,26 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "category": "provider",
                     "entity_id": "resend",
                     "title": "Email Provider (Resend) Degraded or Unauthorized",
-                    "required_action": "Check RESEND_API_KEY secret in Secret Manager and verify billing tier.",
+                    "required_action": "External provider action required: Check Resend account status and sending quota in Resend dashboard.",
                     "base_severity": "high",
                     "created_at_source": resend_provider.get("last_failure") or current_iso,
                     "metadata": resend_provider,
+                    "resolution_type": "external_provider",
+                    "technical_assistance_required": True,
+                    "safe_operating_state": "Public directory browsing is active; outbound enquiry and verification emails are temporarily paused.",
+                    "technical_handoff": f"Resend integration reports {resend_provider.get('status')}. Verify API key permissions or Resend account billing.",
                 }
+            source_status["provider"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
             logger.warning("Error checking providers for obligations: %s", exc)
+            source_status["provider"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 6. Synchronize with `ops_obligations` MongoDB Collection
     obligations_coll = getattr(db, "ops_obligations", None)
     synced_list: List[Dict[str, Any]] = []
 
     if obligations_coll is not None and hasattr(obligations_coll, "update_one"):
+        # A. Upsert Active Obligations Found in the Scan
         for obl_id, obl_data in active_obligations.items():
             existing = await obligations_coll.find_one({"obligation_id": obl_id}, {"_id": 0}) or {}
             created_at_str = existing.get("created_at") or obl_data["created_at_source"]
@@ -249,14 +404,43 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             is_overdue = sla_info["is_overdue"]
             escalation_level = sla_info["escalation_level"]
             severity = "high" if is_overdue else obl_data["base_severity"]
-            status = "escalated" if is_overdue else existing.get("status", "pending")
-            if existing.get("status") == "resolved" and not is_overdue:
-                # If already resolved by owner, maintain resolved state unless recurring
-                status = "resolved"
+
+            # Recurrence detection: if previously resolved, reopen with recurrence badge and increment count
+            prev_status = existing.get("status")
+            recurrence_count = int(existing.get("recurrence_count") or 0)
+            is_recurrence = False
+
+            if prev_status == "resolved":
+                is_recurrence = True
+                recurrence_count += 1
+                status = "escalated" if is_overdue else "pending"
+                reopened_at = current_iso
+            else:
+                status = "escalated" if is_overdue else existing.get("status", "pending")
+                reopened_at = existing.get("reopened_at")
 
             escalated_at = existing.get("escalated_at")
             if is_overdue and not escalated_at:
                 escalated_at = current_iso
+
+            # Preserve human review state without certifying false business completion
+            review_obj = existing.get("review") or {}
+            if is_recurrence:
+                # Reset review state on recurrence so owner is re-notified
+                review_obj = {
+                    "review_state": "detected",
+                    "reopened_reason": "Reopened due to recurrence of active failure",
+                    "updated_at": current_iso,
+                }
+
+            history = existing.get("history") or []
+            if is_recurrence:
+                history.append({
+                    "action": "reopened_recurrence",
+                    "timestamp": current_iso,
+                    "recurrence_count": recurrence_count,
+                    "reason": "New active failure detected for previously resolved obligation",
+                })
 
             doc_payload = {
                 "obligation_id": obl_id,
@@ -273,8 +457,17 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                 "overdue_hours": sla_info["overdue_hours"],
                 "escalation_level": escalation_level,
                 "escalated_at": escalated_at,
+                "recurrence_count": recurrence_count,
+                "reopened_at": reopened_at,
                 "metadata": obl_data.get("metadata", {}),
+                "resolution_type": obl_data.get("resolution_type", "guided_in_ops"),
+                "technical_assistance_required": obl_data.get("technical_assistance_required", False),
+                "safe_operating_state": obl_data.get("safe_operating_state", "Operating normally."),
+                "technical_handoff": obl_data.get("technical_handoff"),
+                "review": review_obj,
+                "history": history,
                 "last_synced_at": current_iso,
+                "last_verified_at": current_iso,
             }
 
             await obligations_coll.update_one(
@@ -284,35 +477,90 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             )
             synced_list.append(doc_payload)
 
-        # Mark obligations as resolved if they are no longer in active_obligations
+        # B. Evidence-Based Terminal State Verification for Unseen Obligations
+        # CRITICAL SAFETY INVARIANT: Absence from active scan NEVER automatically resolves an obligation!
+        # We must inspect the specific entity in its authoritative collection.
         try:
-            active_ids = list(active_obligations.keys())
-            stale_cursor = obligations_coll.find(
-                {
-                    "obligation_id": {"$nin": active_ids},
-                    "status": {"$in": ["pending", "escalated"]},
-                },
-                {"_id": 0, "obligation_id": 1},
+            active_ids = set(active_obligations.keys())
+            pending_cursor = obligations_coll.find(
+                {"status": {"$in": ["pending", "escalated"]}},
+                {"_id": 0},
             )
-            stale_docs = await stale_cursor.to_list(100) if hasattr(stale_cursor, "to_list") else []
-            for stale in stale_docs:
-                stale_id = str(stale.get("obligation_id") or "")
-                if not stale_id or stale_id in active_ids:
+            pending_docs = await pending_cursor.to_list(500) if hasattr(pending_cursor, "to_list") else []
+
+            for obl in pending_docs:
+                obl_id = obl.get("obligation_id", "")
+                if obl_id in active_ids:
+                    continue  # Already refreshed in Step A
+
+                cat = obl.get("category", "")
+                # If the source query for this domain failed, PRESERVE the obligation without mutation
+                cat_status = source_status.get(cat, {}).get("status")
+                if cat_status == "error":
+                    logger.info("Preserving obligation %s because source domain %s encountered a query error", obl_id, cat)
+                    await obligations_coll.update_one(
+                        {"obligation_id": obl_id},
+                        {
+                            "$set": {
+                                "source_verification_gap": f"Source query failed for domain {cat}; preserved pending",
+                                "last_checked_at": current_iso,
+                            }
+                        },
+                    )
+                    synced_list.append(obl)
                     continue
-                await obligations_coll.update_one(
-                    {"obligation_id": stale_id},
-                    {
-                        "$set": {
-                            "status": "resolved",
-                            "resolved_at": current_iso,
-                            "resolution_type": "auto_cleared",
-                            "resolution_notes": "Underlying entity reached valid or terminal state; obligation cleared.",
-                            "last_synced_at": current_iso,
-                        }
-                    },
-                )
+
+                # Query the specific underlying entity for verified positive terminal state
+                is_terminal, reason = await verify_obligation_terminal_state(db, obl)
+                if is_terminal:
+                    history = obl.get("history") or []
+                    history.append({
+                        "action": "auto_resolved_terminal_state",
+                        "timestamp": current_iso,
+                        "notes": reason,
+                    })
+                    await obligations_coll.update_one(
+                        {"obligation_id": obl_id},
+                        {
+                            "$set": {
+                                "status": "resolved",
+                                "resolved_at": current_iso,
+                                "resolution_type": "verified_terminal_state",
+                                "resolution_notes": reason,
+                                "last_synced_at": current_iso,
+                                "last_verified_at": current_iso,
+                                "history": history,
+                            }
+                        },
+                    )
+                    logger.info("Obligation %s resolved via verified terminal state: %s", obl_id, reason)
+                else:
+                    # Positive evidence of resolution does NOT exist. Obligation remains ACTIVE!
+                    sla_info = compute_sla(cat, obl.get("created_at"), now_dt=current_dt)
+                    is_overdue = sla_info["is_overdue"]
+                    esc_level = sla_info["escalation_level"]
+                    status = "escalated" if is_overdue else obl.get("status", "pending")
+                    severity = "high" if is_overdue else obl.get("severity", "medium")
+
+                    update_payload = {
+                        "is_overdue": is_overdue,
+                        "overdue_hours": sla_info["overdue_hours"],
+                        "escalation_level": esc_level,
+                        "status": status,
+                        "severity": severity,
+                        "verification_gap": reason,
+                        "last_synced_at": current_iso,
+                        "last_verified_at": current_iso,
+                    }
+                    await obligations_coll.update_one(
+                        {"obligation_id": obl_id},
+                        {"$set": update_payload},
+                    )
+                    obl.update(update_payload)
+                    synced_list.append(obl)
+
         except Exception as exc:
-            logger.warning("Error resolving cleared obligations: %s", exc)
+            logger.warning("Error during evidence-based obligation resolution: %s", exc)
 
     return synced_list
 
@@ -332,13 +580,25 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None) -> 
         esc_level = int(doc.get("escalation_level") or 0)
         overdue_h = doc.get("overdue_hours", 0)
         sla_h = doc.get("sla_hours", 24)
+        recurrence_count = int(doc.get("recurrence_count") or 0)
 
         title = doc.get("title", "")
+        prefix_parts = []
+        if recurrence_count > 0:
+            prefix_parts.append(f"(Recurred x{recurrence_count})")
         if is_overdue:
-            prefix = "[CRITICAL OVERDUE ESCALATION] " if esc_level >= 2 else "[OVERDUE ESCALATION] "
-            display_title = f"{prefix}{title}"
+            prefix_parts.append("[CRITICAL OVERDUE ESCALATION]" if esc_level >= 2 else "[OVERDUE ESCALATION]")
+
+        if prefix_parts:
+            display_title = f"{' '.join(prefix_parts)} {title}"
         else:
             display_title = title
+
+        # Non-Technical Owner Escalation Hierarchy Details
+        tech_req = bool(doc.get("technical_assistance_required", False))
+        safe_state = doc.get("safe_operating_state", "Operating normally.")
+        res_type = doc.get("resolution_type", "guided_in_ops")
+        handoff = doc.get("technical_handoff")
 
         detail_rows = [
             {"label": "Durable Obligation ID", "value": obl_id},
@@ -347,10 +607,25 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None) -> 
             {"label": "SLA Deadline", "value": doc.get("due_at")},
             {"label": "Overdue Status", "value": f"BREACHED by {overdue_h} hours" if is_overdue else "Within SLA window"},
             {"label": "Escalation Level", "value": f"Level {esc_level} (Action Urgent)" if is_overdue else "Normal (Pending)"},
+            {"label": "Safe Operating Status", "value": safe_state},
+            {"label": "Resolution Channel", "value": res_type.replace("_", " ").title()},
         ]
+
+        if tech_req:
+            detail_rows.append({"label": "Support Requirement", "value": "Technical assistance may be required."})
+        if handoff:
+            detail_rows.append({"label": "Technical Diagnostic Handoff", "value": handoff})
+
         for k, v in (doc.get("metadata") or {}).items():
             if v is not None:
                 detail_rows.append({"label": k.replace("_", " ").title(), "value": str(v)})
+
+        # Review tracking decoupling
+        review_obj = doc.get("review") or {}
+        review_state = review_obj.get("review_state")
+        if review_state == "acknowledged":
+            display_title = f"[ACKNOWLEDGED - IN PROGRESS] {display_title}"
+            detail_rows.append({"label": "Operator Review Note", "value": review_obj.get("notes") or "Acknowledged in ops triage"})
 
         case_obj = {
             "case_id": obl_id,
@@ -374,6 +649,10 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None) -> 
             "is_overdue": is_overdue,
             "overdue_hours": overdue_h,
             "escalation_level": esc_level,
+            "technical_assistance_required": tech_req,
+            "safe_operating_state": safe_state,
+            "technical_handoff": handoff,
+            "resolution_type": res_type,
             "linked_paths": [],
             "audit_refs": [],
         }

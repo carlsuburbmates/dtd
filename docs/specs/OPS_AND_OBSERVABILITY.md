@@ -104,8 +104,10 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
    Defaults to `unknown` with known gap `"production canary event unverified"` until verified event delivery to the Sentry ingestion endpoint is confirmed.
 4. **Deep Health & Scheduler Observability (`/api/health/deep`):**
    Provides deep dependency diagnostics including database connectivity, system state collection access, Cloud Run environment profile, maintenance mode posture, and background scheduler freshness. The freshness threshold is strictly unified with `/ops` loop monitoring at 750 seconds (600s engine-tick cadence + 150s bounded grace). If `engine_tick` age > 750s, it flags `"delayed_or_stale"`; if `last_status != "ok"` (e.g. `partial_error`), it flags `"failing_or_degraded"`.
-5. **Decoupled Edge Observability (Monitoring the Monitor):**
+5. **Decoupled Edge Observability & Coverage Matrix (Monitoring the Monitor):**
    Eliminates circular dependency where a crashed Cloud Run API cannot display an in-console incident. An external Google Cloud Monitoring uptime check probes `https://dogtrainersdirectory.com.au/api/health` from multiple global edge probes every 5 minutes with zero container compute overhead, firing an external alert directly to `admin@dogtrainersdirectory.com.au` on outage. Provisioned idempotently via `scripts/setup_edge_monitoring.sh` and verified end-to-end via `scripts/test_edge_monitoring_delivery.py`.
+   - **Covered by Edge Probe:** Total Cloud Run container crashes (HTTP 502/503), process OOM, network routing/NAT failures, and total MongoDB Atlas outages/unreachability (latency < 5m).
+   - **Covered by Internal Watchdogs & Durable Ledger (in `/ops`):** Background scheduler stalls (>750s threshold, 1h SLA), unverified/overdue trainer submissions (48h SLA), stuck profile claim locks (4h SLA), failed message deliveries (12h SLA), and external provider auth/quota errors (6h SLA).
 6. **Level 1 Honest Status Contract:**
    `/ops` Level 1 guarantees honest state reporting: if background loop telemetry is missing or unobserved, it refuses to report "All Running Normally" and instead displays `monitoring_unverified` ("Monitoring telemetry unverified or stale").
 7. **Durable Owner Responsibility Ledger (`db.ops_obligations`):**
@@ -123,14 +125,28 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
      - `Level 0`: Within SLA window.
      - `Level 1` (Overdue): Automatically sets `is_overdue = True`, status `"escalated"`, severity `"high"`, prepending `[OVERDUE ESCALATION]` badge to the summary.
      - `Level 2` (Critical): Escalates priority to highest tier (sorting rank -1 or -2), forcing the case to the very top of `/ops` Work Queue.
-   - **Resolution Invariant:** An obligation cannot be silently wiped by cache flushes or log roll-overs. It is resolved either by explicit operator review action (persisted in `ops_obligations.review`) or automatically cleared ONLY when the underlying domain entity reaches a verified terminal state.
-8. **Explicit Scheduler Profiles & Subtask Outcome Tracking:**
-   The master orchestrator `/api/internal/jobs/engine-tick` mandates explicit execution profiles (`profile=monitoring|routine|maintenance|all`):
-   - `profile="monitoring"` (or `"readonly"`): **Strictly ZERO database or entity mutations.** Skips ranking recalculations, conversion promotions, inventory maintenance, nurture sequences, and reactivation routing. Executes strictly the health probe, obligations ledger sync, and read-only AI investigation on active incidents.
-   - `profile="routine"`: Core data pipeline executing ranking, conversion promotions, sponsor inventory, health checks, obligations sync, and AI analysis.
-   - `profile="maintenance"`: Routine profile plus trainer nurture and reactivation routing (safely gated).
-   - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production).
+   - **Positive-Evidence Terminal Resolution Invariant:** Absence from a scan NEVER resolves an obligation. Query exceptions, collection timeouts, missing source rows, and scan truncations preserve the obligation in its pending/escalated state. An obligation is resolved ONLY when:
+     1. Dedicated verifier `verify_obligation_terminal_state(db, obl)` queries the specific underlying entity and finds verified positive evidence that it reached a terminal state (e.g. submission is published or rejected; claim is verified or expired with lock released; message retry succeeded); OR
+     2. An explicitly authorised owner action legitimately resolves the case (`state: "resolved"`), creating an immutable audit record with reviewer notes.
+   - **Review State Decoupling:** Review acknowledgment (`state: "investigating"`) or dismissal (`state: "dismissed"`) updates `review.review_state` but does NOT resolve the obligation or falsely certify business completion. The obligation remains tracked in `/ops` until verified resolved.
+   - **Recurrence Safety:** If an entity re-fails after being resolved (e.g. a new delivery failure, or a stalled scheduler), sync detects recurrence, increments `recurrence_count`, prepends `(Recurred xN)` badge, and reopens the obligation without flapping or history deletion.
+8. **Truthful Scheduler Execution Contract & Profile Mutation Boundaries:**
+   The master orchestrator `/api/internal/jobs/engine-tick` mandates explicit execution profiles (`profile=monitoring|routine|maintenance|all`). Unknown or malformed profiles fail closed with `HTTP 400`.
+   - `profile="monitoring"` (or `"readonly"`): **Strictly ZERO customer/trainer/derived entity mutations.** No profile edits, ranking score updates, conversion promotions, sponsor inventory changes, nurture sequences, reactivation routing, external emails, or self-healing routines. Permitted internal operational-state writes only: `system_state` (telemetry/leases), `ops_obligations` (durable ledger sync), and `ops_ai_investigations` (advisory analysis).
+   - `profile="routine"`: Core operational pipeline executing ranking recalculation, conversion promotions, sponsor inventory maintenance, health checks, obligations sync, and AI analysis.
+   - `profile="maintenance"`: Routine profile plus trainer nurture and reactivation routing (safely gated with `ENABLE_REACTIVATION_NOTIFICATIONS=0`).
+   - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production via `is_production_environment() == True`, and default-disabled in sandbox via `OPS_SELF_HEALING_ENABLED=0`).
    - **Subtask Error & Consecutive Failure Tracking:** Captures subtask exceptions without aborting subsequent checks, records `last_status: "partial_error"`, persists `last_error: error_summary`, and increments `consecutive_failures`. Any `partial_error` immediately triggers loop status `"investigate"` or `"escalate"`, regardless of timestamp freshness.
+   - **Unified Freshness Policy:** Aligned strictly at 750 seconds (600s interval + 150s grace) across `/ops` and `/health/deep`.
+9. **Practical Non-Technical Owner Escalation Hierarchy:**
+   DTD is managed by a single non-technical operator. Operational cases in `/ops` must NEVER instruct the owner to modify Python code, run database queries, reconfigure MongoDB, or debug CLI tools. Instead, every case is mapped into:
+   - **A. Automated Resolution:** Bounded, deterministic background routines for mechanical faults (e.g. transient locks).
+   - **B. Guided In-Ops Action:** Plain-English, safe triage buttons (`Resolve`, `Acknowledge`, `Dismiss`) with structured 3-question guidance (*What happened? Why does it matter? What can I do?*).
+   - **C. External Provider Action:** Clear step-by-step instructions and direct destination links for external dashboards (e.g. Stripe, Resend).
+   - **D. Technical Specialist Escalation:** When infrastructure expertise is required:
+     - Clear indicator: `"Technical assistance may be required."`
+     - Reassurance: Explicit `safe_operating_state` (e.g. *"DTD public directory remains operational; routine background ranking and nurture updates are paused."*).
+     - Sanitized Technical Handoff: Ready-to-copy diagnostic text summarizing errors, consecutive failure counts, and endpoints without exposing secrets.
 
 ### AI degradation telemetry and temporal contracts (Phase 1)
 

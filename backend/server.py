@@ -3560,18 +3560,28 @@ async def run_engine_tick_job(
 
         profile_raw = profile.default if hasattr(profile, "default") else profile
         profile_clean = str(profile_raw or "monitoring").lower().strip()
+
+        # Strict validation: Fail closed on unknown or malformed profile
+        VALID_PROFILES = {"monitoring", "readonly", "telemetry", "routine", "standard", "maintenance", "ops", "all", "full"}
+        if profile_clean not in VALID_PROFILES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid scheduler profile '{profile_clean}'. Valid profiles are: monitoring, routine, maintenance, all.",
+            )
+
         include_all = profile_clean in ("all", "full")
         include_maintenance = include_all or profile_clean in ("maintenance", "ops")
         include_routine = include_maintenance or profile_clean in ("routine", "standard")
         is_monitoring_only = profile_clean in ("monitoring", "readonly", "telemetry")
 
-        # In monitoring mode, do not mutate directory entities (trainers, intros, reservations)
-        if not is_monitoring_only:
+        # In monitoring mode: STRICTLY ZERO customer/trainer/derived entity mutations.
+        # Derived business-data updates (ranking, conversions, inventory) run ONLY in routine/maintenance/all profiles.
+        if include_routine:
             await _execute_loop_step("ranking", lambda: recompute_ranking(db))
             await _execute_loop_step("inference", lambda: promote_inferred_conversions(db))
             await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
 
-        # Health and durable obligations ledger run across all profiles
+        # Internal operational-state telemetry (health) and durable obligations ledger sync run across all valid profiles
         await _execute_loop_step("health", lambda: update_health(db))
         await _execute_loop_step("ops_obligations", lambda: ops_obligations.sync_durable_obligations(db))
 
@@ -6878,19 +6888,32 @@ async def update_oversight_case_review(
     if target_case_id.startswith("obligation:"):
         obligations_coll = getattr(db, "ops_obligations", None)
         if obligations_coll is not None and hasattr(obligations_coll, "update_one"):
+            if normalized_state == "resolved":
+                obl_update = {
+                    "status": "resolved",
+                    "resolution": {
+                        "resolved_at": updated_at,
+                        "resolved_by": f"ops:{owner}" if owner else "ops",
+                        "notes": note,
+                        "type": "operator_action",
+                    },
+                    "last_synced_at": updated_at,
+                }
+            else:
+                # Acknowledgment ("investigating") or Dismissal ("dismissed") updates the review state
+                # without falsely certifying underlying business completion or resolving the obligation.
+                obl_update = {
+                    "review": {
+                        "review_state": normalized_state,
+                        "owner": owner,
+                        "notes": note,
+                        "updated_at": updated_at,
+                    },
+                    "last_synced_at": updated_at,
+                }
             await obligations_coll.update_one(
                 {"obligation_id": target_case_id},
-                {
-                    "$set": {
-                        "status": normalized_state,
-                        "resolution": {
-                            "resolved_at": updated_at,
-                            "resolved_by": f"ops:{owner}" if owner else "ops",
-                            "notes": note,
-                        },
-                        "last_synced_at": updated_at,
-                    }
-                },
+                {"$set": obl_update},
             )
     await _audit("ops_case_review_updated", target_case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
     merged_case = _merge_ops_case_state(current_case, after)

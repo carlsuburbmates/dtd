@@ -93,30 +93,37 @@
   - Created dedicated MongoDB persistence collection `db.ops_obligations` with unique index on `obligation_id` and compound index on `(status, is_overdue)`.
   - Authoritative SLA windows per operational domain: scheduler (1h), claim_lock (4h), provider (6h), client_enquiry (12h), directory_guardian (24h), trainer_verification (48h), billing (72h).
   - Multi-tier escalation logic: breaches auto-flag `is_overdue=True`, promote to severity `"high"` with `[OVERDUE ESCALATION]` badge, and sort to the top of `/ops` Work Queue (priority rank -1 or -2).
-  - Invariant: Responsibilities cannot be wiped by cache flushes, log roll-overs, or server restarts. Auto-cleared ONLY upon verified terminal entity resolution, or operator review (persisted directly in `ops_obligations.review`).
-- 2. Explicit Scheduler Execution Profiles & Outcome Tracking:
-  - `profile="monitoring"` (default): **Strictly ZERO database or business entity mutations.** Skips ranking recalculation, conversion promotions, sponsor inventory, nurture, and reactivation. Executes only health check, obligations ledger sync, and read-only AI investigation on active incidents.
+  - Positive-Evidence Terminal Resolution Invariant: Absence from a scan NEVER resolves an obligation. Query exceptions, collection timeouts, missing source rows, and scan truncations preserve the obligation in its pending/escalated state. An obligation is resolved ONLY when dedicated verifier `verify_obligation_terminal_state` inspects the underlying entity and finds verified positive evidence that it reached a terminal state, or an explicit operator review action resolves it.
+  - Review State Decoupling: Review acknowledgment (`state: "investigating"`) or dismissal (`state: "dismissed"`) updates `review.review_state` but does NOT resolve the obligation or falsely certify business completion.
+  - Recurrence Safety: If an entity re-fails after being resolved, sync detects recurrence, increments `recurrence_count`, prepends `(Recurred xN)` badge, and reopens the obligation without flapping or history deletion.
+- 2. Truthful Scheduler Execution Contract & Outcome Tracking:
+  - `profile="monitoring"` (default): **Strictly ZERO customer/trainer/derived entity mutations.** No profile edits, ranking score updates, conversion promotions, sponsor inventory changes, nurture sequences, reactivation routing, external emails, or self-healing routines. Permitted internal operational-state writes only: `system_state` (telemetry/leases), `ops_obligations` (durable ledger sync), and `ops_ai_investigations` (advisory analysis).
   - `profile="routine"`: Core data pipeline (ranking, conversions, sponsor inventory, health, obligations, AI analyst).
   - `profile="maintenance"`: Routine plus trainer nurture and reactivation routing.
   - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production).
+  - Fail-closed Profile Validation: Unknown or malformed profiles fail closed with `HTTP 400`.
   - Subtask error tracking: Captures subtask exceptions without crashing the tick, records `last_status: "partial_error"`, persists `last_error: error_summary`, and increments `consecutive_failures`.
   - Loop status immediately flags `"investigate"` or `"escalate"` if `last_status == "partial_error"`, regardless of timestamp freshness.
   - Unified freshness threshold: strictly aligned at 750 seconds (600s cadence + 150s grace) across `/ops` loop monitoring and `/api/health/deep`.
-- 3. Independent Edge Outage Detection & Decoupled Alerting:
+- 3. Independent Edge Outage Detection, Decoupled Alerting & Coverage Matrix:
   - Idempotent script `scripts/setup_edge_monitoring.sh` provisions Google Cloud Monitoring multi-region external uptime check probing `/api/health` every 5m.
   - Configures email notification channel to `admin@dogtrainersdirectory.com.au`, fully decoupled from Cloud Run container execution.
-  - Verification test `scripts/test_edge_monitoring_delivery.py` passed 4/4 gates: live health probe (HTTP 200), deep diagnostics, container crash and database outage detection simulation, and decoupled owner alert notification payload contract.
+  - Verification test `scripts/test_edge_monitoring_delivery.py` passed 5/5 gates: live health probe (HTTP 200), deep diagnostics, container crash and database outage detection simulation, decoupled owner alert notification payload contract, and failure coverage matrix evaluation.
+  - Coverage Matrix: Edge probe covers container crash (502/503), OOM, and database unreachability (<5m latency). Internal watchdogs & durable ledger in `/ops` cover scheduler stalls (1h SLA), unverified trainers (48h SLA), stuck claim locks (4h SLA), failed messages (12h SLA), and provider degradation (6h SLA).
 - 4. Verified Production Rollback Runbook:
   - Corrected previous invalid `firebase hosting:clone` command syntax. Documented 3 supported, verified rollback procedures:
     1. Firebase Console 1-Click Rollback (Fastest/Instant) via Hosting Release History.
     2. Firebase Hosting REST API Rollback via Google Cloud OAuth token.
     3. Deterministic Git Source Re-Deploy (`git checkout 5733d4d`).
-- 5. Verification Suite Execution:
-  - Isolated backend integration suite: **597 / 597 passed** in 1.49s (`backend/scripts/run_isolated_integration_suite.py`).
-  - Targeted operational pytest suite: **114 / 114 passed** in 7.11s (`test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, `test_public_mode_unit.py`).
-  - Edge monitoring test: **4 / 4 passed** in 1.39s (`scripts/test_edge_monitoring_delivery.py`).
-  - Frontend Vitest suite: **74 / 74 passed** in 1.94s across 10 test files.
-  - Frontend production build: Vite v8.3.4 clean production compilation in 685ms (`frontend/build`).
+- 5. Practical Non-Technical Owner Escalation Hierarchy:
+  - Existing cases in `/ops` refactored to eliminate CLI, Python code, or database instructions.
+  - Infrastructure issues display `"Technical assistance may be required."`, clear business impact, explicit `safe_operating_state` (reassuring that DTD directory browsing is safe), and a sanitized technical handoff text.
+- 6. Verification Suite Execution:
+  - Isolated backend integration suite: **603 / 603 passed** in 1.46s (`backend/scripts/run_isolated_integration_suite.py`).
+  - Targeted operational pytest suite: **120 / 120 passed** in 0.40s across `test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, and `test_public_mode_unit.py`.
+  - Edge monitoring test: **5 / 5 passed** in 2.50s (`scripts/test_edge_monitoring_delivery.py`).
+  - Frontend Vitest suite: **74 / 74 passed** in 1.52s across 10 test files.
+  - Frontend production build: Vite v8.3.4 clean production compilation in 689ms (`frontend/build`).
 - Production Boundaries Strictly Respected:
   - Production backend remains locked to `dtd-api-00058-ter` in `gen-lang-client-0028123502`.
   - Production frontend remains served by Firebase Hosting release `1792053117314000` (Version `f92934ec71003666`).
