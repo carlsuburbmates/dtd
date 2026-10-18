@@ -3410,6 +3410,7 @@ ENGINE_TICK_LEASE_TTL_S = 180
 @api.post("/internal/jobs/engine-tick")
 async def run_engine_tick_job(
     authorization: str = Header(default="", alias="Authorization"),
+    profile: str = Query(default="all"),
 ) -> Dict[str, Any]:
     """Authenticated, serverless execution boundary for autonomous engine loops.
 
@@ -3511,12 +3512,19 @@ async def run_engine_tick_job(
             run_reactivation_routing,
         )
 
+        profile_raw = profile.default if hasattr(profile, "default") else profile
+        profile_clean = str(profile_raw or "all").lower().strip()
+        include_all = profile_clean in ("all", "full")
+        include_maintenance = include_all or profile_clean in ("maintenance", "ops")
+
         await _execute_loop_step("ranking", lambda: recompute_ranking(db))
         await _execute_loop_step("inference", lambda: promote_inferred_conversions(db))
         await _execute_loop_step("health", lambda: update_health(db))
         await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
-        await _execute_loop_step("nurture", lambda: run_growth_nurture(db))
-        await _execute_loop_step("reactivation_route", lambda: run_reactivation_routing(db))
+
+        if include_maintenance:
+            await _execute_loop_step("nurture", lambda: run_growth_nurture(db))
+            await _execute_loop_step("reactivation_route", lambda: run_reactivation_routing(db))
 
         async def _run_scheduled_analyst():
             active_cases = await _current_ops_cases()
@@ -3524,16 +3532,17 @@ async def run_engine_tick_job(
 
         await _execute_loop_step("ops_ai_analyst", _run_scheduled_analyst)
 
-        async def _run_scheduled_recovery_step():
-            active_cases = await _current_ops_cases()
-            return await ops_recovery.run_scheduled_recovery(
-                db,
-                active_cases,
-                audit_fn=_audit,
-                max_batch=2,
-            )
+        if include_all:
+            async def _run_scheduled_recovery_step():
+                active_cases = await _current_ops_cases()
+                return await ops_recovery.run_scheduled_recovery(
+                    db,
+                    active_cases,
+                    audit_fn=_audit,
+                    max_batch=2,
+                )
 
-        await _execute_loop_step("ops_self_healing", _run_scheduled_recovery_step)
+            await _execute_loop_step("ops_self_healing", _run_scheduled_recovery_step)
     finally:
         total_duration_ms = round((time.time() - started_time) * 1000, 2)
         has_error = any(step.get("status") == "error" for step in results.values())
@@ -3570,6 +3579,7 @@ async def run_engine_tick_job(
     return {
         "ok": not has_error,
         "job": "engine-tick",
+        "profile": profile_clean,
         "status": overall_status,
         "results": results,
         "duration_ms": total_duration_ms,

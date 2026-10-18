@@ -109,6 +109,13 @@ def _int_env(name: str, default: int, *, minimum: int = 1, maximum: int = 10_000
     return max(minimum, min(maximum, value))
 
 
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = (os.environ.get(name) or "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on", "enabled")
+
+
 # ---------------------------------------------------------------------------
 # Ranking loop — composite outcome score
 # ---------------------------------------------------------------------------
@@ -743,6 +750,7 @@ async def run_reactivation_routing(db) -> Dict[str, Any]:
     trainers = await db.trainers.find({}, {"_id": 0}).to_list(3000)
     now_dt = now()
     notify_cooldown_h = _int_env("REACTIVATION_NOTIFY_COOLDOWN_HOURS", 168, minimum=12, maximum=24 * 60)
+    notifications_enabled = _bool_env("ENABLE_REACTIVATION_NOTIFICATIONS", default=False)
 
     candidates: Dict[str, Dict[str, Any]] = {}
     for trainer in trainers:
@@ -783,7 +791,7 @@ async def run_reactivation_routing(db) -> Dict[str, Any]:
         routed += 1
 
         last_notified_at = _parse_iso(str((prior or {}).get("last_notified_at") or ""))
-        should_notify = prior is None
+        should_notify = prior is None and notifications_enabled
         if last_notified_at and (now_dt - last_notified_at).total_seconds() < notify_cooldown_h * 3600:
             should_notify = False
         if not should_notify:
@@ -824,6 +832,7 @@ async def run_reactivation_routing(db) -> Dict[str, Any]:
         "routed": routed,
         "notified": notified,
         "skipped_notify": skipped_notify,
+        "notifications_enabled": notifications_enabled,
         "resolved": len(resolved_ids),
         "open_candidates": routed,
     }

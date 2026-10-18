@@ -509,6 +509,88 @@ def test_engine_tick_successful_run_records_telemetry():
     asyncio.run(_test())
 
 
+def test_engine_tick_profile_readonly_skips_maintenance_and_recovery():
+    async def _test():
+        mock_state_coll = _MockCollection(rows=[])
+        orig_db = server.db
+        server.db = _MockDB(system_state=mock_state_coll)
+
+        nurture_mock = AsyncMock(return_value={"nurtured": 0})
+        reactivation_mock = AsyncMock(return_value={"routed": 0})
+        recovery_mock = AsyncMock(return_value={"recovered": 0})
+
+        with patch.object(server, "_require_cloud_scheduler_oidc", return_value=None), \
+             patch("services.engine.recompute_ranking", AsyncMock(return_value={"trainers_scored": 5})), \
+             patch("services.engine.promote_inferred_conversions", AsyncMock(return_value={"promoted": 1})), \
+             patch("services.engine.update_health", AsyncMock(return_value={"healthy": True})), \
+             patch("services.engine.maintain_sponsor_inventory", AsyncMock(return_value={"released": 0})), \
+             patch("services.engine.run_growth_nurture", nurture_mock), \
+             patch("services.engine.run_reactivation_routing", reactivation_mock), \
+             patch("services.ops_recovery.run_scheduled_recovery", recovery_mock):
+
+            res = await server.run_engine_tick_job(authorization="Bearer mock", profile="readonly")
+            assert res["ok"] is True
+            assert res["profile"] == "readonly"
+            assert "ranking" in res["results"]
+            assert "health" in res["results"]
+            assert "nurture" not in res["results"]
+            assert "reactivation_route" not in res["results"]
+            assert "ops_self_healing" not in res["results"]
+            assert nurture_mock.call_count == 0
+            assert reactivation_mock.call_count == 0
+            assert recovery_mock.call_count == 0
+
+        server.db = orig_db
+
+    asyncio.run(_test())
+
+
+def test_reactivation_routing_gates_notifications_by_default(monkeypatch):
+    from services import engine
+    async def _test():
+        now_dt = datetime.now(timezone.utc)
+        created_old = (now_dt - timedelta(days=20)).isoformat()
+        trainer = {
+            "id": "tr_inactive_1",
+            "name": "Inactive Trainer",
+            "email": "inactive@example.com",
+            "created_at": created_old,
+            "intros_30d": 0,
+            "published": True,
+            "confidence_score": 0.85,
+        }
+        trainers_coll = _MockCollection(rows=[trainer])
+        reactivation_coll = _MockCollection(rows=[])
+        state_coll = _MockCollection(rows=[])
+        mock_db = _MockDB(
+            trainers=trainers_coll,
+            reactivation_candidates=reactivation_coll,
+            system_state=state_coll,
+        )
+
+        with patch.object(engine.notifications_service, "notify_trainer_reactivation_candidate", AsyncMock()) as notify_mock:
+            # 1. Default: ENABLE_REACTIVATION_NOTIFICATIONS not set / false
+            monkeypatch.delenv("ENABLE_REACTIVATION_NOTIFICATIONS", raising=False)
+            res = await engine.run_reactivation_routing(mock_db)
+            assert res["routed"] == 1
+            assert res["notified"] == 0
+            assert res["skipped_notify"] == 1
+            assert res["notifications_enabled"] is False
+            assert notify_mock.call_count == 0
+
+            # 2. Explicitly enabled: ENABLE_REACTIVATION_NOTIFICATIONS=1
+            reactivation_coll.rows.clear()
+            notify_mock.return_value = {"status": "sent"}
+            monkeypatch.setenv("ENABLE_REACTIVATION_NOTIFICATIONS", "1")
+            res2 = await engine.run_reactivation_routing(mock_db)
+            assert res2["routed"] == 1
+            assert res2["notified"] == 1
+            assert res2["notifications_enabled"] is True
+            assert notify_mock.call_count == 1
+
+    asyncio.run(_test())
+
+
 # ---------------------------------------------------------------------------
 # Workstream F: Read-only Oversight Invariant (Zero DB Writes)
 # ---------------------------------------------------------------------------
