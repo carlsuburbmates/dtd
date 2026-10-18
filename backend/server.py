@@ -74,9 +74,11 @@ from services.seed import MELBOURNE_TRAINERS
 try:
     from services import ops_analyst
     from services import ops_recovery
+    from services import ops_obligations
 except ImportError:
     from backend.services import ops_analyst
     from backend.services import ops_recovery
+    from backend.services import ops_obligations
 
 matching_ai_adapter: Optional[Any] = None
 
@@ -1894,8 +1896,12 @@ async def _ops_case_rows(
     ai_degradation_cases: Optional[List[Dict[str, Any]]] = None,
     sponsor_inventory_cases: Optional[List[Dict[str, Any]]] = None,
     provider_cases: Optional[List[Dict[str, Any]]] = None,
+    obligation_cases: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     cases: List[Dict[str, Any]] = []
+
+    if obligation_cases:
+        cases.extend(obligation_cases)
 
     try:
         submissions_coll = getattr(db, "submissions", None)
@@ -2482,7 +2488,8 @@ def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Di
         last_dt = None
 
     # Priority 1: Real execution failures are never masked by serverless, maintenance, or disabled flags
-    if consecutive_failures > 0 or last_error:
+    last_status = str(loop.get("last_status") or "")
+    if consecutive_failures > 0 or last_error or last_status in ("partial_error", "error"):
         status = "escalate" if consecutive_failures >= 3 else "investigate"
         age_s = max(0, int((now_dt - last_dt).total_seconds())) if last_dt else None
         return {
@@ -2492,7 +2499,7 @@ def _loop_status(loop_key: str, loop: Dict[str, Any], *, now_dt: datetime) -> Di
             "stale_after_s": interval_s + bounded_grace_seconds(interval_s) if interval_s > 0 else None,
             "execution_owner": "failing",
             "execution_mode": "failing",
-            "reason": f"Loop failing: {last_error or f'{consecutive_failures} consecutive failures'}",
+            "reason": f"Loop failing: {last_error or last_status or f'{consecutive_failures} consecutive failures'}",
         }
 
     # Priority 2: Maintenance mode boundary
@@ -2701,22 +2708,27 @@ def _trainer_intro_ready(trainer: Dict[str, Any]) -> bool:
     return not bool(blocker_codes & disqualifying_codes)
 
 
-def _sort_case_priority(case: Dict[str, Any]) -> tuple[int, int, str]:
+def _sort_case_priority(case: Dict[str, Any]) -> tuple[int, int, int, str]:
+    is_overdue = bool(case.get("is_overdue"))
+    esc_level = int(case.get("escalation_level") or 0)
+    overdue_rank = -2 if esc_level >= 2 else (-1 if is_overdue else 0)
     severity_rank = {"high": 0, "medium": 1, "low": 2}
     state_rank = {
-        "detected": 0,
-        "notified": 1,
-        "acknowledged": 2,
-        "investigating": 3,
-        "actioned": 4,
-        "monitoring": 5,
-        "resolved": 6,
-        "deferred": 7,
-        "dismissed": 8,
-        "escalated_to_owner_override": 9,
-        "escalated_to_technical_owner": 10,
+        "escalated": 0,
+        "detected": 1,
+        "notified": 2,
+        "acknowledged": 3,
+        "investigating": 4,
+        "actioned": 5,
+        "monitoring": 6,
+        "resolved": 7,
+        "deferred": 8,
+        "dismissed": 9,
+        "escalated_to_owner_override": 10,
+        "escalated_to_technical_owner": 11,
     }
     return (
+        overdue_rank,
         severity_rank.get(str(case.get("severity") or "low"), 99),
         state_rank.get(str(case.get("state") or "detected"), 99),
         str(case.get("detected_at") or ""),
@@ -3244,12 +3256,25 @@ async def health_deep() -> JSONResponse:
             if last_run_dt.tzinfo is None:
                 last_run_dt = last_run_dt.replace(tzinfo=timezone.utc)
             tick_age_s = max(0, int((datetime.now(timezone.utc) - last_run_dt).total_seconds()))
+
+        last_status = str(engine_tick_doc.get("last_status") or "unknown")
+        is_fresh = tick_age_s is not None and tick_age_s <= 750
+        if last_status in ("partial_error", "error"):
+            sched_status = "failing_or_degraded"
+        elif is_fresh and last_status == "ok":
+            sched_status = "fresh"
+        elif tick_age_s is not None and tick_age_s > 750:
+            sched_status = "delayed_or_stale"
+        else:
+            sched_status = "unobserved"
+
         diagnostics["checks"]["scheduler"] = {
             "last_run": last_run_str,
             "age_s": tick_age_s,
-            "status": "fresh" if tick_age_s is not None and tick_age_s <= 1200 else ("delayed_or_stale" if tick_age_s else "unobserved"),
+            "status": sched_status,
             "execution_owner": engine_tick_doc.get("execution_owner", "none"),
-            "last_status": engine_tick_doc.get("last_status", "unknown"),
+            "last_status": last_status,
+            "threshold_s": 750,
         }
     except Exception as exc:
         diagnostics["checks"]["scheduler"] = {"status": "unknown", "error": str(exc)}
@@ -3431,7 +3456,7 @@ ENGINE_TICK_LEASE_TTL_S = 180
 @api.post("/internal/jobs/engine-tick")
 async def run_engine_tick_job(
     authorization: str = Header(default="", alias="Authorization"),
-    profile: str = Query(default="all"),
+    profile: str = Query(default="monitoring"),
 ) -> Dict[str, Any]:
     """Authenticated, serverless execution boundary for autonomous engine loops.
 
@@ -3534,14 +3559,21 @@ async def run_engine_tick_job(
         )
 
         profile_raw = profile.default if hasattr(profile, "default") else profile
-        profile_clean = str(profile_raw or "all").lower().strip()
+        profile_clean = str(profile_raw or "monitoring").lower().strip()
         include_all = profile_clean in ("all", "full")
         include_maintenance = include_all or profile_clean in ("maintenance", "ops")
+        include_routine = include_maintenance or profile_clean in ("routine", "standard")
+        is_monitoring_only = profile_clean in ("monitoring", "readonly", "telemetry")
 
-        await _execute_loop_step("ranking", lambda: recompute_ranking(db))
-        await _execute_loop_step("inference", lambda: promote_inferred_conversions(db))
+        # In monitoring mode, do not mutate directory entities (trainers, intros, reservations)
+        if not is_monitoring_only:
+            await _execute_loop_step("ranking", lambda: recompute_ranking(db))
+            await _execute_loop_step("inference", lambda: promote_inferred_conversions(db))
+            await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
+
+        # Health and durable obligations ledger run across all profiles
         await _execute_loop_step("health", lambda: update_health(db))
-        await _execute_loop_step("sponsor_inventory", lambda: maintain_sponsor_inventory(db))
+        await _execute_loop_step("ops_obligations", lambda: ops_obligations.sync_durable_obligations(db))
 
         if include_maintenance:
             await _execute_loop_step("nurture", lambda: run_growth_nurture(db))
@@ -3566,12 +3598,18 @@ async def run_engine_tick_job(
             await _execute_loop_step("ops_self_healing", _run_scheduled_recovery_step)
     finally:
         total_duration_ms = round((time.time() - started_time) * 1000, 2)
-        has_error = any(step.get("status") == "error" for step in results.values())
+        failed_steps = [name for name, step in results.items() if step.get("status") == "error"]
+        has_error = len(failed_steps) > 0
         overall_status = "partial_error" if has_error else "ok"
+        error_summary = f"{len(failed_steps)} step(s) failed: {', '.join(failed_steps)}" if has_error else ""
         completed_ts = now_iso()
 
         if system_state_coll is not None:
             try:
+                prev_doc = await system_state_coll.find_one({"key": "engine_tick"}, {"_id": 0, "consecutive_failures": 1}) or {}
+                prev_failures = int(prev_doc.get("consecutive_failures") or 0)
+                consecutive_failures = (prev_failures + 1) if has_error else 0
+
                 await system_state_coll.update_one(
                     {"key": "engine_tick"},
                     {
@@ -3580,6 +3618,9 @@ async def run_engine_tick_job(
                             "last_run": completed_ts,
                             "execution_owner": "cloud_scheduler",
                             "last_status": overall_status,
+                            "last_error": error_summary,
+                            "consecutive_failures": consecutive_failures,
+                            "failed_steps": failed_steps,
                             "duration_ms": total_duration_ms,
                             "results": results,
                         }
@@ -6714,6 +6755,12 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         ).sort("created_at", -1).limit(50).to_list(50)
         abn_degradation_cases.extend(trainer_degraded)
 
+    try:
+        obligation_cases = await ops_obligations.get_active_obligation_cases(db, now_dt=now_dt)
+    except Exception as exc:
+        logger.warning("Error fetching durable obligation cases: %s", exc)
+        obligation_cases = []
+
     return await _ops_case_rows(
         discovery_summary=discovery_summary,
         waitlist_summary=waitlist_summary,
@@ -6729,6 +6776,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         ai_degradation_cases=ai_degradation_cases,
         sponsor_inventory_cases=sponsor_inventory_snapshot.get("exceptions", []),
         provider_cases=provider_health.cases(provider_snapshot),
+        obligation_cases=obligation_cases,
     )
 
 
@@ -6827,6 +6875,23 @@ async def update_oversight_case_review(
         "occurrence_fingerprint": current_fp,
     }
     await states_coll.update_one({"case_id": target_case_id}, {"$set": after}, upsert=True)
+    if target_case_id.startswith("obligation:"):
+        obligations_coll = getattr(db, "ops_obligations", None)
+        if obligations_coll is not None and hasattr(obligations_coll, "update_one"):
+            await obligations_coll.update_one(
+                {"obligation_id": target_case_id},
+                {
+                    "$set": {
+                        "status": normalized_state,
+                        "resolution": {
+                            "resolved_at": updated_at,
+                            "resolved_by": f"ops:{owner}" if owner else "ops",
+                            "notes": note,
+                        },
+                        "last_synced_at": updated_at,
+                    }
+                },
+            )
     await _audit("ops_case_review_updated", target_case_id, before=before or None, after=after, actor=f"ops:{owner}" if owner else "ops")
     merged_case = _merge_ops_case_state(current_case, after)
     return _scrub({"ok": True, "case": merged_case})
@@ -8612,6 +8677,10 @@ async def _ensure_indexes() -> None:
         if ops_rec_coll is not None and hasattr(ops_rec_coll, "create_index"):
             await ops_rec_coll.create_index("case_id", unique=True, sparse=True)
             await ops_rec_coll.create_index([("status", 1), ("updated_at", -1)])
+        ops_obl_coll = getattr(db, "ops_obligations", None)
+        if ops_obl_coll is not None and hasattr(ops_obl_coll, "create_index"):
+            await ops_obl_coll.create_index("obligation_id", unique=True, sparse=True)
+            await ops_obl_coll.create_index([("status", 1), ("is_overdue", -1)])
     except Exception as exc:
         logger.warning("Startup database index creation non-fatal warning: %s", exc)
 

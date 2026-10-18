@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -491,7 +492,7 @@ def test_engine_tick_successful_run_records_telemetry():
              patch("services.engine.run_growth_nurture", AsyncMock(return_value={"nurtured": 0})), \
              patch("services.engine.run_reactivation_routing", AsyncMock(return_value={"routed": 0})):
 
-            res = await server.run_engine_tick_job(authorization="Bearer mock")
+            res = await server.run_engine_tick_job(authorization="Bearer mock", profile="routine")
             assert res["ok"] is True
             assert res["job"] == "engine-tick"
             assert res["status"] == "ok"
@@ -503,42 +504,52 @@ def test_engine_tick_successful_run_records_telemetry():
             assert tick_doc is not None
             assert tick_doc["execution_owner"] == "cloud_scheduler"
             assert tick_doc["last_status"] == "ok"
+            assert tick_doc["consecutive_failures"] == 0
 
         server.db = orig_db
 
     asyncio.run(_test())
 
 
-def test_engine_tick_profile_readonly_skips_maintenance_and_recovery():
+def test_engine_tick_profile_monitoring_has_strictly_zero_entity_mutations():
     async def _test():
         mock_state_coll = _MockCollection(rows=[])
         orig_db = server.db
         server.db = _MockDB(system_state=mock_state_coll)
 
+        ranking_mock = AsyncMock(return_value={"trainers_scored": 5})
+        inference_mock = AsyncMock(return_value={"promoted": 1})
+        sponsor_mock = AsyncMock(return_value={"released": 0})
         nurture_mock = AsyncMock(return_value={"nurtured": 0})
         reactivation_mock = AsyncMock(return_value={"routed": 0})
         recovery_mock = AsyncMock(return_value={"recovered": 0})
+        health_mock = AsyncMock(return_value={"healthy": True})
+        obligations_mock = AsyncMock(return_value=[])
 
         with patch.object(server, "_require_cloud_scheduler_oidc", return_value=None), \
-             patch("services.engine.recompute_ranking", AsyncMock(return_value={"trainers_scored": 5})), \
-             patch("services.engine.promote_inferred_conversions", AsyncMock(return_value={"promoted": 1})), \
-             patch("services.engine.update_health", AsyncMock(return_value={"healthy": True})), \
-             patch("services.engine.maintain_sponsor_inventory", AsyncMock(return_value={"released": 0})), \
+             patch("services.engine.recompute_ranking", ranking_mock), \
+             patch("services.engine.promote_inferred_conversions", inference_mock), \
+             patch("services.engine.update_health", health_mock), \
+             patch("services.engine.maintain_sponsor_inventory", sponsor_mock), \
              patch("services.engine.run_growth_nurture", nurture_mock), \
              patch("services.engine.run_reactivation_routing", reactivation_mock), \
+             patch("services.ops_obligations.sync_durable_obligations", obligations_mock), \
              patch("services.ops_recovery.run_scheduled_recovery", recovery_mock):
 
-            res = await server.run_engine_tick_job(authorization="Bearer mock", profile="readonly")
+            # Default profile is "monitoring"
+            res = await server.run_engine_tick_job(authorization="Bearer mock")
             assert res["ok"] is True
-            assert res["profile"] == "readonly"
-            assert "ranking" in res["results"]
-            assert "health" in res["results"]
-            assert "nurture" not in res["results"]
-            assert "reactivation_route" not in res["results"]
-            assert "ops_self_healing" not in res["results"]
+            assert res["profile"] == "monitoring"
+            # Verify data pipeline mutators were NOT invoked
+            assert ranking_mock.call_count == 0
+            assert inference_mock.call_count == 0
+            assert sponsor_mock.call_count == 0
             assert nurture_mock.call_count == 0
             assert reactivation_mock.call_count == 0
             assert recovery_mock.call_count == 0
+            # Only health and obligations monitoring were called
+            assert health_mock.call_count == 1
+            assert obligations_mock.call_count >= 1
 
         server.db = orig_db
 
@@ -638,3 +649,145 @@ def test_oversight_get_endpoint_zero_db_writes():
         server.db = orig_db
 
     asyncio.run(_test())
+
+
+def test_engine_tick_partial_error_and_consecutive_failure_tracking():
+    async def _test():
+        mock_state_coll = _MockCollection(rows=[])
+        orig_db = server.db
+        server.db = _MockDB(system_state=mock_state_coll)
+
+        failing_step = AsyncMock(side_effect=RuntimeError("Ranking calculation exploded"))
+        with patch.object(server, "_require_cloud_scheduler_oidc", return_value=None), \
+             patch("services.engine.recompute_ranking", failing_step), \
+             patch("services.engine.promote_inferred_conversions", AsyncMock(return_value={"promoted": 1})), \
+             patch("services.engine.update_health", AsyncMock(return_value={"healthy": True})), \
+             patch("services.engine.maintain_sponsor_inventory", AsyncMock(return_value={"released": 0})), \
+             patch("services.ops_obligations.sync_durable_obligations", AsyncMock(return_value=[])):
+
+            res = await server.run_engine_tick_job(authorization="Bearer mock", profile="routine")
+            assert res["ok"] is False
+            assert res["status"] == "partial_error"
+            assert res["results"]["ranking"]["status"] == "error"
+
+            tick_doc = next((r for r in mock_state_coll.rows if r.get("key") == "engine_tick"), None)
+            assert tick_doc is not None
+            assert tick_doc["last_status"] == "partial_error"
+            assert tick_doc["consecutive_failures"] == 1
+            assert "ranking" in tick_doc["last_error"]
+
+            # Verify _loop_status reports investigate/failing even though tick was just run (fresh)
+            now_dt = datetime.now(timezone.utc)
+            loop_stat = server._loop_status("engine_tick", tick_doc, now_dt=now_dt)
+            assert loop_stat["status"] in ("investigate", "escalate")
+            assert loop_stat["execution_owner"] == "failing"
+
+        server.db = orig_db
+
+    asyncio.run(_test())
+
+
+def test_health_deep_scheduler_outcome_and_threshold():
+    async def _test():
+        now_dt = datetime.now(timezone.utc)
+        recent_iso = now_dt.isoformat()
+        old_iso = (now_dt - timedelta(seconds=800)).isoformat()
+
+        # Case 1: Fresh and OK
+        mock_coll = _MockCollection(rows=[
+            {"key": "engine_tick", "last_run": recent_iso, "last_status": "ok", "execution_owner": "cloud_scheduler"}
+        ])
+        orig_db = server.db
+        server.db = _MockDB(system_state=mock_coll)
+
+        resp = await server.health_deep()
+        data = json.loads(resp.body.decode("utf-8"))
+        assert data["checks"]["scheduler"]["status"] == "fresh"
+        assert data["checks"]["scheduler"]["threshold_s"] == 750
+
+        # Case 2: Fresh but partial_error -> must be failing_or_degraded!
+        mock_coll.rows = [
+            {"key": "engine_tick", "last_run": recent_iso, "last_status": "partial_error", "execution_owner": "cloud_scheduler"}
+        ]
+        resp = await server.health_deep()
+        data = json.loads(resp.body.decode("utf-8"))
+        assert data["checks"]["scheduler"]["status"] == "failing_or_degraded"
+
+        # Case 3: Stale (> 750s)
+        mock_coll.rows = [
+            {"key": "engine_tick", "last_run": old_iso, "last_status": "ok", "execution_owner": "cloud_scheduler"}
+        ]
+        resp = await server.health_deep()
+        data = json.loads(resp.body.decode("utf-8"))
+        assert data["checks"]["scheduler"]["status"] == "delayed_or_stale"
+
+        server.db = orig_db
+
+    asyncio.run(_test())
+
+
+def test_ops_obligations_persistence_and_escalation():
+    from services import ops_obligations
+    async def _test():
+        now_dt = datetime.now(timezone.utc)
+        old_created = (now_dt - timedelta(hours=50)).isoformat()  # > 48h SLA
+
+        mock_subs = _MockCollection(rows=[
+            {
+                "id": "sub_overdue_1",
+                "business_name": "Overdue K9 Academy",
+                "status": "pending",
+                "abn_status": "unverified",
+                "created_at": old_created,
+            }
+        ])
+        mock_claims = _MockCollection(rows=[])
+        mock_msg = _MockCollection(rows=[])
+        mock_state = _MockCollection(rows=[])
+        mock_obligations = _MockCollection(rows=[])
+
+        orig_db = server.db
+        server.db = _MockDB(
+            submissions=mock_subs,
+            claim_events=mock_claims,
+            message_log=mock_msg,
+            system_state=mock_state,
+            ops_obligations=mock_obligations,
+            ops_case_states=_MockCollection(rows=[]),
+        )
+
+        cases = await ops_obligations.get_active_obligation_cases(server.db, now_dt=now_dt)
+        assert len(cases) == 1
+        case = cases[0]
+        assert case["case_id"] == "obligation:submission:sub_overdue_1"
+        assert "[OVERDUE ESCALATION]" in case["title"]
+        assert case["is_overdue"] is True
+        assert case["escalation_level"] >= 1
+        assert case["severity"] == "high"
+
+        # Verify persisted in ops_obligations collection
+        obl_doc = next((r for r in mock_obligations.rows if r.get("obligation_id") == "obligation:submission:sub_overdue_1"), None)
+        assert obl_doc is not None
+        assert obl_doc["status"] == "escalated"
+        assert obl_doc["is_overdue"] is True
+
+        # Verify review action resolves the obligation in the ledger
+        with patch.object(server, "require_oversight", return_value=None), \
+             patch.object(server, "_audit", AsyncMock()):
+            review_payload = server.OpsCaseReviewIn(
+                state="resolved",
+                owner="carl",
+                note="Verified manually against official ABR register",
+            )
+            res = await server.update_oversight_case_review(
+                case_id="obligation:submission:sub_overdue_1",
+                payload=review_payload,
+            )
+            assert res["ok"] is True
+            assert obl_doc["status"] == "resolved"
+            assert obl_doc["resolution"]["notes"] == "Verified manually against official ABR register"
+
+        server.db = orig_db
+
+    asyncio.run(_test())
+

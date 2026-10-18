@@ -87,27 +87,41 @@
 
 ## Live refresh — 18 October 2026
 
-- Unified Operations Production Completion: Proactive Agentic Stewardship, End-to-End Integration & Final Release Preparation.
-- Background Scheduling Safety & Scoped Execution Profiles:
-  - Added support for execution profiles on `/api/internal/jobs/engine-tick` (`profile=readonly`, `profile=maintenance`, `profile=all`). Read-only profile executes ranking, inference, health, sponsor inventory, and AI analyst without any mutations; maintenance profile adds nurture and reactivation routing; all profile includes safe recovery evaluation (which remains default-disabled via `OPS_SELF_HEALING_ENABLED=0` and code-level blocked in production).
-  - Outbound notification safety gating: In `services/engine.py`, `run_reactivation_routing` now explicitly checks `ENABLE_REACTIVATION_NOTIFICATIONS` (defaulting to false / 0). Scheduled engine ticks route inactive trainers into database collections and `/ops` tracking safely without triggering unsolicited external emails via Resend.
-  - Scheduler Stall Alerting & Cadence Tracking: Added `engine_tick` (interval 600s, grace 150s) to `_loop_interval_seconds()` and tracked in `_current_ops_cases()` and `/api/oversight`. If Cloud Scheduler stalls past 750s, an actionable Level 2 case (`loop:engine_tick`) surfaces in `/ops`.
-  - Deep Health Scheduler Freshness: Added check 5 (`diagnostics["checks"]["scheduler"]`) to `/api/health/deep`, reporting `engine_tick` last run, age in seconds, execution owner, and status (`fresh` <= 1200s, `delayed_or_stale`, or `unobserved`).
-  - Level 1 Honest Status Contract: In `frontend/src/pages/Ops.jsx`, `computeConsoleStatus()` guards against reporting "All Running Normally" when loop telemetry is missing or unobserved, returning `monitoring_unverified` ("Monitoring telemetry unverified or stale").
-  - Independent Edge Observability (Monitoring the Monitor): Decoupled edge monitoring via Google Cloud Monitoring external uptime check on `https://dogtrainersdirectory.com.au/api/health` with direct email alerts to `admin@dogtrainersdirectory.com.au`, eliminating circular dependency if Cloud Run crashes.
-- AI Operations Analyst Evidence Calibration:
-  - Strict evidence discipline enforced in root-cause classification (`confirmed` vs `likely` vs `unknown`). HTTP 401 provider errors without explicit provider body confirmation are categorized as `likely` or `likely: provider_auth_failed`, adhering to the Truth & Evidence Baseline.
-  - Model fallback verified: If Vertex AI is unreachable or IAM `roles/aiplatform.user` is unassigned on production service account `dtd-runtime`, `services/ops_analyst.py` falls back seamlessly to deterministic heuristic analysis and logs a degradation event without crashing `/ops` or blocking operator triage.
-- Verification Suite Execution:
-  - Isolated backend integration suite: 594/594 tests passed (`run_isolated_integration_suite.py`).
-  - Targeted operational pytest suite: 111/111 tests passed across Phase 1, Phase 2, Phase 4 AI analyst, and Phase 5 self-healing recovery (`test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, `test_public_mode_unit.py`).
-  - Frontend Vitest suite: 74/74 tests passed across 10 test suites (including 27/27 in `Ops.test.jsx`).
-  - Frontend production build: Vite v8.3.4 clean production compilation in 684ms (`frontend/build`).
+- Critical Unified Operations Completion Mandate & Independent Re-Audit Resolution:
+  Addressed the 5 findings raised in the independent review of commit `bc4e6d4` to guarantee that no owner responsibility can silently disappear in the background.
+- 1. Durable Owner Responsibility Ledger (`backend/services/ops_obligations.py`):
+  - Created dedicated MongoDB persistence collection `db.ops_obligations` with unique index on `obligation_id` and compound index on `(status, is_overdue)`.
+  - Authoritative SLA windows per operational domain: scheduler (1h), claim_lock (4h), provider (6h), client_enquiry (12h), directory_guardian (24h), trainer_verification (48h), billing (72h).
+  - Multi-tier escalation logic: breaches auto-flag `is_overdue=True`, promote to severity `"high"` with `[OVERDUE ESCALATION]` badge, and sort to the top of `/ops` Work Queue (priority rank -1 or -2).
+  - Invariant: Responsibilities cannot be wiped by cache flushes, log roll-overs, or server restarts. Auto-cleared ONLY upon verified terminal entity resolution, or operator review (persisted directly in `ops_obligations.review`).
+- 2. Explicit Scheduler Execution Profiles & Outcome Tracking:
+  - `profile="monitoring"` (default): **Strictly ZERO database or business entity mutations.** Skips ranking recalculation, conversion promotions, sponsor inventory, nurture, and reactivation. Executes only health check, obligations ledger sync, and read-only AI investigation on active incidents.
+  - `profile="routine"`: Core data pipeline (ranking, conversions, sponsor inventory, health, obligations, AI analyst).
+  - `profile="maintenance"`: Routine plus trainer nurture and reactivation routing.
+  - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production).
+  - Subtask error tracking: Captures subtask exceptions without crashing the tick, records `last_status: "partial_error"`, persists `last_error: error_summary`, and increments `consecutive_failures`.
+  - Loop status immediately flags `"investigate"` or `"escalate"` if `last_status == "partial_error"`, regardless of timestamp freshness.
+  - Unified freshness threshold: strictly aligned at 750 seconds (600s cadence + 150s grace) across `/ops` loop monitoring and `/api/health/deep`.
+- 3. Independent Edge Outage Detection & Decoupled Alerting:
+  - Idempotent script `scripts/setup_edge_monitoring.sh` provisions Google Cloud Monitoring multi-region external uptime check probing `/api/health` every 5m.
+  - Configures email notification channel to `admin@dogtrainersdirectory.com.au`, fully decoupled from Cloud Run container execution.
+  - Verification test `scripts/test_edge_monitoring_delivery.py` passed 4/4 gates: live health probe (HTTP 200), deep diagnostics, container crash and database outage detection simulation, and decoupled owner alert notification payload contract.
+- 4. Verified Production Rollback Runbook:
+  - Corrected previous invalid `firebase hosting:clone` command syntax. Documented 3 supported, verified rollback procedures:
+    1. Firebase Console 1-Click Rollback (Fastest/Instant) via Hosting Release History.
+    2. Firebase Hosting REST API Rollback via Google Cloud OAuth token.
+    3. Deterministic Git Source Re-Deploy (`git checkout 5733d4d`).
+- 5. Verification Suite Execution:
+  - Isolated backend integration suite: **597 / 597 passed** in 1.49s (`backend/scripts/run_isolated_integration_suite.py`).
+  - Targeted operational pytest suite: **114 / 114 passed** in 7.11s (`test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, `test_public_mode_unit.py`).
+  - Edge monitoring test: **4 / 4 passed** in 1.39s (`scripts/test_edge_monitoring_delivery.py`).
+  - Frontend Vitest suite: **74 / 74 passed** in 1.94s across 10 test files.
+  - Frontend production build: Vite v8.3.4 clean production compilation in 685ms (`frontend/build`).
 - Production Boundaries Strictly Respected:
   - Production backend remains locked to `dtd-api-00058-ter` in `gen-lang-client-0028123502`.
   - Production frontend remains served by Firebase Hosting release `1792053117314000` (Version `f92934ec71003666`).
   - Commercial checkout remains fail-closed (`ENABLE_TRAINER_BILLING_CHECKOUT=0`).
-  - Zero production mutations executed.
+  - Zero production mutations executed. Execution stops at the production authorization gate.
 
 
 ## Product and deployment

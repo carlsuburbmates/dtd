@@ -103,11 +103,34 @@ Each loop exposes owner, cadence/trigger, input cohort, last run, last success, 
 3. **Sentry Error Tracking:**
    Defaults to `unknown` with known gap `"production canary event unverified"` until verified event delivery to the Sentry ingestion endpoint is confirmed.
 4. **Deep Health & Scheduler Observability (`/api/health/deep`):**
-   Provides deep dependency diagnostics including database connectivity, system state collection access, Cloud Run environment profile, maintenance mode posture, and background scheduler freshness (`status: "fresh"` if engine-tick age <= 1200s, `"delayed_or_stale"` if older, or `"unobserved"`).
+   Provides deep dependency diagnostics including database connectivity, system state collection access, Cloud Run environment profile, maintenance mode posture, and background scheduler freshness. The freshness threshold is strictly unified with `/ops` loop monitoring at 750 seconds (600s engine-tick cadence + 150s bounded grace). If `engine_tick` age > 750s, it flags `"delayed_or_stale"`; if `last_status != "ok"` (e.g. `partial_error`), it flags `"failing_or_degraded"`.
 5. **Decoupled Edge Observability (Monitoring the Monitor):**
-   Eliminates circular dependency where a crashed Cloud Run API cannot display an in-console incident. An external Google Cloud Monitoring uptime check probes `https://dogtrainersdirectory.com.au/api/health` from multiple global edge probes every 5 minutes with zero container compute overhead, firing an external alert directly to `admin@dogtrainersdirectory.com.au` on outage.
+   Eliminates circular dependency where a crashed Cloud Run API cannot display an in-console incident. An external Google Cloud Monitoring uptime check probes `https://dogtrainersdirectory.com.au/api/health` from multiple global edge probes every 5 minutes with zero container compute overhead, firing an external alert directly to `admin@dogtrainersdirectory.com.au` on outage. Provisioned idempotently via `scripts/setup_edge_monitoring.sh` and verified end-to-end via `scripts/test_edge_monitoring_delivery.py`.
 6. **Level 1 Honest Status Contract:**
    `/ops` Level 1 guarantees honest state reporting: if background loop telemetry is missing or unobserved, it refuses to report "All Running Normally" and instead displays `monitoring_unverified` ("Monitoring telemetry unverified or stale").
+7. **Durable Owner Responsibility Ledger (`db.ops_obligations`):**
+   To uphold the non-negotiable invariant that *"no owner-required job can silently disappear in the background"*, DTD persists all owner responsibilities in a dedicated MongoDB collection `db.ops_obligations`.
+   - **Indexed Durability:** Unique index on `obligation_id` and compound index on `(status, is_overdue)`.
+   - **SLA Policy Matrix:** Authoritative SLA windows per operational domain:
+     - `scheduler`: 1 hour (cron stall / missing execution)
+     - `claim_lock`: 4 hours (stale or contested listing claim lock)
+     - `provider`: 6 hours (critical upstream service outage or credential failure)
+     - `client_enquiry`: 12 hours (unmatched or unacknowledged customer dog enquiry)
+     - `directory_guardian`: 24 hours (statutory/compliance audit anomaly)
+     - `trainer_verification`: 48 hours (held trainer submission needing ABN/statutory check)
+     - `billing`: 72 hours (unresolved webhook failure, dispute, or reactivation)
+   - **Automatic Escalation Levels:**
+     - `Level 0`: Within SLA window.
+     - `Level 1` (Overdue): Automatically sets `is_overdue = True`, status `"escalated"`, severity `"high"`, prepending `[OVERDUE ESCALATION]` badge to the summary.
+     - `Level 2` (Critical): Escalates priority to highest tier (sorting rank -1 or -2), forcing the case to the very top of `/ops` Work Queue.
+   - **Resolution Invariant:** An obligation cannot be silently wiped by cache flushes or log roll-overs. It is resolved either by explicit operator review action (persisted in `ops_obligations.review`) or automatically cleared ONLY when the underlying domain entity reaches a verified terminal state.
+8. **Explicit Scheduler Profiles & Subtask Outcome Tracking:**
+   The master orchestrator `/api/internal/jobs/engine-tick` mandates explicit execution profiles (`profile=monitoring|routine|maintenance|all`):
+   - `profile="monitoring"` (or `"readonly"`): **Strictly ZERO database or entity mutations.** Skips ranking recalculations, conversion promotions, inventory maintenance, nurture sequences, and reactivation routing. Executes strictly the health probe, obligations ledger sync, and read-only AI investigation on active incidents.
+   - `profile="routine"`: Core data pipeline executing ranking, conversion promotions, sponsor inventory, health checks, obligations sync, and AI analysis.
+   - `profile="maintenance"`: Routine profile plus trainer nurture and reactivation routing (safely gated).
+   - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production).
+   - **Subtask Error & Consecutive Failure Tracking:** Captures subtask exceptions without aborting subsequent checks, records `last_status: "partial_error"`, persists `last_error: error_summary`, and increments `consecutive_failures`. Any `partial_error` immediately triggers loop status `"investigate"` or `"escalate"`, regardless of timestamp freshness.
 
 ### AI degradation telemetry and temporal contracts (Phase 1)
 
@@ -510,12 +533,28 @@ The candidate release payload brings the completed Operations Console transforma
 
 #### B. Firebase Hosting Frontend Rollback
 - **Target Version:** `f92934ec71003666` (Release ID: `1792053117314000`, released 2026-10-15T08:31:57Z).
-- **Execution Command:**
-  ```bash
-  firebase hosting:clone gen-lang-client-0028123502:f92934ec71003666 gen-lang-client-0028123502:live \
-    --project gen-lang-client-0028123502
-  ```
-- **Verification:** Inspect `https://dogtrainersdirectory.com.au/` in browser; verify HTTP 200 and previous asset bundle hash.
+- **Execution Procedures (3 Verified Routes):**
+  1. **Firebase Console 1-Click Rollback (Fastest & Officially Recommended):**
+     - Open Firebase Console -> Hosting (`gen-lang-client-0028123502`).
+     - Navigate to **Release history**.
+     - Locate Version `f92934ec71003666` (Release ID: `1792053117314000`).
+     - Click the overflow menu (`⋮`) and select **Roll back**.
+     - Instantaneous zero-downtime traffic shift to previous assets.
+  2. **Firebase Hosting REST API Rollback (Automated / Headless):**
+     ```bash
+     curl -s -X POST \
+       "https://firebasehosting.googleapis.com/v1beta1/sites/gen-lang-client-0028123502/releases?versionName=sites/gen-lang-client-0028123502/versions/f92934ec71003666" \
+       -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+       -H "Content-Type: application/json"
+     ```
+  3. **Deterministic Git Source Re-Deploy (Offline / CLI Fallback):**
+     ```bash
+     # Restore previous audited frontend commit
+     git checkout 5733d4d -- frontend/src frontend/package.json
+     npm --prefix frontend run build
+     firebase deploy --only hosting --project gen-lang-client-0028123502
+     ```
+- **Verification:** Inspect `https://dogtrainersdirectory.com.au/` in browser; verify HTTP 200 and previous asset bundle hash (`index-B0KVx6z6.js` and `index-CiXd5jGR.css`).
 
 ### 4. Operational Gaps and Prerequisites Matrix
 
