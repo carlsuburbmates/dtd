@@ -28,6 +28,9 @@ CATEGORY_SLAS: Dict[str, int] = {
     "claim_lock": 4,            # Stuck trainer profile claim lock needs release within 4 hours
     "provider": 6,              # External provider auth/outage needs review within 6 hours
     "client_enquiry": 12,       # Undelivered client enquiry needs delivery within 12 hours
+    "notification_delivery": 12,# Failed notification dispatch needs delivery within 12 hours
+    "customer_complaint": 12,   # High-priority customer complaint or legal takedown
+    "customer_support": 24,     # General customer support inquiry within 24 hours
     "directory_guardian": 24,   # Statutory or schema violation in directory within 24 hours
     "trainer_verification": 48, # New trainer onboarding / ABN verification within 48 hours
     "billing": 72,              # Past due subscription or billing exception within 72 hours
@@ -148,23 +151,50 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
 
             return False, f"Claim lock still held or in progress (status: {claim_status}, lock_held: {lock_held})"
 
-        elif category == "client_enquiry":
+        elif category in ("client_enquiry", "notification_delivery"):
+            notif_coll = getattr(db, "notification_events", None)
             message_log_coll = getattr(db, "message_log", None)
-            if message_log_coll is None:
-                return False, "Message log collection unavailable"
 
-            # Check if any message record with this dispatch_id reached a terminal success state
-            delivered = await message_log_coll.find_one(
-                {
-                    "$or": [{"dispatch_id": entity_id}, {"id": entity_id}],
-                    "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
-                },
-                {"_id": 0, "status": 1, "created_at": 1},
-            )
-            if delivered:
-                return True, f"Message dispatch {entity_id} verified delivered successfully"
+            # Check notification_events first (authoritative datastore)
+            if notif_coll is not None and hasattr(notif_coll, "find_one"):
+                delivered = await notif_coll.find_one(
+                    {
+                        "$or": [{"dispatch_id": entity_id}, {"id": entity_id}, {"target_id": entity_id}],
+                        "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
+                    },
+                    {"_id": 0, "status": 1, "created_at": 1},
+                )
+                if delivered:
+                    return True, f"Notification dispatch {entity_id} verified delivered successfully"
+
+            # Check message_log as secondary/legacy fallback
+            if message_log_coll is not None and hasattr(message_log_coll, "find_one"):
+                delivered = await message_log_coll.find_one(
+                    {
+                        "$or": [{"dispatch_id": entity_id}, {"id": entity_id}],
+                        "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
+                    },
+                    {"_id": 0, "status": 1, "created_at": 1},
+                )
+                if delivered:
+                    return True, f"Message dispatch {entity_id} verified delivered successfully"
 
             return False, f"No successful delivery recorded for message dispatch {entity_id}"
+
+        elif category in ("customer_support", "customer_complaint"):
+            support_coll = getattr(db, "support_threads", None)
+            if support_coll is None:
+                return False, "Support threads collection unavailable"
+
+            thread = await support_coll.find_one({"case_id": entity_id}, {"_id": 0, "status": 1})
+            if not thread:
+                return False, f"Support thread {entity_id} not found"
+
+            th_status = str(thread.get("status") or "").lower()
+            if th_status in ("resolved", "closed", "completed", "archived"):
+                return True, f"Support thread {entity_id} verified {th_status}"
+
+            return False, f"Support thread {entity_id} remains open (status: {th_status})"
 
         elif category == "scheduler":
             system_state_coll = getattr(db, "system_state", None)
@@ -290,35 +320,118 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             source_status["claim_lock"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 3. Failed Message Delivery (Resend / Enquiries)
+    notif_coll = getattr(db, "notification_events", None)
     message_log_coll = getattr(db, "message_log", None)
-    if message_log_coll is not None and hasattr(message_log_coll, "find"):
+    failed_messages: List[Dict[str, Any]] = []
+
+    # Authoritative persistence: scan notification_events
+    if notif_coll is not None and hasattr(notif_coll, "find"):
         try:
-            failed_messages = await message_log_coll.find(
+            raw_failed = await notif_coll.find(
+                {"status": {"$in": ["failed", "bounced", "error"]}},
+                {"_id": 0, "id": 1, "dispatch_id": 1, "to_email": 1, "kind": 1, "target_kind": 1, "target_id": 1, "error": 1, "created_at": 1},
+            ).sort("created_at", -1).limit(200).to_list(200)
+            for item in raw_failed:
+                failed_messages.append({
+                    "id": item.get("id"),
+                    "dispatch_id": item.get("dispatch_id") or item.get("id"),
+                    "recipient": item.get("to_email"),
+                    "subject": item.get("kind") or "System Notification",
+                    "error": item.get("error"),
+                    "created_at": item.get("created_at"),
+                    "target_kind": item.get("target_kind"),
+                    "target_id": item.get("target_id"),
+                })
+        except Exception as exc:
+            logger.warning("Error reading notification events for obligations: %s", exc)
+
+    # Legacy/test fallback: scan message_log if notification_events was empty or unavailable
+    if not failed_messages and message_log_coll is not None and hasattr(message_log_coll, "find"):
+        try:
+            raw_log = await message_log_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "recipient": 1, "subject": 1, "error": 1, "created_at": 1},
             ).sort("created_at", -1).limit(200).to_list(200)
-            for msg in failed_messages:
-                dispatch_id = str(msg.get("dispatch_id") or msg.get("id") or "")
-                if not dispatch_id:
-                    continue
-                obl_id = f"obligation:message:{dispatch_id}"
-                active_obligations[obl_id] = {
-                    "obligation_id": obl_id,
-                    "category": "client_enquiry",
-                    "entity_id": dispatch_id,
-                    "title": f"Undelivered Message: {msg.get('subject') or 'Client Enquiry'}",
-                    "required_action": f"Verify recipient ({msg.get('recipient')}) or retry dispatch manually in /ops.",
-                    "base_severity": "high",
-                    "created_at_source": msg.get("created_at") or current_iso,
-                    "metadata": {"recipient": msg.get("recipient"), "error": msg.get("error")},
-                    "resolution_type": "guided_in_ops",
-                    "technical_assistance_required": False,
-                    "safe_operating_state": "Website is operating normally; this specific email notification needs retry.",
-                }
-            source_status["client_enquiry"] = {"status": "ok", "checked_at": current_iso}
+            failed_messages.extend(raw_log)
         except Exception as exc:
             logger.warning("Error reading message log for obligations: %s", exc)
-            source_status["client_enquiry"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
+
+    try:
+        for msg in failed_messages:
+            dispatch_id = str(msg.get("dispatch_id") or msg.get("id") or "")
+            if not dispatch_id:
+                continue
+
+            # Verify whether a subsequent event succeeded for this dispatch or target
+            is_recovered = False
+            if notif_coll is not None and hasattr(notif_coll, "find_one"):
+                success_match = await notif_coll.find_one(
+                    {
+                        "$or": [
+                            {"dispatch_id": dispatch_id, "status": {"$in": ["sent", "delivered", "recovered"]}},
+                            {"target_id": msg.get("target_id"), "target_kind": msg.get("target_kind"), "status": {"$in": ["sent", "delivered", "recovered"]}} if msg.get("target_id") else {"_id": None},
+                        ],
+                    },
+                    {"_id": 1},
+                )
+                if success_match:
+                    is_recovered = True
+
+            if is_recovered:
+                continue
+
+            target_kind = str(msg.get("target_kind") or "")
+            cat = "client_enquiry" if target_kind == "intro" or "intro" in str(msg.get("subject") or "").lower() else "notification_delivery"
+            obl_id = f"obligation:message:{dispatch_id}"
+            active_obligations[obl_id] = {
+                "obligation_id": obl_id,
+                "category": cat,
+                "entity_id": dispatch_id,
+                "title": f"Undelivered Message: {msg.get('subject') or 'Client Enquiry'} ({msg.get('recipient')})",
+                "required_action": f"Verify recipient ({msg.get('recipient')}) or retry dispatch manually in /ops.",
+                "base_severity": "high",
+                "created_at_source": msg.get("created_at") or current_iso,
+                "metadata": {"recipient": msg.get("recipient"), "error": msg.get("error"), "target_kind": target_kind, "target_id": msg.get("target_id")},
+                "resolution_type": "guided_in_ops",
+                "technical_assistance_required": False,
+                "safe_operating_state": "Website is operating normally; this specific email notification needs retry.",
+            }
+        source_status["client_enquiry"] = {"status": "ok", "checked_at": current_iso}
+    except Exception as exc:
+        logger.warning("Error compiling message delivery obligations: %s", exc)
+        source_status["client_enquiry"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
+
+    # 3b. Open Customer Support Threads & Inbound Complaints
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is not None and hasattr(support_coll, "find"):
+        try:
+            open_threads = await support_coll.find(
+                {"status": {"$in": ["open", "pending_owner", "escalated"]}},
+                {"_id": 0, "case_id": 1, "sender_email": 1, "category": 1, "severity": 1, "subject": 1, "created_at": 1},
+            ).sort("created_at", -1).limit(100).to_list(100)
+            for thr in open_threads:
+                case_id = str(thr.get("case_id") or "")
+                if not case_id:
+                    continue
+                obl_id = f"obligation:support:{case_id}"
+                cat = "customer_complaint" if thr.get("category") == "complaint" or thr.get("severity") == "high" else "customer_support"
+                active_obligations[obl_id] = {
+                    "obligation_id": obl_id,
+                    "category": cat,
+                    "entity_id": case_id,
+                    "title": f"Customer Request: {thr.get('subject') or thr.get('category', 'Support')} ({thr.get('sender_email')})",
+                    "required_action": "Review inquiry, respond or escalate to specialized workflow in /ops.",
+                    "base_severity": "high" if cat == "customer_complaint" else "medium",
+                    "created_at_source": thr.get("created_at") or current_iso,
+                    "metadata": {"sender_email": thr.get("sender_email"), "category": thr.get("category"), "severity": thr.get("severity")},
+                    "resolution_type": "guided_in_ops",
+                    "technical_assistance_required": False,
+                    "safe_operating_state": "Website is operating normally; this customer inquiry is awaiting operator response.",
+                }
+            source_status["customer_support"] = {"status": "ok", "checked_at": current_iso}
+        except Exception as exc:
+            logger.warning("Error reading support threads for obligations: %s", exc)
+            source_status["customer_support"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
     # 4. Engine Tick Cron / Scheduler Stalls
     system_state_coll = getattr(db, "system_state", None)

@@ -423,3 +423,90 @@ async def notify_pro_trial_expiry_warning(
         subject=f"Your DTD Pro trial ends in {remaining} days",
         html=html,
     )
+
+
+async def notify_support_received(db, thread_doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Send automated receipt confirmation for inbound customer support/complaint."""
+    case_id = str(thread_doc.get("case_id") or "")
+    email = str(thread_doc.get("sender_email") or "").strip()
+    if not email:
+        return {"status": "skipped", "reason": "missing_email"}
+
+    name = _safe_text(thread_doc.get("sender_name") or "there")
+    subject_text = _safe_text(thread_doc.get("subject") or "Support Request")
+    category = str(thread_doc.get("category") or "general_inquiry").replace("_", " ").title()
+
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Thank you for contacting Dog Trainers Directory. We have received your {category.lower()}:</p>"
+        f"<blockquote><strong>{subject_text}</strong></blockquote>"
+        f"<p>Your reference case number is: <strong>{case_id}</strong></p>"
+        "<p>Our operator will review your message and reply as soon as possible.</p>"
+        "<p>Dog Trainers Directory Team</p>"
+    )
+    return await _send_with_retry(
+        db,
+        target_kind="support_thread",
+        target_id=case_id,
+        kind="support_received_receipt",
+        to_email=email,
+        subject=f"[DTD Case {case_id}] We have received your inquiry: {subject_text}",
+        html=html,
+    )
+
+
+async def notify_support_reply(db, thread_doc: Dict[str, Any], reply_text: str) -> Dict[str, Any]:
+    """Send operator reply to customer support thread."""
+    case_id = str(thread_doc.get("case_id") or "")
+    email = str(thread_doc.get("sender_email") or "").strip()
+    if not email:
+        return {"status": "skipped", "reason": "missing_email"}
+
+    name = _safe_text(thread_doc.get("sender_name") or "there")
+    subject_text = _safe_text(thread_doc.get("subject") or "Support Request")
+    safe_reply = _safe_text(reply_text).replace("\n", "<br>")
+
+    html = (
+        f"<p>Hi {name},</p>"
+        f"<p>Regarding your inquiry <strong>{subject_text}</strong> (Reference: <code>{case_id}</code>):</p>"
+        f"<div style='border-left: 3px solid #0284c7; padding-left: 12px; margin: 16px 0;'>{safe_reply}</div>"
+        "<p>You can reply directly to this email if you have further questions or additional information.</p>"
+        "<p>Best regards,<br>Dog Trainers Directory Operations</p>"
+    )
+    return await _send_with_retry(
+        db,
+        target_kind="support_thread",
+        target_id=case_id,
+        kind="support_operator_reply",
+        to_email=email,
+        subject=f"Re: [DTD Case {case_id}] {subject_text}",
+        html=html,
+    )
+
+
+async def notify_trainer_delisted(db, trainer: Dict[str, Any], reason: str) -> Dict[str, Any]:
+    """Notify trainer that their listing has been delisted."""
+    trainer_id = str(trainer.get("id") or "")
+    email = _safe_text(trainer.get("email"))
+    if not email:
+        return {"status": "skipped", "reason": "missing_email"}
+
+    name = _safe_text(trainer.get("name") or "Trainer")
+    safe_reason = _safe_text(reason)
+
+    html = (
+        f"<p>Hi {name},</p>"
+        "<p>As requested or per directory review, your listing on Dog Trainers Directory has been deactivated and removed from public search.</p>"
+        f"<p><strong>Reason:</strong> {safe_reason}</p>"
+        "<p>If you believe this was done in error or wish to reactivate your listing in the future, please contact us at info@dogtrainersdirectory.com.au.</p>"
+        "<p>Dog Trainers Directory Team</p>"
+    )
+    return await _send_with_retry(
+        db,
+        target_kind="trainer",
+        target_id=trainer_id,
+        kind="trainer_delisted_notice",
+        to_email=email,
+        subject="Your Dog Trainers Directory listing has been deactivated",
+        html=html,
+    )

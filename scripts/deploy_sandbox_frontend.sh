@@ -17,15 +17,14 @@ fi
 (
   cd "${REPO_ROOT}/frontend"
   yarn build
+  gcloud run deploy "${SERVICE_NAME}" \
+    --project "${PROJECT_ID}" \
+    --region "${REGION}" \
+    --source . \
+    --allow-unauthenticated \
+    --min-instances 0 \
+    --max-instances 2
 )
-
-gcloud run deploy "${SERVICE_NAME}" \
-  --project "${PROJECT_ID}" \
-  --region "${REGION}" \
-  --source "${REPO_ROOT}/frontend" \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 2
 
 WEB_URL="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format='value(status.url)')"
 HTML="$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}/")"

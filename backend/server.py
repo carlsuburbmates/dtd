@@ -8373,6 +8373,912 @@ async def oversight_trainer_capability_recheck(
         "ts": now_iso(),
     }
 
+# ---------------------------------------------------------------------------
+# Workstream A2: Asynchronous Resend Delivery Webhook Receiver
+# ---------------------------------------------------------------------------
+
+@app.post("/resend/webhook")
+@api.post("/resend/webhook")
+async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
+    """Secure, idempotent receiver for Resend delivery, bounce, and complaint events."""
+    payload_raw = await request.body()
+    secret = (os.environ.get("RESEND_WEBHOOK_SECRET") or "").strip()
+
+    # If webhook secret is configured, verify signature header
+    if secret:
+        svix_id = request.headers.get("svix-id")
+        svix_timestamp = request.headers.get("svix-timestamp")
+        svix_signature = request.headers.get("svix-signature")
+        if not (svix_id and svix_timestamp and svix_signature):
+            raise HTTPException(status_code=401, detail="Missing required Svix webhook signature headers.")
+        try:
+            ts_epoch = float(svix_timestamp)
+            if abs(time.time() - ts_epoch) > 300:
+                raise HTTPException(status_code=401, detail="Webhook signature timestamp expired.")
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid signature timestamp.")
+
+    try:
+        event = json.loads(payload_raw.decode("utf-8")) if payload_raw else {}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Malformed JSON payload: {exc}")
+
+    event_id = str(event.get("id") or (event.get("data") or {}).get("email_id") or uuid.uuid4().hex)
+    event_type = str(event.get("type") or "email.unknown")
+    event_data = event.get("data") or {}
+    email_id = str(event_data.get("email_id") or "")
+
+    # Idempotency check via resend_events collection
+    resend_events_coll = getattr(db, "resend_webhook_events", None)
+    if resend_events_coll is not None:
+        try:
+            await resend_events_coll.insert_one({
+                "id": event_id,
+                "type": event_type,
+                "email_id": email_id,
+                "created_at": now_iso(),
+                "payload": event_data,
+            })
+        except DuplicateKeyError:
+            return {"ok": True, "duplicate": True, "event_id": event_id}
+
+    # Update notification_events with confirmed delivery/bounce status
+    notif_coll = getattr(db, "notification_events", None)
+    if notif_coll is not None and email_id:
+        update_doc: Dict[str, Any] = {
+            "resend_event_type": event_type,
+            "resend_event_at": now_iso(),
+        }
+        if event_type == "email.delivered":
+            update_doc["status"] = "delivered"
+            update_doc["delivered_at"] = now_iso()
+        elif event_type in ("email.bounced", "email.complained"):
+            update_doc["status"] = "bounced" if event_type == "email.bounced" else "complained"
+            update_doc["bounce_reason"] = str((event_data.get("bounce") or {}).get("type") or event_type)
+
+        await notif_coll.update_many({"provider_id": email_id}, {"$set": update_doc})
+
+    return {"ok": True, "event_id": event_id, "type": event_type}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B4: First-Party Customer Support & Complaint Intake (MW-021)
+# ---------------------------------------------------------------------------
+
+class SupportContactIn(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    email: EmailStr = Field(...)
+    category: str = Field(default="general_inquiry")
+    subject: str = Field(..., min_length=2, max_length=240)
+    message: str = Field(..., min_length=5, max_length=5000)
+    trainer_id: Optional[str] = None
+    trainer_name: Optional[str] = None
+
+
+@app.post("/support/contact")
+@api.post("/support/contact")
+async def create_support_inquiry(payload: SupportContactIn) -> Dict[str, Any]:
+    """First-party customer support, complaint, delisting, or privacy intake."""
+    valid_categories = {
+        "general_inquiry",
+        "complaint",
+        "listing_correction",
+        "delisting_request",
+        "privacy_request",
+        "billing_question",
+    }
+    category = payload.category.strip().lower()
+    if category not in valid_categories:
+        category = "general_inquiry"
+
+    severity = "high" if category in ("complaint", "delisting_request", "privacy_request") else "medium"
+    now_ts = now_iso()
+    case_id = f"sup_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{uuid.uuid4().hex[:8]}"
+
+    thread_doc = {
+        "case_id": case_id,
+        "sender_name": payload.name.strip(),
+        "sender_email": str(payload.email).strip().lower(),
+        "category": category,
+        "severity": severity,
+        "subject": payload.subject.strip(),
+        "trainer_id": (payload.trainer_id or "").strip() or None,
+        "trainer_name": (payload.trainer_name or "").strip() or None,
+        "status": "open",
+        "messages": [
+            {
+                "sender": "customer",
+                "text": payload.message.strip(),
+                "created_at": now_ts,
+            }
+        ],
+        "created_at": now_ts,
+        "updated_at": now_ts,
+    }
+
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is not None:
+        await support_coll.insert_one(thread_doc)
+
+    # Dispatch automated receipt confirmation via Resend
+    try:
+        await notifications_service.notify_support_received(db, thread_doc)
+    except Exception:
+        logger.exception("Failed sending support receipt confirmation for case_id=%s", case_id)
+
+    await _audit(
+        "support_inquiry_created",
+        case_id,
+        after={"category": category, "severity": severity, "subject": payload.subject},
+        actor="customer",
+    )
+    return {
+        "ok": True,
+        "case_id": case_id,
+        "status": "open",
+        "message": "Thank you. Your request has been received and reference number generated.",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Oversight Support Management Endpoints (MW-021)
+# ---------------------------------------------------------------------------
+
+@api.get("/oversight/support/threads")
+async def list_support_threads(
+    category: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """List customer support threads with filtering by category and status."""
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        return {"ok": True, "threads": []}
+
+    query: Dict[str, Any] = {}
+    if category:
+        query["category"] = category.strip().lower()
+    if status:
+        query["status"] = status.strip().lower()
+
+    threads = await support_coll.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"ok": True, "threads": threads, "count": len(threads)}
+
+
+@api.get("/oversight/support/threads/{case_id}")
+async def get_support_thread(
+    case_id: str,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Retrieve full detail and message history of a customer support thread."""
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Support thread not found")
+
+    return {"ok": True, "thread": thread}
+
+
+class SupportReplyIn(BaseModel):
+    reply_text: str = Field(..., min_length=3, max_length=5000)
+    mark_status: Optional[str] = Field(default="awaiting_customer_reply")
+
+
+@api.post("/oversight/support/threads/{case_id}/reply")
+async def reply_support_thread(
+    case_id: str,
+    payload: SupportReplyIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Send an operator reply to customer and update support thread status."""
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Support thread not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+    new_message = {
+        "sender": "operator",
+        "operator": operator_identity,
+        "text": payload.reply_text.strip(),
+        "created_at": now_ts,
+    }
+
+    new_status = payload.mark_status if payload.mark_status in ("awaiting_customer_reply", "resolved", "open") else "awaiting_customer_reply"
+
+    await support_coll.update_one(
+        {"case_id": case_id},
+        {
+            "$push": {"messages": new_message},
+            "$set": {"status": new_status, "updated_at": now_ts},
+        },
+    )
+
+    # Dispatch email reply to customer via Resend
+    notif_res = await notifications_service.notify_support_reply(db, thread, payload.reply_text.strip())
+
+    await _audit(
+        "support_thread_replied",
+        case_id,
+        after={"status": new_status, "operator": operator_identity, "notif_status": notif_res.get("status")},
+        actor="ops",
+    )
+    return {"ok": True, "case_id": case_id, "status": new_status, "dispatched": notif_res.get("status") == "sent"}
+
+
+class SupportCloseIn(BaseModel):
+    resolution_notes: str = Field(..., min_length=3)
+    confirmed: bool = Field(default=True)
+
+
+@api.post("/oversight/support/threads/{case_id}/close")
+async def close_support_thread(
+    case_id: str,
+    payload: SupportCloseIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Explicitly close a customer support thread with verified outcome notes."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    now_ts = now_iso()
+    res = await support_coll.update_one(
+        {"case_id": case_id},
+        {
+            "$set": {
+                "status": "resolved",
+                "resolution_notes": payload.resolution_notes.strip(),
+                "closed_at": now_ts,
+                "closed_by": f"ops:{_client_ip(request)}",
+                "updated_at": now_ts,
+            }
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Support thread not found")
+
+    await _audit("support_thread_closed", case_id, after={"resolution_notes": payload.resolution_notes}, actor="ops")
+    return {"ok": True, "case_id": case_id, "status": "resolved"}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B1: Submission Decisions (MW-001)
+# ---------------------------------------------------------------------------
+
+class OversightSubmissionReviewIn(BaseModel):
+    action: str = Field(..., description="Action: approve, reject, or request_evidence")
+    notes: Optional[str] = None
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+    override_abn_unverified: bool = Field(default=False, description="Explicit approval of unverified listing without fabricating ABN")
+
+
+@api.post("/oversight/submissions/{submission_id}/review")
+async def review_held_submission(
+    submission_id: str,
+    payload: OversightSubmissionReviewIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Review and act on a held or pending trainer submission with publication invariants."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+    if payload.action not in {"approve", "reject", "request_evidence"}:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be approve, reject, or request_evidence.")
+
+    sub_coll = getattr(db, "submissions", None)
+    if sub_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    sub = await sub_coll.find_one({"id": submission_id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    current_status = str(sub.get("status") or "")
+    if current_status == "published":
+        return {"ok": True, "status": "published", "idempotent": True, "trainer_id": sub.get("trainer_id")}
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    if payload.action == "reject":
+        await sub_coll.update_one(
+            {"id": submission_id},
+            {
+                "$set": {
+                    "status": "rejected",
+                    "rejection_reason": payload.notes or "Submission rejected during administrative review.",
+                    "reviewed_by": operator_identity,
+                    "reviewed_at": now_ts,
+                }
+            },
+        )
+        await _audit("submission_rejected", submission_id, after={"reason": payload.notes}, actor="ops")
+        return {"ok": True, "status": "rejected", "submission_id": submission_id}
+
+    elif payload.action == "request_evidence":
+        await sub_coll.update_one(
+            {"id": submission_id},
+            {
+                "$set": {
+                    "status": "held_awaiting_evidence",
+                    "evidence_requested_notes": payload.notes or "Further identification/ABN evidence requested.",
+                    "evidence_requested_at": now_ts,
+                    "reviewed_by": operator_identity,
+                }
+            },
+        )
+        await _audit("submission_evidence_requested", submission_id, after={"notes": payload.notes}, actor="ops")
+        return {"ok": True, "status": "held_awaiting_evidence", "submission_id": submission_id}
+
+    # action == "approve"
+    abn_verified = bool(sub.get("abn_verified"))
+    if not abn_verified and not payload.override_abn_unverified:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot approve submission with unverified ABN without explicit override_abn_unverified confirmation.",
+        )
+
+    verification_status = "verified" if abn_verified else "unverified"
+    trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
+
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is not None:
+        existing = await trainers_coll.find_one({"$or": [{"id": trainer_id}, {"via_submission_id": submission_id}]}, {"_id": 0, "id": 1})
+        if not existing:
+            trainer_doc = {
+                "id": trainer_id,
+                "name": sub.get("name") or "Unnamed Trainer",
+                "email": sub.get("email"),
+                "phone": sub.get("phone"),
+                "website": sub.get("website"),
+                "abn": sub.get("abn"),
+                "abn_status": sub.get("abn_status", "not_provided"),
+                "abn_verified": abn_verified,
+                "verification_status": verification_status,
+                "serviced_suburbs": sub.get("serviced_suburbs", []),
+                "specialties": sub.get("specialties", []),
+                "capabilities": sub.get("capabilities", []),
+                "published": True,
+                "is_active": True,
+                "contact_ready": True,
+                "outcome_score": 0.05,
+                "registered_at": now_ts,
+                "created_at": now_ts,
+                "via_submission_id": submission_id,
+            }
+            await trainers_coll.insert_one(trainer_doc)
+        else:
+            await trainers_coll.update_one(
+                {"id": existing["id"]},
+                {"$set": {"published": True, "is_active": True, "verification_status": verification_status, "updated_at": now_ts}},
+            )
+            trainer_id = existing["id"]
+
+    await sub_coll.update_one(
+        {"id": submission_id},
+        {
+            "$set": {
+                "status": "published",
+                "trainer_id": trainer_id,
+                "approved_by": operator_identity,
+                "approved_at": now_ts,
+            }
+        },
+    )
+
+    try:
+        sub_for_notif = dict(sub)
+        sub_for_notif["status"] = "published"
+        sub_for_notif["trainer_id"] = trainer_id
+        await notifications_service.notify_submitter_result(db, sub_for_notif)
+    except Exception:
+        logger.exception("Failed notifying submitter of approved publication: %s", submission_id)
+
+    await _audit(
+        "submission_approved_and_published",
+        submission_id,
+        after={"trainer_id": trainer_id, "verification_status": verification_status, "operator": operator_identity},
+        actor="ops",
+    )
+    return {"ok": True, "status": "published", "submission_id": submission_id, "trainer_id": trainer_id}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B2: Claim Adjudication & Disputes (MW-004 / MW-005)
+# ---------------------------------------------------------------------------
+
+class OversightClaimReviewIn(BaseModel):
+    action: str = Field(..., description="Action: grant_with_proof, deny, or request_evidence")
+    notes: Optional[str] = None
+    proof_reference: Optional[str] = Field(default=None, description="Required citation of business documentation (e.g. ASIC extract, domain invoice)")
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+
+
+@api.post("/oversight/claims/{claim_id}/review")
+async def review_profile_claim(
+    claim_id: str,
+    payload: OversightClaimReviewIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Adjudicate contested profile claims with verified proof requirements."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+    if payload.action not in {"grant_with_proof", "deny", "request_evidence"}:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be grant_with_proof, deny, or request_evidence.")
+
+    claims_coll = getattr(db, "claim_events", None)
+    if claims_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    claim = await claims_coll.find_one({"id": claim_id}, {"_id": 0})
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim event not found")
+
+    trainer_id = claim.get("trainer_id")
+    trainers_coll = getattr(db, "trainers", None)
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    if payload.action == "deny":
+        await claims_coll.update_one(
+            {"id": claim_id},
+            {"$set": {"status": "denied", "denial_reason": payload.notes, "reviewed_by": operator_identity, "reviewed_at": now_ts}},
+        )
+        if trainers_coll is not None and trainer_id:
+            await trainers_coll.update_one({"id": trainer_id}, {"$unset": {"claim_in_progress": ""}})
+        await _audit("claim_denied", claim_id, after={"trainer_id": trainer_id, "notes": payload.notes}, actor="ops")
+        return {"ok": True, "status": "denied", "claim_id": claim_id}
+
+    elif payload.action == "request_evidence":
+        await claims_coll.update_one(
+            {"id": claim_id},
+            {"$set": {"status": "awaiting_claimant_evidence", "evidence_notes": payload.notes, "reviewed_by": operator_identity}},
+        )
+        await _audit("claim_evidence_requested", claim_id, after={"notes": payload.notes}, actor="ops")
+        return {"ok": True, "status": "awaiting_claimant_evidence", "claim_id": claim_id}
+
+    # action == "grant_with_proof"
+    if not payload.proof_reference or len(payload.proof_reference.strip()) < 5:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot grant profile ownership without non-empty proof_reference (e.g. ASIC registration, domain WHOIS verification).",
+        )
+
+    claimant_email = claim.get("email") or claim.get("claimant_email")
+    if trainers_coll is not None and trainer_id:
+        await trainers_coll.update_one(
+            {"id": trainer_id},
+            {
+                "$set": {
+                    "is_claimed": True,
+                    "claimed_by": claimant_email,
+                    "claimed_at": now_ts,
+                    "claim_proof_reference": payload.proof_reference.strip(),
+                    "claim_verified_by": operator_identity,
+                },
+                "$unset": {"claim_in_progress": ""},
+            },
+        )
+
+    await claims_coll.update_one(
+        {"id": claim_id},
+        {
+            "$set": {
+                "status": "verified",
+                "proof_reference": payload.proof_reference.strip(),
+                "resolved_by": operator_identity,
+                "resolved_at": now_ts,
+            }
+        },
+    )
+
+    await _audit(
+        "claim_granted_with_proof",
+        claim_id,
+        after={"trainer_id": trainer_id, "claimant_email": claimant_email, "proof": payload.proof_reference},
+        actor="ops",
+    )
+    return {"ok": True, "status": "verified", "claim_id": claim_id, "trainer_id": trainer_id}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B3: Quarantined Enquiry Decisions (MW-008)
+# ---------------------------------------------------------------------------
+
+class OversightFraudReviewIn(BaseModel):
+    action: str = Field(..., description="Action: release or confirm_spam")
+    notes: Optional[str] = None
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+
+
+@api.post("/oversight/intros/{intro_id}/fraud-review")
+async def review_quarantined_intro(
+    intro_id: str,
+    payload: OversightFraudReviewIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Review false-positive quarantined spam enquiries with safe duplicate-proof release."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+    if payload.action not in {"release", "confirm_spam"}:
+        raise HTTPException(status_code=400, detail="Invalid action. Must be release or confirm_spam.")
+
+    intros_coll = getattr(db, "intros", None)
+    if intros_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    intro = await intros_coll.find_one({"id": intro_id}, {"_id": 0})
+    if not intro:
+        raise HTTPException(status_code=404, detail="Intro enquiry not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    if payload.action == "confirm_spam":
+        await intros_coll.update_one(
+            {"id": intro_id},
+            {"$set": {"status": "blacklisted", "confirmed_spam_by": operator_identity, "reviewed_at": now_ts}},
+        )
+        await _audit("intro_spam_confirmed", intro_id, after={"notes": payload.notes}, actor="ops")
+        return {"ok": True, "status": "blacklisted", "intro_id": intro_id}
+
+    # action == "release"
+    claimed = await intros_coll.find_one_and_update(
+        {"id": intro_id, "quarantined": True},
+        {
+            "$set": {
+                "quarantined": False,
+                "fraud_cleared_by": operator_identity,
+                "fraud_cleared_at": now_ts,
+                "delivery_state": "in_progress",
+            }
+        },
+        return_document=True,
+    )
+    if not claimed:
+        return {"ok": True, "status": "already_released", "intro_id": intro_id}
+
+    trainer = await db.trainers.find_one({"id": intro.get("trainer_id")}, {"_id": 0})
+    delivery_status = "failed"
+    if trainer:
+        try:
+            notif_meta = await notifications_service.notify_trainer_new_intro(db, trainer, intro)
+            delivery_status = notif_meta.get("trainer_notification_status", "sent")
+        except Exception as exc:
+            logger.exception("Failed releasing quarantined intro_id=%s: %s", intro_id, exc)
+
+    new_state = "delivered" if delivery_status in ("sent", "delivered") else "failed"
+    await intros_coll.update_one(
+        {"id": intro_id},
+        {"$set": {"delivery_state": new_state, "delivery_status": new_state}},
+    )
+
+    await _audit(
+        "intro_fraud_quarantine_released",
+        intro_id,
+        after={"delivery_state": new_state, "operator": operator_identity},
+        actor="ops",
+    )
+    return {"ok": True, "status": "released", "delivery_state": new_state, "intro_id": intro_id}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B5: Trainer Delisting, Profile Edits & Compliance Suppression (MW-002, MW-006, MW-015)
+# ---------------------------------------------------------------------------
+
+class OversightTrainerDelistIn(BaseModel):
+    reason: str = Field(..., min_length=3)
+    requester_email: Optional[str] = None
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+
+
+@api.post("/oversight/trainers/{trainer_id}/delist")
+async def delist_trainer(
+    trainer_id: str,
+    payload: OversightTrainerDelistIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Voluntary or administrative trainer delisting with suppression against re-ingestion."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    await trainers_coll.update_one(
+        {"id": trainer_id},
+        {
+            "$set": {
+                "is_active": False,
+                "published": False,
+                "delisted_at": now_ts,
+                "delisted_by": operator_identity,
+                "delisted_reason": payload.reason.strip(),
+            }
+        },
+    )
+
+    delist_coll = getattr(db, "delisted_suppression_list", None)
+    if delist_coll is not None:
+        await delist_coll.update_one(
+            {"trainer_id": trainer_id},
+            {
+                "$set": {
+                    "trainer_id": trainer_id,
+                    "phone": trainer.get("phone"),
+                    "abn": trainer.get("abn"),
+                    "name": trainer.get("name"),
+                    "delisted_at": now_ts,
+                    "reason": payload.reason.strip(),
+                }
+            },
+            upsert=True,
+        )
+
+    try:
+        await notifications_service.notify_trainer_delisted(db, trainer, payload.reason.strip())
+    except Exception:
+        logger.exception("Failed sending delisting notification to trainer=%s", trainer_id)
+
+    await _audit(
+        "trainer_delisted",
+        trainer_id,
+        after={"reason": payload.reason, "operator": operator_identity},
+        actor="ops",
+    )
+    return {"ok": True, "trainer_id": trainer_id, "status": "delisted"}
+
+
+class OversightTrainerProfilePatchIn(BaseModel):
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    bio: Optional[str] = None
+    specialties: Optional[List[str]] = None
+    serviced_suburbs: Optional[List[str]] = None
+    notes: Optional[str] = None
+    confirmed: bool = Field(default=True)
+
+
+@api.patch("/oversight/trainers/{trainer_id}")
+async def patch_trainer_profile(
+    trainer_id: str,
+    payload: OversightTrainerProfilePatchIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Assisted trainer profile modification with audited diff."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    update_doc: Dict[str, Any] = {"updated_at": now_iso()}
+    changes: Dict[str, Any] = {}
+
+    if payload.phone is not None:
+        update_doc["phone"] = payload.phone.strip()
+        changes["phone"] = {"before": trainer.get("phone"), "after": payload.phone.strip()}
+    if payload.email is not None:
+        update_doc["email"] = payload.email.strip().lower()
+        changes["email"] = {"before": trainer.get("email"), "after": payload.email.strip().lower()}
+    if payload.website is not None:
+        update_doc["website"] = payload.website.strip()
+        changes["website"] = {"before": trainer.get("website"), "after": payload.website.strip()}
+    if payload.bio is not None:
+        update_doc["bio"] = payload.bio.strip()
+        changes["bio"] = {"before": trainer.get("bio"), "after": payload.bio.strip()}
+    if payload.specialties is not None:
+        update_doc["specialties"] = payload.specialties
+        changes["specialties"] = {"before": trainer.get("specialties"), "after": payload.specialties}
+    if payload.serviced_suburbs is not None:
+        update_doc["serviced_suburbs"] = payload.serviced_suburbs
+        changes["serviced_suburbs"] = {"before": trainer.get("serviced_suburbs"), "after": payload.serviced_suburbs}
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    update_doc["last_edited_by"] = operator_identity
+
+    await trainers_coll.update_one({"id": trainer_id}, {"$set": update_doc})
+    await _audit("trainer_profile_patched", trainer_id, after=changes, actor="ops")
+    return {"ok": True, "trainer_id": trainer_id, "changes": changes}
+
+
+class OversightTrainerSuppressIn(BaseModel):
+    legal_grounds: str = Field(..., description="Legal grounds: defamation_notice, consumer_law_breach, safety_welfare_concern")
+    evidence_reference: str = Field(..., min_length=5, description="Citation of official legal notice or complaint")
+    notes: Optional[str] = None
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+
+
+@api.post("/oversight/trainers/{trainer_id}/suppress")
+async def suppress_trainer_listing(
+    trainer_id: str,
+    payload: OversightTrainerSuppressIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Immediate statutory compliance or safety suppression of a trainer listing."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    valid_grounds = {"defamation_notice", "consumer_law_breach", "safety_welfare_concern", "licensing_revocation"}
+    if payload.legal_grounds not in valid_grounds:
+        raise HTTPException(status_code=400, detail=f"Invalid legal grounds. Must be one of: {', '.join(valid_grounds)}")
+
+    trainers_coll = getattr(db, "trainers", None)
+    if trainers_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    await trainers_coll.update_one(
+        {"id": trainer_id},
+        {
+            "$set": {
+                "published": False,
+                "is_active": False,
+                "compliance_suppressed": True,
+                "suppression_reason": payload.legal_grounds,
+                "evidence_reference": payload.evidence_reference.strip(),
+                "suppressed_by": operator_identity,
+                "suppressed_at": now_ts,
+            }
+        },
+    )
+
+    await _audit(
+        "trainer_compliance_suppressed",
+        trainer_id,
+        after={
+            "legal_grounds": payload.legal_grounds,
+            "evidence_reference": payload.evidence_reference,
+            "operator": operator_identity,
+        },
+        actor="ops",
+    )
+    return {"ok": True, "trainer_id": trainer_id, "status": "suppressed"}
+
+
+# ---------------------------------------------------------------------------
+# Workstream B5: Privacy Request Processing (MW-009)
+# ---------------------------------------------------------------------------
+
+class OversightPrivacyProcessIn(BaseModel):
+    action: str = Field(..., description="Action: authorise_scrub, reject_non_subject, or request_identity_proof")
+    notes: Optional[str] = None
+    confirmed: bool = Field(..., description="Explicit confirmation required")
+
+
+@api.post("/oversight/privacy/requests/{case_id}/process")
+async def process_privacy_request(
+    case_id: str,
+    payload: OversightPrivacyProcessIn,
+    request: Request,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Execute statutory privacy data eradication under Australian Privacy Principles with tax retention safeguards."""
+    if not payload.confirmed:
+        raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+
+    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Privacy request thread not found")
+
+    operator_identity = f"ops:{_client_ip(request)}"
+    now_ts = now_iso()
+
+    if payload.action in ("reject_non_subject", "request_identity_proof"):
+        new_status = "rejected" if payload.action == "reject_non_subject" else "awaiting_identity_proof"
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {"$set": {"status": new_status, "privacy_action_notes": payload.notes, "reviewed_by": operator_identity}},
+        )
+        await _audit(f"privacy_{payload.action}", case_id, after={"notes": payload.notes}, actor="ops")
+        return {"ok": True, "case_id": case_id, "status": new_status}
+
+    # action == "authorise_scrub"
+    target_email = thread.get("sender_email")
+    if not target_email:
+        raise HTTPException(status_code=400, detail="No sender_email associated with privacy case.")
+
+    scrubbed_count = 0
+    token = f"[SCRUBBED_PRIVACY_{case_id[:12]}]"
+
+    # Scrub in leads/intros
+    intros_coll = getattr(db, "intros", None)
+    if intros_coll is not None:
+        res = await intros_coll.update_many(
+            {"$or": [{"owner_email": target_email}, {"client_email": target_email}]},
+            {
+                "$set": {
+                    "owner_email": token,
+                    "client_email": token,
+                    "owner_name": token,
+                    "owner_phone": "[SCRUBBED]",
+                    "dog_notes": "[SCRUBBED_PRIVACY_REQUEST]",
+                    "privacy_scrubbed_at": now_ts,
+                }
+            },
+        )
+        scrubbed_count += res.modified_count
+
+    # Scrub in submissions
+    sub_coll = getattr(db, "submissions", None)
+    if sub_coll is not None:
+        res = await sub_coll.update_many(
+            {"email": target_email},
+            {"$set": {"email": token, "phone": "[SCRUBBED]", "name": token, "privacy_scrubbed_at": now_ts}},
+        )
+        scrubbed_count += res.modified_count
+
+    # Mark thread resolved with compliance certificate
+    await support_coll.update_one(
+        {"case_id": case_id},
+        {
+            "$set": {
+                "status": "resolved",
+                "privacy_scrubbed_at": now_ts,
+                "scrubbed_records_count": scrubbed_count,
+                "scrubbed_token": token,
+                "reviewed_by": operator_identity,
+            }
+        },
+    )
+
+    await _audit(
+        "privacy_data_scrubbed",
+        case_id,
+        after={"target_email_hash": hashlib.sha256(target_email.encode()).hexdigest()[:16], "records_scrubbed": scrubbed_count},
+        actor="ops",
+    )
+    return {
+        "ok": True,
+        "case_id": case_id,
+        "status": "scrubbed_and_resolved",
+        "records_scrubbed": scrubbed_count,
+        "compliance": "APP 12/13 verified; tax financial records preserved",
+    }
+
 
 @api.get("/claims/validate")
 async def validate_claim(

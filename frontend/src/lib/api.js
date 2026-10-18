@@ -68,6 +68,20 @@ export const refundSubscription = (payload) => opsApi.post("/oversight/subscript
 export const getMaintenanceMode = () => opsApi.get("/ops/maintenance-mode");
 export const setMaintenanceMode = (payload) => opsApi.post("/ops/maintenance-mode", payload);
 
+// Support & Owner Operations Workflows
+export const submitSupportInquiry = (payload) => api.post("/support/contact", payload);
+export const listSupportThreads = (params) => opsApi.get("/oversight/support/threads", { params });
+export const getSupportThread = (caseId) => opsApi.get(`/oversight/support/threads/${encodeURIComponent(caseId)}`);
+export const replySupportThread = (caseId, payload) => opsApi.post(`/oversight/support/threads/${encodeURIComponent(caseId)}/reply`, payload);
+export const closeSupportThread = (caseId, payload) => opsApi.post(`/oversight/support/threads/${encodeURIComponent(caseId)}/close`, payload);
+export const reviewHeldSubmission = (subId, payload) => opsApi.post(`/oversight/submissions/${encodeURIComponent(subId)}/review`, payload);
+export const reviewClaim = (claimId, payload) => opsApi.post(`/oversight/claims/${encodeURIComponent(claimId)}/review`, payload);
+export const reviewQuarantinedIntro = (introId, payload) => opsApi.post(`/oversight/intros/${encodeURIComponent(introId)}/fraud-review`, payload);
+export const delistTrainer = (trainerId, payload) => opsApi.post(`/oversight/trainers/${encodeURIComponent(trainerId)}/delist`, payload);
+export const updateTrainerProfile = (trainerId, payload) => opsApi.patch(`/oversight/trainers/${encodeURIComponent(trainerId)}`, payload);
+export const suppressTrainerListing = (trainerId, payload) => opsApi.post(`/oversight/trainers/${encodeURIComponent(trainerId)}/suppress`, payload);
+export const processPrivacyScrub = (caseId, payload) => opsApi.post(`/oversight/privacy/requests/${encodeURIComponent(caseId)}/process`, payload);
+
 export const buildAttributionSearch = ({
     campaign = "",
     source = "",
