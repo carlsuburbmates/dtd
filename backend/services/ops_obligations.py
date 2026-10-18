@@ -140,27 +140,36 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
                 t_id = (claim_doc.get("trainer_id") if claim_doc else entity_id)
                 trainer_doc = await trainers_coll.find_one({"id": t_id}, {"_id": 0})
 
-            claim_status = str(claim_doc.get("status") if claim_doc else "").lower()
-            lock_held = bool(trainer_doc.get("claim_in_progress") if trainer_doc else False)
+            if not claim_doc and not trainer_doc:
+                return False, f"Neither claim event nor trainer record found for {entity_id}; cannot verify lock release"
+            if not trainer_doc:
+                return False, f"Trainer record {entity_id} not found; cannot verify lock release"
 
-            if claim_status in ("verified", "completed"):
-                return True, f"Profile claim verified and completed for trainer {entity_id}"
-            
-            if (claim_status in ("expired", "cancelled", "released") or not claim_doc) and not lock_held:
-                return True, f"Claim lock released and confirmed inactive (claim status: {claim_status or 'none'}, lock_held: False)"
+            lock_held = bool(trainer_doc.get("claim_in_progress"))
+            if lock_held:
+                return False, f"Claim lock still actively held on trainer {entity_id}"
 
-            return False, f"Claim lock still held or in progress (status: {claim_status}, lock_held: {lock_held})"
+            if claim_doc:
+                claim_status = str(claim_doc.get("status") or "").lower()
+                if claim_status in ("verified", "completed"):
+                    return True, f"Profile claim verified and completed for trainer {entity_id}"
+                if claim_status in ("expired", "cancelled", "released", "denied") and not lock_held:
+                    return True, f"Claim lock released and confirmed inactive (claim status: {claim_status})"
+                return False, f"Claim lock status is {claim_status}, lock_held: {lock_held}"
+
+            return True, f"No active claim lock on trainer {entity_id} (lock_held: False)"
 
         elif category in ("client_enquiry", "notification_delivery"):
             notif_coll = getattr(db, "notification_events", None)
             message_log_coll = getattr(db, "message_log", None)
 
             # Check notification_events first (authoritative datastore)
+            # Confirmed delivery requires terminal status 'delivered' or 'recovered', matched strictly on dispatch_id
             if notif_coll is not None and hasattr(notif_coll, "find_one"):
                 delivered = await notif_coll.find_one(
                     {
-                        "$or": [{"dispatch_id": entity_id}, {"id": entity_id}, {"target_id": entity_id}],
-                        "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
+                        "$or": [{"dispatch_id": entity_id}, {"id": entity_id}],
+                        "status": {"$in": ["delivered", "recovered"]},
                     },
                     {"_id": 0, "status": 1, "created_at": 1},
                 )
@@ -172,14 +181,14 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
                 delivered = await message_log_coll.find_one(
                     {
                         "$or": [{"dispatch_id": entity_id}, {"id": entity_id}],
-                        "status": {"$in": ["sent", "delivered", "completed", "recovered", 200, 202]},
+                        "status": {"$in": ["delivered", "recovered"]},
                     },
                     {"_id": 0, "status": 1, "created_at": 1},
                 )
                 if delivered:
                     return True, f"Message dispatch {entity_id} verified delivered successfully"
 
-            return False, f"No successful delivery recorded for message dispatch {entity_id}"
+            return False, f"No confirmed delivery recorded for message dispatch {entity_id}"
 
         elif category in ("customer_support", "customer_complaint"):
             support_coll = getattr(db, "support_threads", None)
@@ -362,14 +371,14 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             if not dispatch_id:
                 continue
 
-            # Verify whether a subsequent event succeeded for this dispatch or target
+            # Verify whether a subsequent retry or delivery event succeeded for this exact dispatch
             is_recovered = False
             if notif_coll is not None and hasattr(notif_coll, "find_one"):
                 success_match = await notif_coll.find_one(
                     {
                         "$or": [
-                            {"dispatch_id": dispatch_id, "status": {"$in": ["sent", "delivered", "recovered"]}},
-                            {"target_id": msg.get("target_id"), "target_kind": msg.get("target_kind"), "status": {"$in": ["sent", "delivered", "recovered"]}} if msg.get("target_id") else {"_id": None},
+                            {"dispatch_id": dispatch_id, "status": {"$in": ["delivered", "recovered"]}},
+                            {"retry_of_dispatch_id": dispatch_id, "status": {"$in": ["delivered", "recovered"]}},
                         ],
                     },
                     {"_id": 1},
@@ -678,21 +687,27 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
     return synced_list
 
 
-async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None) -> List[Dict[str, Any]]:
+async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None, read_only: bool = False) -> List[Dict[str, Any]]:
     """Convert durable unaddressed obligations into top-priority Ops console cases."""
     current_dt = now_dt or now_utc()
-    synced = await sync_durable_obligations(db, now_dt=current_dt)
+    if read_only:
+        obls_coll = getattr(db, "ops_obligations", None)
+        if obls_coll is None or not hasattr(obls_coll, "find"):
+            return []
+        docs = await obls_coll.find({"status": {"$ne": "resolved"}}).to_list(100)
+    else:
+        synced = await sync_durable_obligations(db, now_dt=current_dt)
+        docs = [d for d in synced if d.get("status") != "resolved"]
+
     cases: List[Dict[str, Any]] = []
 
-    for doc in synced:
-        if doc.get("status") == "resolved":
-            continue
-
+    for doc in docs:
         obl_id = doc.get("obligation_id", "")
-        is_overdue = bool(doc.get("is_overdue"))
-        esc_level = int(doc.get("escalation_level") or 0)
-        overdue_h = doc.get("overdue_hours", 0)
-        sla_h = doc.get("sla_hours", 24)
+        sla_info = compute_sla(doc.get("category", ""), doc.get("created_at_source") or doc.get("created_at"), now_dt=current_dt)
+        is_overdue = sla_info["is_overdue"]
+        esc_level = sla_info["escalation_level"]
+        overdue_h = sla_info["overdue_hours"]
+        sla_h = sla_info["sla_hours"]
         recurrence_count = int(doc.get("recurrence_count") or 0)
 
         title = doc.get("title", "")
