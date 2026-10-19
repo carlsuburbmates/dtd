@@ -268,7 +268,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     ]
                 },
                 {"_id": 0, "id": 1, "business_name": 1, "name": 1, "abn": 1, "abn_status": 1, "created_at": 1},
-            ).to_list(500)
+            ).sort("created_at", 1).to_list(None)
             for sub in pending_subs:
                 sub_id = str(sub.get("id") or "")
                 if not sub_id:
@@ -302,7 +302,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     "status": {"$in": ["initiated", "pending", "otp_sent", "stale", "lock_held"]},
                 },
                 {"_id": 0, "id": 1, "trainer_id": 1, "status": 1, "method": 1, "created_at": 1, "updated_at": 1},
-            ).to_list(200)
+            ).sort("created_at", 1).to_list(None)
             for claim in stuck_claims:
                 claim_id = str(claim.get("id") or "")
                 trainer_id = str(claim.get("trainer_id") or "")
@@ -339,7 +339,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             raw_failed = await notif_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "to_email": 1, "kind": 1, "target_kind": 1, "target_id": 1, "error": 1, "created_at": 1},
-            ).sort("created_at", -1).to_list(1000)
+            ).sort("created_at", 1).to_list(None)
             for item in raw_failed:
                 failed_messages.append({
                     "id": item.get("id"),
@@ -360,7 +360,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             raw_log = await message_log_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "recipient": 1, "subject": 1, "error": 1, "created_at": 1},
-            ).sort("created_at", -1).to_list(1000)
+            ).sort("created_at", 1).to_list(None)
             failed_messages.extend(raw_log)
         except Exception as exc:
             logger.warning("Error reading message log for obligations: %s", exc)
@@ -418,7 +418,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             open_threads = await support_coll.find(
                 {"status": {"$in": ["open", "pending_owner", "escalated", "reply_delivery_failed", "awaiting_customer_reply", "awaiting_identity_proof"]}},
                 {"_id": 0, "case_id": 1, "sender_email": 1, "category": 1, "severity": 1, "subject": 1, "status": 1, "created_at": 1},
-            ).sort("created_at", -1).to_list(500)
+            ).sort("created_at", 1).to_list(None)
             for thr in open_threads:
                 case_id = str(thr.get("case_id") or "")
                 if not case_id:
@@ -640,7 +640,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                 {"status": {"$in": ["pending", "escalated", "waiting"]}},
                 {"_id": 0},
             )
-            pending_docs = await pending_cursor.to_list(1000) if hasattr(pending_cursor, "to_list") else []
+            pending_docs = await pending_cursor.sort("created_at", 1).to_list(None) if hasattr(pending_cursor, "to_list") else []
 
             for obl in pending_docs:
                 obl_id = obl.get("obligation_id", "")
@@ -735,7 +735,7 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None, rea
         obls_coll = getattr(db, "ops_obligations", None)
         if obls_coll is None or not hasattr(obls_coll, "find"):
             return []
-        docs = await obls_coll.find({"status": {"$ne": "resolved"}}).sort("created_at", -1).to_list(1000)
+        docs = await obls_coll.find({"status": {"$ne": "resolved"}}).sort("created_at", 1).to_list(None)
     else:
         synced = await sync_durable_obligations(db, now_dt=current_dt)
         docs = [d for d in synced if d.get("status") != "resolved"]

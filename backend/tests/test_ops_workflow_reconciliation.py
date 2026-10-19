@@ -38,7 +38,9 @@ class _Cursor:
         self.rows = list(rows)
         self._iter = iter(self.rows)
 
-    def sort(self, *args, **kwargs):
+    def sort(self, key=None, direction=1, *args, **kwargs):
+        if isinstance(key, str):
+            self.rows.sort(key=lambda r: str(r.get(key, "")), reverse=(direction == -1))
         return self
 
     def limit(self, n=None):
@@ -50,6 +52,8 @@ class _Cursor:
         return self
 
     async def to_list(self, _n=None):
+        if _n is not None:
+            return list(self.rows[:_n])
         return list(self.rows)
 
     def __aiter__(self):
@@ -214,17 +218,20 @@ class _MockCollection:
         return SimpleNamespace(deleted_count=before - len(self.rows))
 
     async def find_one_and_update(self, filt, update, upsert=False, return_document=None):
+        target = None
         for row in self.rows:
             if _match_doc(row, filt):
-                set_vals = update.get("$set", {}) if isinstance(update, dict) else {}
-                row.update(set_vals)
-                return dict(row)
-        if upsert:
-            doc = dict(filt)
-            set_vals = update.get("$set", {}) if isinstance(update, dict) else {}
-            doc.update(set_vals)
-            self.rows.append(doc)
-            return dict(doc)
+                target = row
+                break
+        if target is None and upsert:
+            target = dict(filt)
+            self.rows.append(target)
+        if target is not None:
+            pre = dict(target)
+            await self.update_one(filt, update, upsert=False)
+            if return_document:
+                return dict(target)
+            return pre
         return None
 
 
@@ -555,6 +562,7 @@ def test_held_submission_review_and_publication():
                 "abn": "12345678901",
                 "abn_status": "active",
                 "abn_verified": True,
+                "source_evidence_url": "https://baysidek9.com.au",
                 "status": "held",
                 "consent_public_listing": True,
                 "consent_information_accuracy": True,
@@ -566,6 +574,7 @@ def test_held_submission_review_and_publication():
                 "id": delisted_sub_id,
                 "name": "Suppressed Bad Trainer",
                 "email": "bad@trainer.com.au",
+                "source_evidence_url": "https://badtrainer.com.au",
                 "abn": "99999999999",
                 "status": "held",
                 "consent_public_listing": True,
@@ -645,6 +654,7 @@ def test_held_submission_review_and_publication():
                     "id": no_abn_id,
                     "name": "Jane's Dog Walking",
                     "email": "jane.sole@example.com",
+                    "source_evidence_url": "https://janesdogwalking.com.au",
                     "phone": "0400999888",
                     "abn": "",
                     "abn_status": "not_provided",
@@ -662,6 +672,26 @@ def test_held_submission_review_and_publication():
                 assert tr_sole is not None
                 assert tr_sole["verification_status"] == "unverified"
                 assert tr_sole["abn_verified"] is False
+
+                # 5. Missing source provenance blocks publication (400)
+                no_prov_id = "sub_no_provenance_test"
+                await mock_subs.insert_one({
+                    "id": no_prov_id,
+                    "name": "No Source Trainer",
+                    "email": "nosource@example.com",
+                    "phone": "0400999888",
+                    "abn": "",
+                    "status": "held",
+                    "consent_public_listing": True,
+                    "consent_information_accuracy": True,
+                })
+                res_no_prov = await client.post(
+                    f"/api/oversight/submissions/{no_prov_id}/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_no_prov.status_code == 400
+                assert "lacks source provenance" in res_no_prov.json()["detail"].lower()
         finally:
             server.db = orig_db
             if orig_pass:
@@ -703,8 +733,11 @@ def test_claim_review_grant_with_proof_and_deny():
                 "trainer_id": trainer_id,
                 "claimant_email": "legit.owner@melbournedog.com.au",
                 "status": "pending_challenge",
+                "method": "email_otp",
+                "otp_digest": "sha256_legit_challenge_digest",
                 "otp_verified": True,
                 "identity_verified": True,
+                "identity_verified_by": "ops:127.0.0.1",
                 "created_at": "2026-10-19T00:00:00Z",
             }
         ])
@@ -736,6 +769,28 @@ def test_claim_review_grant_with_proof_and_deny():
                 )
                 assert res_unverified.status_code == 422
                 assert "Direct ownership assignment via text reference is prohibited" in res_unverified.json()["detail"]
+
+                # 1b. Arbitrary flag without challenge provenance (no method, no otp_digest) is rejected (422)
+                claim_arbitrary_flag = "clm_arbitrary_flag_003"
+                await mock_claims.insert_one({
+                    "id": claim_arbitrary_flag,
+                    "trainer_id": trainer_id,
+                    "claimant_email": "arbitrary@melbournedog.com.au",
+                    "status": "pending_challenge",
+                    "otp_verified": True,
+                    "created_at": "2026-10-19T00:00:00Z",
+                })
+                res_arb = await client.post(
+                    f"/api/oversight/claims/{claim_arbitrary_flag}/review",
+                    json={
+                        "action": "grant_with_proof",
+                        "confirmed": True,
+                        "proof_reference": "ASIC business extract doc_456",
+                    },
+                    headers=headers,
+                )
+                assert res_arb.status_code == 422
+                assert "verifiable challenge provenance" in res_arb.json()["detail"]
 
                 # 2. Valid grant with verified OTP/identity and substantive business documentation
                 res_legit = await client.post(
@@ -996,7 +1051,17 @@ def test_privacy_scrub_pipeline_under_app_guidelines():
                 assert res_req_id.json()["status"] == "awaiting_identity_proof"
 
                 # 3. Authorise scrub once verified
-                await mock_support.update_one({"case_id": case_id}, {"$set": {"identity_verified": True}})
+                await mock_support.update_one(
+                    {"case_id": case_id},
+                    {
+                        "$set": {
+                            "identity_verified": True,
+                            "identity_verified_by": "ops:127.0.0.1",
+                            "identity_verified_at": "2026-10-19T00:00:00Z",
+                            "identity_verification_method": "photo_id",
+                        }
+                    },
+                )
                 res = await client.post(
                     f"/api/oversight/privacy/requests/{case_id}/process",
                     json={"action": "authorise_scrub", "confirmed": True},
@@ -1141,6 +1206,14 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 "messages": [{"sender": "customer", "text": "Please delete my data"}],
             },
             {
+                "case_id": "sup_priv_unprovenanced",
+                "category": "privacy_request",
+                "status": "open",
+                "sender_email": "sarah@user.com",
+                "identity_verified": True, # Flag set to True without any recorded operator provenance
+                "messages": [{"sender": "customer", "text": "Please delete my data"}],
+            },
+            {
                 "case_id": "sup_not_privacy",
                 "category": "general_inquiry",
                 "status": "open",
@@ -1154,7 +1227,18 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 "status": "open",
                 "sender_email": "sarah@user.com",
                 "identity_verified": True,
+                "identity_verified_by": "ops:127.0.0.1",
+                "identity_verified_at": "2026-10-19T00:00:00Z",
+                "identity_verification_method": "passport_match",
                 "messages": [{"sender": "customer", "text": "Please delete my data"}],
+            },
+            {
+                "case_id": "sup_hist_thread_other",
+                "category": "general_inquiry",
+                "status": "closed",
+                "sender_email": "sarah@user.com",
+                "sender_name": "Sarah Connor",
+                "messages": [{"sender": "customer", "text": "Old inquiry"}],
             },
         ])
         mock_intros = _MockCollection(rows=[
@@ -1174,11 +1258,35 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 "phone": "0412345678",
             }
         ])
+        mock_waitlist = _MockCollection(rows=[
+            {
+                "id": "wait_priv_cf01",
+                "email": "sarah@user.com",
+                "name": "Sarah Connor",
+                "phone": "0412345678",
+            }
+        ])
+        mock_claims = _MockCollection(rows=[
+            {
+                "id": "clm_priv_cf01",
+                "claimant_email": "sarah@user.com",
+                "phone": "0412345678",
+            }
+        ])
+        mock_notifs = _MockCollection(rows=[
+            {
+                "id": "notif_priv_cf01",
+                "to_email": "sarah@user.com",
+            }
+        ])
 
         mock_db = _MockDB(
             support_threads=mock_threads,
             intros=mock_intros,
             submissions=mock_subs,
+            owner_waitlist=mock_waitlist,
+            claim_events=mock_claims,
+            notification_events=mock_notifs,
             audit_log=_MockCollection(),
         )
         server.db = mock_db
@@ -1197,13 +1305,32 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 assert res1.status_code == 400
                 assert "Requester identity must be verified" in res1.json()["detail"]
 
-                # 2. Arbitrary notes do not authorise erasure
-                res2 = await client.post(
-                    "/api/oversight/privacy/requests/sup_priv_unverified/process",
-                    json={"action": "authorise_scrub", "confirmed": True, "notes": "Customer spoke to owner"},
+                # 1b. Unprovenanced identity_verified=True flag (no identity_verified_by or at) is rejected (400)
+                res_unprovenanced = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_unprovenanced/process",
+                    json={"action": "authorise_scrub", "confirmed": True},
                     headers=headers,
                 )
-                assert res2.status_code == 400
+                assert res_unprovenanced.status_code == 400
+                assert "recorded verification provenance" in res_unprovenanced.json()["detail"]
+
+                # 2. In-request documentary proof allows unverified case to be verified and scrubbed
+                res_in_request = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_unverified/process",
+                    json={
+                        "action": "authorise_scrub",
+                        "confirmed": True,
+                        "proof_reference": "VIC Driver Licence 998877",
+                        "proof_method": "photo_id",
+                    },
+                    headers=headers,
+                )
+                assert res_in_request.status_code == 200
+                assert res_in_request.json()["status"] == "resolved"
+                thread_updated = await mock_threads.find_one({"case_id": "sup_priv_unverified"})
+                assert thread_updated["identity_verified"] is True
+                assert thread_updated["identity_verification_method"] == "photo_id"
+                assert thread_updated["identity_proof_reference"] == "VIC Driver Licence 998877"
 
                 # 3. Wrong request category is rejected
                 res3 = await client.post(
@@ -1226,11 +1353,13 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 thr_failed = await mock_threads.find_one({"case_id": "sup_priv_verified"})
                 assert thr_failed["status"] == "privacy_scrub_failed"
                 assert "privacy_error" in thr_failed
+                assert thr_failed["failed_at_step"] == "intros"
+                assert "scrub_journal" in thr_failed
 
                 # Restore intros.update_many
                 del mock_db._collections["intros"].update_many
 
-                # 5. Verified requester completes successfully
+                # 5. Verified requester completes successfully across all 6 collections
                 res_ok = await client.post(
                     "/api/oversight/privacy/requests/sup_priv_verified/process",
                     json={"action": "authorise_scrub", "confirmed": True},
@@ -1239,12 +1368,25 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 assert res_ok.status_code == 200
                 data = res_ok.json()
                 assert data["status"] == "resolved"
-                assert data["records_scrubbed"] == 2
+                assert data["records_scrubbed"] >= 6
+                assert len(data["scrub_journal"]) == 6
 
-                # Verify actual scrubbing happened
+                # Verify actual scrubbing happened across collections
                 intro_doc = await mock_intros.find_one({"id": "int_priv_cf01"})
                 assert intro_doc["owner_email"].startswith("[SCRUBBED_PRIVACY_")
                 assert intro_doc["owner_phone"] == "[SCRUBBED]"
+
+                wait_doc = await mock_waitlist.find_one({"id": "wait_priv_cf01"})
+                assert wait_doc["email"].startswith("[SCRUBBED_PRIVACY_")
+
+                claim_doc = await mock_claims.find_one({"id": "clm_priv_cf01"})
+                assert claim_doc["claimant_email"].startswith("[SCRUBBED_PRIVACY_")
+
+                notif_doc = await mock_notifs.find_one({"id": "notif_priv_cf01"})
+                assert notif_doc["to_email"].startswith("[SCRUBBED_PRIVACY_")
+
+                hist_doc = await mock_threads.find_one({"case_id": "sup_hist_thread_other"})
+                assert hist_doc["sender_email"].startswith("[SCRUBBED_PRIVACY_")
 
                 # 6. Idempotent repeated processing
                 res_repeat = await client.post(
@@ -1279,6 +1421,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 "phone": "+61412000001",
                 "email": "banned@trainer.com",
                 "website": "bannedtraining.com.au",
+                "source_evidence_url": "https://bannedtraining.com.au",
                 "abn": "11222333444",
                 "consent_public_listing": True,
                 "consent_information_accuracy": True,
@@ -1290,6 +1433,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 "email": "noconsent@trainer.com",
                 "phone": "+61412000002",
                 "website": "noconsent.com.au",
+                "source_evidence_url": "https://noconsent.com.au",
                 "consent_public_listing": False,
                 "consent_information_accuracy": True,
             },
@@ -1300,6 +1444,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 "email": "shared@trainer.com",
                 "phone": "+61412000003",
                 "website": "pawsunlimited.com.au",
+                "source_evidence_url": "https://pawsunlimited.com.au",
                 "consent_public_listing": True,
                 "consent_information_accuracy": True,
             },
@@ -1310,6 +1455,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 "email": "bark@trainer.com",
                 "phone": "+61412000004",
                 "website": "barkacademy.com.au",
+                "source_evidence_url": "https://barkacademy.com.au",
                 "abn": "99888777666",
                 "abn_verified": True,
                 "consent_public_listing": True,
@@ -1322,6 +1468,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 "email": "soletrader@trainer.com",
                 "phone": "+61412000005",
                 "website": "soletraderpups.com.au",
+                "source_evidence_url": "https://soletraderpups.com.au",
                 "abn": "",
                 "consent_public_listing": True,
                 "consent_information_accuracy": True,
@@ -1397,7 +1544,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                 assert res_noprov.status_code == 400
                 assert "source provenance" in res_noprov.json()["detail"].lower()
 
-                # 4. Matching email alone cannot authorise overwriting another trainer (409)
+                # 4. Matching contact details alone cannot authorise overwriting another trainer (409)
                 # "Paws Unlimited Academy" has email "shared@trainer.com", which matches "Bark Academy Melbourne"
                 res_unrelated = await client.post(
                     "/api/oversight/submissions/sub_unrelated_email_1/review",
@@ -1405,7 +1552,7 @@ def test_cf02_trainer_publication_authority_dedup_and_concurrency():
                     headers=headers,
                 )
                 assert res_unrelated.status_code == 409
-                assert "Matching email alone cannot authorise overwriting another trainer" in res_unrelated.json()["detail"] or "already claimed" in res_unrelated.json()["detail"]
+                assert "different business identity" in res_unrelated.json()["detail"] or "already claimed" in res_unrelated.json()["detail"]
 
                 # 5. Existing claimed listing cannot be displaced (409)
                 res_claimed = await client.post(
@@ -1466,9 +1613,20 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "expires_at": "2099-01-01T00:00:00Z",
             },
             {
+                "id": "clm_unprovenanced_flag_only",
+                "trainer_id": "trn_unprov_target",
+                "claimant_email": "attacker@fake.com",
+                "otp_verified": True, # Flag set, but NO method and NO otp_digest/challenge_token
+                "identity_verified": False,
+                "status": "verified",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
                 "id": "clm_expired_challenge",
                 "trainer_id": "trn_expired_target",
                 "claimant_email": "legit@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_expired_digest",
                 "otp_verified": True,
                 "status": "verified",
                 "expires_at": "2020-01-01T00:00:00Z",  # Expired in past!
@@ -1477,6 +1635,8 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_already_claimed_trainer",
                 "trainer_id": "trn_already_claimed",
                 "claimant_email": "newbie@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_claimed_digest",
                 "otp_verified": True,
                 "status": "verified",
                 "expires_at": "2099-01-01T00:00:00Z",
@@ -1485,6 +1645,8 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_conflicting_verified_prior",
                 "trainer_id": "trn_conflicting_target",
                 "claimant_email": "first_verified@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_prior_digest",
                 "otp_verified": True,
                 "status": "verified",
                 "expires_at": "2099-01-01T00:00:00Z",
@@ -1493,6 +1655,8 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_conflicting_verified_attacker",
                 "trainer_id": "trn_conflicting_target",
                 "claimant_email": "rival@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_attacker_digest",
                 "otp_verified": True,
                 "status": "verified",
                 "expires_at": "2099-01-01T00:00:00Z",
@@ -1501,6 +1665,8 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_competing_winner",
                 "trainer_id": "trn_target_claim",
                 "claimant_email": "owner_alice@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_winner_digest",
                 "otp_verified": True,
                 "status": "verified",
                 "expires_at": "2099-01-01T00:00:00Z",
@@ -1509,6 +1675,8 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_competing_loser",
                 "trainer_id": "trn_target_claim",
                 "claimant_email": "challenger_bob@trainer.com",
+                "method": "email_otp",
+                "otp_digest": "sha256_loser_digest",
                 "otp_verified": True,
                 "status": "pending_verification",
                 "expires_at": "2099-01-01T00:00:00Z",
@@ -1518,6 +1686,13 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
             {
                 "id": "trn_target_claim",
                 "name": "Target Pups",
+                "claim_status": "unclaimed",
+                "is_claimed": False,
+                "published": True,
+            },
+            {
+                "id": "trn_unprov_target",
+                "name": "Unprovenanced Flag Target Pups",
                 "claim_status": "unclaimed",
                 "is_claimed": False,
                 "published": True,
@@ -1565,7 +1740,16 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                     headers=headers,
                 )
                 assert res1.status_code == 422
-                assert "Claimant must complete canonical identity verification challenge" in res1.json()["detail"]
+                assert "verifiable challenge provenance" in res1.json()["detail"] or "complete canonical identity verification challenge" in res1.json()["detail"]
+
+                # 1b. Unprovenanced verification flag without server challenge origin is rejected (422)
+                res_unprov = await client.post(
+                    "/api/oversight/claims/clm_unprovenanced_flag_only/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC extract 12345", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_unprov.status_code == 422
+                assert "verifiable challenge provenance" in res_unprov.json()["detail"]
 
                 # 2. Expired verification challenge cannot grant ownership (410)
                 res2 = await client.post(
@@ -1863,4 +2047,242 @@ def test_cf05_durable_obligation_completeness_and_waiting_state():
         assert len(synced_after_error) > 0
 
     asyncio.run(_test())
+
+
+def test_cf04_adversarial_gather_concurrent_reply_dispatch():
+    """Adversarial test for CF-04: simultaneous requests via asyncio.gather against reply_support_thread.
+    Verifies that only one request acquires the in-flight lock, resend is called exactly once,
+    and concurrent/duplicate requests are rejected or handled idempotently with zero double-dispatch."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        mock_threads = _MockCollection(rows=[
+            {
+                "case_id": "sup_concurrent_gather_01",
+                "category": "general_inquiry",
+                "status": "open",
+                "sender_email": "gather_client@example.com",
+                "messages": [
+                    {"sender": "customer", "text": "Is training available this Saturday?"}
+                ],
+            }
+        ])
+        mock_db = _MockDB(
+            support_threads=mock_threads,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                dispatch_count = 0
+                async def _delayed_mock_send(db, thread, reply_text):
+                    nonlocal dispatch_count
+                    dispatch_count += 1
+                    await asyncio.sleep(0.05)  # simulate network transit window
+                    return {"status": "sent", "id": f"resend_gather_{dispatch_count}"}
+
+                with patch("services.notifications.notify_support_reply", side_effect=_delayed_mock_send):
+                    req_payload = {
+                        "reply_text": "Yes, we have a slot open at 10 AM.",
+                        "mark_status": "awaiting_customer_reply",
+                    }
+                    tasks = [
+                        client.post(
+                            "/api/oversight/support/threads/sup_concurrent_gather_01/reply",
+                            json=req_payload,
+                            headers=headers,
+                        )
+                        for _ in range(5)
+                    ]
+                    responses = await asyncio.gather(*tasks)
+
+                # Exactly one email dispatch must occur
+                assert dispatch_count == 1
+
+                # Exactly one successful dispatch response
+                dispatched_responses = [r for r in responses if r.status_code == 200 and r.json().get("dispatched") is True]
+                assert len(dispatched_responses) == 1
+
+                # The other 4 requests must either be rejected as concurrent in-flight (409) or detected as duplicate (200, duplicate=True)
+                other_responses = [r for r in responses if r is not dispatched_responses[0]]
+                for r in other_responses:
+                    assert r.status_code in (200, 409)
+                    if r.status_code == 200:
+                        assert r.json().get("duplicate") is True
+                    elif r.status_code == 409:
+                        assert "in progress" in r.json()["detail"].lower() or "concurrent" in r.json()["detail"].lower()
+
+                # Verify thread only has one ops reply message added
+                thread_final = await mock_threads.find_one({"case_id": "sup_concurrent_gather_01"})
+                ops_messages = [m for m in thread_final["messages"] if m.get("sender") == "operator"]
+                assert len(ops_messages) == 1
+                assert thread_final.get("reply_dispatching") is not True
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
+
+def test_cf05_adversarial_scale_zero_omissions():
+    """Adversarial test for CF-05: >1,000 cases verification demonstrating that unbounded scans (to_list(None))
+    and chronological sorting ensure complete zero-omission obligation coverage without silent truncation."""
+    async def _test():
+        # Generate 1,005 notification failure events
+        failed_notifs = []
+        for i in range(1005):
+            failed_notifs.append({
+                "id": f"notif_scale_{i:04d}",
+                "dispatch_id": f"dsp_scale_{i:04d}",
+                "status": "failed",
+                "error": "Resend API 429 Rate Limit",
+                "attempt": 3,
+                "created_at": f"2026-10-15T{i // 3600:02d}:{(i % 3600) // 60:02d}:{i % 60:02d}Z",
+            })
+
+        # Generate 1,005 held submissions
+        held_subs = []
+        for i in range(1005):
+            held_subs.append({
+                "id": f"sub_scale_{i:04d}",
+                "name": f"Trainer Scale {i}",
+                "email": f"trainer_{i}@example.com",
+                "status": "held",
+                "source_evidence_url": f"https://trainer{i}.com.au",
+                "created_at": f"2026-10-16T{i // 3600:02d}:{(i % 3600) // 60:02d}:{i % 60:02d}Z",
+            })
+
+        mock_notif = _MockCollection(rows=failed_notifs)
+        mock_subs = _MockCollection(rows=held_subs)
+        mock_obls = _MockCollection()
+
+        mock_db = _MockDB(
+            notification_events=mock_notif,
+            submissions=mock_subs,
+            ops_obligations=mock_obls,
+        )
+
+        # Ingestion across all 2,010 items
+        synced = await ops_obligations.sync_durable_obligations(mock_db)
+        synced_map = {o["obligation_id"]: o for o in synced}
+
+        # Verify complete coverage without 500 or 1000 limit truncation
+        assert "obligation:message:dsp_scale_0000" in synced_map
+        assert "obligation:submission:sub_scale_0000" in synced_map
+        assert "obligation:message:dsp_scale_0500" in synced_map
+        assert "obligation:submission:sub_scale_0500" in synced_map
+        assert "obligation:message:dsp_scale_1000" in synced_map
+        assert "obligation:submission:sub_scale_1000" in synced_map
+        assert "obligation:message:dsp_scale_1004" in synced_map
+        assert "obligation:submission:sub_scale_1004" in synced_map
+
+        # Total synced must equal exactly 2,010 items (zero silent omissions)
+        assert len(synced) == 2010
+
+        # Read-only active obligation retrieval must also return all 2,010 items
+        active_cases = await ops_obligations.get_active_obligation_cases(mock_db, read_only=True)
+        assert len(active_cases) == 2010
+
+    asyncio.run(_test())
+
+
+def test_cf02_strict_dedup_no_fuzzy_overwrite():
+    """Adversarial test for CF-02: verify that SequenceMatcher 0.8 fuzzy name matching is removed
+    and cannot authorise overwriting another business record. Non-matching ABN with fuzzy name similarity
+    creates a distinct trainer record instead of overwriting existing business."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        # Existing trainer with ABN 11111111111
+        mock_trainers = _MockCollection(rows=[
+            {
+                "id": "trn_melb_k9_existing",
+                "name": "Melbourne K9 Training Academy",
+                "email": "contact@melbournek9.com.au",
+                "abn": "11111111111",
+                "abn_verified": True,
+                "published": True,
+                "is_active": True,
+                "via_submission_id": "sub_orig_001",
+            }
+        ])
+
+        # New submission with highly similar name (~0.96 similarity ratio) but DIFFERENT ABN
+        sub_id = "sub_fuzzy_name_diff_abn"
+        mock_subs = _MockCollection(rows=[
+            {
+                "id": sub_id,
+                "name": "Melbourne K9 Training Academi",  # 1 character typo -> ~0.96 ratio
+                "email": "different@k9academy.com.au",
+                "phone": "+61411222333",
+                "website": "k9academy.com.au",
+                "abn": "22222222222",  # Different ABN!
+                "abn_verified": True,
+                "source_evidence_url": "https://k9academy.com.au",
+                "status": "held",
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            }
+        ])
+
+        mock_db = _MockDB(
+            submissions=mock_subs,
+            trainers=mock_trainers,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                # Approve the submission
+                res = await client.post(
+                    f"/api/oversight/submissions/{sub_id}/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res.status_code == 200
+                data = res.json()
+                assert data["status"] == "published"
+                new_trainer_id = data["trainer_id"]
+
+                # INVARIANT: Must NOT overwrite the existing trainer trn_melb_k9_existing!
+                assert new_trainer_id != "trn_melb_k9_existing"
+
+                # Check existing trainer was NOT modified
+                orig_trainer = await mock_trainers.find_one({"id": "trn_melb_k9_existing"})
+                assert orig_trainer["name"] == "Melbourne K9 Training Academy"
+                assert orig_trainer["abn"] == "11111111111"
+                assert orig_trainer["email"] == "contact@melbournek9.com.au"
+
+                # Check new distinct trainer was inserted
+                new_trainer = await mock_trainers.find_one({"id": new_trainer_id})
+                assert new_trainer["name"] == "Melbourne K9 Training Academi"
+                assert new_trainer["abn"] == "22222222222"
+                assert new_trainer["via_submission_id"] == sub_id
+                # Check canonical schema and capabilities
+                assert "capabilities" in new_trainer
+                assert new_trainer["published"] is True
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
 
