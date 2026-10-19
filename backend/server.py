@@ -8639,14 +8639,17 @@ async def reply_support_thread(
     if not thread:
         raise HTTPException(status_code=404, detail="Support thread not found")
 
-    # Duplicate reply prevention
+    # Duplicate reply prevention: only suppress if previous identical reply was accepted/delivered
     existing_messages = thread.get("messages") or []
     if existing_messages and existing_messages[-1].get("sender") == "operator" and existing_messages[-1].get("text") == payload.reply_text.strip():
-        return {"ok": True, "case_id": case_id, "status": thread.get("status"), "duplicate": True, "message": "Duplicate reply detected."}
+        if existing_messages[-1].get("delivery_status") in ("accepted", "delivered", "sent"):
+            return {"ok": True, "case_id": case_id, "status": thread.get("status"), "duplicate": True, "message": "Duplicate reply detected."}
 
     operator_identity = f"ops:{_client_ip(request)}"
     now_ts = now_iso()
+    message_id = f"msg_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
     new_message = {
+        "message_id": message_id,
         "sender": "operator",
         "operator": operator_identity,
         "text": payload.reply_text.strip(),
@@ -8654,7 +8657,7 @@ async def reply_support_thread(
         "delivery_status": "pending",
     }
 
-    # Record drafted/queued reply message first
+    # Record drafted/queued reply message first with unique message_id
     await support_coll.update_one(
         {"case_id": case_id},
         {"$push": {"messages": new_message}},
@@ -8677,34 +8680,26 @@ async def reply_support_thread(
 
     if is_accepted:
         new_status = "awaiting_customer_reply"
-        thread_doc = await support_coll.find_one({"case_id": case_id})
-        msgs = list((thread_doc or {}).get("messages") or [])
-        if msgs:
-            msgs[-1]["delivery_status"] = "accepted"
-            msgs[-1]["provider_id"] = notif_id
         await support_coll.update_one(
-            {"case_id": case_id},
+            {"case_id": case_id, "messages.message_id": message_id},
             {
                 "$set": {
                     "status": new_status,
-                    "messages": msgs,
+                    "messages.$.delivery_status": "accepted",
+                    "messages.$.provider_id": notif_id,
                     "updated_at": now_ts,
                 }
             },
         )
     else:
         new_status = "reply_delivery_failed"
-        thread_doc = await support_coll.find_one({"case_id": case_id})
-        msgs = list((thread_doc or {}).get("messages") or [])
-        if msgs:
-            msgs[-1]["delivery_status"] = "failed"
-            msgs[-1]["error"] = notif_error
         await support_coll.update_one(
-            {"case_id": case_id},
+            {"case_id": case_id, "messages.message_id": message_id},
             {
                 "$set": {
                     "status": new_status,
-                    "messages": msgs,
+                    "messages.$.delivery_status": "failed",
+                    "messages.$.error": notif_error,
                     "updated_at": now_ts,
                 }
             },
@@ -8713,10 +8708,10 @@ async def reply_support_thread(
     await _audit(
         "support_thread_replied",
         case_id,
-        after={"status": new_status, "operator": operator_identity, "dispatched": is_accepted},
+        after={"status": new_status, "operator": operator_identity, "dispatched": is_accepted, "message_id": message_id},
         actor="ops",
     )
-    return {"ok": True, "case_id": case_id, "status": new_status, "dispatched": is_accepted}
+    return {"ok": True, "case_id": case_id, "status": new_status, "dispatched": is_accepted, "message_id": message_id}
 
 
 class SupportCloseIn(BaseModel):
@@ -8746,16 +8741,32 @@ async def close_support_thread(
         raise HTTPException(status_code=404, detail="Support thread not found")
 
     category = str(thread.get("category") or "").lower()
-    # Specialized obligations safeguard: Cannot close without underlying verified resolution
+    # Specialized obligations safeguard: Cannot close without underlying positive verified resolution
     if category == "delisting_request":
         trainer_id = thread.get("trainer_id")
-        if trainer_id:
-            trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0, "published": 1, "is_active": 1})
-            if trainer and (trainer.get("published") is True or trainer.get("is_active") is True):
-                raise HTTPException(status_code=422, detail="Cannot close delisting support thread: trainer listing remains active and published.")
+        if not trainer_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: no trainer_id linked to verify delisting status.",
+            )
+        trainers_coll = getattr(db, "trainers", None)
+        trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0, "published": 1, "is_active": 1}) if trainers_coll is not None else None
+        if not trainer:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: linked trainer record not found in directory. Missing record cannot certify delisting.",
+            )
+        if trainer.get("published") is True or trainer.get("is_active") is True:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: trainer listing remains active and published.",
+            )
     elif category == "privacy_request":
-        if not thread.get("privacy_processed") and not thread.get("privacy_scrubbed_at"):
-            raise HTTPException(status_code=422, detail="Cannot close privacy support thread: privacy erasure or lawful handling has not been completed.")
+        if not thread.get("privacy_processed"):
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close privacy support thread: privacy data erasure has not been completed.",
+            )
 
     operator_identity = f"ops:{_client_ip(request)}"
     now_ts = now_iso()
@@ -8849,35 +8860,57 @@ async def review_held_submission(
     if current_status in ("rejected", "withdrawn", "cancelled"):
         raise HTTPException(status_code=409, detail=f"Cannot approve submission in terminal state '{current_status}'.")
 
-    # Canonical suppression check against delisted entities
-    suppression = await deduplication.suppression_match(db, sub)
-    if suppression:
-        raise HTTPException(status_code=403, detail="Submission matches a delisted or suppressed business entity and cannot be published.")
+    # Atomic lock transition to prevent concurrent approval race
+    locked_sub = await sub_coll.find_one_and_update(
+        {"id": submission_id, "status": {"$in": ["held", "held_awaiting_evidence", "pending", "hold"]}},
+        {"$set": {"status": "publishing", "locked_by": operator_identity, "locked_at": now_ts}},
+        return_document=True,
+    )
+    if not locked_sub:
+        fresh = await sub_coll.find_one({"id": submission_id}, {"_id": 0})
+        fresh_status = str((fresh or {}).get("status") or "")
+        if fresh_status == "published":
+            return {"ok": True, "status": "published", "idempotent": True, "trainer_id": (fresh or {}).get("trainer_id")}
+        if fresh_status == "publishing":
+            raise HTTPException(status_code=409, detail="Concurrent approval in progress for this submission.")
+        raise HTTPException(status_code=409, detail=f"Cannot approve submission in state '{fresh_status}'.")
 
-    # Canonical consent and contact readiness gates
-    if not sub.get("consent_public_listing") or not sub.get("consent_information_accuracy"):
-        raise HTTPException(status_code=400, detail="Submission lacks required public listing and accuracy consent.")
+    try:
+        # Canonical suppression check against delisted entities
+        suppression = await deduplication.suppression_match(db, sub)
+        if suppression:
+            raise HTTPException(status_code=403, detail="Submission matches a delisted or suppressed business entity and cannot be published.")
 
-    contact_ready = bool(sub.get("website") or sub.get("phone") or sub.get("email"))
-    if not contact_ready:
-        raise HTTPException(status_code=400, detail="Submission must contain at least one valid contact channel (phone, email, or website).")
+        # Canonical consent and contact readiness gates
+        if not sub.get("consent_public_listing") or not sub.get("consent_information_accuracy"):
+            raise HTTPException(status_code=400, detail="Submission lacks required public listing and accuracy consent.")
 
-    # ABN verification invariants
-    clean_abn = str(sub.get("abn") or "").strip()
-    abn_verified = bool(sub.get("abn_verified"))
-    if clean_abn and not abn_verified and not payload.override_abn_unverified:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot approve submission with unverified ABN without explicit override_abn_unverified confirmation.",
-        )
+        contact_ready = bool(sub.get("website") or sub.get("phone") or sub.get("email"))
+        if not contact_ready:
+            raise HTTPException(status_code=400, detail="Submission must contain at least one valid contact channel (phone, email, or website).")
 
-    # Legitimate ABN-optional listings remain unverified; never award false verified badges
-    verification_status = "verified" if abn_verified else "unverified"
+        # Source provenance check: submission must have a traceable source
+        if not (sub.get("submitter_email") or sub.get("email") or sub.get("source_evidence_url")):
+            raise HTTPException(status_code=400, detail="Submission lacks source provenance (no submitter email, listing email, or source evidence).")
 
-    # Duplicate identity matching
-    trainers_coll = getattr(db, "trainers", None)
-    existing = None
-    if trainers_coll is not None:
+        # ABN verification invariants
+        clean_abn = str(sub.get("abn") or "").strip()
+        abn_verified = bool(sub.get("abn_verified"))
+        if clean_abn and not abn_verified and not payload.override_abn_unverified:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot approve submission with unverified ABN without explicit override_abn_unverified confirmation.",
+            )
+
+        # Legitimate ABN-optional listings remain unverified; never award false verified badges
+        verification_status = "verified" if abn_verified else "unverified"
+
+        # Duplicate identity matching
+        trainers_coll = getattr(db, "trainers", None)
+        if trainers_coll is None:
+            raise HTTPException(status_code=503, detail="Trainers store unavailable")
+
+        existing = None
         if clean_abn:
             existing = await trainers_coll.find_one({"abn": clean_abn}, {"_id": 0})
         if not existing and sub.get("email"):
@@ -8889,27 +8922,49 @@ async def review_held_submission(
         if not existing:
             existing = await trainers_coll.find_one({"via_submission_id": submission_id}, {"_id": 0})
 
-    if existing:
-        t_claim = str(existing.get("claim_status") or "").lower()
-        if t_claim in ("claimed", "claim_disputed"):
-            raise HTTPException(status_code=409, detail="Competing submission cannot overwrite an already claimed or disputed trainer listing.")
+        if existing:
+            t_claim = str(existing.get("claim_status") or "").lower()
+            if t_claim in ("claimed", "claim_disputed") or existing.get("is_claimed"):
+                raise HTTPException(status_code=409, detail="Competing submission cannot overwrite an already claimed or disputed trainer listing.")
 
-    declared_capabilities = trainer_quality.package_trainer_capabilities(
-        specialties=sub.get("specialties"),
-        service_formats=sub.get("service_formats"),
-        life_stages=sub.get("life_stages"),
-        training_philosophy=sub.get("training_philosophy"),
-        serviced_suburbs=sub.get("serviced_suburbs"),
-        catchment_type=sub.get("catchment_type"),
-        delivery_constraints=sub.get("delivery_constraints"),
-        basis="trainer_declaration",
-        evidence_reference=submission_id,
-        confirmed_at=now_ts,
-    )
+            # Invariant: Matching email alone must not overwrite an unrelated business record
+            is_same_business = False
+            if sub.get("trainer_id") and existing.get("id") == sub.get("trainer_id"):
+                is_same_business = True
+            elif existing.get("via_submission_id") == submission_id:
+                is_same_business = True
+            elif clean_abn and deduplication.normalize_abn(existing.get("abn")) == clean_abn:
+                is_same_business = True
+            else:
+                sub_name_norm = deduplication.normalize_name(sub.get("name"))
+                ex_name_norm = deduplication.normalize_name(existing.get("name"))
+                if sub_name_norm and ex_name_norm:
+                    from difflib import SequenceMatcher
+                    sim = SequenceMatcher(None, sub_name_norm, ex_name_norm).ratio()
+                    if sim >= 0.8:
+                        is_same_business = True
 
-    if existing:
-        trainer_id = existing["id"]
-        if trainers_coll is not None:
+            if not is_same_business:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Submission matches contact details of an existing trainer with a different business identity. Matching email alone cannot authorise overwriting another trainer.",
+                )
+
+        declared_capabilities = trainer_quality.package_trainer_capabilities(
+            specialties=sub.get("specialties"),
+            service_formats=sub.get("service_formats"),
+            life_stages=sub.get("life_stages"),
+            training_philosophy=sub.get("training_philosophy"),
+            serviced_suburbs=sub.get("serviced_suburbs"),
+            catchment_type=sub.get("catchment_type"),
+            delivery_constraints=sub.get("delivery_constraints"),
+            basis="trainer_declaration",
+            evidence_reference=submission_id,
+            confirmed_at=now_ts,
+        )
+
+        if existing:
+            trainer_id = existing["id"]
             await trainers_coll.update_one(
                 {"id": trainer_id},
                 {
@@ -8925,47 +8980,53 @@ async def review_held_submission(
                     }
                 },
             )
-    else:
-        trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
-        trainer_doc = {
-            "id": trainer_id,
-            "name": sub.get("name") or "Unnamed Trainer",
-            "email": sub.get("email") or "",
-            "phone": sub.get("phone") or "",
-            "website": sub.get("website") or "",
-            "suburb": sub.get("suburb") or "",
-            "region": sub.get("region") or ACTIVE_REGION,
-            "abn": sub.get("abn") or "",
-            "abn_status": sub.get("abn_status", "not_provided"),
-            "abn_verified": abn_verified,
-            "verification_status": verification_status,
-            "serviced_suburbs": sub.get("serviced_suburbs", []),
-            "specialties": sub.get("specialties", []),
-            "capabilities": declared_capabilities,
-            "tier": "unclaimed",
-            "claim_status": "unclaimed",
-            "published": True,
-            "is_active": True,
-            "contact_ready": contact_ready,
-            "outcome_score": 0.05,
-            "registered_at": now_ts,
-            "created_at": now_ts,
-            "via_submission_id": submission_id,
-        }
-        if trainers_coll is not None:
+        else:
+            trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
+            trainer_doc = {
+                "id": trainer_id,
+                "name": sub.get("name") or "Unnamed Trainer",
+                "email": sub.get("email") or "",
+                "phone": sub.get("phone") or "",
+                "website": sub.get("website") or "",
+                "suburb": sub.get("suburb") or "",
+                "region": sub.get("region") or ACTIVE_REGION,
+                "abn": sub.get("abn") or "",
+                "abn_status": sub.get("abn_status", "not_provided"),
+                "abn_verified": abn_verified,
+                "verification_status": verification_status,
+                "serviced_suburbs": sub.get("serviced_suburbs", []),
+                "specialties": sub.get("specialties", []),
+                "capabilities": declared_capabilities,
+                "tier": "unclaimed",
+                "claim_status": "unclaimed",
+                "published": True,
+                "is_active": True,
+                "contact_ready": contact_ready,
+                "outcome_score": 0.05,
+                "registered_at": now_ts,
+                "created_at": now_ts,
+                "via_submission_id": submission_id,
+            }
             await trainers_coll.insert_one(trainer_doc)
 
-    await sub_coll.update_one(
-        {"id": submission_id},
-        {
-            "$set": {
-                "status": "published",
-                "trainer_id": trainer_id,
-                "approved_by": operator_identity,
-                "approved_at": now_ts,
-            }
-        },
-    )
+        await sub_coll.update_one(
+            {"id": submission_id},
+            {
+                "$set": {
+                    "status": "published",
+                    "trainer_id": trainer_id,
+                    "approved_by": operator_identity,
+                    "approved_at": now_ts,
+                }
+            },
+        )
+    except HTTPException:
+        await sub_coll.update_one({"id": submission_id, "status": "publishing"}, {"$set": {"status": current_status}})
+        raise
+    except Exception as exc:
+        logger.exception("Publication failure for submission %s: %s", submission_id, exc)
+        await sub_coll.update_one({"id": submission_id, "status": "publishing"}, {"$set": {"status": current_status}})
+        raise HTTPException(status_code=500, detail=f"Database failure during publication: {exc}")
 
     try:
         sub_for_notif = dict(sub)
@@ -9050,8 +9111,19 @@ async def review_profile_claim(
     if claim_status in ("expired", "stale", "locked", "denied", "cancelled"):
         raise HTTPException(status_code=409, detail=f"Claim in state '{claim_status}' cannot be granted.")
 
+    # Expiry verification
+    expires_at_raw = claim.get("expires_at")
+    if expires_at_raw:
+        expires_at = _parse_iso(str(expires_at_raw))
+        if expires_at and expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Claim verification has expired. Claimant must restart verification challenge.")
+
     if not trainer_id:
         raise HTTPException(status_code=400, detail="Claim event has no associated trainer_id.")
+
+    claimant_email = claim.get("claimant_email") or claim.get("email")
+    if not claimant_email:
+        raise HTTPException(status_code=422, detail="Claim event has no verified claimant email.")
 
     trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0}) if trainers_coll is not None else None
     if not trainer:
@@ -9059,19 +9131,42 @@ async def review_profile_claim(
 
     t_claim_status = str(trainer.get("claim_status") or "").lower()
     if t_claim_status in ("claimed", "claim_disputed") or trainer.get("is_claimed"):
+        # Allow idempotent call for the exact same verified claimant
+        if trainer.get("claimed_by") == claimant_email and claim_status == "verified":
+            return {"ok": True, "status": "verified", "claim_id": claim_id, "trainer_id": trainer_id, "idempotent": True}
         raise HTTPException(
             status_code=409,
             detail="Cannot displace an existing verified owner or listing under dispute. Competing claims cannot overwrite ownership without formal dispute resolution.",
         )
 
-    # Invariant: Arbitrary text reference cannot replace canonical verification challenge
-    if not claim.get("otp_verified") and not claim.get("identity_verified"):
+    # Invariant: Arbitrary text reference or self-asserted flags without canonical verification challenge cannot grant ownership
+    has_otp_verification = bool(claim.get("otp_verified") or claim.get("verified_at") or claim_status == "verified")
+    has_identity_verification = bool(claim.get("identity_verified") and (claim.get("identity_verified_at") or claim.get("identity_provenance")))
+    if not has_otp_verification and not has_identity_verification:
         raise HTTPException(
             status_code=422,
             detail="Direct ownership assignment via text reference is prohibited. Claimant must complete canonical identity verification challenge.",
         )
 
-    claimant_email = claim.get("email") or claim.get("claimant_email")
+    # Protection against conflicting verified claims under different claimant
+    conflicting = await claims_coll.find_one(
+        {
+            "trainer_id": trainer_id,
+            "id": {"$ne": claim_id},
+            "status": "verified",
+            "$or": [
+                {"claimant_email": {"$nin": ["", None, claimant_email]}},
+                {"email": {"$nin": ["", None, claimant_email]}},
+            ],
+        },
+        {"_id": 0},
+    )
+    if conflicting:
+        raise HTTPException(
+            status_code=409,
+            detail="A conflicting verified claim exists for this trainer under a different claimant email.",
+        )
+
     if trainers_coll is not None and trainer_id:
         await trainers_coll.update_one(
             {"id": trainer_id},
@@ -9100,6 +9195,12 @@ async def review_profile_claim(
                 "resolved_at": now_ts,
             }
         },
+    )
+
+    # Supersede competing pending claims for this trainer
+    await claims_coll.update_many(
+        {"trainer_id": trainer_id, "id": {"$ne": claim_id}, "status": {"$in": ["pending_verification", "awaiting_claimant_evidence"]}},
+        {"$set": {"status": "superseded", "superseded_by": claim_id, "updated_at": now_ts}},
     )
 
     await _audit(
@@ -9456,6 +9557,10 @@ async def process_privacy_request(
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
 
+    valid_actions = {"authorise_scrub", "reject_non_subject", "request_identity_proof"}
+    if payload.action not in valid_actions:
+        raise HTTPException(status_code=400, detail=f"Invalid action: '{payload.action}'. Must be one of {valid_actions}.")
+
     support_coll = getattr(db, "support_threads", None)
     if support_coll is None:
         raise HTTPException(status_code=503, detail="Store unavailable")
@@ -9474,29 +9579,42 @@ async def process_privacy_request(
         new_status = "rejected" if payload.action == "reject_non_subject" else "awaiting_identity_proof"
         await support_coll.update_one(
             {"case_id": case_id},
-            {"$set": {"status": new_status, "privacy_action_notes": payload.notes, "reviewed_by": operator_identity}},
+            {"$set": {"status": new_status, "privacy_action_notes": payload.notes, "reviewed_by": operator_identity, "updated_at": now_ts}},
         )
         await _audit(f"privacy_{payload.action}", case_id, after={"notes": payload.notes}, actor="ops")
         return {"ok": True, "case_id": case_id, "status": new_status}
 
     # action == "authorise_scrub"
-    if not thread.get("identity_verified") and not (payload.notes and "identity_verified" in payload.notes.lower()):
+    if thread.get("privacy_processed") is True and str(thread.get("status") or "") == "resolved":
+        return {
+            "ok": True,
+            "case_id": case_id,
+            "status": "resolved",
+            "already_processed": True,
+            "records_scrubbed": thread.get("scrubbed_records_count", 0),
+        }
+
+    # Strict identity provenance: notes-based assertions are completely prohibited
+    if thread.get("identity_verified") is not True:
         raise HTTPException(
             status_code=400,
-            detail="Requester identity must be verified before privacy data erasure can be authorised. Use request_identity_proof first.",
+            detail="Requester identity must be verified through canonical identity proof before privacy data erasure can be authorised. Operator notes cannot confer verification authority.",
         )
 
     target_email = thread.get("sender_email")
     if not target_email:
         raise HTTPException(status_code=400, detail="No sender_email associated with privacy case.")
 
-    scrubbed_count = 0
+    intros_coll = getattr(db, "intros", None)
+    sub_coll = getattr(db, "submissions", None)
+    if intros_coll is None or sub_coll is None:
+        raise HTTPException(status_code=503, detail="Required data stores unavailable for privacy scrub")
+
     token = f"[SCRUBBED_PRIVACY_{case_id[:12]}]"
 
-    # Scrub in leads/intros (preserving business financial records)
-    intros_coll = getattr(db, "intros", None)
-    if intros_coll is not None:
-        res = await intros_coll.update_many(
+    try:
+        # Scrub in leads/intros (preserving business financial records)
+        res1 = await intros_coll.update_many(
             {"$or": [{"owner_email": target_email}, {"client_email": target_email}]},
             {
                 "$set": {
@@ -9509,31 +9627,38 @@ async def process_privacy_request(
                 }
             },
         )
-        scrubbed_count += res.modified_count
+        scrubbed_intros = res1.modified_count
 
-    # Scrub in submissions
-    sub_coll = getattr(db, "submissions", None)
-    if sub_coll is not None:
-        res = await sub_coll.update_many(
+        # Scrub in submissions
+        res2 = await sub_coll.update_many(
             {"email": target_email},
             {"$set": {"email": token, "phone": "[SCRUBBED]", "name": token, "privacy_scrubbed_at": now_ts}},
         )
-        scrubbed_count += res.modified_count
+        scrubbed_subs = res2.modified_count
+        scrubbed_count = scrubbed_intros + scrubbed_subs
 
-    # Mark thread resolved with verified outcome records
-    await support_coll.update_one(
-        {"case_id": case_id},
-        {
-            "$set": {
-                "status": "resolved",
-                "privacy_processed": True,
-                "privacy_scrubbed_at": now_ts,
-                "scrubbed_records_count": scrubbed_count,
-                "scrubbed_token": token,
-                "reviewed_by": operator_identity,
-            }
-        },
-    )
+        # Mark thread resolved with verified outcome records
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {
+                "$set": {
+                    "status": "resolved",
+                    "privacy_processed": True,
+                    "privacy_scrubbed_at": now_ts,
+                    "scrubbed_records_count": scrubbed_count,
+                    "scrubbed_token": token,
+                    "reviewed_by": operator_identity,
+                    "updated_at": now_ts,
+                }
+            },
+        )
+    except Exception as exc:
+        logger.exception("Privacy scrub database failure for case_id=%s: %s", case_id, exc)
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {"$set": {"status": "privacy_scrub_failed", "privacy_error": str(exc), "updated_at": now_ts}},
+        )
+        raise HTTPException(status_code=500, detail=f"Database failure during privacy scrub: {exc}")
 
     await _audit(
         "privacy_data_scrubbed",

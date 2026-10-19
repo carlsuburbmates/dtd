@@ -339,7 +339,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             raw_failed = await notif_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "to_email": 1, "kind": 1, "target_kind": 1, "target_id": 1, "error": 1, "created_at": 1},
-            ).sort("created_at", -1).limit(200).to_list(200)
+            ).sort("created_at", -1).to_list(1000)
             for item in raw_failed:
                 failed_messages.append({
                     "id": item.get("id"),
@@ -360,7 +360,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             raw_log = await message_log_coll.find(
                 {"status": {"$in": ["failed", "bounced", "error"]}},
                 {"_id": 0, "id": 1, "dispatch_id": 1, "recipient": 1, "subject": 1, "error": 1, "created_at": 1},
-            ).sort("created_at", -1).limit(200).to_list(200)
+            ).sort("created_at", -1).to_list(1000)
             failed_messages.extend(raw_log)
         except Exception as exc:
             logger.warning("Error reading message log for obligations: %s", exc)
@@ -399,6 +399,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                 "title": f"Undelivered Message: {msg.get('subject') or 'Client Enquiry'} ({msg.get('recipient')})",
                 "required_action": f"Verify recipient ({msg.get('recipient')}) or retry dispatch manually in /ops.",
                 "base_severity": "high",
+                "status": "pending",
                 "created_at_source": msg.get("created_at") or current_iso,
                 "metadata": {"recipient": msg.get("recipient"), "error": msg.get("error"), "target_kind": target_kind, "target_id": msg.get("target_id")},
                 "resolution_type": "guided_in_ops",
@@ -410,32 +411,56 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
         logger.warning("Error compiling message delivery obligations: %s", exc)
         source_status["client_enquiry"] = {"status": "error", "error": str(exc), "checked_at": current_iso}
 
-    # 3b. Open Customer Support Threads & Inbound Complaints
+    # 3b. Open Customer Support Threads & Inbound Complaints (including reply delivery failures and waiting states)
     support_coll = getattr(db, "support_threads", None)
     if support_coll is not None and hasattr(support_coll, "find"):
         try:
             open_threads = await support_coll.find(
-                {"status": {"$in": ["open", "pending_owner", "escalated"]}},
-                {"_id": 0, "case_id": 1, "sender_email": 1, "category": 1, "severity": 1, "subject": 1, "created_at": 1},
-            ).sort("created_at", -1).limit(100).to_list(100)
+                {"status": {"$in": ["open", "pending_owner", "escalated", "reply_delivery_failed", "awaiting_customer_reply", "awaiting_identity_proof"]}},
+                {"_id": 0, "case_id": 1, "sender_email": 1, "category": 1, "severity": 1, "subject": 1, "status": 1, "created_at": 1},
+            ).sort("created_at", -1).to_list(500)
             for thr in open_threads:
                 case_id = str(thr.get("case_id") or "")
                 if not case_id:
                     continue
                 obl_id = f"obligation:support:{case_id}"
-                cat = "customer_complaint" if thr.get("category") == "complaint" or thr.get("severity") == "high" else "customer_support"
+                thr_status = str(thr.get("status") or "").lower()
+
+                if thr_status == "reply_delivery_failed":
+                    cat = "customer_complaint" if thr.get("category") == "complaint" else "notification_delivery"
+                    title = f"Failed Support Reply Delivery: {thr.get('subject') or thr.get('category')} ({thr.get('sender_email')})"
+                    req_action = "Outbound support reply delivery failed. Retry reply dispatch or verify recipient email in /ops."
+                    base_sev = "high"
+                    obl_status = "pending"
+                    safe_state = "Website is operating normally; this specific support reply delivery failed and requires retry."
+                elif thr_status in ("awaiting_customer_reply", "awaiting_identity_proof"):
+                    cat = "customer_support"
+                    title = f"Awaiting External Response: {thr.get('subject') or thr.get('category')} ({thr.get('sender_email')})"
+                    req_action = f"Awaiting response from customer ({thr_status.replace('_', ' ')}). Urgent alerts paused."
+                    base_sev = "low"
+                    obl_status = "waiting"
+                    safe_state = f"Website is operating normally; thread is paused awaiting customer response ({thr_status.replace('_', ' ')})."
+                else:
+                    cat = "customer_complaint" if thr.get("category") == "complaint" or thr.get("severity") == "high" else "customer_support"
+                    title = f"Customer Request: {thr.get('subject') or thr.get('category', 'Support')} ({thr.get('sender_email')})"
+                    req_action = "Review inquiry, respond or escalate to specialized workflow in /ops."
+                    base_sev = "high" if cat == "customer_complaint" else "medium"
+                    obl_status = "pending"
+                    safe_state = "Website is operating normally; this customer inquiry is awaiting operator response."
+
                 active_obligations[obl_id] = {
                     "obligation_id": obl_id,
                     "category": cat,
                     "entity_id": case_id,
-                    "title": f"Customer Request: {thr.get('subject') or thr.get('category', 'Support')} ({thr.get('sender_email')})",
-                    "required_action": "Review inquiry, respond or escalate to specialized workflow in /ops.",
-                    "base_severity": "high" if cat == "customer_complaint" else "medium",
+                    "title": title,
+                    "required_action": req_action,
+                    "base_severity": base_sev,
+                    "status": obl_status,
                     "created_at_source": thr.get("created_at") or current_iso,
-                    "metadata": {"sender_email": thr.get("sender_email"), "category": thr.get("category"), "severity": thr.get("severity")},
+                    "metadata": {"sender_email": thr.get("sender_email"), "category": thr.get("category"), "severity": thr.get("severity"), "thread_status": thr_status},
                     "resolution_type": "guided_in_ops",
                     "technical_assistance_required": False,
-                    "safe_operating_state": "Website is operating normally; this customer inquiry is awaiting operator response.",
+                    "safe_operating_state": safe_state,
                 }
             source_status["customer_support"] = {"status": "ok", "checked_at": current_iso}
         except Exception as exc:
@@ -531,8 +556,15 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
             prev_status = existing.get("status")
             recurrence_count = int(existing.get("recurrence_count") or 0)
             is_recurrence = False
+            is_waiting = (obl_data.get("status") == "waiting")
 
-            if prev_status == "resolved":
+            if is_waiting:
+                is_overdue = False
+                escalation_level = 0
+                severity = "low"
+                status = "waiting"
+                reopened_at = existing.get("reopened_at")
+            elif prev_status == "resolved":
                 is_recurrence = True
                 recurrence_count += 1
                 status = "escalated" if is_overdue else "pending"
@@ -576,7 +608,7 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                 "due_at": sla_info["due_at"],
                 "sla_hours": sla_info["sla_hours"],
                 "is_overdue": is_overdue,
-                "overdue_hours": sla_info["overdue_hours"],
+                "overdue_hours": 0.0 if is_waiting else sla_info["overdue_hours"],
                 "escalation_level": escalation_level,
                 "escalated_at": escalated_at,
                 "recurrence_count": recurrence_count,
@@ -605,10 +637,10 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
         try:
             active_ids = set(active_obligations.keys())
             pending_cursor = obligations_coll.find(
-                {"status": {"$in": ["pending", "escalated"]}},
+                {"status": {"$in": ["pending", "escalated", "waiting"]}},
                 {"_id": 0},
             )
-            pending_docs = await pending_cursor.to_list(500) if hasattr(pending_cursor, "to_list") else []
+            pending_docs = await pending_cursor.to_list(1000) if hasattr(pending_cursor, "to_list") else []
 
             for obl in pending_docs:
                 obl_id = obl.get("obligation_id", "")
@@ -658,15 +690,24 @@ async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> Lis
                     logger.info("Obligation %s resolved via verified terminal state: %s", obl_id, reason)
                 else:
                     # Positive evidence of resolution does NOT exist. Obligation remains ACTIVE!
-                    sla_info = compute_sla(cat, obl.get("created_at"), now_dt=current_dt)
-                    is_overdue = sla_info["is_overdue"]
-                    esc_level = sla_info["escalation_level"]
-                    status = "escalated" if is_overdue else obl.get("status", "pending")
-                    severity = "high" if is_overdue else obl.get("severity", "medium")
+                    is_waiting = (obl.get("status") == "waiting")
+                    if is_waiting:
+                        is_overdue = False
+                        esc_level = 0
+                        status = "waiting"
+                        severity = "low"
+                        overdue_h = 0.0
+                    else:
+                        sla_info = compute_sla(cat, obl.get("created_at"), now_dt=current_dt)
+                        is_overdue = sla_info["is_overdue"]
+                        esc_level = sla_info["escalation_level"]
+                        status = "escalated" if is_overdue else obl.get("status", "pending")
+                        severity = "high" if is_overdue else obl.get("severity", "medium")
+                        overdue_h = sla_info["overdue_hours"]
 
                     update_payload = {
                         "is_overdue": is_overdue,
-                        "overdue_hours": sla_info["overdue_hours"],
+                        "overdue_hours": overdue_h,
                         "escalation_level": esc_level,
                         "status": status,
                         "severity": severity,
@@ -694,7 +735,7 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None, rea
         obls_coll = getattr(db, "ops_obligations", None)
         if obls_coll is None or not hasattr(obls_coll, "find"):
             return []
-        docs = await obls_coll.find({"status": {"$ne": "resolved"}}).to_list(100)
+        docs = await obls_coll.find({"status": {"$ne": "resolved"}}).sort("created_at", -1).to_list(1000)
     else:
         synced = await sync_durable_obligations(db, now_dt=current_dt)
         docs = [d for d in synced if d.get("status") != "resolved"]
@@ -704,9 +745,15 @@ async def get_active_obligation_cases(db, now_dt: Optional[datetime] = None, rea
     for doc in docs:
         obl_id = doc.get("obligation_id", "")
         sla_info = compute_sla(doc.get("category", ""), doc.get("created_at_source") or doc.get("created_at"), now_dt=current_dt)
-        is_overdue = sla_info["is_overdue"]
-        esc_level = sla_info["escalation_level"]
-        overdue_h = sla_info["overdue_hours"]
+        is_waiting = (doc.get("status") == "waiting")
+        if is_waiting:
+            is_overdue = False
+            esc_level = 0
+            overdue_h = 0.0
+        else:
+            is_overdue = sla_info["is_overdue"]
+            esc_level = sla_info["escalation_level"]
+            overdue_h = sla_info["overdue_hours"]
         sla_h = sla_info["sla_hours"]
         recurrence_count = int(doc.get("recurrence_count") or 0)
 

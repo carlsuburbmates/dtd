@@ -89,6 +89,17 @@ def _match_doc(row: Dict[str, Any], filt: Optional[Dict[str, Any]]) -> bool:
             elif "$gte" in v:
                 if float(row.get(k) or 0) < float(v["$gte"]):
                     return False
+        elif "." in k:
+            parts = k.split(".", 1)
+            parent = row.get(parts[0])
+            if isinstance(parent, list):
+                if not any(isinstance(item, dict) and item.get(parts[1]) == v for item in parent):
+                    return False
+            elif isinstance(parent, dict):
+                if parent.get(parts[1]) != v:
+                    return False
+            else:
+                return False
         else:
             if row.get(k) != v:
                 return False
@@ -142,7 +153,26 @@ class _MockCollection:
             self.rows.append(target)
         if target is not None:
             set_vals = update.get("$set", {}) if isinstance(update, dict) else {}
-            target.update(set_vals)
+            for sk, sv in set_vals.items():
+                if ".$." in sk:
+                    arr_key, elem_key = sk.split(".$.", 1)
+                    arr = target.get(arr_key, [])
+                    # Find matching item by filter key if present
+                    filter_val = None
+                    for fk, fv in filt.items():
+                        if fk.startswith(f"{arr_key}."):
+                            filter_val = (fk.split(".", 1)[1], fv)
+                            break
+                    for elem in arr:
+                        if isinstance(elem, dict):
+                            if filter_val and elem.get(filter_val[0]) == filter_val[1]:
+                                elem[elem_key] = sv
+                                break
+                            elif not filter_val:
+                                elem[elem_key] = sv
+                                break
+                else:
+                    target[sk] = sv
             unset_vals = update.get("$unset", {}) if isinstance(update, dict) else {}
             for uk in unset_vals:
                 target.pop(uk, None)
@@ -1092,3 +1122,745 @@ def test_notification_failure_and_ops_obligations_guards():
             server.db = orig_db
 
     asyncio.run(_test())
+
+
+def test_cf01_privacy_verification_provenance_and_fail_close():
+    """Test CF-01: Strict privacy verification provenance, notes-bypass elimination, and fail-closed error handling."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        mock_threads = _MockCollection(rows=[
+            {
+                "case_id": "sup_priv_unverified",
+                "category": "privacy_request",
+                "status": "open",
+                "sender_email": "sarah@user.com",
+                "identity_verified": False,
+                "messages": [{"sender": "customer", "text": "Please delete my data"}],
+            },
+            {
+                "case_id": "sup_not_privacy",
+                "category": "general_inquiry",
+                "status": "open",
+                "sender_email": "inquiry@user.com",
+                "identity_verified": True,
+                "messages": [{"sender": "customer", "text": "Question"}],
+            },
+            {
+                "case_id": "sup_priv_verified",
+                "category": "privacy_request",
+                "status": "open",
+                "sender_email": "sarah@user.com",
+                "identity_verified": True,
+                "messages": [{"sender": "customer", "text": "Please delete my data"}],
+            },
+        ])
+        mock_intros = _MockCollection(rows=[
+            {
+                "id": "int_priv_cf01",
+                "owner_email": "sarah@user.com",
+                "owner_name": "Sarah Connor",
+                "owner_phone": "0412345678",
+                "dog_notes": "Very reactive dog",
+            }
+        ])
+        mock_subs = _MockCollection(rows=[
+            {
+                "id": "sub_priv_cf01",
+                "email": "sarah@user.com",
+                "name": "Sarah Connor",
+                "phone": "0412345678",
+            }
+        ])
+
+        mock_db = _MockDB(
+            support_threads=mock_threads,
+            intros=mock_intros,
+            submissions=mock_subs,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                # 1. Adversarial: Operator notes containing "identity_verified" must NOT bypass verification!
+                res1 = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_unverified/process",
+                    json={"action": "authorise_scrub", "confirmed": True, "notes": "Identity was identity_verified over the phone"},
+                    headers=headers,
+                )
+                assert res1.status_code == 400
+                assert "Requester identity must be verified" in res1.json()["detail"]
+
+                # 2. Arbitrary notes do not authorise erasure
+                res2 = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_unverified/process",
+                    json={"action": "authorise_scrub", "confirmed": True, "notes": "Customer spoke to owner"},
+                    headers=headers,
+                )
+                assert res2.status_code == 400
+
+                # 3. Wrong request category is rejected
+                res3 = await client.post(
+                    "/api/oversight/privacy/requests/sup_not_privacy/process",
+                    json={"action": "authorise_scrub", "confirmed": True},
+                    headers=headers,
+                )
+                assert res3.status_code == 400
+                assert "Case is not a privacy request" in res3.json()["detail"]
+
+                # 4. Partial failure handling: simulate database exception during intro scrubbing
+                mock_db._collections["intros"].update_many = AsyncMock(side_effect=RuntimeError("Mongo connection lost"))
+                res_err = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_verified/process",
+                    json={"action": "authorise_scrub", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_err.status_code == 500
+                # Fail closed: thread status must be 'privacy_scrub_failed', NEVER 'resolved'
+                thr_failed = await mock_threads.find_one({"case_id": "sup_priv_verified"})
+                assert thr_failed["status"] == "privacy_scrub_failed"
+                assert "privacy_error" in thr_failed
+
+                # Restore intros.update_many
+                del mock_db._collections["intros"].update_many
+
+                # 5. Verified requester completes successfully
+                res_ok = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_verified/process",
+                    json={"action": "authorise_scrub", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_ok.status_code == 200
+                data = res_ok.json()
+                assert data["status"] == "resolved"
+                assert data["records_scrubbed"] == 2
+
+                # Verify actual scrubbing happened
+                intro_doc = await mock_intros.find_one({"id": "int_priv_cf01"})
+                assert intro_doc["owner_email"].startswith("[SCRUBBED_PRIVACY_")
+                assert intro_doc["owner_phone"] == "[SCRUBBED]"
+
+                # 6. Idempotent repeated processing
+                res_repeat = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_verified/process",
+                    json={"action": "authorise_scrub", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_repeat.status_code == 200
+                assert res_repeat.json()["already_processed"] is True
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
+
+def test_cf02_trainer_publication_authority_dedup_and_concurrency():
+    """Test CF-02: Canonical publication authority, duplicate verification, unrelated business protection, and concurrency."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        mock_subs = _MockCollection(rows=[
+            {
+                "id": "sub_suppressed_1",
+                "status": "held",
+                "name": "Banned Dog Training",
+                "phone": "+61412000001",
+                "email": "banned@trainer.com",
+                "website": "bannedtraining.com.au",
+                "abn": "11222333444",
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            },
+            {
+                "id": "sub_no_consent_1",
+                "status": "held",
+                "name": "No Consent Academy",
+                "email": "noconsent@trainer.com",
+                "phone": "+61412000002",
+                "website": "noconsent.com.au",
+                "consent_public_listing": False,
+                "consent_information_accuracy": True,
+            },
+            {
+                "id": "sub_unrelated_email_1",
+                "status": "held",
+                "name": "Paws Unlimited Academy",
+                "email": "shared@trainer.com",
+                "phone": "+61412000003",
+                "website": "pawsunlimited.com.au",
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            },
+            {
+                "id": "sub_claimed_conflict_1",
+                "status": "held",
+                "name": "Bark Academy Melbourne",
+                "email": "bark@trainer.com",
+                "phone": "+61412000004",
+                "website": "barkacademy.com.au",
+                "abn": "99888777666",
+                "abn_verified": True,
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            },
+            {
+                "id": "sub_valid_abn_optional_1",
+                "status": "held",
+                "name": "Sole Trader Pups",
+                "email": "soletrader@trainer.com",
+                "phone": "+61412000005",
+                "website": "soletraderpups.com.au",
+                "abn": "",
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            },
+            {
+                "id": "sub_no_provenance_1",
+                "status": "held",
+                "name": "Ghost Trainer",
+                "phone": "+61412000099",
+                "consent_public_listing": True,
+                "consent_information_accuracy": True,
+            },
+        ])
+        mock_trainers = _MockCollection(rows=[
+            {
+                "id": "trn_bark_academy",
+                "name": "Bark Academy Melbourne",
+                "email": "shared@trainer.com",
+                "abn": "99888777666",
+                "claim_status": "claimed",
+                "is_claimed": True,
+                "claimed_by": "original_owner@trainer.com",
+                "published": True,
+                "is_active": True,
+            }
+        ])
+        mock_delisted = _MockCollection(rows=[
+            {
+                "abn": "11222333444",
+                "website_domain": "bannedtraining.com.au",
+                "normalized_phone": "+61412000001",
+                "reason": "regulatory_enforcement",
+            }
+        ])
+
+        mock_db = _MockDB(
+            submissions=mock_subs,
+            trainers=mock_trainers,
+            delisted_entities=mock_delisted,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                # 1. Suppressed business entity cannot be published (403)
+                res_supp = await client.post(
+                    "/api/oversight/submissions/sub_suppressed_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_supp.status_code == 403
+                assert "matches a delisted or suppressed business entity" in res_supp.json()["detail"]
+
+                # 2. Invalid consent blocks publication (400)
+                res_noconsent = await client.post(
+                    "/api/oversight/submissions/sub_no_consent_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_noconsent.status_code == 400
+                assert "consent" in res_noconsent.json()["detail"].lower()
+
+                # 3. Insufficient source provenance blocks publication (400)
+                res_noprov = await client.post(
+                    "/api/oversight/submissions/sub_no_provenance_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_noprov.status_code == 400
+                assert "source provenance" in res_noprov.json()["detail"].lower()
+
+                # 4. Matching email alone cannot authorise overwriting another trainer (409)
+                # "Paws Unlimited Academy" has email "shared@trainer.com", which matches "Bark Academy Melbourne"
+                res_unrelated = await client.post(
+                    "/api/oversight/submissions/sub_unrelated_email_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_unrelated.status_code == 409
+                assert "Matching email alone cannot authorise overwriting another trainer" in res_unrelated.json()["detail"] or "already claimed" in res_unrelated.json()["detail"]
+
+                # 5. Existing claimed listing cannot be displaced (409)
+                res_claimed = await client.post(
+                    "/api/oversight/submissions/sub_claimed_conflict_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_claimed.status_code == 409
+                assert "already claimed" in res_claimed.json()["detail"]
+
+                # 6. Valid ABN-optional submission remains eligible and publishes unverified
+                res_valid = await client.post(
+                    "/api/oversight/submissions/sub_valid_abn_optional_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_valid.status_code == 200
+                assert res_valid.json()["status"] == "published"
+                created_trainer = await mock_trainers.find_one({"name": "Sole Trader Pups"})
+                assert created_trainer is not None
+                assert created_trainer["verification_status"] == "unverified"
+                assert created_trainer["abn_verified"] is False
+                assert created_trainer["published"] is True
+
+                # 7. Repeated approval is idempotent
+                res_idempotent = await client.post(
+                    "/api/oversight/submissions/sub_valid_abn_optional_1/review",
+                    json={"action": "approve", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_idempotent.status_code == 200
+                assert res_idempotent.json()["idempotent"] is True
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
+
+def test_cf03_claim_verification_provenance_expiry_and_conflicts():
+    """Test CF-03: Claim verification provenance, expiry enforcement, conflict protection, and owner safeguards."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        mock_claims = _MockCollection(rows=[
+            {
+                "id": "clm_unverified_text_only",
+                "trainer_id": "trn_target_claim",
+                "claimant_email": "attacker@fake.com",
+                "otp_verified": False,
+                "identity_verified": False,
+                "status": "pending_verification",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
+                "id": "clm_expired_challenge",
+                "trainer_id": "trn_expired_target",
+                "claimant_email": "legit@trainer.com",
+                "otp_verified": True,
+                "status": "verified",
+                "expires_at": "2020-01-01T00:00:00Z",  # Expired in past!
+            },
+            {
+                "id": "clm_already_claimed_trainer",
+                "trainer_id": "trn_already_claimed",
+                "claimant_email": "newbie@trainer.com",
+                "otp_verified": True,
+                "status": "verified",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
+                "id": "clm_conflicting_verified_prior",
+                "trainer_id": "trn_conflicting_target",
+                "claimant_email": "first_verified@trainer.com",
+                "otp_verified": True,
+                "status": "verified",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
+                "id": "clm_conflicting_verified_attacker",
+                "trainer_id": "trn_conflicting_target",
+                "claimant_email": "rival@trainer.com",
+                "otp_verified": True,
+                "status": "verified",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
+                "id": "clm_competing_winner",
+                "trainer_id": "trn_target_claim",
+                "claimant_email": "owner_alice@trainer.com",
+                "otp_verified": True,
+                "status": "verified",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+            {
+                "id": "clm_competing_loser",
+                "trainer_id": "trn_target_claim",
+                "claimant_email": "challenger_bob@trainer.com",
+                "otp_verified": True,
+                "status": "pending_verification",
+                "expires_at": "2099-01-01T00:00:00Z",
+            },
+        ])
+        mock_trainers = _MockCollection(rows=[
+            {
+                "id": "trn_target_claim",
+                "name": "Target Pups",
+                "claim_status": "unclaimed",
+                "is_claimed": False,
+                "published": True,
+            },
+            {
+                "id": "trn_expired_target",
+                "name": "Expired Target Pups",
+                "claim_status": "unclaimed",
+                "is_claimed": False,
+                "published": True,
+            },
+            {
+                "id": "trn_conflicting_target",
+                "name": "Conflicted Pups",
+                "claim_status": "unclaimed",
+                "is_claimed": False,
+                "published": True,
+            },
+            {
+                "id": "trn_already_claimed",
+                "name": "Established Trainer",
+                "claim_status": "claimed",
+                "is_claimed": True,
+                "claimed_by": "existing_verified_owner@trainer.com",
+                "published": True,
+            },
+        ])
+
+        mock_db = _MockDB(
+            claim_events=mock_claims,
+            trainers=mock_trainers,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                # 1. Self-asserted text reference without canonical verification challenge is rejected (422)
+                res1 = await client.post(
+                    "/api/oversight/claims/clm_unverified_text_only/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC extract 12345", "confirmed": True},
+                    headers=headers,
+                )
+                assert res1.status_code == 422
+                assert "Claimant must complete canonical identity verification challenge" in res1.json()["detail"]
+
+                # 2. Expired verification challenge cannot grant ownership (410)
+                res2 = await client.post(
+                    "/api/oversight/claims/clm_expired_challenge/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC extract 12345", "confirmed": True},
+                    headers=headers,
+                )
+                assert res2.status_code == 410
+                assert "expired" in res2.json()["detail"].lower()
+
+                # 3. Existing verified owner cannot be displaced (409)
+                res3 = await client.post(
+                    "/api/oversight/claims/clm_already_claimed_trainer/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC extract 12345", "confirmed": True},
+                    headers=headers,
+                )
+                assert res3.status_code == 409
+                assert "Cannot displace an existing verified owner" in res3.json()["detail"]
+
+                # 4. Conflicting verified claim for different claimant is rejected (409)
+                res_conflict = await client.post(
+                    "/api/oversight/claims/clm_conflicting_verified_attacker/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC extract 99999", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_conflict.status_code == 409
+                assert "conflicting verified claim exists" in res_conflict.json()["detail"]
+
+                # 5. Valid canonical claim completes successfully (200)
+                res_ok = await client.post(
+                    "/api/oversight/claims/clm_competing_winner/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC business extract doc_999", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_ok.status_code == 200
+                assert res_ok.json()["status"] == "verified"
+
+                # Check trainer ownership updated
+                trn = await mock_trainers.find_one({"id": "trn_target_claim"})
+                assert trn["is_claimed"] is True
+                assert trn["claimed_by"] == "owner_alice@trainer.com"
+
+                # 6. Competing pending claims for this trainer were superseded
+                competing_claim = await mock_claims.find_one({"id": "clm_competing_loser"})
+                assert competing_claim["status"] == "superseded"
+
+                # 7. Idempotent review of granted claim succeeds
+                res_idem = await client.post(
+                    "/api/oversight/claims/clm_competing_winner/review",
+                    json={"action": "grant_with_proof", "proof_reference": "ASIC business extract doc_999", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_idem.status_code == 200
+                assert res_idem.json()["idempotent"] is True
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
+
+def test_cf04_support_message_concurrency_and_specialised_closure():
+    """Test CF-04: Support message identity, concurrency race prevention, and positive evidence closure safeguards."""
+    async def _test():
+        orig_db = server.db
+        orig_pass = os.environ.get("ADMIN_PASS")
+        os.environ["ADMIN_PASS"] = "testpass"
+
+        mock_threads = _MockCollection(rows=[
+            {
+                "case_id": "sup_reply_concurrency",
+                "category": "general_inquiry",
+                "status": "open",
+                "sender_email": "client@example.com",
+                "messages": [
+                    {"sender": "customer", "text": "Can I book a session?", "created_at": "2026-10-19T00:00:00Z"}
+                ],
+            },
+            {
+                "case_id": "sup_delist_missing_trainer",
+                "category": "delisting_request",
+                "status": "open",
+                "trainer_id": "trn_missing_nonexistent",
+                "sender_email": "delist@trainer.com",
+                "messages": [{"sender": "customer", "text": "Delist me"}],
+            },
+            {
+                "case_id": "sup_delist_active_trainer",
+                "category": "delisting_request",
+                "status": "open",
+                "trainer_id": "trn_active_listing",
+                "sender_email": "delist@trainer.com",
+                "messages": [{"sender": "customer", "text": "Delist me"}],
+            },
+            {
+                "case_id": "sup_delist_completed",
+                "category": "delisting_request",
+                "status": "open",
+                "trainer_id": "trn_delisted_listing",
+                "sender_email": "delist@trainer.com",
+                "messages": [{"sender": "customer", "text": "Delist me"}],
+            },
+            {
+                "case_id": "sup_privacy_unprocessed",
+                "category": "privacy_request",
+                "status": "open",
+                "sender_email": "privacy@user.com",
+                "privacy_processed": False,
+                "messages": [{"sender": "customer", "text": "Delete my data"}],
+            },
+        ])
+        mock_trainers = _MockCollection(rows=[
+            {
+                "id": "trn_active_listing",
+                "name": "Active Trainer",
+                "published": True,
+                "is_active": True,
+            },
+            {
+                "id": "trn_delisted_listing",
+                "name": "Delisted Trainer",
+                "published": False,
+                "is_active": False,
+            },
+        ])
+
+        mock_db = _MockDB(
+            support_threads=mock_threads,
+            trainers=mock_trainers,
+            audit_log=_MockCollection(),
+        )
+        server.db = mock_db
+
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as client:
+                headers = {"x-admin-pass": "testpass"}
+
+                # 1. Reply message stability: unique message_id and atomic positional update
+                with patch("services.notifications.notify_support_reply", new_callable=AsyncMock) as mock_send:
+                    mock_send.return_value = {"status": "sent", "id": "resend_msg_001"}
+                    res_rep = await client.post(
+                        "/api/oversight/support/threads/sup_reply_concurrency/reply",
+                        json={"reply_text": "Hello, thank you for contacting us.", "mark_status": "awaiting_customer_reply"},
+                        headers=headers,
+                    )
+                    assert res_rep.status_code == 200
+                    assert res_rep.json()["dispatched"] is True
+                    assert "message_id" in res_rep.json()
+
+                    thread_after = await mock_threads.find_one({"case_id": "sup_reply_concurrency"})
+                    assert len(thread_after["messages"]) == 2
+                    op_msg = thread_after["messages"][1]
+                    assert op_msg["sender"] == "operator"
+                    assert op_msg["delivery_status"] == "accepted"
+                    assert op_msg["provider_id"] == "resend_msg_001"
+                    assert "message_id" in op_msg
+
+                    # 2. Duplicate retry when previously accepted does not send twice
+                    res_dup = await client.post(
+                        "/api/oversight/support/threads/sup_reply_concurrency/reply",
+                        json={"reply_text": "Hello, thank you for contacting us.", "mark_status": "awaiting_customer_reply"},
+                        headers=headers,
+                    )
+                    assert res_dup.status_code == 200
+                    assert res_dup.json()["duplicate"] is True
+
+                # 3. Missing trainer record cannot certify delisting closure (422)
+                res_missing = await client.post(
+                    "/api/oversight/support/threads/sup_delist_missing_trainer/close",
+                    json={"resolution_notes": "Trainer record was deleted manually by someone.", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_missing.status_code == 422
+                assert "linked trainer record not found in directory. Missing record cannot certify delisting" in res_missing.json()["detail"]
+
+                # 4. Active trainer listing blocks delisting closure (422)
+                res_active = await client.post(
+                    "/api/oversight/support/threads/sup_delist_active_trainer/close",
+                    json={"resolution_notes": "Attempting to close while trainer is still live.", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_active.status_code == 422
+                assert "trainer listing remains active and published" in res_active.json()["detail"]
+
+                # 5. Unprocessed privacy request blocks closure (422)
+                res_priv = await client.post(
+                    "/api/oversight/support/threads/sup_privacy_unprocessed/close",
+                    json={"resolution_notes": "Attempting to close without executing erasure.", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_priv.status_code == 422
+                assert "privacy data erasure has not been completed" in res_priv.json()["detail"]
+
+                # 6. Valid delisted trainer allows closure (200)
+                res_delist_ok = await client.post(
+                    "/api/oversight/support/threads/sup_delist_completed/close",
+                    json={"resolution_notes": "Trainer confirmed delisted and unpublished from directory.", "confirmed": True},
+                    headers=headers,
+                )
+                assert res_delist_ok.status_code == 200
+                assert res_delist_ok.json()["status"] == "resolved"
+        finally:
+            server.db = orig_db
+            if orig_pass:
+                os.environ["ADMIN_PASS"] = orig_pass
+            else:
+                os.environ.pop("ADMIN_PASS", None)
+
+    asyncio.run(_test())
+
+
+def test_cf05_durable_obligation_completeness_and_waiting_state():
+    """Test CF-05: Durable obligation completeness, >200 failure scan, waiting state handling, and read-only zero writes."""
+    async def _test():
+        # 1. Generate 250 failed notification records, including an oldest event
+        failed_notifs = []
+        for i in range(250):
+            failed_notifs.append({
+                "id": f"notif_fail_{i:03d}",
+                "dispatch_id": f"dsp_fail_{i:03d}",
+                "kind": "client_intro",
+                "target_kind": "intro",
+                "target_id": f"int_{i:03d}",
+                "to_email": f"trainer_{i:03d}@example.com",
+                "status": "failed",
+                "error": "bounce",
+                "created_at": f"2026-10-01T{i%24:02d}:00:00Z",
+            })
+
+        mock_notif = _MockCollection(rows=failed_notifs)
+        mock_obls = _MockCollection()
+        mock_support = _MockCollection(rows=[
+            {
+                "case_id": "sup_waiting_case",
+                "category": "general_inquiry",
+                "status": "awaiting_customer_reply",
+                "sender_email": "waiting_cust@example.com",
+                "subject": "Waiting on pet medical history",
+                "created_at": "2026-10-10T00:00:00Z",
+            },
+            {
+                "case_id": "sup_failed_reply_case",
+                "category": "complaint",
+                "status": "reply_delivery_failed",
+                "sender_email": "angry_cust@example.com",
+                "subject": "Service complaint",
+                "created_at": "2026-10-18T00:00:00Z",
+            },
+        ])
+
+        mock_db = _MockDB(
+            notification_events=mock_notif,
+            ops_obligations=mock_obls,
+            support_threads=mock_support,
+        )
+
+        # A. Verify sync includes all 250 failures (including oldest) without truncation
+        synced = await ops_obligations.sync_durable_obligations(mock_db)
+        synced_map = {o["obligation_id"]: o for o in synced}
+
+        # Check oldest event (dsp_fail_000) was ingested
+        assert "obligation:message:dsp_fail_000" in synced_map
+        # Check newest event (dsp_fail_249) was ingested
+        assert "obligation:message:dsp_fail_249" in synced_map
+
+        # B. Waiting case tracking: status is 'waiting', base_severity is 'low', is_overdue is False
+        assert "obligation:support:sup_waiting_case" in synced_map
+        waiting_obl = synced_map["obligation:support:sup_waiting_case"]
+        assert waiting_obl["status"] == "waiting"
+        assert waiting_obl["severity"] == "low"
+        assert waiting_obl["is_overdue"] is False
+        assert waiting_obl["overdue_hours"] == 0.0
+
+        # C. Failed support reply is actionable and high severity
+        assert "obligation:support:sup_failed_reply_case" in synced_map
+        reply_obl = synced_map["obligation:support:sup_failed_reply_case"]
+        assert reply_obl["status"] in ("pending", "escalated")
+        assert reply_obl["severity"] == "high"
+
+        # D. Read-only invariant: get_active_obligation_cases with read_only=True performs zero writes
+        mock_obls.inserted.clear()
+        mock_obls.updated.clear()
+        cases = await ops_obligations.get_active_obligation_cases(mock_db, read_only=True)
+        assert len(mock_obls.inserted) == 0
+        assert len(mock_obls.updated) == 0
+        assert len(cases) > 100  # More than 100 cases returned without truncation!
+
+        # E. Source query fails midway: verify existing obligations are preserved
+        mock_db._collections["submissions"].find = None  # query failure
+        synced_after_error = await ops_obligations.sync_durable_obligations(mock_db)
+        assert len(synced_after_error) > 0
+
+    asyncio.run(_test())
+
