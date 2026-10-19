@@ -1032,14 +1032,14 @@ def test_privacy_scrub_pipeline_under_app_guidelines():
         try:
             headers = {"x-admin-pass": "test-secret"}
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                # 1. Scrub without verified identity returns 400
+                # 1. Scrub without verified identity returns 403
                 res_unverified = await client.post(
                     f"/api/oversight/privacy/requests/{case_id}/process",
                     json={"action": "authorise_scrub", "confirmed": True},
                     headers=headers,
                 )
-                assert res_unverified.status_code == 400
-                assert "Requester identity must be verified" in res_unverified.json()["detail"]
+                assert res_unverified.status_code == 403
+                assert "Destructive privacy data erasure remains unavailable" in res_unverified.json()["detail"]
 
                 # 2. Request identity proof action updates status
                 res_req_id = await client.post(
@@ -1050,7 +1050,7 @@ def test_privacy_scrub_pipeline_under_app_guidelines():
                 assert res_req_id.status_code == 200
                 assert res_req_id.json()["status"] == "awaiting_identity_proof"
 
-                # 3. Authorise scrub once verified
+                # 3. Authorise scrub once verified with documented trustworthy procedure
                 await mock_support.update_one(
                     {"case_id": case_id},
                     {
@@ -1058,7 +1058,7 @@ def test_privacy_scrub_pipeline_under_app_guidelines():
                             "identity_verified": True,
                             "identity_verified_by": "ops:127.0.0.1",
                             "identity_verified_at": "2026-10-19T00:00:00Z",
-                            "identity_verification_method": "photo_id",
+                            "identity_verification_method": "verified_documentary_audit",
                         }
                     },
                 )
@@ -1229,7 +1229,7 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                 "identity_verified": True,
                 "identity_verified_by": "ops:127.0.0.1",
                 "identity_verified_at": "2026-10-19T00:00:00Z",
-                "identity_verification_method": "passport_match",
+                "identity_verification_method": "verified_documentary_audit",
                 "messages": [{"sender": "customer", "text": "Please delete my data"}],
             },
             {
@@ -1296,25 +1296,26 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 headers = {"x-admin-pass": "testpass"}
 
-                # 1. Adversarial: Operator notes containing "identity_verified" must NOT bypass verification!
+                # 1. Adversarial: Operator notes containing "identity_verified" must NOT bypass verification (403)!
                 res1 = await client.post(
                     "/api/oversight/privacy/requests/sup_priv_unverified/process",
                     json={"action": "authorise_scrub", "confirmed": True, "notes": "Identity was identity_verified over the phone"},
                     headers=headers,
                 )
-                assert res1.status_code == 400
-                assert "Requester identity must be verified" in res1.json()["detail"]
+                assert res1.status_code == 403
+                assert "Destructive privacy data erasure remains unavailable" in res1.json()["detail"]
 
-                # 1b. Unprovenanced identity_verified=True flag (no identity_verified_by or at) is rejected (400)
+                # 1b. Unprovenanced identity_verified=True flag (no identity_verified_by or at) is rejected (403)
                 res_unprovenanced = await client.post(
                     "/api/oversight/privacy/requests/sup_priv_unprovenanced/process",
                     json={"action": "authorise_scrub", "confirmed": True},
                     headers=headers,
                 )
-                assert res_unprovenanced.status_code == 400
-                assert "recorded verification provenance" in res_unprovenanced.json()["detail"]
+                assert res_unprovenanced.status_code == 403
+                assert "Destructive privacy data erasure remains unavailable" in res_unprovenanced.json()["detail"]
 
-                # 2. In-request documentary proof allows unverified case to be verified and scrubbed
+                # 2. In-request manual proof shortcut is strictly rejected (403):
+                # Destructive erasure cannot proceed via unauthenticated in-request strings.
                 res_in_request = await client.post(
                     "/api/oversight/privacy/requests/sup_priv_unverified/process",
                     json={
@@ -1325,12 +1326,21 @@ def test_cf01_privacy_verification_provenance_and_fail_close():
                     },
                     headers=headers,
                 )
-                assert res_in_request.status_code == 200
-                assert res_in_request.json()["status"] == "resolved"
-                thread_updated = await mock_threads.find_one({"case_id": "sup_priv_unverified"})
-                assert thread_updated["identity_verified"] is True
-                assert thread_updated["identity_verification_method"] == "photo_id"
-                assert thread_updated["identity_proof_reference"] == "VIC Driver Licence 998877"
+                assert res_in_request.status_code == 403
+                assert "Destructive privacy data erasure remains unavailable" in res_in_request.json()["detail"]
+
+                # 2b. Non-destructive action (request_identity_proof) succeeds
+                res_req_proof = await client.post(
+                    "/api/oversight/privacy/requests/sup_priv_unverified/process",
+                    json={
+                        "action": "request_identity_proof",
+                        "confirmed": True,
+                        "notes": "Requesting statutory identity verification",
+                    },
+                    headers=headers,
+                )
+                assert res_req_proof.status_code == 200
+                assert res_req_proof.json()["status"] == "awaiting_identity_proof"
 
                 # 3. Wrong request category is rejected
                 res3 = await client.post(

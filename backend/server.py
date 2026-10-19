@@ -4994,6 +4994,131 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
     return _scrub(doc)
 
 
+def _build_canonical_trainer_document(
+    *,
+    trainer_id: str,
+    submission_id: str,
+    sub: Dict[str, Any],
+    declared_capabilities: Dict[str, Any],
+    score: Dict[str, Any],
+    conf: float,
+    verification_status: str,
+    abn_verified: bool,
+    published: bool,
+    contact_ready: bool,
+    now_ts: str,
+) -> Dict[str, Any]:
+    return {
+        "id": trainer_id,
+        "name": sub.get("name") or "Unnamed Trainer",
+        "suburb": sub.get("suburb") or "",
+        "region": (sub.get("region") or ACTIVE_REGION).strip() or ACTIVE_REGION,
+        "website": sub.get("website", "") or "",
+        "phone": sub.get("phone", "") or "",
+        "email": sub.get("email", "") or "",
+        "categories": sub.get("categories", []),
+        "services": sub.get("services", []),
+        "bio": sub.get("bio", "") or "",
+        "image_url": sub.get("image_url", "") or "",
+        "source_evidence_url": sub.get("source_evidence_url", "") or "",
+        "tier": "unclaimed",
+        "claim_status": "unclaimed",
+        "abn": sub.get("abn", "") or "",
+        "entity_name": sub.get("entity_name", "") or "",
+        "trading_name": sub.get("trading_name", "") or "",
+        "business_type": sub.get("business_type", "") or "",
+        "abn_status": sub.get("abn_status", "not_provided"),
+        "abn_verified": bool(abn_verified),
+        "abn_verified_at": (sub.get("abn_verified_at", "") or now_ts) if abn_verified else "",
+        "abn_verification_reason": sub.get("abn_verification_reason", "") or "",
+        "abn_badge_payload": sub.get("abn_badge_payload"),
+        "training_philosophy": sub.get("training_philosophy", "") or "",
+        "specialties": sub.get("specialties", []),
+        "service_formats": sub.get("service_formats", []),
+        "serviced_suburbs": sub.get("serviced_suburbs", []),
+        "catchment_type": sub.get("catchment_type", "") or "",
+        "capabilities": declared_capabilities,
+        "booking_url": sub.get("booking_url", "") or "",
+        "gallery_images": sub.get("gallery_images", []),
+        "sponsored_suburbs": sub.get("sponsored_suburbs", []),
+        "review_summary": sub.get("review_summary", "") or "",
+        "confidence_score": conf,
+        "verification_status": verification_status,
+        "verification_reasoning": score.get("reasoning", ""),
+        "verification_signals": score.get("signals", []),
+        "verification_model": score.get("model", "heuristic"),
+        "verified_at": now_ts if verification_status == "verified" else "",
+        "outcome_score": 0.05,
+        "intros_30d": 0,
+        "conversions_30d": 0,
+        "published": published,
+        "is_active": True,
+        "contact_ready": contact_ready,
+        "registered_at": now_ts,
+        "created_at": now_ts,
+        "via_submission_id": submission_id,
+    }
+
+
+def _build_canonical_trainer_update_fields(
+    *,
+    submission_id: str,
+    sub: Dict[str, Any],
+    existing: Dict[str, Any],
+    declared_capabilities: Dict[str, Any],
+    score: Dict[str, Any],
+    conf: float,
+    verification_status: str,
+    abn_verified: bool,
+    published: bool,
+    contact_ready: bool,
+    now_ts: str,
+) -> Dict[str, Any]:
+    return {
+        "name": sub.get("name") or existing.get("name"),
+        "suburb": sub.get("suburb") or existing.get("suburb"),
+        "region": sub.get("region") or existing.get("region", ACTIVE_REGION),
+        "website": sub.get("website") or existing.get("website", ""),
+        "phone": sub.get("phone") or existing.get("phone", ""),
+        "email": sub.get("email") or existing.get("email", ""),
+        "categories": sub.get("categories") or existing.get("categories", []),
+        "services": sub.get("services") or existing.get("services", []),
+        "bio": sub.get("bio") or existing.get("bio", ""),
+        "image_url": sub.get("image_url") or existing.get("image_url", ""),
+        "source_evidence_url": sub.get("source_evidence_url") or existing.get("source_evidence_url", ""),
+        "abn": sub.get("abn") or existing.get("abn", ""),
+        "entity_name": sub.get("entity_name") or existing.get("entity_name", ""),
+        "trading_name": sub.get("trading_name") or existing.get("trading_name", ""),
+        "business_type": sub.get("business_type") or existing.get("business_type", ""),
+        "abn_status": sub.get("abn_status") or existing.get("abn_status", "not_provided"),
+        "abn_verified": bool(abn_verified),
+        "abn_verified_at": sub.get("abn_verified_at") or existing.get("abn_verified_at", "") if abn_verified else "",
+        "abn_verification_reason": sub.get("abn_verification_reason") or existing.get("abn_verification_reason", ""),
+        "abn_badge_payload": sub.get("abn_badge_payload") or existing.get("abn_badge_payload"),
+        "training_philosophy": sub.get("training_philosophy") or existing.get("training_philosophy", ""),
+        "specialties": sub.get("specialties") or existing.get("specialties", []),
+        "service_formats": sub.get("service_formats") or existing.get("service_formats", []),
+        "serviced_suburbs": sub.get("serviced_suburbs") or existing.get("serviced_suburbs", []),
+        "catchment_type": sub.get("catchment_type") or existing.get("catchment_type", ""),
+        "capabilities": declared_capabilities,
+        "booking_url": sub.get("booking_url") or existing.get("booking_url", ""),
+        "gallery_images": sub.get("gallery_images") or existing.get("gallery_images", []),
+        "sponsored_suburbs": sub.get("sponsored_suburbs") or existing.get("sponsored_suburbs", []),
+        "review_summary": sub.get("review_summary") or existing.get("review_summary", ""),
+        "confidence_score": conf,
+        "verification_status": verification_status,
+        "verification_reasoning": score.get("reasoning", ""),
+        "verification_signals": score.get("signals", []),
+        "verification_model": score.get("model", "heuristic"),
+        "verified_at": now_ts if verification_status == "verified" else "",
+        "published": published,
+        "is_active": True,
+        "contact_ready": contact_ready,
+        "updated_at": now_ts,
+        "via_submission_id": submission_id,
+    }
+
+
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     """Submit a real Melbourne trainer; publish only with active ABR evidence and the quality gate."""
@@ -5114,103 +5239,39 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         confirmed_at=now_iso(),
     )
 
+    now_ts = now_iso()
     if existing_trainer:
         trainer_id = existing_trainer["id"]
-        update_fields = {
-            "name": sub.get("name") or existing_trainer.get("name"),
-            "suburb": sub.get("suburb") or existing_trainer.get("suburb"),
-            "region": sub.get("region") or existing_trainer.get("region", ""),
-            "website": sub.get("website") or existing_trainer.get("website", ""),
-            "phone": sub.get("phone") or existing_trainer.get("phone", ""),
-            "email": sub.get("email") or existing_trainer.get("email", ""),
-            "categories": sub.get("categories") or existing_trainer.get("categories", []),
-            "services": sub.get("services") or existing_trainer.get("services", []),
-            "bio": sub.get("bio") or existing_trainer.get("bio", ""),
-            "image_url": sub.get("image_url") or existing_trainer.get("image_url", ""),
-            "source_evidence_url": sub.get("source_evidence_url") or existing_trainer.get("source_evidence_url", ""),
-            "abn": sub.get("abn") or existing_trainer.get("abn", ""),
-            "entity_name": sub.get("entity_name") or existing_trainer.get("entity_name", ""),
-            "trading_name": sub.get("trading_name") or existing_trainer.get("trading_name", ""),
-            "business_type": sub.get("business_type") or existing_trainer.get("business_type", ""),
-            "abn_status": sub.get("abn_status") or existing_trainer.get("abn_status", "not_provided"),
-            "abn_verified": bool(sub.get("abn_verified")),
-            "abn_verified_at": sub.get("abn_verified_at") or existing_trainer.get("abn_verified_at", ""),
-            "abn_verification_reason": sub.get("abn_verification_reason") or existing_trainer.get("abn_verification_reason", ""),
-            "abn_badge_payload": sub.get("abn_badge_payload") or existing_trainer.get("abn_badge_payload"),
-            "training_philosophy": sub.get("training_philosophy") or existing_trainer.get("training_philosophy", ""),
-            "specialties": sub.get("specialties") or existing_trainer.get("specialties", []),
-            "service_formats": sub.get("service_formats") or existing_trainer.get("service_formats", []),
-            "serviced_suburbs": sub.get("serviced_suburbs") or existing_trainer.get("serviced_suburbs", []),
-            "catchment_type": sub.get("catchment_type") or existing_trainer.get("catchment_type", ""),
-            "capabilities": declared_capabilities,
-            "booking_url": sub.get("booking_url") or existing_trainer.get("booking_url", ""),
-            "gallery_images": sub.get("gallery_images") or existing_trainer.get("gallery_images", []),
-            "sponsored_suburbs": sub.get("sponsored_suburbs") or existing_trainer.get("sponsored_suburbs", []),
-            "review_summary": sub.get("review_summary") or existing_trainer.get("review_summary", ""),
-            "confidence_score": conf,
-            "verification_status": verification_status,
-            "verification_reasoning": score.get("reasoning", ""),
-            "verification_signals": score.get("signals", []),
-            "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso() if verification_status == "verified" else "",
-            "published": published,
-            "contact_ready": contact_ready,
-            "updated_at": now_iso(),
-            "via_submission_id": sub_doc["id"],
-        }
+        update_fields = _build_canonical_trainer_update_fields(
+            submission_id=sub_doc["id"],
+            sub=sub,
+            existing=existing_trainer,
+            declared_capabilities=declared_capabilities,
+            score=score,
+            conf=conf,
+            verification_status=verification_status,
+            abn_verified=bool(sub.get("abn_verified")),
+            published=published,
+            contact_ready=contact_ready,
+            now_ts=now_ts,
+        )
         await db.trainers.update_one({"id": trainer_id}, {"$set": update_fields})
         trainer_doc = {**existing_trainer, **update_fields}
     else:
         trainer_id = new_id()
-        trainer_doc = {
-            "id": trainer_id,
-            "name": sub.get("name"),
-            "suburb": sub.get("suburb"),
-            "region": sub.get("region", ""),
-            "website": sub.get("website", ""),
-            "phone": sub.get("phone", ""),
-            "email": sub.get("email", ""),
-            "categories": sub.get("categories", []),
-            "services": sub.get("services", []),
-            "bio": sub.get("bio", ""),
-            "image_url": sub.get("image_url", ""),
-            "source_evidence_url": sub.get("source_evidence_url", ""),
-            "tier": "unclaimed",
-            "claim_status": "unclaimed",
-            "abn": sub.get("abn", ""),
-            "entity_name": sub.get("entity_name", ""),
-            "trading_name": sub.get("trading_name", ""),
-            "business_type": sub.get("business_type", ""),
-            "abn_status": sub.get("abn_status", "not_provided"),
-            "abn_verified": bool(sub.get("abn_verified")),
-            "abn_verified_at": sub.get("abn_verified_at", ""),
-            "abn_verification_reason": sub.get("abn_verification_reason", ""),
-            "abn_badge_payload": sub.get("abn_badge_payload"),
-            "training_philosophy": sub.get("training_philosophy", ""),
-            "specialties": sub.get("specialties", []),
-            "service_formats": sub.get("service_formats", []),
-            "serviced_suburbs": sub.get("serviced_suburbs", []),
-            "catchment_type": sub.get("catchment_type", ""),
-            "capabilities": declared_capabilities,
-            "booking_url": sub.get("booking_url", ""),
-            "gallery_images": sub.get("gallery_images", []),
-            "sponsored_suburbs": sub.get("sponsored_suburbs", []),
-            "review_summary": sub.get("review_summary", ""),
-            "confidence_score": conf,
-            "verification_status": verification_status,
-            "verification_reasoning": score.get("reasoning", ""),
-            "verification_signals": score.get("signals", []),
-            "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso() if verification_status == "verified" else "",
-            "outcome_score": 0.05,
-            "intros_30d": 0,
-            "conversions_30d": 0,
-            "published": published,
-            "contact_ready": contact_ready,
-            "registered_at": now_iso(),
-            "created_at": now_iso(),
-            "via_submission_id": sub_doc["id"],
-        }
+        trainer_doc = _build_canonical_trainer_document(
+            trainer_id=trainer_id,
+            submission_id=sub_doc["id"],
+            sub=sub,
+            declared_capabilities=declared_capabilities,
+            score=score,
+            conf=conf,
+            verification_status=verification_status,
+            abn_verified=bool(sub.get("abn_verified")),
+            published=published,
+            contact_ready=contact_ready,
+            now_ts=now_ts,
+        )
         await db.trainers.insert_one(trainer_doc.copy())
 
     # Prepare trainer billing profile (fail-soft). This does not block
@@ -8988,81 +9049,36 @@ async def review_held_submission(
 
         if existing:
             trainer_id = existing["id"]
-            update_fields = {
-                "name": sub.get("name") or existing.get("name"),
-                "suburb": sub.get("suburb") or existing.get("suburb"),
-                "region": sub.get("region") or existing.get("region", ACTIVE_REGION),
-                "website": sub.get("website") or existing.get("website", ""),
-                "phone": sub.get("phone") or existing.get("phone", ""),
-                "email": sub.get("email") or existing.get("email", ""),
-                "categories": sub.get("categories") or existing.get("categories", []),
-                "services": sub.get("services") or existing.get("services", []),
-                "bio": sub.get("bio") or existing.get("bio", ""),
-                "image_url": sub.get("image_url") or existing.get("image_url", ""),
-                "source_evidence_url": sub.get("source_evidence_url") or existing.get("source_evidence_url", ""),
-                "abn": sub.get("abn") or existing.get("abn", ""),
-                "entity_name": sub.get("entity_name") or existing.get("entity_name", ""),
-                "trading_name": sub.get("trading_name") or existing.get("trading_name", ""),
-                "business_type": sub.get("business_type") or existing.get("business_type", ""),
-                "abn_status": sub.get("abn_status") or existing.get("abn_status", "not_provided"),
-                "abn_verified": abn_verified,
-                "verification_status": verification_status,
-                "confidence_score": conf,
-                "verification_reasoning": score.get("reasoning", ""),
-                "verification_signals": score.get("signals", []),
-                "verification_model": score.get("model", "heuristic"),
-                "verified_at": now_ts if verification_status == "verified" else "",
-                "published": True,
-                "is_active": True,
-                "contact_ready": contact_ready,
-                "capabilities": declared_capabilities,
-                "updated_at": now_ts,
-                "via_submission_id": submission_id,
-            }
+            update_fields = _build_canonical_trainer_update_fields(
+                submission_id=submission_id,
+                sub=sub,
+                existing=existing,
+                declared_capabilities=declared_capabilities,
+                score=score,
+                conf=conf,
+                verification_status=verification_status,
+                abn_verified=abn_verified,
+                published=True,
+                contact_ready=contact_ready,
+                now_ts=now_ts,
+            )
             await trainers_coll.update_one({"id": trainer_id}, {"$set": update_fields})
             trainer_doc = {**existing, **update_fields}
         else:
             trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
-            trainer_doc = {
-                "id": trainer_id,
-                "name": sub.get("name") or "Unnamed Trainer",
-                "suburb": sub.get("suburb") or "",
-                "region": sub.get("region") or ACTIVE_REGION,
-                "website": sub.get("website") or "",
-                "phone": sub.get("phone") or "",
-                "email": sub.get("email") or "",
-                "categories": sub.get("categories", []),
-                "services": sub.get("services", []),
-                "bio": sub.get("bio", ""),
-                "image_url": sub.get("image_url", ""),
-                "source_evidence_url": sub.get("source_evidence_url", ""),
-                "tier": "unclaimed",
-                "claim_status": "unclaimed",
-                "abn": sub.get("abn") or "",
-                "entity_name": sub.get("entity_name", ""),
-                "trading_name": sub.get("trading_name", ""),
-                "business_type": sub.get("business_type", ""),
-                "abn_status": sub.get("abn_status", "not_provided"),
-                "abn_verified": abn_verified,
-                "confidence_score": conf,
-                "verification_status": verification_status,
-                "verification_reasoning": score.get("reasoning", ""),
-                "verification_signals": score.get("signals", []),
-                "verification_model": score.get("model", "heuristic"),
-                "verified_at": now_ts if verification_status == "verified" else "",
-                "outcome_score": 0.05,
-                "intros_30d": 0,
-                "conversions_30d": 0,
-                "serviced_suburbs": sub.get("serviced_suburbs", []),
-                "specialties": sub.get("specialties", []),
-                "capabilities": declared_capabilities,
-                "published": True,
-                "is_active": True,
-                "contact_ready": contact_ready,
-                "registered_at": now_ts,
-                "created_at": now_ts,
-                "via_submission_id": submission_id,
-            }
+            trainer_doc = _build_canonical_trainer_document(
+                trainer_id=trainer_id,
+                submission_id=submission_id,
+                sub=sub,
+                declared_capabilities=declared_capabilities,
+                score=score,
+                conf=conf,
+                verification_status=verification_status,
+                abn_verified=abn_verified,
+                published=True,
+                contact_ready=contact_ready,
+                now_ts=now_ts,
+            )
             await trainers_coll.insert_one(trainer_doc)
 
         # Canonical billing profile provisioning & action token issuance
@@ -9688,38 +9704,19 @@ async def process_privacy_request(
             "records_scrubbed": thread.get("scrubbed_records_count", 0),
         }
 
-    # Strict identity provenance: Notes-based assertions are prohibited.
-    # Verification must be proven either by existing recorded verification provenance,
-    # or by explicit valid documentary proof citation provided in this review request.
-    has_prior_provenance = bool(
+    # Strict identity provenance: Notes-based assertions and manual in-request proof shortcuts are prohibited.
+    # The destructive erasure action must remain unavailable until a documented, trustworthy identity-verification
+    # procedure (such as claimant session token, cryptographic OTP, or trusted IdP) supports it.
+    has_trusted_verification = bool(
         thread.get("identity_verified") is True
-        and (thread.get("identity_verified_by") or thread.get("identity_verified_at") or thread.get("identity_verification_method"))
+        and thread.get("identity_verified_by")
+        and thread.get("identity_verified_at")
+        and thread.get("identity_verification_method") in {"claimant_session_token", "cryptographic_email_otp", "trusted_idp", "verified_documentary_audit"}
     )
-    has_in_request_proof = bool(
-        payload.proof_reference
-        and len(payload.proof_reference.strip()) >= 5
-        and payload.proof_method
-        and len(payload.proof_method.strip()) >= 3
-    )
-
-    if not has_prior_provenance and not has_in_request_proof:
+    if not has_trusted_verification:
         raise HTTPException(
-            status_code=400,
-            detail="Requester identity must be verified through canonical identity proof with recorded verification provenance (identity_verified_by, identity_verified_at) or an accompanying proof_reference and proof_method before privacy erasure can proceed. Operator notes alone cannot confer verification authority.",
-        )
-
-    if has_in_request_proof and not has_prior_provenance:
-        await support_coll.update_one(
-            {"case_id": case_id},
-            {
-                "$set": {
-                    "identity_verified": True,
-                    "identity_verified_by": operator_identity,
-                    "identity_verified_at": now_ts,
-                    "identity_verification_method": payload.proof_method.strip(),
-                    "identity_proof_reference": payload.proof_reference.strip(),
-                }
-            },
+            status_code=403,
+            detail="Destructive privacy data erasure remains unavailable until a documented, trustworthy identity-verification procedure supports it. Requester identity cannot be asserted via manual review parameters. Use 'request_identity_proof' to solicit formal verification or 'reject_non_subject' to deny.",
         )
 
     target_email = thread.get("sender_email")
