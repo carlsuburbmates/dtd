@@ -5542,7 +5542,7 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         raise HTTPException(status_code=409, detail="This profile has already been claimed.")
     await db.claim_events.update_one(
         {"id": event["id"], "status": "pending_verification"},
-        {"$set": {"status": "verified", "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
+        {"$set": {"status": "verified", "otp_verified": True, "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
     )
     session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
     await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
@@ -9234,11 +9234,17 @@ async def review_profile_claim(
         or claim.get("challenge_token_hash")
         or claim.get("challenge_id")
     )
-    is_challenge_verified = bool(claim.get("otp_verified") or claim.get("challenge_verified"))
+    is_challenge_verified = bool(
+        str(claim.get("status") or "").lower() == "verified"
+        or claim.get("otp_verified") is True
+        or claim.get("challenge_verified") is True
+    )
+    challenge_delivered = (str(claim.get("delivery_status") or "") == "sent") or (str(claim.get("status") or "").lower() == "verified")
     trusted_challenge_origin = bool(
         challenge_method in ("email_otp", "phone_otp", "domain_dns", "abn_signoff", "operator_verified")
         and has_challenge_artifact
         and is_challenge_verified
+        and challenge_delivered
     )
     trusted_operator_documentary_proof = bool(
         claim.get("identity_verified") is True

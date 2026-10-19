@@ -716,7 +716,14 @@ def test_claim_review_grant_with_proof_and_deny():
                 "email": "original@melbournedog.com.au",
                 "is_claimed": False,
                 "claim_in_progress": True,
-            }
+            },
+            {
+                "id": "trn_canonical_002",
+                "name": "Canonical K9 Academy",
+                "email": "canonical.owner@melbournedog.com.au",
+                "is_claimed": False,
+                "claim_in_progress": True,
+            },
         ])
         mock_claims = _MockCollection(rows=[
             {
@@ -791,6 +798,30 @@ def test_claim_review_grant_with_proof_and_deny():
                 )
                 assert res_arb.status_code == 422
                 assert "verifiable challenge provenance" in res_arb.json()["detail"]
+
+                # 1c. Canonical claim event with status: 'verified' and otp_digest (without explicit otp_verified boolean) is recognized
+                claim_canonical = "clm_canonical_verified_004"
+                await mock_claims.insert_one({
+                    "id": claim_canonical,
+                    "trainer_id": "trn_canonical_002",
+                    "claimant_email": "canonical.owner@melbournedog.com.au",
+                    "status": "verified",
+                    "method": "email_otp",
+                    "otp_digest": "sha256_canonical_digest",
+                    "delivery_status": "sent",
+                    "created_at": "2026-10-19T00:00:00Z",
+                })
+                res_canon = await client.post(
+                    f"/api/oversight/claims/{claim_canonical}/review",
+                    json={
+                        "action": "grant_with_proof",
+                        "confirmed": True,
+                        "proof_reference": "ASIC extract matching canonical claimant",
+                    },
+                    headers=headers,
+                )
+                assert res_canon.status_code == 200
+                assert res_canon.json()["status"] == "verified"
 
                 # 2. Valid grant with verified OTP/identity and substantive business documentation
                 res_legit = await client.post(
