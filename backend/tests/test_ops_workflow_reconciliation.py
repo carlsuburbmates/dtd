@@ -724,6 +724,13 @@ def test_claim_review_grant_with_proof_and_deny():
                 "is_claimed": False,
                 "claim_in_progress": True,
             },
+            {
+                "id": "trn_exceptional_003",
+                "name": "Exceptional K9 Academy",
+                "email": "listed.owner@melbournedog.com.au",
+                "is_claimed": False,
+                "claim_in_progress": True,
+            },
         ])
         mock_claims = _MockCollection(rows=[
             {
@@ -740,7 +747,7 @@ def test_claim_review_grant_with_proof_and_deny():
                 "trainer_id": trainer_id,
                 "claimant_email": "legit.owner@melbournedog.com.au",
                 "status": "pending_challenge",
-                "method": "email_otp",
+                "method": "email",
                 "otp_digest": "sha256_legit_challenge_digest",
                 "otp_verified": True,
                 "identity_verified": True,
@@ -799,14 +806,14 @@ def test_claim_review_grant_with_proof_and_deny():
                 assert res_arb.status_code == 422
                 assert "verifiable challenge provenance" in res_arb.json()["detail"]
 
-                # 1c. Canonical claim event with status: 'verified' and otp_digest (without explicit otp_verified boolean) is recognized
+                # 1c. Canonical claim event produced by start_trainer_claim with method: 'email', status: 'verified', and otp_digest is recognized
                 claim_canonical = "clm_canonical_verified_004"
                 await mock_claims.insert_one({
                     "id": claim_canonical,
                     "trainer_id": "trn_canonical_002",
                     "claimant_email": "canonical.owner@melbournedog.com.au",
                     "status": "verified",
-                    "method": "email_otp",
+                    "method": "email",
                     "otp_digest": "sha256_canonical_digest",
                     "delivery_status": "sent",
                     "created_at": "2026-10-19T00:00:00Z",
@@ -822,6 +829,57 @@ def test_claim_review_grant_with_proof_and_deny():
                 )
                 assert res_canon.status_code == 200
                 assert res_canon.json()["status"] == "verified"
+
+                # 1d. Exceptional claim (mismatched/missing email) has no challenge delivery; text-only grant is blocked (422)
+                claim_exceptional_unprov = "clm_exceptional_mismatch_005"
+                await mock_claims.insert_one({
+                    "id": claim_exceptional_unprov,
+                    "trainer_id": "trn_exceptional_003",
+                    "claimant_email": "mismatched@otherdomain.com.au",
+                    "method": "email",
+                    "status": "needs_review",
+                    "reason": "claim_email_does_not_match_listing",
+                    "created_at": "2026-10-19T00:00:00Z",
+                })
+                res_exc_unprov = await client.post(
+                    f"/api/oversight/claims/{claim_exceptional_unprov}/review",
+                    json={
+                        "action": "grant_with_proof",
+                        "confirmed": True,
+                        "proof_reference": "Customer claims they bought the business",
+                    },
+                    headers=headers,
+                )
+                assert res_exc_unprov.status_code == 422
+                assert "Direct ownership assignment via text reference is prohibited" in res_exc_unprov.json()["detail"]
+
+                # 1e. Exceptional claim with verified supervisor documentary audit provenance succeeds (200)
+                claim_exceptional_provenanced = "clm_exceptional_provenanced_006"
+                await mock_claims.insert_one({
+                    "id": claim_exceptional_provenanced,
+                    "trainer_id": "trn_exceptional_003",
+                    "claimant_email": "mismatched@otherdomain.com.au",
+                    "method": "email",
+                    "status": "needs_review",
+                    "reason": "claim_email_does_not_match_listing",
+                    "identity_verified": True,
+                    "identity_verified_by": "supervisor:compliance_auditor",
+                    "identity_verification_method": "verified_documentary_audit",
+                    "identity_provenance": "ASIC current company extract, statutory declaration, photo ID matched",
+                    "identity_verified_at": "2026-10-19T01:00:00Z",
+                    "created_at": "2026-10-19T00:00:00Z",
+                })
+                res_exc_prov = await client.post(
+                    f"/api/oversight/claims/{claim_exceptional_provenanced}/review",
+                    json={
+                        "action": "grant_with_proof",
+                        "confirmed": True,
+                        "proof_reference": "ASIC business transfer contract and verified director ID",
+                    },
+                    headers=headers,
+                )
+                assert res_exc_prov.status_code == 200
+                assert res_exc_prov.json()["status"] == "verified"
 
                 # 2. Valid grant with verified OTP/identity and substantive business documentation
                 res_legit = await client.post(
@@ -1706,7 +1764,7 @@ def test_cf03_claim_verification_provenance_expiry_and_conflicts():
                 "id": "clm_competing_winner",
                 "trainer_id": "trn_target_claim",
                 "claimant_email": "owner_alice@trainer.com",
-                "method": "email_otp",
+                "method": "email",
                 "otp_digest": "sha256_winner_digest",
                 "otp_verified": True,
                 "status": "verified",

@@ -9241,7 +9241,7 @@ async def review_profile_claim(
     )
     challenge_delivered = (str(claim.get("delivery_status") or "") == "sent") or (str(claim.get("status") or "").lower() == "verified")
     trusted_challenge_origin = bool(
-        challenge_method in ("email_otp", "phone_otp", "domain_dns", "abn_signoff", "operator_verified")
+        challenge_method in ("email", "email_otp", "phone_otp", "domain_dns", "abn_signoff", "operator_verified")
         and has_challenge_artifact
         and is_challenge_verified
         and challenge_delivered
