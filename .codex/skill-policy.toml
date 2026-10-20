@@ -1,47 +1,55 @@
 version = 1
 mode = "suggest_then_auto_use"
 require_explicit_composio_invocation = true
-
 blocked_skills = []
 
-# Routing guidance:
-# - Keep this file as the only routing policy source.
-# - Use the smallest safe local toolchain first.
-# - Add a plugin or skill only when it clearly matches the task and improves evidence quality.
-# - Prefer native browser/visual checks for UI work and repo tests for code changes.
-# - For integration-heavy work, prefer the matching plugin when available and fall back to local tools.
-# - Carry forward session authorisation. An authorised workflow may include remote branch sync and developer-sandbox actions without a new approval for each step.
-# - If a task can be completed by inspecting repo files, build output, browser evidence, or official docs, prefer that path over external provider consoles.
+# Governance: AGENTS.md defines authorisation, environment and independent audit gates.
+# This TOML defines capability routing only; it never grants production/billing/provider
+# mutation authority. Use the R0–R13 roadmap and existing DF/M/spec contracts for scope.
 
-# Precedence
-# 1. Repo-local analysis, edits, and tests.
-# 2. Native browser/visual tools for local or hosted web surfaces.
-# 3. Official docs via `web` when the fact may have changed or needs primary-source verification.
-# 4. Named plugin or connector when the task clearly matches that ecosystem and the tool is available in-session.
-# 5. Skills/subagents when they materially reduce cycle time or risk.
+# Preferred order is by fitness, not a fixed local-only restriction:
+# - For source work: local filesystem, git history/diff, tests/builds and repo search.
+# - For GitHub/CI: local `git`/`gh` using established credentials, or a connected GitHub tool.
+# - For Cloud Run/Firebase/GCP: authenticated `gcloud`/Firebase CLI or connected provider UI.
+# - For databases and services: approved read-only provider console/connector or scoped CLI.
+# - For UI: browser/Playwright on the actual local or sandbox environment, including mobile.
+# - For moving provider facts: current official provider docs; never infer runtime state.
+# - For complex tasks: a small number of complementary skills/subagents, not a tool parade.
 
-# Required response behavior when optional capabilities are relevant
-# - Announce a skill on first use; do not require a suggestion table or a second approval in auto-use mode.
-# - Keep the active skill set small and task-relevant.
-# - Mention skipped capabilities only when the omission affects evidence or outcome.
+# Existing authentication is the first option:
+# - Check active account + project/scope without emitting secrets; use supported token caches.
+# - Reuse already authenticated CLI/browser/connector sessions wherever permitted.
+# - Do not extract cookies/tokens, bypass MFA, paste secrets in chat or copy production keys.
+# - If unavailable/expired, request the smallest specific official user-side login/consent
+#   step in a trusted local UI. Continue nonblocked work, then recheck and resume.
+# - Do not confuse interactive management login with managed production runtime identity.
+# - Do not claim an integration is authenticated until actual read access is confirmed.
 
-# Integration routing notes
-# - Frontend / local web UI work: Browser plugin first for localhost/127.0.0.1 apps; use Browser screenshots and interaction checks before relying on prose.
-# - Remote authenticated web work: Chrome plugin first when session/cookies/profile state matters.
-# - Documentation / API / platform facts: web with primary sources first for changing docs, SDKs, and hosted-provider behavior.
-# - GitHub, Vercel, Render, Stripe, Figma, Cloudflare, Gmail, Google Calendar, Drive, Documents, Spreadsheets, and other named ecosystems: prefer the matching plugin or connector when available in-session; otherwise use local tools plus official docs.
-# - When a user explicitly names a plugin or connector that is available, prefer it over the generic fallback path.
-# - When a user explicitly requests a connector that is not yet available, discover install candidates first, then request install only if there is an exact match.
+# Repo read/local-authorised edits and tests can proceed using available access.
+# New implementation work stays local until independently audited (AGENTS.md §6A).
+# Accepted exact SHA: authorised agent can execute remote and dev-sandbox work per gate.
+# Gated production, live billing, auth/credential and destructive real-data actions stay gated.
 
-# Fallback rules
-# - If the preferred plugin is unavailable, use the nearest safe fallback and say why.
-# - If the task is read-only analysis, prefer local inspection and official docs over external provider mutations.
-# - If an external side effect is a normal step of an authorised workflow, proceed; ask only when new authority is genuinely required.
-# - If the task crosses multiple domains, keep the routing stack as small as possible and only add a second capability when it meaningfully reduces risk.
+# Skill routing:
+# - Workflow across UI/API/data/automation/notifications/ops -> dtd-feature-workflow-completion.
+# - Public page copy/CTA/accessible mobile visual polish -> dtd-premium-look-audit.
+# - Cross-stage planning, owner exception triage, conflicting evidence -> dtd-proactive-owner-assistance.
+# - Scope R0–R2: release consolidation only; never treat mention of /ops as permission
+#   to restart previously accepted Ops phases 1–5A.
+# - Scope R3–R8: use existing M/DF identifiers and verify only current acceptance gaps.
+# - Scope R10–R12: measure user/trainer value, payment outcomes and workload with
+#   consented and privacy-bounded data; metrics are not R1–R2 release prerequisites.
 
-# Default capability bundles
-# - Repo analysis/editing: shell search, file reads, targeted patching, targeted tests.
-# - UI verification: Browser + local build/test + screenshot comparison.
-# - Changing web/platform docs: web + repo edits + consistency re-read.
-# - Provider work: matching plugin + local validation + official docs.
-# - High-risk work: parallel review only when the task is billing/auth/runtime ownership/production-state sensitive.
+# Browser/connector priority:
+# - If a user explicitly requests an available named integration, prefer it.
+# - For authenticated sessions where browser state matters, use a supported logged-in
+#   browser tool; never assume ordinary HTTP fetch can access a logged-in session.
+# - For data mutations prefer official, auditable API/CLI over fragile UI automation where
+#   either is authorised; do not bypass platform safeguards or owner action prompts.
+# - For absent capabilities, use safe fallback tools; state the exact verification gap.
+
+# Response discipline:
+# - Reuse accepted evidence; select proportionate tests for actual changed paths.
+# - Avoid broad permission queries and repeated plan-only outputs.
+# - Give exact provider, account/project and required trusted-local login step if blocked.
+# - Report what changed, proved, remains blocked, cleanup and one next work package.

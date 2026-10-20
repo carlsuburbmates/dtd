@@ -1,4 +1,4 @@
 interface:
-  display_name: "DTD Premium look audit"
-  short_description: "Audit and refine DTD public website pages"
-  default_prompt: "Use $dtd-premium-look-audit to audit and refine DTD public website pages while preserving the current business priority and locked launch posture."
+  display_name: "DTD Public Website Audit"
+  short_description: "Verify actual DTD public routes, copy and mobile experience"
+  default_prompt: "Use $dtd-premium-look-audit to refine current owner/trainer public pages using the approved roadmap and verified live posture, not historical supply-first assumptions."

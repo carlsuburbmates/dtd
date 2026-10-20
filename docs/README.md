@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 26 September 2026
+**Reconciled:** 20 October 2026 (documentation map refreshed; product synthesis remains governed by linked sources)
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -20,6 +20,14 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | Document | What it answers | When to read it |
 | --- | --- | --- |
 | [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) | What code, tests, deployment and captured runtime evidence show now | Before changing or reporting the product |
+| [DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md](DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md) | Owner-approved R0–R13 stage sequence and separate engineering/product/operational/business outcomes | Stage navigation; existing authority documents still govern implementation |
+| [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md) | Current stage gates, next safe action and review checkpoint | Resuming roadmap execution |
+| [DTD_CODEX_CURRENT_REALITY_AUDIT.md](DTD_CODEX_CURRENT_REALITY_AUDIT.md) | Dated independent evidence for the 20 October baseline and R1 readiness | Reviewing this audit snapshot |
+| [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) | Deduplicated P0–P3 findings mapped to roadmap stages | Prioritizing fixes without creating parallel issue tracking |
+| [DTD_ROADMAP_RECONCILIATION.md](DTD_ROADMAP_RECONCILIATION.md) | R-stage mapping to existing completion plans, findings and decisions | Reconciling existing plans |
+| [DTD_GOVERNANCE_SYNC_EVIDENCE.md](DTD_GOVERNANCE_SYNC_EVIDENCE.md) | ZIP integrity, repository comparison and governance review handoff | Reviewing governance synchronization |
+| [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) | Exact DF-043 commit/build/revision, sandbox suppression checks, identity verification and R1 gate | Reviewing developer release evidence |
+| [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md) | Bounded synthetic fixture and temporary Scheduler cleanup record | Verifying sandbox fixture cleanup |
 | [DTD_TARGETED_POST_LAUNCH_STATE.md](DTD_TARGETED_POST_LAUNCH_STATE.md) | The concrete next build and operating target | When choosing or implementing near-term work |
 | [DTD_TARGETED_MATCHING_PIPELINE_STATE.md](DTD_TARGETED_MATCHING_PIPELINE_STATE.md) | The concrete owner-to-trainer matching target, including acquisition, AI, urgent support and acceptance | Before changing matching, trainer capability data or urgent-support work |
 | [DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) | Matching work packages, completion rules and independent verification evidence | Before implementing or accepting matching-pipeline work |

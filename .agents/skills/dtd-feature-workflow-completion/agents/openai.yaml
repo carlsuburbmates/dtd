@@ -1,4 +1,4 @@
 interface:
   display_name: "DTD Feature Workflow Completion"
-  short_description: "Implement DTD features as complete workflows"
-  default_prompt: "Use $dtd-feature-workflow-completion to implement or validate a DTD feature end to end across user workflow branches, automation, and /ops visibility."
+  short_description: "Close DTD workflows against R-stage and M/DF acceptance"
+  default_prompt: "Use $dtd-feature-workflow-completion to advance the authorised DTD R stage with full workflow evidence, existing authenticated local/remote tooling and no reopened accepted remediation."
