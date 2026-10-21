@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 21 October 2026 (R2 release reconciliation added; product synthesis remains governed by linked sources)
+**Reconciled:** 22 October 2026 (R3 API release evidence and hosting boundary added; product synthesis remains governed by linked sources)
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -11,7 +11,7 @@ DTD is a free-to-dog-owners directory and guided matching service for Greater Me
 
 The immediate target is to make that existing system safe and dependable for a solo operator: maintain the seeded production suburb catalogue, correct SEO indexation controls, repair stale automated loops and broken messaging paths, reconcile `/ops` promises with its real bounded actions, clean questionable trainer records, remediate the documented dependency-security backlog, and switch Stripe to live mode only with the trial anchor and refund safeguards set together. The owner-to-trainer matching pipeline is a separately governed targeted workstream: it must complete its decision contract, trainer-capability supply, safe AI/fallback states, urgent support and acceptance evidence before it can be called complete. Longer-term automation, demand-based pricing, additional products, and broader distribution remain vision items rather than commitments.
 
-The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL. The Google Cloud technical migration requested during the Google for Startups review is complete: Firebase Hosting serves the frontend in project `gen-lang-client-0028123502`, Cloud Run serves the API, and the public domain routes through the Google stack. An isolated developer staging sandbox (`dogtrainersdirectory-dev` and MongoDB Atlas `dtd-sandbox`) provides safe pre-production testing and development. The program application remains subject to Google's manual re-review; no approval or credit award is recorded here.
+The First Leash remains a separate application at `learn.dogtrainersdirectory.com.au`. The relationship is a branded, static, query-free link in each direction. Behavioural dossier data stays on the user's device and is never transferred in the URL. Prior evidence records the public DTD site on Firebase Hosting in project `gen-lang-client-0028123502`, with Cloud Run for the API and Cloudflare in front of the public DNS. Current repo Firebase defaults still select that production project; no developer Firebase Hosting site is verified. The developer sandbox currently uses Cloud Run `dtd-api-dev` and `dtd-web-dev` in project `dogtrainersdirectory-dev`; it is not deployed through the repo's Firebase defaults. GitHub also still creates non-production Vercel Preview deployments for PRs (DF-007). The program application remains subject to Google's manual re-review; no approval or credit award is recorded here.
 
 ## Authority map
 
@@ -26,6 +26,7 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) | Deduplicated P0–P3 findings mapped to roadmap stages | Prioritizing fixes without creating parallel issue tracking |
 | [DTD_ROADMAP_RECONCILIATION.md](DTD_ROADMAP_RECONCILIATION.md) | R-stage mapping to existing completion plans, findings and decisions | Reconciling existing plans |
 | [R2_RELEASE_RECONCILIATION.md](R2_RELEASE_RECONCILIATION.md) | Exact merged main SHA, developer Cloud Run revisions, checks, safety flags, scheduler state and recovery evidence | Reviewing R2 consolidation and sandbox deployment |
+| [R3_RELEASE_FOUNDATION.md](R3_RELEASE_FOUNDATION.md) | Exact R3 developer API release, dependency/source verification, health, scheduler, recovery limits and hosting/provider gaps | Reviewing R3 release foundation and current sandbox boundary |
 | [DTD_GOVERNANCE_SYNC_EVIDENCE.md](DTD_GOVERNANCE_SYNC_EVIDENCE.md) | ZIP integrity, repository comparison and governance review handoff | Reviewing governance synchronization |
 | [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) | Exact DF-043 commit/build/revision, sandbox suppression checks, identity verification and R1 gate | Reviewing developer release evidence |
 | [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md) | Bounded synthetic fixture and temporary Scheduler cleanup record | Verifying sandbox fixture cleanup |
