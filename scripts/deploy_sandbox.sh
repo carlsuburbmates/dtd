@@ -24,6 +24,46 @@ validate_preflight_interpreter() {
   fi
 }
 
+resolve_deploy_source_sha() {
+  local repo_root="$1"
+  local upload_files
+  local untracked_upload_files
+  local tracked_backend_files
+
+  if ! git -C "${repo_root}" rev-parse --verify HEAD >/dev/null 2>&1; then
+    echo "Sandbox deployment requires a Git checkout with a committed source revision" >&2
+    return 64
+  fi
+  if ! git -C "${repo_root}" diff --quiet HEAD -- backend; then
+    echo "Sandbox deployment requires a clean committed backend source tree" >&2
+    return 64
+  fi
+  if ! upload_files="$(gcloud meta list-files-for-upload "${repo_root}/backend")"; then
+    echo "Could not determine the Cloud Run backend source upload set" >&2
+    return 64
+  fi
+  if [ -z "${upload_files}" ]; then
+    echo "Cloud Run backend source upload set is empty" >&2
+    return 64
+  fi
+  validate_uploaded_backend_files "${repo_root}" "${upload_files}" || return $?
+  git -C "${repo_root}" rev-parse HEAD
+}
+
+validate_uploaded_backend_files() {
+  local repo_root="$1"
+  local upload_files="$2"
+  local tracked_backend_files
+  local untracked_upload_files
+  tracked_backend_files="$(git -C "${repo_root}" ls-files -- backend | sed 's#^backend/##' | sort)"
+  untracked_upload_files="$(comm -23 <(printf '%s\n' "${upload_files}" | sort) <(printf '%s\n' "${tracked_backend_files}" | sort))"
+  if [ -n "${untracked_upload_files}" ]; then
+    echo "Sandbox source upload contains files that are not tracked by Git:" >&2
+    printf '%s\n' "${untracked_upload_files}" >&2
+    return 64
+  fi
+}
+
 validate_health_response() {
   HEALTH_RESPONSE="$1" python3 - <<'PY'
 import json
@@ -72,6 +112,12 @@ if [ "$#" -ne 0 ]; then
   exit 64
 fi
 
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+DEPLOY_SOURCE_SHA="$(resolve_deploy_source_sha "${REPO_ROOT}")"
+REVISION_SUFFIX="r3-${DEPLOY_SOURCE_SHA:0:8}"
+echo "Sandbox source revision: ${DEPLOY_SOURCE_SHA} (${REVISION_SUFFIX})"
+
 # 1. Run the mandatory local preflight suite.
 echo "🔍 [1/3] Running preflight code compilation and tests..."
 validate_preflight_interpreter
@@ -87,6 +133,7 @@ echo "🚀 [2/3] Deploying ${SERVICE_NAME} to Google Cloud Run in project ${PROJ
 gcloud run deploy "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
   --region "${REGION}" \
+  --revision-suffix "${REVISION_SUFFIX}" \
   --source backend \
   --allow-unauthenticated \
   --service-account "${SERVICE_ACCOUNT}" \

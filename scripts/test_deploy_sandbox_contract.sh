@@ -35,6 +35,97 @@ if ! grep -Fq 'DTD_PREFLIGHT_PYTHON' "${repo_root}/scripts/deploy_sandbox.sh" ||
   exit 1
 fi
 
+if ! grep -Fq -- '--revision-suffix "${REVISION_SUFFIX}"' "${repo_root}/scripts/deploy_sandbox.sh"; then
+  echo "Sandbox revisions must carry their committed source SHA suffix" >&2
+  exit 1
+fi
+
+source_test_root="$(mktemp -d)"
+trap 'rm -rf "${source_test_root}"' EXIT
+git -C "${source_test_root}" init -q
+git -C "${source_test_root}" config user.name "DTD sandbox contract test"
+git -C "${source_test_root}" config user.email "sandbox-contract@example.invalid"
+mkdir -p "${source_test_root}/backend" "${source_test_root}/bin"
+printf 'committed source\n' >"${source_test_root}/backend/server.py"
+printf '.gcloudignore\n' >"${source_test_root}/backend/.gcloudignore"
+printf 'backend/credentials.json\n' >"${source_test_root}/.gitignore"
+cat >"${source_test_root}/bin/gcloud" <<'MOCK_GCLOUD'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "$#" -ne 3 ] || [ "$1" != meta ] || [ "$2" != list-files-for-upload ]; then
+  echo "unexpected gcloud invocation" >&2
+  exit 64
+fi
+if [ "${MOCK_GCLOUD_FAIL:-0}" = 1 ]; then
+  exit 2
+fi
+cat "${UPLOAD_MANIFEST}"
+MOCK_GCLOUD
+chmod +x "${source_test_root}/bin/gcloud"
+export UPLOAD_MANIFEST="${source_test_root}/upload-manifest.txt"
+export PATH="${source_test_root}/bin:${PATH}"
+printf '.gcloudignore\nserver.py\n' >"${UPLOAD_MANIFEST}"
+git -C "${source_test_root}" add .gitignore backend/.gcloudignore backend/server.py
+git -C "${source_test_root}" commit -q -m "fixture source"
+source_sha="$(resolve_deploy_source_sha "${source_test_root}")"
+if [ "${source_sha}" != "$(git -C "${source_test_root}" rev-parse HEAD)" ]; then
+  echo "Sandbox deploy source resolver did not return HEAD" >&2
+  exit 1
+fi
+export MOCK_GCLOUD_FAIL=1
+set +e
+gcloud_failure_status=0
+resolve_deploy_source_sha "${source_test_root}" >/dev/null 2>&1 || gcloud_failure_status=$?
+set -e
+unset MOCK_GCLOUD_FAIL
+if [ "${gcloud_failure_status}" -ne 64 ]; then
+  echo "Sandbox deployment must fail closed when Cloud Run upload inspection fails" >&2
+  exit 1
+fi
+printf '\n' >"${UPLOAD_MANIFEST}"
+set +e
+empty_manifest_status=0
+resolve_deploy_source_sha "${source_test_root}" >/dev/null 2>&1 || empty_manifest_status=$?
+set -e
+if [ "${empty_manifest_status}" -ne 64 ]; then
+  echo "Sandbox deployment must reject an empty Cloud Run upload manifest" >&2
+  exit 1
+fi
+printf '.gcloudignore\nserver.py\n' >"${UPLOAD_MANIFEST}"
+printf 'uncommitted source\n' >"${source_test_root}/backend/server.py"
+set +e
+dirty_source_status=0
+resolve_deploy_source_sha "${source_test_root}" >/dev/null 2>&1 || dirty_source_status=$?
+set -e
+if [ "${dirty_source_status}" -ne 64 ]; then
+  echo "Sandbox deployment must reject a modified backend source tree" >&2
+  exit 1
+fi
+git -C "${source_test_root}" checkout -- backend/server.py
+printf 'credential material\n' >"${source_test_root}/backend/credentials.json"
+printf '.gcloudignore\ncredentials.json\nserver.py\n' >"${UPLOAD_MANIFEST}"
+set +e
+ignored_source_status=0
+resolve_deploy_source_sha "${source_test_root}" >/dev/null 2>&1 || ignored_source_status=$?
+set -e
+if [ "${ignored_source_status}" -ne 64 ]; then
+  echo "Sandbox deployment must reject ignored backend files included by source upload" >&2
+  exit 1
+fi
+rm "${source_test_root}/backend/credentials.json"
+printf 'untracked source\n' >"${source_test_root}/backend/untracked.py"
+printf '.gcloudignore\nserver.py\nuntracked.py\n' >"${UPLOAD_MANIFEST}"
+set +e
+untracked_source_status=0
+resolve_deploy_source_sha "${source_test_root}" >/dev/null 2>&1 || untracked_source_status=$?
+set -e
+if [ "${untracked_source_status}" -ne 64 ]; then
+  echo "Sandbox deployment must reject untracked backend source" >&2
+  exit 1
+fi
+rm -rf "${source_test_root}"
+trap - EXIT
+
 set +e
 invalid_python_output="$(DTD_PREFLIGHT_PYTHON="${repo_root}/does-not-exist" bash -c 'source "$1"; validate_preflight_interpreter' _ "${repo_root}/scripts/deploy_sandbox.sh" 2>&1)"
 invalid_python_status=$?
