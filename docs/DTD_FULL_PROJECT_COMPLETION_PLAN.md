@@ -1,8 +1,8 @@
 # DTD Full Project Completion Plan
 
-**Status:** active execution plan — refreshed 21 October 2026. This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
+**Status:** active execution plan — refreshed 22 October 2026. This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
 
-## Current verified baseline — 21 October 2026
+## Current verified baseline — 22 October 2026
 
 - R0 remains accepted only at exact SHA `1ac4138e4d82991501139298cc624be732661119`. PR #12 consolidation merged at `704c830`; explicit developer deploy gates merged at `f24cc49`. Current R2 release details and recovery evidence are in [R2_RELEASE_RECONCILIATION.md](R2_RELEASE_RECONCILIATION.md).
 - Developer web revision uses `dtd-web-dev-runtime`; canary and promoted API-backed catalogue flow passed. DF-042 is DONE within the verified direct-permission and flow scope; inherited organization permissions remain NOT_VERIFIED.
@@ -11,6 +11,8 @@
 - R1 runtime acceptance was DONE WITH NAMED BLOCKED FOLLOW-UPS on API revision `dtd-api-dev-00054-rvl` before R2 deployment. Its synthetic webhook, claim success/negative cases, privacy denial, suppression, delisting, fraud, support intake/concurrency/closure and protected Ops have scenario outcomes and cleanup evidence. DF-051 and positive trainer/privacy/publication journeys remain R5; acquisition-dedup regression is required in R4 before activation; notifier fallback and scoped obligation completeness remain R7; provider-originated webhook verification and webhook-enabled recovery remain R3. Conditional rollback to `00059-hex` was rehearsed and the service restored to `00054-rvl`; ingestion remains PAUSED under the separate R4 gate.
 - DF-038 source retirement and developer passcode rotation are remotely integrated in the accepted R2 stack. R1 permits ingestion to remain PAUSED; DF-044/045 remain separate R4 activation dependencies.
 - The targeted R1 release evidence and cleanup record are [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) and [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md).
+- Roadmap execution is sequential: R0–R2 are complete, R3 is active and PARTIAL, and R4 must not begin before R3 exits. Current developer API revision, R3 review gaps and recovery limits are maintained in [R3_RELEASE_FOUNDATION.md](R3_RELEASE_FOUNDATION.md) and [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md). DF-046 correction and sandbox parity are accepted; safe default-branch integration and remaining R3 provider/recovery gates are pending.
+- Per owner direction, R0–R8 end in delivery of the independently verified developer sandbox and evidence packet for owner audit. R9 production work is separate and requires that audit plus specific authority; R10–R12 need post-release evidence. See [CDR-026](DTD_CONFLICT_AND_DECISION_REGISTER.md).
 
 ## Evidence carried forward from 7 October
 
@@ -25,7 +27,7 @@
 
 ## Completion rule
 
-DTD is not complete until every applicable item below is independently evidenced `DONE` in the developer sandbox, all verified open findings are closed or explicitly superseded by an owner decision, and production is separately authorised. Passing code tests, a Cloud Run health response, a scheduler job, or a rendered screen alone is insufficient.
+The pre-production delivery is complete only when R0–R8 and their applicable open findings are independently evidenced in the developer sandbox, the required fixtures and provider effects are clean, and the complete evidence packet is handed to the owner for audit. Passing code tests, a Cloud Run health response, a scheduler job, or a rendered screen alone is insufficient. R9 production, R10 marketplace value, R11 commercial validation and R12 sustainable operation remain later roadmap outcomes; they require owner audit/authority and, where relevant, post-release observation. Do not mark them done to make the sandbox handoff appear complete.
 
 ## Execution order
 
@@ -51,9 +53,10 @@ DTD is not complete until every applicable item below is independently evidenced
 
 ## Immediate active sequence
 
-1. On owner confirmation, complete only the final browser-submitted protected-enquiry action with a disposable fixture; keep all UI-visible test data namespaced and prove its removal. Browser result/profile and API/Ops terminal-delivery evidence are accepted, but the final browser submit is a representational external action.
-2. Design a namespaced, approved-source ingestion acceptance run and rerun. The scheduler transport dry-run is complete; do not use a real business source until its acquisition authority, expected record disposition and cleanup plan are explicit.
-3. Complete the remaining DF work in the cross-project ledger below, beginning with CI/dependency and privacy/safety acceptance blockers.
+1. Continue R3 only: DF-046 commit `9dd53ed` is independently accepted and deployed; five live API/Ops scenarios passed with 14 fixtures cleaned. Reconcile the remaining R3 provider recovery/alert controls and safe default-branch integration/alert-rescan effects. Keep the ingestion job PAUSED and do not invoke engine-tick.
+2. Reconcile remaining R3 provider recovery/alert evidence, dependency/default-branch integration, and safe deployment effects. Use Cloud Run `dtd-api-dev` + `dtd-web-dev` with Atlas `dtd_sandbox` as the documented developer sandbox; never use the repository's production Firebase defaults for sandbox deployment.
+3. After an explicit R3 exit checkpoint, start R4; then proceed R5, R6, R7 and R8 in order. Do not skip unfinished work: assign newly found items to an existing stage or the To Do register and carry them forward.
+4. At R8, deliver the full verified sandbox and evidence packet to the owner for audit. Do not start R9 or deploy production before that audit and separate owner authority.
 
 ## Cross-project finding ledger
 

@@ -14,6 +14,7 @@ Validates:
 import asyncio
 import json
 import pytest
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock
 
@@ -433,6 +434,200 @@ async def test_ops_degradation_case_formatting():
     assert "TIMEOUT" in c["risk_reason_codes"]
     assert c["responsibility_layer"] == "Layer 1 — Normal Ops"
     assert any(row["label"] == "Fallback used" and row["value"] == "true" for row in c["detail_rows"])
+
+
+def test_degradation_health_ignores_stale_recovered_history():
+    now = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+    events = [
+        {
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(hours=30)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+        for _ in range(25)
+    ]
+
+    summary = ai_service.summarize_degradation_health(events, now=now)
+
+    assert summary["status"] == "nominal"
+    assert summary["active_degradation_events"] == 0
+    assert summary["recent_recovered_fallback_events"] == 0
+    assert summary["operations"] == []
+
+
+def test_degradation_health_applies_thresholds_per_operation():
+    now = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+    events = [
+        {
+            "operation": operation,
+            "timestamp": (now - timedelta(minutes=5)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+        for operation in ("ops_analyst_inference", "trainer_verification_scoring")
+        for _ in range(2)
+    ]
+
+    isolated = ai_service.summarize_degradation_health(events, now=now)
+    assert isolated["status"] == "nominal"
+    assert isolated["active_degradation_events"] == 0
+    assert isolated["recent_recovered_fallback_events"] == 4
+
+    events.append(
+        {
+            "operation": "trainer_verification_scoring",
+            "timestamp": (now - timedelta(minutes=3)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+    )
+    sustained = ai_service.summarize_degradation_health(events, now=now)
+    assert sustained["status"] == "degraded"
+    assert sustained["active_degradation_events"] == 3
+    assert sustained["active_operations"] == 1
+    assert [row["operation"] for row in sustained["operations"] if row["status"] == "degraded"] == [
+        "trainer_verification_scoring"
+    ]
+
+
+@pytest.mark.anyio
+async def test_ops_degradation_thresholds_match_health_per_operation(monkeypatch):
+    now = datetime.now(timezone.utc)
+    events = [
+        {
+            "id": f"event-{operation}-{index}",
+            "operation": operation,
+            "timestamp": (now - timedelta(minutes=5)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "rate_limit",
+            "error_code": "RATE_LIMIT_429",
+        }
+        for operation in ("ops_analyst_inference", "trainer_verification_scoring")
+        for index in range(2)
+    ]
+
+    async def _events(*, limit, db=None):
+        return events
+
+    monkeypatch.setattr(ai_service, "get_degradation_events", _events)
+
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "nominal"
+    assert not any(case["case_id"] == "ai_degradation:sustained" for case in cases)
+    assert all(case["state"] == "monitoring" for case in cases)
+
+    events.append(
+        {
+            "id": "event-ops-extra",
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(minutes=3)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "rate_limit",
+            "error_code": "RATE_LIMIT_429",
+        }
+    )
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "degraded"
+    assert any(case["case_id"] == "ai_degradation:sustained" for case in cases)
+
+
+@pytest.mark.anyio
+async def test_ops_persistent_threshold_is_scoped_to_each_operation(monkeypatch):
+    now = datetime.now(timezone.utc)
+    events = [
+        {
+            "id": f"persistent-{operation}-{index}",
+            "operation": operation,
+            "timestamp": (now - timedelta(hours=2)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "service_unavailable",
+            "error_code": "SERVICE_UNAVAILABLE",
+        }
+        for operation, count in (("ops_analyst_inference", 3), ("trainer_verification_scoring", 2))
+        for index in range(count)
+    ]
+
+    async def _events(*, limit, db=None):
+        return events
+
+    monkeypatch.setattr(ai_service, "get_degradation_events", _events)
+
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "nominal"
+    assert not any(case["case_id"] == "ai_degradation:persistent_low_volume" for case in cases)
+    assert all(case["state"] == "monitoring" for case in cases)
+
+
+def test_degradation_health_respects_configured_persistent_window(monkeypatch):
+    now = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(ai_service, "AI_FALLBACK_PERSISTENT_WINDOW_S", 6 * 60 * 60)
+    monkeypatch.setattr(ai_service, "AI_FALLBACK_PERSISTENT_THRESHOLD", 2)
+    events = [
+        {
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(hours=7)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+        for _ in range(5)
+    ]
+
+    outside_window = ai_service.summarize_degradation_health(events, now=now)
+    assert outside_window["status"] == "nominal"
+    assert outside_window["recent_recovered_fallback_events"] == 0
+
+    events.append(
+        {
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(hours=5)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+    )
+    inside_window = ai_service.summarize_degradation_health(events, now=now)
+    assert inside_window["status"] == "nominal"
+    assert inside_window["operations"][0]["recovered_fallback_events_persistent_window"] == 1
+
+    events.append(
+        {
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(hours=4)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+        }
+    )
+    at_threshold = ai_service.summarize_degradation_health(events, now=now)
+    assert at_threshold["status"] == "degraded"
+    assert at_threshold["active_degradation_events"] == 2
+
+
+def test_degradation_health_keeps_unrecovered_failures_actionable():
+    summary = ai_service.summarize_degradation_health(
+        [
+            {
+                "operation": "diagnostic_matching",
+                "timestamp": "invalid",
+                "recovered": False,
+                "fallback_used": False,
+            }
+        ],
+        now=datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert summary["status"] == "degraded"
+    assert summary["active_degradation_events"] == 1
+    assert summary["active_operations"] == 1
+    assert summary["operations"][0]["latest_event_age_s"] is None
 
 
 @pytest.mark.anyio
