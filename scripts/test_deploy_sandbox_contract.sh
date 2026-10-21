@@ -42,6 +42,40 @@ for setting in ENABLE_TRAINER_BILLING_CHECKOUT=0 OPS_SELF_HEALING_ENABLED=0; do
   fi
 done
 
+for web_contract in '--to-latest' 'latestCreatedRevisionName' 'latestReadyRevisionName' 'EXPECTED_BUNDLE'; do
+  if ! grep -Fq -- "${web_contract}" "${repo_root}/scripts/deploy_sandbox_frontend.sh"; then
+    echo "Sandbox frontend deployment must verify ${web_contract}" >&2
+    exit 1
+  fi
+done
+
+REPO_ROOT="${repo_root}" python3 - <<'PY'
+import os
+import pathlib
+import re
+import tempfile
+
+pattern = r"""/(?:assets/index|static/js/main)[^\"]*\.js"""
+sample = '<script type="module" src="/assets/index-A1b2C3.js"></script>'
+match = re.search(pattern, sample)
+assert match and match.group(0) == "/assets/index-A1b2C3.js", match
+script = pathlib.Path(os.environ["REPO_ROOT"]) / "scripts/deploy_sandbox_frontend.sh"
+assert 'pathlib.Path(os.environ["REPO_ROOT"]) / "frontend/build/index.html"' in script.read_text()
+with tempfile.TemporaryDirectory() as temporary_root:
+    index_html = pathlib.Path(temporary_root) / "frontend/build/index.html"
+    index_html.parent.mkdir(parents=True)
+    index_html.write_text(sample)
+    original_cwd = pathlib.Path.cwd()
+    os.chdir(tempfile.gettempdir())
+    try:
+        built_html = (pathlib.Path(temporary_root) / "frontend/build/index.html").read_text()
+    finally:
+        os.chdir(original_cwd)
+    built_match = re.search(pattern, built_html)
+    assert built_match and built_match.group(0) == "/assets/index-A1b2C3.js", built_match
+print("Sandbox frontend bundle parser: PASS")
+PY
+
 if ! grep -Fq -- '--update-headers="Content-Type=application/json"' "${repo_root}/scripts/setup_sandbox_ingestion.sh"; then
   echo "Scheduler provisioning must send JSON payloads to the FastAPI endpoint" >&2
   exit 1

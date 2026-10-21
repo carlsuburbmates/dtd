@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 20 October 2026 (documentation map refreshed; product synthesis remains governed by linked sources)
+**Reconciled:** 21 October 2026 (R2 release reconciliation added; product synthesis remains governed by linked sources)
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -25,6 +25,7 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | [DTD_CODEX_CURRENT_REALITY_AUDIT.md](DTD_CODEX_CURRENT_REALITY_AUDIT.md) | Dated independent evidence for the 20 October baseline and R1 readiness | Reviewing this audit snapshot |
 | [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) | Deduplicated P0–P3 findings mapped to roadmap stages | Prioritizing fixes without creating parallel issue tracking |
 | [DTD_ROADMAP_RECONCILIATION.md](DTD_ROADMAP_RECONCILIATION.md) | R-stage mapping to existing completion plans, findings and decisions | Reconciling existing plans |
+| [R2_RELEASE_RECONCILIATION.md](R2_RELEASE_RECONCILIATION.md) | Exact merged main SHA, developer Cloud Run revisions, checks, safety flags, scheduler state and recovery evidence | Reviewing R2 consolidation and sandbox deployment |
 | [DTD_GOVERNANCE_SYNC_EVIDENCE.md](DTD_GOVERNANCE_SYNC_EVIDENCE.md) | ZIP integrity, repository comparison and governance review handoff | Reviewing governance synchronization |
 | [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) | Exact DF-043 commit/build/revision, sandbox suppression checks, identity verification and R1 gate | Reviewing developer release evidence |
 | [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md) | Bounded synthetic fixture and temporary Scheduler cleanup record | Verifying sandbox fixture cleanup |

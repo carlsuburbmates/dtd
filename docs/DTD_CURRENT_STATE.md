@@ -33,6 +33,10 @@
 - **R1 scheduler contract:** the master mandate requires inspection of Scheduler state and safety but does not require trainer ingestion to be enabled for R1 exit. Keep `dtd-trainer-ingest-cron` **PAUSED**. DF-044 and DF-045 are R4 dependencies for any later activation, not grounds to restart the whole roadmap.
 - **Firebase access:** authenticated Firebase CLI principal can list the project, but Hosting site inventory returns 403 (`firebasehosting.sites.list` missing or not granted). The deployed developer web target is Cloud Run, so this does not block R1. Firebase Hosting inventory is `NOT_VERIFIED`.
 
+## R2 sandbox release refresh — 21 October 2026
+
+R2 PR #12 and safety follow-up PR #15 are merged; exact main is `f24cc49723840028bbe4ea35f6787eed03c440ba`. Developer API `dtd-api-dev-00055-kbm` and web `dtd-web-dev-00023-phd` serve 100% in Cloud Run. API health/database, explicit checkout/self-healing disabled flags, web asset hash and browser render passed. Trainer-ingest remains PAUSED; engine-tick configuration is enabled on `profile=routine` and was inspected without invocation. No fixture, provider message, live payment, production service or production data was touched. The exact images, checks, R1/R4–R12 finding assignments and conditional recovery procedure are in `R2_RELEASE_RECONCILIATION.md`.
+
 ## Live refresh — 7 October 2026
 
 - The developer sandbox now serves Cloud Run revision `dtd-api-dev-00021-dfd` at 100% traffic using the dedicated runtime service account `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`; `/api/health` returned an available database. The default Compute service account is no longer the Cloud Run runtime identity. Its explicit Vertex model is `gemini-3.5-flash`, replacing the unavailable legacy default observed in the prior sandbox run. The constrained matcher uses a bounded JSON schema with automatic function calling and thinking disabled; the live M9 provider case returned non-degraded results within its five-second boundary.
