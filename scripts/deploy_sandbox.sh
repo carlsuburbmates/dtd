@@ -17,6 +17,13 @@ SERVICE_ACCOUNT="dtd-api-dev-runtime@${PROJECT_ID}.iam.gserviceaccount.com"
 SERVICE_URL="https://${SERVICE_NAME}-625222421634.${REGION}.run.app"
 PREFLIGHT_PYTHON="${DTD_PREFLIGHT_PYTHON:-.venv/bin/python}"
 
+validate_preflight_interpreter() {
+  if [ -n "${DTD_PREFLIGHT_PYTHON:-}" ] && [ ! -x "${PREFLIGHT_PYTHON}" ]; then
+    echo "DTD_PREFLIGHT_PYTHON is not executable: ${PREFLIGHT_PYTHON}" >&2
+    return 64
+  fi
+}
+
 validate_health_response() {
   HEALTH_RESPONSE="$1" python3 - <<'PY'
 import json
@@ -67,10 +74,7 @@ fi
 
 # 1. Run the mandatory local preflight suite.
 echo "🔍 [1/3] Running preflight code compilation and tests..."
-if [ -n "${DTD_PREFLIGHT_PYTHON:-}" ] && [ ! -x "${PREFLIGHT_PYTHON}" ]; then
-  echo "DTD_PREFLIGHT_PYTHON is not executable: ${PREFLIGHT_PYTHON}" >&2
-  exit 64
-fi
+validate_preflight_interpreter
 python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py
 node scripts/check_prelaunch_release_gate.js
 if [ -x "${PREFLIGHT_PYTHON}" ]; then

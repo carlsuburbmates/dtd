@@ -35,9 +35,12 @@ if ! grep -Fq 'DTD_PREFLIGHT_PYTHON' "${repo_root}/scripts/deploy_sandbox.sh" ||
   exit 1
 fi
 
-invalid_python_output="$(DTD_PREFLIGHT_PYTHON="${repo_root}/does-not-exist" bash "${repo_root}/scripts/deploy_sandbox.sh" 2>&1 || true)"
-if ! grep -Fq 'DTD_PREFLIGHT_PYTHON is not executable' <<<"${invalid_python_output}"; then
-  echo "Sandbox deployment must reject an invalid preflight interpreter before deployment" >&2
+set +e
+invalid_python_output="$(DTD_PREFLIGHT_PYTHON="${repo_root}/does-not-exist" bash -c 'source "$1"; validate_preflight_interpreter' _ "${repo_root}/scripts/deploy_sandbox.sh" 2>&1)"
+invalid_python_status=$?
+set -e
+if [ "${invalid_python_status}" -ne 64 ] || ! grep -Fq 'DTD_PREFLIGHT_PYTHON is not executable' <<<"${invalid_python_output}"; then
+  echo "Sandbox preflight validation must reject an invalid interpreter with status 64" >&2
   exit 1
 fi
 
