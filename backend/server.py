@@ -3193,12 +3193,7 @@ async def health_deep() -> JSONResponse:
 
     # 3. AI Service circuit status
     try:
-        degradation_events = await ai_service.get_degradation_events(db=db)
-        circuit_open = len(degradation_events) > 0
-        diagnostics["checks"]["ai_circuit"] = {
-            "status": "degraded" if circuit_open else "nominal",
-            "active_degradation_events": len(degradation_events),
-        }
+        diagnostics["checks"]["ai_circuit"] = await ai_service.get_degradation_health_summary(db=db)
     except Exception as exc:
         diagnostics["checks"]["ai_circuit"] = {"status": "unknown", "error": str(exc)}
 

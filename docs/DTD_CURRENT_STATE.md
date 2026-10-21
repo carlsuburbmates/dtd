@@ -570,11 +570,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-046 — Deep health labels recovered fallback history as active AI degradation
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R3 observability accuracy gap.
-- **Evidence:** `ai_degradation_events` contained 25 records, all `recovered=true` and `fallback_used=true`; the latest was 19 October. Twenty-three were Ops analyst inference failures and two trainer-verification scoring timeouts. `backend/server.py` treats any retained event as active degradation; `get_degradation_events()` does not filter recovered or stale records. The active matcher does not use this count as a circuit breaker.
-- **Impact/uncertainty:** operators see degraded health after fallback has recovered, and the signal mixes unrelated operations. Causes of analyst failures remain unknown; matching degradation is not evidenced.
-- **Why deferred:** the DF-043 publication-suppression defect is fixed and verified. Remaining R1 sandbox scenarios are `NOT_VERIFIED`; scheduled-ingestion reactivation alone is blocked by R4 DF-044/045. Telemetry correction remains an independent R3 task.
-- **Next action:** distinguish active/open failures from recovered history by operation and age, then add health endpoint recovery/expiry tests.
+- **Observed/status:** 21 October 2026 — **PARTIAL**, P2 R3 observability accuracy gap; local correction is independently accepted, developer-sandbox runtime confirmation remains open.
+- **Evidence:** the prior developer database had 25 records, all `recovered=true` and `fallback_used=true`; the latest was 19 October. Twenty-three were Ops analyst inference failures and two trainer-verification scoring timeouts. The previous `/health/deep` implementation counted every retained record. The corrected implementation classifies unrecovered records as actionable, excludes malformed/future/stale recovered history, and applies the existing burst and configured persistence thresholds independently by operation. Tests cover stale history, per-operation thresholds, configured-window boundaries, unrecovered failures, and endpoint wiring. The exact source delta passed independent review; targeted AI tests passed 28/28 and the endpoint test passed 1/1.
+- **Impact/uncertainty:** source behavior is corrected, but the developer runtime has not yet been updated and checked. The root cause of historical analyst fallback events remains unknown; no matching degradation is evidenced.
+- **Why partial:** runtime health output must be confirmed after deploying the exact accepted commit to the developer sandbox.
+- **Next action:** complete normal reviewed branch integration and developer-sandbox deployment; verify `/health/deep` and retain ingestion PAUSED.
 
 ### DF-047 — Support case reply and closure lack an operator-facing Ops workflow
 

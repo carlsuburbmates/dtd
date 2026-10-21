@@ -799,7 +799,7 @@ def test_engine_tick_partial_error_and_consecutive_failure_tracking():
     asyncio.run(_test())
 
 
-def test_health_deep_scheduler_outcome_and_threshold():
+def test_health_deep_scheduler_outcome_and_threshold(monkeypatch):
     async def _test():
         now_dt = datetime.now(timezone.utc)
         recent_iso = now_dt.isoformat()
@@ -811,11 +811,18 @@ def test_health_deep_scheduler_outcome_and_threshold():
         ])
         orig_db = server.db
         server.db = _MockDB(system_state=mock_coll)
+        ai_summary = {"status": "nominal", "active_degradation_events": 0, "active_operations": 0}
+
+        async def _health_summary(*, db=None):
+            return ai_summary
+
+        monkeypatch.setattr(server.ai_service, "get_degradation_health_summary", _health_summary)
 
         resp = await server.health_deep()
         data = json.loads(resp.body.decode("utf-8"))
         assert data["checks"]["scheduler"]["status"] == "fresh"
         assert data["checks"]["scheduler"]["threshold_s"] == 750
+        assert data["checks"]["ai_circuit"] == ai_summary
 
         # Case 2: Fresh but partial_error -> must be failing_or_degraded!
         mock_coll.rows = [

@@ -21,7 +21,7 @@ Reliability and Governance:
 from __future__ import annotations
 
 import asyncio
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 import json
 import logging
@@ -258,6 +258,103 @@ STALE_DEGRADATION_MAX_AGE_S = int(os.environ.get("AI_STALE_DEGRADATION_MAX_AGE_S
 # Backwards compatibility aliases
 DEGRADATION_WINDOW_S = AI_FALLBACK_BURST_WINDOW_S
 SUSTAINED_DEGRADATION_THRESHOLD = AI_FALLBACK_BURST_THRESHOLD
+
+
+def summarize_degradation_health(
+    events: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Summarize actionable AI failures by operation, excluding stale recovery history."""
+    now_dt = now or datetime.now(timezone.utc)
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+
+    operation_stats: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "unrecovered_events": 0,
+            "recovered_fallback_events_1h": 0,
+            "recovered_fallback_events_persistent_window": 0,
+            "latest_event_age_s": None,
+        }
+    )
+
+    for event in events:
+        operation = str(event.get("operation") or "unknown")
+        recovered_fallback = bool(event.get("recovered", True) and event.get("fallback_used", True))
+        timestamp = str(event.get("timestamp") or event.get("created_at") or "").strip()
+        age_s: Optional[float] = None
+        if timestamp:
+            try:
+                event_dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                if event_dt.tzinfo is None:
+                    event_dt = event_dt.replace(tzinfo=timezone.utc)
+                candidate_age = (now_dt - event_dt).total_seconds()
+                if candidate_age >= -60:
+                    age_s = max(0.0, candidate_age)
+            except (TypeError, ValueError, OverflowError):
+                age_s = None
+
+        stats = operation_stats[operation]
+        if not recovered_fallback:
+            # Unrecovered failures remain actionable even if the timestamp is missing or old.
+            stats["unrecovered_events"] += 1
+            if age_s is not None and (
+                stats["latest_event_age_s"] is None or age_s < stats["latest_event_age_s"]
+            ):
+                stats["latest_event_age_s"] = int(age_s)
+            continue
+
+        # A recovered event needs trustworthy, recent timing evidence to affect health.
+        if age_s is None or age_s > STALE_DEGRADATION_MAX_AGE_S:
+            continue
+        if age_s <= AI_FALLBACK_PERSISTENT_WINDOW_S:
+            stats["recovered_fallback_events_persistent_window"] += 1
+        if age_s <= AI_FALLBACK_BURST_WINDOW_S:
+            stats["recovered_fallback_events_1h"] += 1
+        if stats["latest_event_age_s"] is None or age_s < stats["latest_event_age_s"]:
+            stats["latest_event_age_s"] = int(age_s)
+
+    operations = []
+    active_events = 0
+    active_operations = 0
+    recent_recovered_events = 0
+    for operation, stats in sorted(operation_stats.items()):
+        burst_count = stats["recovered_fallback_events_1h"]
+        persistent_count = stats["recovered_fallback_events_persistent_window"]
+        unrecovered_count = stats["unrecovered_events"]
+        if not (unrecovered_count or persistent_count):
+            continue
+        is_active = (
+            unrecovered_count > 0
+            or burst_count >= AI_FALLBACK_BURST_THRESHOLD
+            or persistent_count >= AI_FALLBACK_PERSISTENT_THRESHOLD
+        )
+        recent_recovered_events += persistent_count
+        if is_active:
+            active_operations += 1
+            active_events += unrecovered_count + persistent_count
+        operations.append(
+            {
+                "operation": operation,
+                "status": "degraded" if is_active else "nominal",
+                **stats,
+            }
+        )
+
+    return {
+        "status": "degraded" if active_operations else "nominal",
+        "active_degradation_events": active_events,
+        "active_operations": active_operations,
+        "recent_recovered_fallback_events": recent_recovered_events,
+        "operations": operations,
+    }
+
+
+async def get_degradation_health_summary(db: Optional[Any] = None) -> Dict[str, Any]:
+    """Return current health classification from persisted or in-memory events."""
+    events = await get_degradation_events(limit=MAX_DEGRADATION_EVENTS, db=db)
+    return summarize_degradation_health(events)
 
 
 async def get_ops_degradation_cases(
