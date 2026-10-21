@@ -53,13 +53,26 @@ REPO_ROOT="${repo_root}" python3 - <<'PY'
 import os
 import pathlib
 import re
+import tempfile
 
 pattern = r"""/(?:assets/index|static/js/main)[^\"]*\.js"""
 sample = '<script type="module" src="/assets/index-A1b2C3.js"></script>'
 match = re.search(pattern, sample)
 assert match and match.group(0) == "/assets/index-A1b2C3.js", match
-index_html = pathlib.Path(os.environ["REPO_ROOT"]) / "frontend/build/index.html"
-assert index_html.is_file(), f"Expected built index at {index_html}"
+script = pathlib.Path(os.environ["REPO_ROOT"]) / "scripts/deploy_sandbox_frontend.sh"
+assert 'pathlib.Path(os.environ["REPO_ROOT"]) / "frontend/build/index.html"' in script.read_text()
+with tempfile.TemporaryDirectory() as temporary_root:
+    index_html = pathlib.Path(temporary_root) / "frontend/build/index.html"
+    index_html.parent.mkdir(parents=True)
+    index_html.write_text(sample)
+    original_cwd = pathlib.Path.cwd()
+    os.chdir(tempfile.gettempdir())
+    try:
+        built_html = (pathlib.Path(temporary_root) / "frontend/build/index.html").read_text()
+    finally:
+        os.chdir(original_cwd)
+    built_match = re.search(pattern, built_html)
+    assert built_match and built_match.group(0) == "/assets/index-A1b2C3.js", built_match
 print("Sandbox frontend bundle parser: PASS")
 PY
 
