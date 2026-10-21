@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Mail, Phone, Globe, MapPin, ShieldCheck, ArrowRight, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
 import { extractPublicMonetizationPolicy, resolvePublicMonetizationCopy } from "@/lib/publicPolicy";
@@ -7,6 +7,48 @@ import { toast } from "sonner";
 import { PublicFooter, PublicHeader } from "@/components/PublicChrome";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+
+const BILLING_AUTH_STORAGE_PREFIX = "dtd-trainer-billing-auth:";
+
+function readStoredClaimAuth(trainerId) {
+    if (!trainerId || typeof window === "undefined") return "";
+    try {
+        const parsed = JSON.parse(sessionStorage.getItem(`${BILLING_AUTH_STORAGE_PREFIX}${trainerId}`) || "{}");
+        return String(parsed.trainerClaimSession || "");
+    } catch (_) {
+        return "";
+    }
+}
+
+function writeStoredClaimAuth(trainerId, claimSessionToken) {
+    if (!trainerId || typeof window === "undefined") return;
+    try {
+        const existing = JSON.parse(sessionStorage.getItem(`${BILLING_AUTH_STORAGE_PREFIX}${trainerId}`) || "{}");
+        existing.trainerClaimSession = claimSessionToken;
+        sessionStorage.setItem(`${BILLING_AUTH_STORAGE_PREFIX}${trainerId}`, JSON.stringify(existing));
+    } catch (_) {}
+}
+
+function extractInitialCapsFromTrainer(t) {
+    if (!t) return null;
+    const caps = t.capabilities || {};
+    const delivery = caps.delivery_constraints?.declared_value || t.delivery_constraints || {};
+    const suburbs = caps.serviced_suburbs?.declared_value || t.serviced_suburbs || t.suburbs || t.suburb || "";
+    return {
+        specialties: caps.specialties?.declared_value || t.specialties || [],
+        service_formats: caps.service_formats?.declared_value || t.service_formats || [],
+        life_stages: caps.life_stages?.declared_value || t.life_stages || [],
+        training_philosophy: caps.training_philosophy?.declared_value || t.training_philosophy || "",
+        serviced_suburbs: Array.isArray(suburbs) ? suburbs.join(", ") : String(suburbs || ""),
+        catchment_type: caps.catchment_type?.declared_value || t.catchment_type || "specific_suburbs",
+        delivery_constraints: {
+            in_home_available: Boolean(delivery.in_home_available),
+            facility_available: Boolean(delivery.facility_available),
+            travel_distance_km: Math.min(200, Math.max(0, Number(delivery.travel_distance_km) || 0)),
+            notes: typeof delivery.notes === "string" ? delivery.notes.slice(0, 200) : "",
+        },
+    };
+}
 
 function claimErrorMessage(error) {
     const status = error?.response?.status;
@@ -66,6 +108,19 @@ const CATCHMENT_OPTIONS = [
 
 export default function TrainerDetail() {
     const { id } = useParams();
+    const [searchParams] = useSearchParams();
+    const queryClaimSession = searchParams?.get?.("claimSession") || "";
+    const [claimSessionToken, setClaimSessionToken] = useState(() => queryClaimSession || readStoredClaimAuth(id));
+
+    useEffect(() => {
+        if (id) {
+            const token = queryClaimSession || readStoredClaimAuth(id);
+            if (token && token !== claimSessionToken) {
+                setClaimSessionToken(token);
+            }
+        }
+    }, [id, queryClaimSession]);
+
     const [matchContextToken, setMatchContextToken] = useState(() => {
         try {
             return typeof window !== "undefined" ? sessionStorage.getItem("d_match_context_token") || null : null;
@@ -94,7 +149,6 @@ export default function TrainerDetail() {
     const [claimBusy, setClaimBusy] = useState(false);
     const [claimError, setClaimError] = useState("");
     const [claimComplete, setClaimComplete] = useState(false);
-    const [claimSessionToken, setClaimSessionToken] = useState("");
     const [claimStep, setClaimStep] = useState("email");
     const [claimPrefill, setClaimPrefill] = useState(null);
     const [confirmedCaps, setConfirmedCaps] = useState({
@@ -311,8 +365,9 @@ export default function TrainerDetail() {
                 claim_event_id: claimEvent.claim_event_id,
                 otp: claimCode,
             });
-            const sessionToken = response.data?.session?.token || "";
+            const sessionToken = response.data?.session?.token || response.data?.trainer_claim_session || "";
             setClaimSessionToken(sessionToken);
+            writeStoredClaimAuth(id, sessionToken);
             setTrainer((current) => current ? { ...current, claim_status: "claimed", tier: "claimed" } : current);
 
             // Fetch prefill facts for Step 2
@@ -443,10 +498,26 @@ export default function TrainerDetail() {
             setClaimCode("");
             setClaimEvent(null);
             setClaimComplete(false);
-            setClaimSessionToken("");
-            setClaimStep("email");
+            setClaimStep((claimSessionToken || readStoredClaimAuth(id)) ? "capabilities" : "email");
             setConfirmError("");
             setConfirmStatement(false);
+        }
+    };
+
+    const handleOpenEditCapabilities = () => {
+        const activeToken = claimSessionToken || queryClaimSession || readStoredClaimAuth(id);
+        const existing = extractInitialCapsFromTrainer(trainer);
+        if (existing) {
+            setConfirmedCaps(existing);
+        }
+        if (activeToken) {
+            setClaimSessionToken(activeToken);
+            setClaimStep("capabilities");
+            setClaimOpen(true);
+        } else {
+            setClaimStep("email");
+            setClaimError("Please verify your business email to manage listing capabilities.");
+            setClaimOpen(true);
         }
     };
 
@@ -554,17 +625,14 @@ export default function TrainerDetail() {
                         <div className="mt-4 flex flex-wrap gap-2.5 sm:mt-0">
                             <button
                                 type="button"
-                                onClick={() => {
-                                    setClaimStep("capabilities");
-                                    setClaimOpen(true);
-                                }}
+                                onClick={handleOpenEditCapabilities}
                                 className="btn-secondary text-xs py-2.5 px-4"
                                 data-testid="edit-capabilities-open"
                             >
                                 Edit specialties &amp; formats
                             </button>
                             <Link
-                                to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${claimSessionToken ? `&claimSession=${encodeURIComponent(claimSessionToken)}` : ""}`}
+                                to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${(claimSessionToken || readStoredClaimAuth(id)) ? `&claimSession=${encodeURIComponent(claimSessionToken || readStoredClaimAuth(id))}` : ""}`}
                                 className="btn-primary text-xs py-2.5 px-4"
                                 data-testid="trainer-billing-link"
                             >

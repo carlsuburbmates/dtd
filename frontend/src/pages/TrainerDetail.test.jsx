@@ -302,6 +302,89 @@ describe("TrainerDetail ownership claim", () => {
 
         view.cleanup();
     });
+
+    it("restores claim session on revisit and authorizes capability save and billing navigation (DF-030)", async () => {
+        sessionStorage.setItem(
+            "dtd-trainer-billing-auth:trainer_1",
+            JSON.stringify({ trainerClaimSession: "revisited-claim-token" })
+        );
+        const claimedTrainer = {
+            ...trainer,
+            claim_status: "claimed",
+            tier: "core",
+            specialties: ["puppy_training"],
+            service_formats: ["in_home"],
+        };
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1" ? claimedTrainer : { public_matching_enabled: false },
+        }));
+        api.post.mockResolvedValueOnce({ data: { ok: true, capabilities: { specialties: { basis: "trainer_declaration" } } } });
+
+        const view = renderDetail();
+        await settle();
+
+        // 1. Verify billing navigation retains stored claim session
+        const billingLink = view.container.querySelector("[data-testid='trainer-billing-link']");
+        expect(billingLink.getAttribute("href")).toContain("claimSession=revisited-claim-token");
+
+        // 2. Click edit specialties & formats
+        act(() => {
+            view.container.querySelector("[data-testid='edit-capabilities-open']").click();
+        });
+        await settle();
+
+        // Form opens directly in capabilities step with preloaded saved values
+        expect(view.container.querySelector("[data-testid='claim-capabilities-step']")).not.toBeNull();
+        const puppyCheck = view.container.querySelector("[data-testid='claim-specialty-puppy_training']");
+        expect(puppyCheck.checked).toBe(true);
+
+        // 3. Confirm and save
+        const confirmCheck = view.container.querySelector("[data-testid='claim-confirm-statement']");
+        const confirmBtn = view.container.querySelector("[data-testid='claim-confirm-submit']");
+        act(() => {
+            confirmCheck.click();
+        });
+        await act(async () => {
+            confirmBtn.click();
+        });
+        await settle();
+
+        // Verify save request sent restored claim session header
+        expect(api.post).toHaveBeenCalledWith(
+            "/trainers/trainer_1/capabilities/confirm",
+            expect.objectContaining({ confirmation_statement: true }),
+            expect.objectContaining({ headers: { "X-Trainer-Claim-Session": "revisited-claim-token" } })
+        );
+
+        view.cleanup();
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("requires owner verification before editing when revisit lacks active claim session (DF-030)", async () => {
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+        const claimedTrainer = { ...trainer, claim_status: "claimed", tier: "core" };
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1" ? claimedTrainer : { public_matching_enabled: false },
+        }));
+
+        const view = renderDetail();
+        await settle();
+
+        // Billing link does not include an unauthorized token
+        const billingLink = view.container.querySelector("[data-testid='trainer-billing-link']");
+        expect(billingLink.getAttribute("href")).not.toContain("claimSession=");
+
+        // Clicking edit prompts the owner to verify ownership first
+        act(() => {
+            view.container.querySelector("[data-testid='edit-capabilities-open']").click();
+        });
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='claim-email']")).not.toBeNull();
+        expect(view.container.textContent).toContain("Please verify your business email to manage listing capabilities");
+
+        view.cleanup();
+    });
 });
 
 describe("TrainerDetail matching enquiry delivery", () => {
