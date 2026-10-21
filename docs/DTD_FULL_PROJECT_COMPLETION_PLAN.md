@@ -11,7 +11,7 @@
 - R1 runtime acceptance was DONE WITH NAMED BLOCKED FOLLOW-UPS on API revision `dtd-api-dev-00054-rvl` before R2 deployment. Its synthetic webhook, claim success/negative cases, privacy denial, suppression, delisting, fraud, support intake/concurrency/closure and protected Ops have scenario outcomes and cleanup evidence. DF-051 and positive trainer/privacy/publication journeys remain R5; acquisition-dedup regression is required in R4 before activation; notifier fallback and scoped obligation completeness remain R7; provider-originated webhook verification and webhook-enabled recovery remain R3. Conditional rollback to `00059-hex` was rehearsed and the service restored to `00054-rvl`; ingestion remains PAUSED under the separate R4 gate.
 - DF-038 source retirement and developer passcode rotation are remotely integrated in the accepted R2 stack. R1 permits ingestion to remain PAUSED; DF-044/045 remain separate R4 activation dependencies.
 - The targeted R1 release evidence and cleanup record are [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) and [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md).
-- Roadmap execution is sequential: R0–R2 are complete, R3 is active and PARTIAL, and R4 must not begin before R3 exits. Current developer API revision, R3 review gaps and recovery limits are maintained in [R3_RELEASE_FOUNDATION.md](R3_RELEASE_FOUNDATION.md) and [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md). DF-046 correction and sandbox parity are accepted; safe default-branch integration and remaining R3 provider/recovery gates are pending.
+- Roadmap execution is sequential: R0–R2 are complete and R3 is finishing its final dependency follow-up. DF-046, PR #17 integration/main CI and Cloud Run sandbox identity are accepted. Current evidence is in [R3_RELEASE_FOUNDATION.md](R3_RELEASE_FOUNDATION.md) and [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md). The owner requested a handover after current work; do not start R4 in this session.
 - Per owner direction, R0–R8 end in delivery of the independently verified developer sandbox and evidence packet for owner audit. R9 production work is separate and requires that audit plus specific authority; R10–R12 need post-release evidence. See [CDR-026](DTD_CONFLICT_AND_DECISION_REGISTER.md).
 
 ## Evidence carried forward from 7 October
@@ -53,8 +53,8 @@ The pre-production delivery is complete only when R0–R8 and their applicable o
 
 ## Immediate active sequence
 
-1. Continue R3 only: DF-046 commit `9dd53ed` is independently accepted and deployed; five live API/Ops scenarios passed with 14 fixtures cleaned. Reconcile the remaining R3 provider recovery/alert controls and safe default-branch integration/alert-rescan effects. Keep the ingestion job PAUSED and do not invoke engine-tick.
-2. Reconcile remaining R3 provider recovery/alert evidence, dependency/default-branch integration, and safe deployment effects. Use Cloud Run `dtd-api-dev` + `dtd-web-dev` with Atlas `dtd_sandbox` as the documented developer sandbox; never use the repository's production Firebase defaults for sandbox deployment.
+1. Finish R3 follow-redirects integration/rescan, then record the accepted checkpoint and hand over. DF-046 and the original five dependency alerts are resolved; retain the two newly discovered alerts until rescan proves closure.
+2. CDR-027 confirms Cloud Run `dtd-api-dev` + `dtd-web-dev` with Atlas `dtd_sandbox` as the final developer sandbox. Firebase Hosting is production-only. Preserve provider work at R4/R7/R9, and keep ingestion PAUSED.
 3. After an explicit R3 exit checkpoint, start R4; then proceed R5, R6, R7 and R8 in order. Do not skip unfinished work: assign newly found items to an existing stage or the To Do register and carry them forward.
 4. At R8, deliver the full verified sandbox and evidence packet to the owner for audit. Do not start R9 or deploy production before that audit and separate owner authority.
 
@@ -64,7 +64,8 @@ This is a working completion ledger, not a claim that every repository statement
 
 | Finding(s) | Phase | State | Completion evidence still required |
 | --- | --- | --- | --- |
-| DF-001, DF-007 | 1, 7 | OPEN | Retire/confirm obsolete release-hosting surfaces after an owner-approved production inventory; do not change DNS or production hosting during sandbox work. |
+| DF-001 | 1, 7 | OPEN | Provider credential/recovery controls remain assigned to R4/R7/R9; preserve their separate authority gates. |
+| DF-007 | 1, 7 | PARTIAL | Canonical production routing and Vercel disconnection are accepted at R3; `.com` ownership remains conditional research at R9 only if a production domain change makes it relevant. |
 | DF-003, DF-011, DF-020 | 3 | PARTIAL | The isolated `dtd-web-dev` frontend deploys the guided path, has browser-submitted result/profile evidence, and its bundle calls only the sandbox API. Only the confirmation-gated browser protected-enquiry submission remains. |
 | DF-004, DF-008 | 2, 5 | OPEN | Controlled SEO publication and attribution evidence; preserve the fail-closed legacy corpus until evidence supports a disposition. |
 | DF-005 | 5, 7 | OPEN | No-charge payment-provider acceptance only after the owner authorises commercial testing. |

@@ -235,3 +235,10 @@
 - **Rationale:** the strategic roadmap combines pre-release engineering/product stages with outcomes that can only be measured after release. The owner receives the complete sandbox at the R8 boundary without false claims about future business outcomes.
 - **Supersedes:** any interpretation that R9 production can precede owner audit of the final R8 sandbox, or that R10–R12 must be claimed complete before delivering the sandbox.
 - **Affected:** end-to-end roadmap, execution register, full project completion plan, R8 acceptance/handoff, R9 authority gate and post-release measurement stages.
+
+## CDR-027 — Cloud Run is the developer sandbox; Firebase Hosting is production-only
+
+- **Date/status:** 22 October 2026 — explicit owner clarification, confirmed against provider state.
+- **Decision:** Deliver R0–R8 on Cloud Run `dtd-web-dev` and `dtd-api-dev` in `dogtrainersdirectory-dev`, region `australia-southeast1`, with the isolated Atlas `dtd_sandbox` database. The owner-audit URL is `https://dtd-web-dev-x2kdoaemtq-ts.a.run.app/`; `/ops` is on the same origin. Firebase Hosting is used only for production `dogtrainersdirectory.com.au`, whose `/api/**` rewrite reaches production Cloud Run `dtd-api` in `gen-lang-client-0028123502`.
+- **Evidence:** the owner explicitly corrected the earlier Firebase sandbox description; current Cloud Run service and Firebase Hosting API reads agree. Dev Hosting has zero sites; the main Firebase site has only its live channel.
+- **Supersedes:** the inferred requirement to identify/provision a Firebase developer Hosting site or grant Hosting Viewer for R3. DF-053 is SUPERSEDED. No production mutation or new provider provisioning is authorized. CDR-026's sandbox handover and later production gate remain unchanged.
