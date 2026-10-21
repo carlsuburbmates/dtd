@@ -37,7 +37,7 @@ The same developer API's read-only `/api/config` returned canonical suburb catal
 
 ## 3. Recovery procedure and limits
 
-The immediately preceding revision `dtd-api-dev-00055-kbm` has `Ready=True` but is now inactive (`Active=False`, reason `Retired`); it was the pre-deployment 100% target. It contains the accepted ingestion-suppression and webhook retry fixes, but predates the R3 dependency and health-classifier changes. Treat it only as a **potential qualified emergency traffic return**: the post-deployment reactivation command has not been exercised, and the revision is not a universal known-good or current security baseline. It reintroduces the reported dependency alerts and old health interpretation. The trainer-ingestion Scheduler must remain PAUSED throughout.
+The immediately preceding revision `dtd-api-dev-00055-kbm` has `Ready=True` but is inactive while not receiving traffic (`Active=False`, reason `Retired`); it was the pre-deployment 100% target. It contains the accepted ingestion-suppression and webhook retry fixes, but predates the R3 dependency and health-classifier changes. On 22 October, the traffic-return command below was exercised: `00055-kbm` received 100% traffic, `/api/health` returned HTTP 200 with database available, ingestion remained PAUSED, then the R3 candidate was restored to 100% and health reverified. This qualifies `00055-kbm` as a bounded emergency traffic-return target under these conditions, not a universal known-good or current security baseline. It reintroduces the reported dependency alerts and old health interpretation. No fixture or business-data write was performed by the rehearsal.
 
 For a candidate startup or service regression, first inspect the exact revision and scheduler state. The bounded traffic-return command is:
 
@@ -48,7 +48,7 @@ gcloud run services update-traffic dtd-api-dev \
   --to-revisions dtd-api-dev-00055-kbm=100
 ```
 
-Then confirm `latestReadyRevisionName`, the 100% traffic target, `/api/health`, `/health/deep`, and that `dtd-trainer-ingest-cron` is still PAUSED. Restore the candidate with `--to-revisions dtd-api-dev-r3-76e8a010=100` only after the regression cause is corrected and verified. Do not invoke `dtd-engine-tick-cron`, activate ingestion, restore the old Firebase target, or route any production traffic as part of recovery. This exact traffic-return procedure has **not** been rehearsed for the new R3 revision; prior R1 rollback evidence remains separately recorded.
+Then confirm `latestReadyRevisionName`, the 100% traffic target, `/api/health`, `/health/deep`, and that `dtd-trainer-ingest-cron` is still PAUSED. Restore the candidate with `--to-revisions dtd-api-dev-r3-76e8a010=100` only after the regression cause is corrected and verified. Do not invoke `dtd-engine-tick-cron`, activate ingestion, restore the old Firebase target, or route any production traffic as part of recovery. The 22 October rehearsal and prior R1 rollback evidence are separately recorded.
 
 ## 4. Provider dependency registry (sanitised)
 
@@ -80,4 +80,4 @@ Provider status statements above distinguish a successful runtime probe from pro
 
 ## 6. R3 exit disposition
 
-R3 is **PARTIAL**. The accepted API candidate is deployed and verified in the developer Cloud Run sandbox. Completion still requires a written recovery exercise/qualification, a consolidated CI/dependency manifest, a reconciled provider recovery/alert registry, owner disposition for the active Vercel preview, and an unambiguous statement of whether Cloud Run is the intended sandbox deliverable or a separate Firebase Hosting sandbox is expected. Default-branch Dependabot alerts close only after accepted integration. No R4 work has been started, ingestion remains PAUSED, and production remains untouched.
+R3 is **PARTIAL**. The accepted API candidate is deployed and verified in the developer Cloud Run sandbox, and its bounded traffic-return path has been rehearsed. Remaining R3 gates are provider-management/recovery and independent alert gaps, owner disposition for the active Vercel preview, and an unambiguous statement of whether Cloud Run is the intended sandbox deliverable or a separate Firebase Hosting sandbox is expected. Five default-branch Dependabot alerts remain until accepted integration and rescan. No R4 work has been started, ingestion remains PAUSED, and production remains untouched.
