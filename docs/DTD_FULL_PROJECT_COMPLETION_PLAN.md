@@ -2,13 +2,13 @@
 
 **Status:** active execution plan — refreshed 21 October 2026. This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
 
-## Current verified baseline — 20 October 2026
+## Current verified baseline — 21 October 2026
 
-- R0 remains accepted only at exact SHA `1ac4138e4d82991501139298cc624be732661119`. DF-043 is a separate independently accepted commit `50f3c594d611bede8b7a610d7b09fb3fd8680f23`, deployed to developer API revision `dtd-api-dev-00050-7r7`; targeted tests and bounded live suppression/cleanup scenarios passed.
+- R0 remains accepted only at exact SHA `1ac4138e4d82991501139298cc624be732661119`. DF-043 remains the separately reviewed suppression fix at `50f3c594d611bede8b7a610d7b09fb3fd8680f23`.
 - Developer web revision uses `dtd-web-dev-runtime`; canary and promoted API-backed catalogue flow passed. DF-042 is DONE within the verified direct-permission and flow scope; inherited organization permissions remain NOT_VERIFIED.
 - Developer trainer-ingest Scheduler is PAUSED with its original schedule, OIDC, deadline, URL and `{}` body. DF-045 robots fail-open and DF-044 URL/domain source approval remain open R4 controls. The enabled engine-tick path does not invoke ingestion. Keep the ingestion job paused until those controls and source execution scope are independently resolved.
-- R1 is PARTIAL after the 21 October runtime refresh: claim, unverified-privacy rejection, suppression/republication denial and delisting/notification pass on the deployed releases; signed webhook/replay and several support/fraud/obligation/claim exception cases remain NOT_VERIFIED. The immediate pre-DF-043 revision is not a safe rollback; traffic recovery to the current DF-043 revision is prepared but unexercised.
-- DF-038 is an active R1 privileged-acceptance blocker: the current accepted branch still tracks a script literal matching the enabled developer admin secret. No further privileged Ops calls or credential changes are authorised until the owner resolves the specific rotation/source-retirement gate. R1's exit contract allows ingestion to remain PAUSED; DF-044/045 remain a separate R4 activation dependency. Production was not changed.
+- R1 is PARTIAL on current API revision `dtd-api-dev-00054-rvl` (image `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3`, source `fdd2c454`). Signed webhook retry reconciliation, claim mismatch, privacy denial, suppression, delisting, fraud confirm-spam, support concurrency/closure and protected Ops have bounded evidence. Safe live notifier failure/fallback and positive obligation resolution/completeness remain outstanding; provider-originated webhook delivery is NOT_VERIFIED. Recovery to `00059-hex` is conditional and unpractised.
+- DF-038 source retirement is accepted locally in `85bb608` and the developer passcode rotation is verified; remote integration remains an R2 task. No owner action is currently required. R1 permits ingestion to remain PAUSED; DF-044/045 remain separate R4 activation dependencies.
 - The targeted R1 release evidence and cleanup record are [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) and [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md).
 
 ## Evidence carried forward from 7 October

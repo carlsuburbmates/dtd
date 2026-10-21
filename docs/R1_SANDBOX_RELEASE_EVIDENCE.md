@@ -3,7 +3,7 @@
 **Date:** 21 October 2026
 **Frozen baseline:** R0 `1ac4138e4d82991501139298cc624be732661119`
 **Accepted delta:** DF-043 `50f3c594d611bede8b7a610d7b09fb3fd8680f23` (parent is frozen R0)
-**Developer API:** `dtd-api-dev-00059-hex`, 100% traffic; image `sha256:891a4abb9f4119a13579a76a4b9269414bc1f30a87cf71f99acf200831bbbfe9`, built from `e207dbef8472e89be208ca6be0e631d4e72649e9`
+**Developer API:** `dtd-api-dev-00054-rvl`, 100% traffic; image `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3`, built from `fdd2c45431dfeccf405a14ebdb46b45d545fa6ca`
 **Developer web:** `dtd-web-dev-webidentity`, 100% traffic
 
 ## Code review and build
@@ -24,6 +24,14 @@
 - Current revision `dtd-api-dev-00059-hex` is Ready at 100% with image `sha256:891a4abb9f4119a13579a76a4b9269414bc1f30a87cf71f99acf200831bbbfe9`. `RESEND_WEBHOOK_SECRET` is pinned to developer Secret Manager version 2. Generated version 1 was disabled after candidate checks.
 - The database has unique index `id_1`. One valid synthetic signed event returned HTTP 200; its replay returned HTTP 200 with `duplicate: true`, while exactly one row remained. Tampered-body and missing-header requests returned HTTP 401. Cleanup deleted one event and a direct query confirmed zero remained.
 - Resend's authenticated dashboard showed no webhook endpoints. Provider-originated delivery and downstream provider retry behavior are therefore `NOT_VERIFIED`; these checks establish the signed API path and database idempotency only.
+
+### Targeted retry-reconciliation correction
+
+- PR #13 review identified a partial-write case: the webhook receipt could be stored before the notification status update, causing a legitimate retry to be acknowledged as a duplicate without finishing the notification update.
+- Commit `fdd2c45431dfeccf405a14ebdb46b45d545fa6ca` reconciles notification state from a persisted receipt on retry, validates receipt identity and payload, prevents an older terminal event from overwriting a newer state, and fails closed with HTTP 503 for ambiguous legacy receipt keys.
+- Independent delta review: **ACCEPT**. Targeted tests: **20 passed** (`tests/test_ops_workflow_reconciliation.py` and `tests/test_resend_webhook_idempotency_index.py`); `git diff --check` passed.
+- Cloud Build `a96fab06-c09c-4637-85f7-7f69787851ac` succeeded; image digest is `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3`. Current revision `00054-rvl` is Ready at 100%. Its effective runtime configuration matches the previous revision, including runtime identity and secret references.
+- On `00054-rvl`, signed synthetic delivery updated the notification to `delivered`; replay returned `duplicate=true` with one receipt. Invalid signature returned HTTP 401 without a receipt. Direct database queries after cleanup found zero synthetic receipt and notification rows.
 
 ## Bounded live suppression verification
 
@@ -50,29 +58,51 @@ The original trainer-ingest job is currently verified `PAUSED`; original URL, `{
 
 ## Rollback
 
-Current API revision `dtd-api-dev-00059-hex` serves the reviewed `e207dbef` image and is Ready at 100%. The corrected-code recovery target `dtd-api-dev-00055-mez` carries the same `50f3c594` suppression fix and active admin passcode version 3, but has no Resend webhook signing secret; webhook requests fail closed there. Revisions `00049` and `00027` are not safe rollback targets because they predate DF-043; their stale direct tags were removed. To restore corrected API code after a later regression, assign 100% to `dtd-api-dev-00055-mez` in `australia-southeast1` with `gcloud run services update-traffic dtd-api-dev --project=dogtrainersdirectory-dev --region=australia-southeast1 --to-revisions=dtd-api-dev-00055-mez=100`, then verify health, database availability, image digest, suppression behavior, Ops authentication and expected webhook fail-closed behavior. The traffic-update procedure was exercised during promotions, but rollback to `00055` itself was not. Overall rollback readiness is **PARTIAL** pending that controlled recovery exercise.
+Current API revision `dtd-api-dev-00054-rvl` serves reviewed commit `fdd2c45` and is Ready at 100%. Previous revision `dtd-api-dev-00059-hex` carries DF-043 suppression, the unique receipt index and the same runtime configuration, but predates the retry-reconciliation correction. It is a **conditional emergency recovery target only** while trainer-ingest remains paused and no Resend webhook endpoint is configured; it is not fully known-good for webhook processing. Revisions `00049` and `00027` predate DF-043 and are unsafe rollback targets. If recovery is required, assign 100% to `dtd-api-dev-00059-hex` in `australia-southeast1` with `gcloud run services update-traffic dtd-api-dev --project=dogtrainersdirectory-dev --region=australia-southeast1 --to-revisions=dtd-api-dev-00059-hex=100`, then verify revision/image, health and database, DF-043 suppression, Ops authentication, paused ingestion and absence of a Resend endpoint. Restore `00054-rvl` after the incident is resolved and webhook reconciliation is confirmed. The traffic switch command was exercised during promotion; rollback to `00059` has not been rehearsed. Recovery readiness remains **PARTIAL**.
 
 ## 21 October targeted runtime acceptance refresh
 
-The initial checks used API revision `dtd-api-dev-00050-7r7`; the current refresh confirms `dtd-api-dev-00059-hex` and web revision `dtd-web-dev-webidentity`, Ready on 100% developer traffic. `/api/health` and `/` returned HTTP 200. The API image is source-verified to local reviewed commit `e207dbef`; trainer fixtures used the Resend test sink only and were removed. No production action occurred.
+The current refresh confirms API revision `dtd-api-dev-00054-rvl` and web revision `dtd-web-dev-webidentity`, Ready on 100% developer traffic. `/api/health` and `/` returned HTTP 200. The API image was built from reviewed commit `fdd2c45`. All temporary application records were removed. One support email used Resend's documented test sink; its provider-side test metadata remains. No production action occurred.
 
 | Scenario | Result | Runtime evidence |
 |---|---|---|
 | API/web basic compatibility | **DONE** | API health/database and web root returned HTTP 200. |
-| SR-01 signed Resend webhook, replay and duplicate idempotency | **DONE in developer sandbox; provider delivery NOT_VERIFIED** | On current revision `00059`, the unique event index exists; first valid synthetic delivery returned HTTP 200, replay returned `duplicate: true`, and only one row persisted. Tampered body and missing headers returned HTTP 401. Cleanup deleted the event and a direct query confirmed zero remain. The authenticated Resend dashboard showed no webhook endpoints, so no provider-originated event was tested. |
-| Unsigned/tampered Resend webhook negative paths | **DONE** | On the current configured developer candidate, missing signature headers and a body altered after signing returned HTTP 401 and created no event row. This is fail-closed and complements the signed/replay check. |
+| SR-01 signed Resend webhook, replay and duplicate idempotency | **DONE for synthetic API path; provider delivery NOT_VERIFIED** | On `00054-rvl`, signed delivery updated the synthetic notification to `delivered`; replay returned `duplicate=true`; one receipt remained. Cleanup left zero synthetic receipt or notification rows. No provider endpoint is configured. |
+| SR-02 durable receipt recovery after notification-write failure | **DONE locally; live failure injection NOT_VERIFIED** | Regression tests inject notification update failure after receipt persistence, then verify a retry reconciles state. Live sandbox verified successful delivery/replay and invalid-signature rejection; no safe live failure injection was available. |
+| Signed event ordering and legacy receipt ambiguity | **DONE locally** | Targeted regression suite verifies stale terminal events do not overwrite newer state and ambiguous legacy receipt keys fail closed. |
+| Unsigned/tampered Resend webhook negative paths | **DONE in developer sandbox** | Invalid signature returned HTTP 401 and created no receipt; cleanup confirmed zero remain. |
 | Ordinary trainer claim and delivery | **DONE** | Browser claim on current web/API reached “Identity claimed”; `claim_events` reached `verified`, trainer claim/tier persisted, start/verify audit rows existed, and Resend returned HTTP 200 with provider message ID. |
-| Claim exception cases (invalid/expired/replayed challenge) | **NOT_VERIFIED** | Current deployment was not exercised for these negative challenge cases. |
+| Claim exception: valid address does not match listing | **DONE in developer sandbox** | Synthetic mismatch returned HTTP 403, wrote one `needs_review` claim event with mismatch reason, and created no notification; fixture and event were removed and verified absent. |
 | Privacy request without trusted subject proof | **DONE** | Authenticated synthetic `authorise_scrub` returned HTTP 403; request document was byte-for-byte unchanged and no case audit row was written. |
-| Verified privacy scrub / positive-resolution completion | **NOT_VERIFIED** | No trusted synthetic subject-verification flow was available; no scrub was attempted. |
+| Verified privacy scrub / positive-resolution completion | **NOT_VERIFIED; mapped to R5** | No trusted synthetic subject-verification flow was available; no scrub was attempted. |
 | Compliance suppression and attempted republication | **DONE** | Synthetic public trainer was suppressed; authoritative delisted identity was written, public API returned 404, matching held submission approval returned HTTP 403 and stayed held, and suppression audit evidence existed. |
 | Trainer delisting, notification and public removal | **DONE** | Synthetic trainer delist returned HTTP 200; trainer was inactive/unpublished, authoritative suppression row and audit were present, public API returned 404, and test-sink notification was recorded `sent` with HTTP 200/provider ID. |
-| Fraud quarantine release/spam confirmation | **NOT_VERIFIED** | No live synthetic fraud case was run on this revision. |
-| SR-04 / CF-04 support concurrency, delivery failure/fallback and specialised closure | **NOT_VERIFIED** | Not rerun against current revision; the live fixture must cover concurrency, notifier failure/fallback and closure evidence. |
-| Durable obligations completeness and positive terminal resolution | **NOT_VERIFIED** | Code tests remain accepted R0 evidence; no current-revision synthetic Ops obligation lifecycle was run. |
-| Protected Ops authentication / DF-038 | **DONE in developer runtime; source integration PARTIAL** | No passcode returned HTTP 401. Developer Secret Manager version 3 returned HTTP 200; the previous version-2 passcode returned HTTP 401. Current revision `00059` pins version 3; version 2 is disabled. Synthetic auth-limiter state was deleted and verified absent. Fail-closed runner retirement is independently accepted in local commit `85bb608`, but awaits remote integration; historical Git retains the disabled value. |
+| Fraud quarantine confirm-spam negative path | **DONE in developer sandbox** | Synthetic quarantined intro returned HTTP 200 with blacklisted state and one Ops audit row; no notification was created. Fixture and auth-limiter state were removed and verified absent. |
+| Support reply concurrency and idempotency | **DONE in developer sandbox** | Five concurrent duplicate operator replies resulted in one outbound dispatch, one persisted message, one notification and one audit row. Destination was Resend's test sink. All application fixture rows were removed and verified absent. |
+| Support reply delivery failure/fallback | **NOT_VERIFIED; mapped to R7** | Local mocked failure coverage exists; live safe failure injection is unavailable. No real recipient was contacted and no notifier credentials were changed. |
+| Specialised support closure | **DONE in developer sandbox** | Synthetic thread closed with a truthful synthetic note, resolved state and one Ops audit row; all fixture rows were removed and verified absent. |
+| Durable obligations completeness and positive terminal resolution | **NOT_VERIFIED; mapped to R7** | Only local mocked evidence exists. No bounded per-fixture live sync path was available; broad engine-tick execution was avoided. |
+| Protected Ops authentication / DF-038 | **DONE in developer runtime; remote source integration pending R2** | No passcode returned HTTP 401; current developer passcode returned HTTP 200; previous version was rejected. Synthetic auth-limiter state was removed. Fail-closed runner retirement is independently accepted in local commit `85bb608`; historical Git retains the disabled value. |
 
-R1 remains **PARTIAL**. The R1 exit contract permits ingestion explicitly **PAUSED**. SR-01 synthetic API acceptance is complete on the developer sandbox; actual Resend provider delivery is `NOT_VERIFIED`. Claim exceptions, positive verified privacy, fraud, support, and obligations also remain `NOT_VERIFIED`. DF-044/045 remain the separate R4 acquisition-activation dependency. This checkpoint does not reopen DF-042/043 or the accepted R0 code review.
+### Required SR/CF scenario disposition on the current release
+
+The accepted R0 code matrix remains accepted; the table below records current developer-runtime coverage and carries forward only evidence for paths unchanged by `fdd2c45`. **PARTIAL** means some subcases passed but the full scenario is not runtime-accepted.
+
+| Scenario | Status | Current evidence and remaining subcase |
+|---|---|---|
+| SR-01 — Resend webhook delivery/status reconciliation | **PARTIAL** | Synthetic signed delivery, successful replay, signature denial and database cleanup passed on `00054-rvl`; write-failure retry recovery passed in local regression tests but was not injected live. Provider-originated delivery is `NOT_VERIFIED` because no endpoint is configured. |
+| SR-02 — Held trainer submission review | **PARTIAL** | Live held-submission suppression denial passed; positive review/publication with statutory consents, provenance and ABN rules was not rerun on this release. |
+| SR-03 — Claim adjudication | **PARTIAL** | Prior ordinary claim success remains applicable because `fdd2c45` changes only webhook handling; current synthetic email mismatch returned 403 without notification. Invalid/expired/replayed challenge and conflict subcases were not rerun live. |
+| SR-04 — Support intake/reply/closure | **PARTIAL** | Current live duplicate concurrency produced one dispatch; specialised closure persisted a truthful note and audit. Failure/fallback injection and full intake path lack current live evidence. |
+| SR-05 — Privacy scrub | **PARTIAL** | Current unverified-subject request returned 403 with zero mutation/audit. Positive scrub after trusted identity proof was not attempted and remains assigned to R5. |
+| SR-06 — Durable obligation reconciliation | **NOT_VERIFIED live** | Current code tests/mock evidence remain accepted; no scoped live sync, completeness scan or positive terminal resolution was run. |
+| CF-01 — Privacy proof provenance/fail closed | **PARTIAL** | Unverified scrub denial passed live; the full verified-proof and error-provenance matrix was not run live. Positive privacy flow is R5. |
+| CF-02 — Publication authority/deduplication/concurrency | **PARTIAL** | Suppression, republish denial and delisting passed live; positive publication and publication race cases were not rerun live. |
+| CF-03 — Claim proof/expiry/conflicts | **PARTIAL** | Ordinary claim evidence carries forward and current mismatch denial passed; challenge provenance, expiry and conflicting verified-owner cases were not rerun live. |
+| CF-04 — Support message concurrency/closure safeguards | **PARTIAL** | Live five-way duplicate reply and specialised closure passed; provider failure/fallback remains unverified and is assigned to R7 for safe delivery-path acceptance. |
+| CF-05 — Obligation completeness/waiting/read-only invariant | **NOT_VERIFIED live** | Local tests cover large scans, waiting states and zero writes; no bounded current-release live fixture path exists. Positive obligation resolution/completeness remains open for R7. |
+
+R1 remains **PARTIAL**. Its exit contract permits ingestion explicitly **PAUSED**, and that is the verified scheduler state. Remaining R1 blockers are live safe injection for support notification failure/fallback and a scoped live positive obligation-resolution/completeness path. Provider-originated webhook delivery is `NOT_VERIFIED`; synthetic signed API behavior is accepted. Positive privacy scrub is mapped to R5. DF-044/045 remain a separate R4 scheduler activation dependency. This checkpoint preserves DF-042/043 and the accepted R0 review.
 
 ## DF-038 credential discrepancy discovered during R1
 

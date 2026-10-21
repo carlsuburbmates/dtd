@@ -24,3 +24,15 @@ Cleanup status: **DONE** for the bounded fixture set. Exact identifiers are omit
 - No real trainer, customer, production record, live payment or production provider state was changed. The original trainer-ingest Scheduler remained paused.
 
 Cleanup status for the four workflow fixtures, synthetic auth state and webhook events: **DONE**. Provider-side test-sink message metadata is intentionally retained by Resend; application database rows and public profiles were removed and verified absent.
+
+## 21 October acceptance refresh on `dtd-api-dev-00054-rvl`
+
+- Webhook recovery fixture: the synthetic notification and its `svix-id` receipt were deleted; direct collection queries confirmed zero matching records. Invalid-signature request created no receipt.
+- Claim mismatch fixture: synthetic trainer and claim event were deleted; direct queries confirmed absent. No notification was emitted.
+- Privacy denial fixture: case, historical row copies across the scoped collections and auth-limiter key were removed; all were confirmed absent. The denied scrub had left the records unchanged before cleanup.
+- Fraud confirm-spam fixture: synthetic intro, Ops audit row and auth-limiter state were deleted and confirmed absent; no notification was created.
+- Support concurrency fixture: synthetic thread, message, notification, Ops audit row and auth-limiter state were deleted and confirmed absent. Five concurrent duplicate replies created one provider test-sink message; Resend retains provider-side test metadata only.
+- Support closure fixture: synthetic thread, audit row and auth-limiter state were deleted and confirmed absent.
+- No live failure injection, obligations sync, production record, real trainer recipient, billing operation or production configuration was touched. The original trainer-ingest Scheduler stayed PAUSED; engine-tick remained independently enabled.
+
+Cleanup status: **DONE** for all application records created in this refresh. Provider-side test-sink metadata from the single support email remains at Resend and does not contain application fixture records.
