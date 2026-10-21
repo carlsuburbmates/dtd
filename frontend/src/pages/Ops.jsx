@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp, Sparkles, MessageSquare } from "lucide-react";
 import {
     setAdminPass,
     getAdminPass,
@@ -14,6 +14,10 @@ import {
     getAttributionOversight,
     getMaintenanceMode,
     setMaintenanceMode,
+    listSupportThreads,
+    getSupportThread,
+    replySupportThread,
+    closeSupportThread,
 } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -22,6 +26,7 @@ const VIEW_ORDER = [
     "pipeline_flow",
     "attribution",
     "work_queue",
+    "support_threads",
     "matching",
     "trainer_supply",
     "seo_indexation",
@@ -32,7 +37,7 @@ const VIEW_ORDER = [
 ];
 
 const VIEW_GROUPS = [
-    { title: "Daily Operations", keys: ["overview", "work_queue", "matching", "messages"] },
+    { title: "Daily Operations", keys: ["overview", "work_queue", "support_threads", "matching", "messages"] },
     { title: "Supply & Pipeline", keys: ["trainer_supply", "pipeline_flow", "attribution", "seo_indexation"] },
     { title: "Platform & Governance", keys: ["billing_reactivation", "system_activity", "recent_changes"] },
 ];
@@ -42,6 +47,7 @@ const VIEW_LABELS = {
     pipeline_flow: "Pipeline Flow",
     attribution: "Attribution & Revenue",
     work_queue: "Work Queue",
+    support_threads: "Support Cases",
     matching: "Matching Engine",
     trainer_supply: "Trainer Supply",
     seo_indexation: "SEO & Indexation",
@@ -56,6 +62,7 @@ const PAGE_INTROS = {
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     attribution: "Joined first-party report linking acquisition sources, trainer tiers, customer introductions, and Stripe revenue.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
+    support_threads: "Review, reply to, and close first-party customer support, complaint, delisting, and privacy inquiries.",
     matching: "Monitor AI-assisted matching, search scope expansion, fallback circuit status, urgent vet triage, and outcome follow-up health.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
     seo_indexation: "Review stored suburb pages against current canonical, supply, content and robots requirements before any indexation decision.",
@@ -488,6 +495,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             value: formatShortNumber(needsReview),
             note: needsReview ? "Open the queue before moving on." : "No queue items are waiting right now.",
         },
+        support_threads: {
+            eyebrow: "Support Cases",
+            value: "Queue",
+            note: "First-party customer and trainer inquiries.",
+        },
         matching: {
             eyebrow: "Match events",
             value: formatShortNumber(matchingOversight?.total_events || 0),
@@ -568,7 +580,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                                                 >
                                                     <span className="truncate">{VIEW_LABELS[key]}</span>
                                                     <span className="shrink-0 text-[10px] font-mono opacity-80 ml-2">
-                                                        {summary.value}
+                                                        {summary?.value || ""}
                                                     </span>
                                                 </button>
                                             );
@@ -685,6 +697,10 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                                 onSelectCase={setSelectedCaseId}
                                 onRefresh={onRefresh}
                             />
+                        ) : null}
+
+                        {activeView === "support_threads" ? (
+                            <SupportThreadsView onRefresh={onRefresh} />
                         ) : null}
 
                         {activeView === "matching" ? (
@@ -3608,6 +3624,406 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                     </table>
                 </div>
             </section>
+        </section>
+    );
+}
+
+function SupportThreadsView({ onRefresh }) {
+    const [threads, setThreads] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [selectedCaseId, setSelectedCaseId] = useState(null);
+    const [selectedThread, setSelectedThread] = useState(null);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+
+    // Reply state
+    const [replyText, setReplyText] = useState("");
+    const [markStatus, setMarkStatus] = useState("awaiting_customer_reply");
+    const [replying, setReplying] = useState(false);
+
+    // Close state
+    const [closeNotes, setCloseNotes] = useState("");
+    const [closeConfirmed, setCloseConfirmed] = useState(false);
+    const [closing, setClosing] = useState(false);
+    const [actionMsg, setActionMsg] = useState("");
+
+    const loadThreads = useCallback(async () => {
+        setLoading(true);
+        setError("");
+        try {
+            const params = {};
+            if (categoryFilter !== "all") params.category = categoryFilter;
+            if (statusFilter !== "all") params.status = statusFilter;
+            const res = await listSupportThreads(params);
+            const list = res.data?.threads || [];
+            setThreads(list);
+            if (selectedCaseId && !list.some((t) => t.case_id === selectedCaseId)) {
+                setSelectedCaseId(null);
+                setSelectedThread(null);
+            }
+        } catch (err) {
+            setError(err.response?.data?.detail || "Failed to load support threads.");
+        } finally {
+            setLoading(false);
+        }
+    }, [categoryFilter, statusFilter, selectedCaseId]);
+
+    useEffect(() => {
+        loadThreads();
+    }, [loadThreads]);
+
+    const handleSelectThread = async (caseId) => {
+        setSelectedCaseId(caseId);
+        setLoadingDetail(true);
+        setActionMsg("");
+        setReplyText("");
+        setCloseNotes("");
+        setCloseConfirmed(false);
+        try {
+            const res = await getSupportThread(caseId);
+            setSelectedThread(res.data?.thread || null);
+        } catch (err) {
+            toast.error(err.response?.data?.detail || "Failed to load thread details.");
+        } finally {
+            setLoadingDetail(false);
+        }
+    };
+
+    const handleReply = async (e) => {
+        e.preventDefault();
+        if (!selectedCaseId || replyText.trim().length < 3) {
+            toast.error("Reply text must be at least 3 characters.");
+            return;
+        }
+        setReplying(true);
+        setActionMsg("");
+        try {
+            const res = await replySupportThread(selectedCaseId, {
+                reply_text: replyText.trim(),
+                mark_status: markStatus,
+            });
+            if (res.data?.ok) {
+                toast.success("Reply dispatched to customer.");
+                setActionMsg("Reply successfully dispatched.");
+                setReplyText("");
+                const detailRes = await getSupportThread(selectedCaseId);
+                setSelectedThread(detailRes.data?.thread || null);
+                loadThreads();
+            }
+        } catch (err) {
+            const msg = err.response?.data?.detail || "Failed to send reply.";
+            toast.error(msg);
+            setActionMsg(msg);
+        } finally {
+            setReplying(false);
+        }
+    };
+
+    const handleClose = async (e) => {
+        e.preventDefault();
+        if (!selectedCaseId) return;
+        if (closeNotes.trim().length < 10) {
+            toast.error("Resolution notes must be at least 10 characters.");
+            return;
+        }
+        if (!closeConfirmed) {
+            toast.error("Please confirm the verified outcome.");
+            return;
+        }
+        setClosing(true);
+        setActionMsg("");
+        try {
+            const res = await closeSupportThread(selectedCaseId, {
+                resolution_notes: closeNotes.trim(),
+                confirmed: true,
+            });
+            if (res.data?.ok) {
+                toast.success("Support case verified and closed.");
+                setActionMsg("Support case successfully closed.");
+                setCloseNotes("");
+                setCloseConfirmed(false);
+                const detailRes = await getSupportThread(selectedCaseId);
+                setSelectedThread(detailRes.data?.thread || null);
+                loadThreads();
+                if (onRefresh) onRefresh();
+            }
+        } catch (err) {
+            const msg = err.response?.data?.detail || "Failed to close support case.";
+            toast.error(msg);
+            setActionMsg(msg);
+        } finally {
+            setClosing(false);
+        }
+    };
+
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-support-view">
+            <PageHeader title="Support Cases" description={PAGE_INTROS.support_threads} />
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-[#8B9E98] uppercase">Category:</span>
+                    <select
+                        value={categoryFilter}
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
+                        data-testid="ops-support-category-filter"
+                    >
+                        <option value="all">All Categories</option>
+                        <option value="complaint">Complaint</option>
+                        <option value="delisting_request">Delisting Request</option>
+                        <option value="privacy_request">Privacy Request</option>
+                        <option value="listing_correction">Listing Correction</option>
+                        <option value="billing_question">Billing Question</option>
+                        <option value="general_inquiry">General Inquiry</option>
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-[#8B9E98] uppercase">Status:</span>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
+                        data-testid="ops-support-status-filter"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="open">Open</option>
+                        <option value="awaiting_customer_reply">Awaiting Customer Reply</option>
+                        <option value="in_progress">In Progress</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={loadThreads}
+                    className="ml-auto inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg border border-[#2A3935] bg-[#111A17] text-[#C9C2B1] hover:text-white"
+                >
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                </button>
+            </div>
+
+            {error && (
+                <div className="mt-3 p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-200 text-xs">
+                    {error}
+                </div>
+            )}
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr,1.3fr]">
+                <div className="border border-[#1E2A27] rounded-2xl bg-[#0D1412] p-3 max-h-[700px] overflow-y-auto">
+                    {loading ? (
+                        <div className="py-8 text-center text-xs font-mono text-[#8B9E98]">Loading support cases...</div>
+                    ) : threads.length === 0 ? (
+                        <div className="py-8 text-center text-xs font-mono text-[#8B9E98]">
+                            No support cases matching current filters.
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {threads.map((t) => {
+                                const isSelected = selectedCaseId === t.case_id;
+                                const isHigh = t.severity === "high";
+                                return (
+                                    <button
+                                        key={t.case_id}
+                                        type="button"
+                                        onClick={() => handleSelectThread(t.case_id)}
+                                        data-testid="ops-support-thread-row"
+                                        className={`w-full text-left p-3 rounded-xl border transition flex flex-col gap-1.5 ${
+                                            isSelected
+                                                ? "border-[#D9B36C] bg-[#1A2622]"
+                                                : "border-[#1E2A27] bg-[#111A17] hover:bg-[#16221F]"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-xs font-semibold text-[#F5F2EB] truncate">
+                                                {t.subject || "No Subject"}
+                                            </span>
+                                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full uppercase ${
+                                                isHigh ? "bg-rose-950 text-rose-300 border border-rose-800" : "bg-amber-950 text-amber-300 border border-amber-800"
+                                            }`}>
+                                                {t.category?.replace("_", " ")}
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] text-[#8B9E98] truncate">
+                                            From: {t.sender_name} ({t.sender_email})
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] font-mono text-[#667A74]">
+                                            <span>{t.case_id}</span>
+                                            <span className={`px-1.5 py-0.5 rounded ${
+                                                t.status === "resolved" || t.status === "closed"
+                                                    ? "bg-emerald-950 text-emerald-300"
+                                                    : "bg-blue-950 text-blue-300"
+                                            }`}>
+                                                {t.status}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <div className="border border-[#1E2A27] rounded-2xl bg-[#0D1412] p-4">
+                    {!selectedCaseId ? (
+                        <div className="py-16 text-center text-xs font-mono text-[#8B9E98]">
+                            Select a support case from the list to view thread details, reply, or verify closure.
+                        </div>
+                    ) : loadingDetail ? (
+                        <div className="py-16 text-center text-xs font-mono text-[#8B9E98]">Loading case detail...</div>
+                    ) : !selectedThread ? (
+                        <div className="py-16 text-center text-xs font-mono text-rose-300">Case details not found.</div>
+                    ) : (
+                        <div className="space-y-4" data-testid="ops-support-detail">
+                            <div className="border-b border-[#1E2A27] pb-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h3 className="text-sm font-semibold text-[#F5F2EB] font-serif">
+                                        {selectedThread.subject}
+                                    </h3>
+                                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#1B2824] text-[#D9B36C]">
+                                        {selectedThread.case_id}
+                                    </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#8B9E98]">
+                                    <span>Category: <strong>{selectedThread.category}</strong></span>
+                                    <span>·</span>
+                                    <span>Severity: <strong className={selectedThread.severity === "high" ? "text-rose-400" : "text-amber-400"}>{selectedThread.severity}</strong></span>
+                                    <span>·</span>
+                                    <span>Status: <strong>{selectedThread.status}</strong></span>
+                                    {selectedThread.trainer_name && (
+                                        <>
+                                            <span>·</span>
+                                            <span>Trainer: <strong>{selectedThread.trainer_name}</strong></span>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="mt-1 text-xs text-[#8B9E98]">
+                                    Sender: <span className="text-[#C9C2B1]">{selectedThread.sender_name}</span> &lt;{selectedThread.sender_email}&gt;
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                                {(selectedThread.messages || []).map((msg, idx) => {
+                                    const isCustomer = msg.sender === "customer";
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                                                isCustomer
+                                                    ? "bg-[#111A17] border-[#223530] text-[#C9C2B1]"
+                                                    : "bg-[#162722] border-[#2E4A40] text-[#E0EFEA]"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between font-mono text-[10px] text-[#8B9E98] mb-1">
+                                                <span className="font-semibold uppercase text-[#D9B36C]">
+                                                    {isCustomer ? "Customer" : "Operator"}
+                                                </span>
+                                                <span>{msg.created_at ? new Date(msg.created_at).toLocaleString() : ""}</span>
+                                            </div>
+                                            <div className="whitespace-pre-wrap">{msg.text}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {actionMsg && (
+                                <div className="p-3 rounded-xl bg-[#1B2824] border border-[#2A3935] text-xs font-mono text-[#D9B36C]">
+                                    {actionMsg}
+                                </div>
+                            )}
+
+                            {selectedThread.status !== "closed" && selectedThread.status !== "resolved" ? (
+                                <div className="space-y-4 pt-2 border-t border-[#1E2A27]">
+                                    <form onSubmit={handleReply} className="space-y-2">
+                                        <div className="text-xs font-mono font-bold text-[#F5F2EB] uppercase tracking-wider">
+                                            Operator Reply
+                                        </div>
+                                        <textarea
+                                            value={replyText}
+                                            onChange={(e) => setReplyText(e.target.value)}
+                                            placeholder="Compose official reply to sender..."
+                                            rows={3}
+                                            data-testid="ops-support-reply-input"
+                                            className="w-full bg-[#111A17] border border-[#2A3935] text-[#F5F2EB] text-xs font-sans rounded-xl p-3 focus:outline-none focus:border-[#D9B36C]"
+                                        />
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[11px] font-mono text-[#8B9E98]">Mark Status:</span>
+                                                <select
+                                                    value={markStatus}
+                                                    onChange={(e) => setMarkStatus(e.target.value)}
+                                                    className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded px-2 py-1"
+                                                >
+                                                    <option value="awaiting_customer_reply">Awaiting Customer Reply</option>
+                                                    <option value="in_progress">In Progress</option>
+                                                </select>
+                                            </div>
+                                            <button
+                                                type="submit"
+                                                disabled={replying || replyText.trim().length < 3}
+                                                data-testid="ops-support-reply-btn"
+                                                className="btn-primary text-xs px-3 py-1.5 font-mono disabled:opacity-50"
+                                            >
+                                                {replying ? "Dispatching..." : "Dispatch Reply"}
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                    <form onSubmit={handleClose} className="space-y-2 pt-3 border-t border-[#1E2A27]">
+                                        <div className="text-xs font-mono font-bold text-[#F5F2EB] uppercase tracking-wider">
+                                            Verified Case Closure
+                                        </div>
+                                        <p className="text-[11px] text-[#8B9E98] leading-normal">
+                                            Requires substantive verified outcome notes (min 10 characters). Delisting or privacy requests require underlying resolution proof.
+                                        </p>
+                                        <textarea
+                                            value={closeNotes}
+                                            onChange={(e) => setCloseNotes(e.target.value)}
+                                            placeholder="Explain verified outcome and actions taken (minimum 10 characters)..."
+                                            rows={2}
+                                            data-testid="ops-support-close-notes"
+                                            className="w-full bg-[#111A17] border border-[#2A3935] text-[#F5F2EB] text-xs font-sans rounded-xl p-3 focus:outline-none focus:border-[#D9B36C]"
+                                        />
+                                        <div className="flex items-center justify-between gap-3">
+                                            <label className="flex items-center gap-2 text-xs text-[#C9C2B1] cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={closeConfirmed}
+                                                    onChange={(e) => setCloseConfirmed(e.target.checked)}
+                                                    data-testid="ops-support-close-confirm"
+                                                    className="rounded border-[#2A3935] text-[#D9B36C] focus:ring-0"
+                                                />
+                                                <span className="text-[11px] font-mono">Confirm verified resolution</span>
+                                            </label>
+                                            <button
+                                                type="submit"
+                                                disabled={closing || closeNotes.trim().length < 10 || !closeConfirmed}
+                                                data-testid="ops-support-close-btn"
+                                                className="bg-emerald-800 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-mono disabled:opacity-50 transition"
+                                            >
+                                                {closing ? "Closing..." : "Verify & Close"}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            ) : (
+                                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-200 text-xs">
+                                    <strong>Case Resolved & Closed.</strong>
+                                    {selectedThread.resolution_notes && (
+                                        <p className="mt-1 text-[11px] text-emerald-300/80">
+                                            Notes: {selectedThread.resolution_notes}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
         </section>
     );
 }

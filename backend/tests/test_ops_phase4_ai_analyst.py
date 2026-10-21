@@ -343,6 +343,19 @@ def test_daily_budget_exhaustion_enforces_cost_safeguard(monkeypatch):
     asyncio.run(_test())
 
 
+def test_daily_budget_query_failure_fails_closed(monkeypatch):
+    async def _test():
+        db = FakeDatabase()
+        async def failing_count(*args, **kwargs):
+            raise RuntimeError("Database connection timed out")
+        db.ops_ai_investigations.count_documents = failing_count
+
+        within_budget, count, limit = await ops_analyst.check_daily_budget(db)
+        assert within_budget is False
+        assert count == limit
+    asyncio.run(_test())
+
+
 # ==============================================================================
 # 6. Manual Request Cooldown & Rate Limit Tests
 # ==============================================================================

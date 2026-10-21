@@ -8705,21 +8705,28 @@ async def create_support_inquiry(payload: SupportContactIn) -> Dict[str, Any]:
         await support_coll.insert_one(thread_doc)
 
     # Dispatch automated receipt confirmation via Resend
+    receipt_delivered = False
     try:
-        await notifications_service.notify_support_received(db, thread_doc)
+        receipt_meta = await notifications_service.notify_support_received(db, thread_doc)
+        receipt_delivered = bool(
+            isinstance(receipt_meta, dict)
+            and (receipt_meta.get("ok") is True or receipt_meta.get("status") in ("sent", "delivered"))
+        )
     except Exception:
         logger.exception("Failed sending support receipt confirmation for case_id=%s", case_id)
+        receipt_delivered = False
 
     await _audit(
         "support_inquiry_created",
         case_id,
-        after={"category": category, "severity": severity, "subject": payload.subject},
+        after={"category": category, "severity": severity, "subject": payload.subject, "receipt_delivered": receipt_delivered},
         actor="customer",
     )
     return {
         "ok": True,
         "case_id": case_id,
         "status": "open",
+        "receipt_delivered": receipt_delivered,
         "message": "Thank you. Your request has been received and reference number generated.",
     }
 

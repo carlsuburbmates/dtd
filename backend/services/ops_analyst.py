@@ -356,8 +356,8 @@ async def check_daily_budget(db: Any) -> Tuple[bool, int, int]:
         })
         return count < OPS_AI_DAILY_BUDGET, count, OPS_AI_DAILY_BUDGET
     except Exception as e:
-        logger.warning("Failed to check daily AI budget: %s", e)
-        return True, 0, OPS_AI_DAILY_BUDGET
+        logger.warning("Failed to check daily AI budget, failing closed: %s", e)
+        return False, OPS_AI_DAILY_BUDGET, OPS_AI_DAILY_BUDGET
 
 
 async def check_manual_cooldown(db: Any, case_id: str) -> Tuple[bool, int]:
