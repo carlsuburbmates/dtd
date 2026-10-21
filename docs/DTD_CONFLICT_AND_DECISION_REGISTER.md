@@ -226,3 +226,12 @@
 - **Rationale:** repeated preflight reports and confirmation loops were delaying work in a one-owner project despite existing authorisation. Evidence and actual product boundaries remain necessary; redundant prompts do not.
 - **Supersedes:** any interpretation of repository process rules requiring a new approval for every optional skill, backend edit, branch push, sandbox step or ordinary external action after the owner has already authorised the workflow.
 - **Affected:** `AGENTS.md`, `.codex/skill-policy.toml`, the proactive owner-assistance skill, workstream handoffs and release sequencing.
+
+## CDR-026 — Developer sandbox is the R0–R8 delivery and owner-audit boundary
+
+- **Date/status:** 2026-10-22 — owner-directed roadmap execution boundary.
+- **Decision:** Complete R0–R8 in dependency order and deliver the verified developer sandbox with its evidence packet as the end of this execution workstream. After R8 is independently accepted, the owner audits that sandbox. R9 production work may begin only after that owner audit and specific production authority. R10–R12 describe real marketplace, commercial and sustainable-operation outcomes that require post-release observations; they remain future stages and cannot be represented as complete before their evidence exists. R13 stays optional and evidence-triggered. This boundary does not authorize production, live billing, ingestion activation or any separately gated provider/data action.
+- **Evidence:** the owner's 22 October direction that production must wait until the roadmap work is complete, that the sandbox is the final delivery for the current work, and that the owner will audit the sandbox before deciding on production.
+- **Rationale:** the strategic roadmap combines pre-release engineering/product stages with outcomes that can only be measured after release. The owner receives the complete sandbox at the R8 boundary without false claims about future business outcomes.
+- **Supersedes:** any interpretation that R9 production can precede owner audit of the final R8 sandbox, or that R10–R12 must be claimed complete before delivering the sandbox.
+- **Affected:** end-to-end roadmap, execution register, full project completion plan, R8 acceptance/handoff, R9 authority gate and post-release measurement stages.

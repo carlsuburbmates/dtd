@@ -491,6 +491,83 @@ def test_degradation_health_applies_thresholds_per_operation():
     ]
 
 
+@pytest.mark.anyio
+async def test_ops_degradation_thresholds_match_health_per_operation(monkeypatch):
+    now = datetime.now(timezone.utc)
+    events = [
+        {
+            "id": f"event-{operation}-{index}",
+            "operation": operation,
+            "timestamp": (now - timedelta(minutes=5)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "rate_limit",
+            "error_code": "RATE_LIMIT_429",
+        }
+        for operation in ("ops_analyst_inference", "trainer_verification_scoring")
+        for index in range(2)
+    ]
+
+    async def _events(*, limit, db=None):
+        return events
+
+    monkeypatch.setattr(ai_service, "get_degradation_events", _events)
+
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "nominal"
+    assert not any(case["case_id"] == "ai_degradation:sustained" for case in cases)
+    assert all(case["state"] == "monitoring" for case in cases)
+
+    events.append(
+        {
+            "id": "event-ops-extra",
+            "operation": "ops_analyst_inference",
+            "timestamp": (now - timedelta(minutes=3)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "rate_limit",
+            "error_code": "RATE_LIMIT_429",
+        }
+    )
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "degraded"
+    assert any(case["case_id"] == "ai_degradation:sustained" for case in cases)
+
+
+@pytest.mark.anyio
+async def test_ops_persistent_threshold_is_scoped_to_each_operation(monkeypatch):
+    now = datetime.now(timezone.utc)
+    events = [
+        {
+            "id": f"persistent-{operation}-{index}",
+            "operation": operation,
+            "timestamp": (now - timedelta(hours=2)).isoformat(),
+            "recovered": True,
+            "fallback_used": True,
+            "error_type": "service_unavailable",
+            "error_code": "SERVICE_UNAVAILABLE",
+        }
+        for operation, count in (("ops_analyst_inference", 3), ("trainer_verification_scoring", 2))
+        for index in range(count)
+    ]
+
+    async def _events(*, limit, db=None):
+        return events
+
+    monkeypatch.setattr(ai_service, "get_degradation_events", _events)
+
+    health = ai_service.summarize_degradation_health(events, now=now)
+    cases = await ai_service.get_ops_degradation_cases()
+
+    assert health["status"] == "nominal"
+    assert not any(case["case_id"] == "ai_degradation:persistent_low_volume" for case in cases)
+    assert all(case["state"] == "monitoring" for case in cases)
+
+
 def test_degradation_health_respects_configured_persistent_window(monkeypatch):
     now = datetime(2026, 10, 21, 12, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(ai_service, "AI_FALLBACK_PERSISTENT_WINDOW_S", 6 * 60 * 60)
