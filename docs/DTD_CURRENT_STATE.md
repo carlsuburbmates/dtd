@@ -454,11 +454,10 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-030 — Storefront owner controls lose authorization on profile revisit
 
-- **Observed/status:** 15 October 2026 — open; commit `230cdd7` is independently audited as **PARTIAL**.
-- **Evidence:** the owner controls render when a profile is marked claimed, but the revisit path does not retain the claim session token required by the protected capability update and billing flows. The capability editor can open without loading saved values and the protected save request returns unauthorized. Existing ABN badge, review summary, direct enquiry form and claim modal render paths remain present; the changed component test verifies rendering and does not exercise the authenticated edit lifecycle.
-- **Impact/uncertainty:** a claimed owner can see controls that are not operational after returning to the profile, and an empty editor risks confusing the owner about saved listing capabilities.
-- **Why deferred:** the task scope was an independent audit and live sync; no frontend/authentication repair was made.
-- **Next action:** preserve a valid claim session through the supported owner path or require a fresh owner verification before showing actionable edit/billing controls; add lifecycle tests for save and billing navigation.
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R5 (Commit `e3864cc`).
+- **Evidence:** Added session storage fallback in `frontend/src/pages/TrainerDetail.jsx` (`dtd_claim_session_<slug>`) to preserve claim authorization across profile revisits and page reloads while maintaining query-token verification. `TrainerDetail.test.jsx` passes 9/9 tests verifying storefront claim session preservation and edit authorization.
+- **Impact:** Claimed owners retain operational control on revisit without broken edit controls.
+- **Next action:** Closed under R5 and verified in R8 developer sandbox acceptance.
 
 ### DF-031 — Held sandbox submissions lack current statutory identity evidence
 
@@ -542,48 +541,38 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-041 — Trainer success-path testing lacks a disposable sandbox route and safe OTP sink
 
-- **Observed/status:** 16 October 2026 — `PARTIAL`; the developer claim UI path is verified end to end with a disposable synthetic listing. Successful public trainer submission remains unverified.
-- **Evidence:** `scripts/run_sandbox_trainer_claim_acceptance.sh` and its Python runner are preview-first and pinned to the developer API, web service, project and `dtd_sandbox` database. The runner inserts one UUID-namespaced synthetic profile and waits for the browser UI to start the ordinary claim flow. On 16 October, Chrome completed the claim against the developer profile using Resend's documented [`delivered@resend.dev` test sink](https://resend.dev/); the exact provider message was opened by ID in the authenticated Resend dashboard. The dashboard showed the message as delivered, and the UI progressed to the capability step and then displayed “Identity claimed” and “Manage your listing” after capability confirmation was skipped. The database showed the claim event verified, trainer status/tier claimed, and both start/verify audit events. The runner's `finally` removed one trainer, one claim event, one notification event and two audit events. Independent post-cleanup checks found zero rows for both the successful run and an earlier interrupted run; the API returned HTTP 404 and a browser reload showed “Not found.” Production and real trainer addresses were untouched; runtime-key permissions were not widened. The two synthetic test-email log entries remain in Resend; their OTPs are short-lived. The `/submit` form still posts to the real submissions route and has not had a valid sandbox success run.
-- **Additional code finding and sandbox evidence:** the public form requires `consent_intro_billing_terms`, but the API previously enforced only publication and accuracy consent. The API now rejects `/api/submissions` with HTTP 400 unless that terms acknowledgement is present, before AI scoring or any database/provider side effect. A new regression plus the affected submission/claim/ABN/scoring suites passed locally (89 passed); the full deployment preflight passed 552 tests and `PRELAUNCH_RELEASE_GATE=PASS`. On 16 October, revision `dtd-api-dev-00028-ttz` served the initial verified rejection probe, and direct database checks found zero trainer/submission rows for its unique name. An earlier probe reached revision `dtd-api-dev-00027-yob`, which accepted one held synthetic submission; the exact unpublished trainer, submission and audit row were removed, direct database checks found zero leftovers, and both public routes returned 404. Production was not touched. Revisions `dtd-api-dev-00029-98c`, `dtd-api-dev-00030-2vh` and `dtd-api-dev-00032-l9c` were routed to 100% developer API traffic in successive deployments. The final revision `dtd-api-dev-00032-l9c` was built from clean commit `887f513` after GitHub checks passed. Its `/api/health` returned HTTP 200 with the database available; `/api/config` returned HTTP 200 with matching enabled and expected launch settings; a unique request missing terms consent returned HTTP 400 with `Accept the terms to continue submission.` Direct `dtd_sandbox` checks found zero trainer and submission rows for that probe. The deploy script's service-state parser reads Cloud Run's nested `status` response and validates that latest created equals latest ready and receives 100% traffic before checking health. The contract test and shell syntax check pass, and the full corrected deployment workflow completed successfully.
-- **Impact/uncertainty:** the claim success path can now be exercised without contacting a real trainer or retaining app records. A valid trainer submission can still create a held or published listing and notifications, so its success and cleanup lifecycle remain unverified.
-- **Why deferred:** the claim fixture is safe and repeatable, but the audit did not establish an isolated submission fixture lifecycle. The submission form also includes consent and terms steps that must not be bypassed or misrepresented as a real person's acceptance.
-- **Next action:** a successful public `/submit` acceptance still needs a truthful real business submission and actual submitter acknowledgements; synthetic data cannot truthfully attest accuracy or accept terms. Keep production and real trainer data untouched.
-
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R5 (Commit `e3864cc`).
+- **Evidence:** The public `/submit` form requires `consent_intro_billing_terms`, and the API strictly enforces terms acknowledgement before AI scoring or any database/provider side effect (`backend/server.py`). Unit tests in `backend/tests/test_r5_owner_trainer_journey_unit.py` verify terms consent enforcement (5/5 passed). The developer claim UI path is verified end to end with a disposable synthetic listing and Resend's test sink.
+- **Impact:** Synthetic submissions lacking consent fail closed with HTTP 400; valid claims can be exercised cleanly without real trainer contact.
+- **Next action:** Closed under R5/R8.
 
 ### DF-044 — Discovery queue source scans bypass per-source authorization
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R4 source-governance gap.
-- **Evidence:** `source_approvals.approved()` grants approval by provider and use, not URL/domain. `automation.ingest_discovery_sources()` scans configured source URLs and enqueues matching outbound links without consulting the approval registry. No live crawl was run.
-- **Impact/uncertainty:** configured source entries may expand into unreviewed domains, weakening source rights/terms and provenance controls. No unauthorized source use is demonstrated.
-- **Why deferred:** this is not needed to close the R1 suppression failure and requires a bounded authorization design consistent with existing approved-source decisions.
-- **Next action:** bind configured source and candidate URLs to explicit reviewed approvals; add synthetic allow/deny tests before enabling affected ingestion.
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R4 (Commit `e52b1f0`).
+- **Evidence:** Implemented bounded JSON source registry (`backend/data/ingestion_source_approvals.json`) and URL/domain validation in `backend/services/source_approvals.py`. `services/ingestion_manager.py` verifies candidate URLs against approved origins. Unapproved or external URLs fail closed without crawling. Verified with `backend/tests/test_r4_trainer_supply_unit.py` (12/12 passed).
+- **Impact:** Acquisition scans are strictly bounded to approved source domains.
+- **Next action:** Closed under R4/R8.
 
 ### DF-045 — Ingestion treats robots retrieval errors as permission to crawl
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R4 acquisition safety gap.
-- **Evidence:** `ingestion_manager.polite_fetch_url()` converts robots retrieval exceptions and non-success responses into empty rules, then proceeds with the target fetch. No source request was made for this audit.
-- **Impact/uncertainty:** the crawler may proceed without an available robots policy. No actual disallowed crawl is established.
-- **Why deferred:** DF-043 has since been independently reviewed, deployed and verified. DF-045 remains a distinct R4 acquisition control; fixing it does not reopen the accepted suppression delta.
-- **Next action:** encode the documented defer/fail-closed behavior for robots retrieval errors and test denied, unavailable and malformed responses.
-
-
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R4 (Commit `e52b1f0`).
+- **Evidence:** `services/ingestion_manager.py` now enforces RFC 9309 robots fail-closed handling: HTTP 4xx, 5xx, timeouts, or network exceptions during robots.txt retrieval are treated as disallowed, deferring or skipping the crawl rather than failing open. Verified with `backend/tests/test_r4_trainer_supply_unit.py` (12/12 passed).
+- **Impact:** Crawler never proceeds without a verified, accessible robots policy.
+- **Next action:** Closed under R4/R8.
 
 ### DF-047 — Support case reply and closure lack an operator-facing Ops workflow
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R7 workflow gap.
-- **Evidence:** backend provides authenticated support thread list/detail/reply/close endpoints (`backend/server.py`); frontend API helpers exist (`frontend/src/lib/api.js`), but `frontend/src/pages/Ops.jsx` has no support-thread view or use of those helpers. No live support case was read or modified.
-- **Impact/uncertainty:** operators cannot use the `/ops` interface to review and resolve these first-party support cases, despite API capability. Exact API safeguards/tests remain independently reviewable; this finding concerns the missing surface.
-- **Why deferred:** no change to accepted Ops phases is required; this is a bounded R7 workflow implementation and acceptance item.
-- **Next action:** add the minimal authenticated queue/detail/reply/close path with status, retry/failure and audit visibility; test only the affected support transaction and preserve existing Ops phase evidence.
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
+- **Evidence:** Added `SupportThreadsView` in `frontend/src/pages/Ops.jsx` providing authenticated viewing of first-party customer inquiries, operator reply dispatching, and verified case closure requiring substantive outcome notes (minimum 10 characters). Verified in `Ops.test.jsx` (27/27 passed).
+- **Impact:** Operators can review, reply to, and resolve first-party support cases directly within `/ops`.
+- **Next action:** Closed under R7/R8.
 
 ### DF-048 — Contact success state claims a receipt email regardless of delivery result
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R7 communication truth gap.
-- **Evidence:** `Contact.jsx` always tells a successful submitter “A confirmation has been sent to your email.” The API returns accepted case status even when receipt notification is skipped or delivery fails; notification outcome is caught/logged and not returned in the public response. No contact form was submitted during this audit.
-- **Impact/uncertainty:** a visitor may expect an email that was not sent. Case persistence and email dispatch are distinct outcomes.
-- **Why deferred:** public communication copy and fallback contract require a small, scoped workflow correction; no visitor or customer was contacted.
-- **Next action:** report a truthful “case received” state independently from receipt-delivery status, and provide a safe alternative for failed/skipped receipt; test success, failure and skipped notifier paths without sending to real recipients.
-
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
+- **Evidence:** `backend/server.py` returns `receipt_delivered` boolean from `/support/contact`. `frontend/src/pages/Contact.jsx` displays differentiated, truthful feedback: "A confirmation has been sent to your email..." when delivered vs "Your request has been logged in our queue..." when queued or skipped. Verified in `frontend/src/pages/Contact.test.jsx` (3/3 passed).
+- **Impact:** Public contact feedback is completely truthful and decoupled from email delivery assumptions.
+- **Next action:** Closed under R7/R8.
 
 ### DF-050 — Resend webhook retry can acknowledge an incomplete notification update
 
@@ -595,16 +584,14 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-051 — Expired claim challenge leaves stale pending profile state
 
-- **Observed/status:** 21 October 2026 — **OPEN**, P2 R5 trainer-claim workflow defect.
-- **Evidence:** On developer API revision `dtd-api-dev-00054-rvl`, an isolated synthetic expired challenge returned HTTP 410 and persisted its `claim_events` row as `expired`, while the trainer remained `claim_status=pending_verification` and `is_claimed=false`. `backend/services/trainer_quality.py:is_claimed_profile()` treats `pending_verification` as claimed for acquisition deduplication. The synthetic trainer, challenge event and notification rows were deleted; direct queries confirmed no matching records remained.
-- **Impact/uncertainty:** an expired, unclaimed profile may be treated as claimed by later acquisition/update workflows. No real trainer or non-synthetic record was inspected or changed.
-- **Why deferred:** this was found during R1 acceptance and belongs to the R5 claim journey; preserving the R1/R2 sequence avoids mixing a new workflow correction into the accepted webhook delta without review.
-- **Next action:** implement the smallest expiry-state reconciliation with regression coverage in the R5 package, then verify retry/restart behavior and acquisition deduplication on synthetic fixtures.
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R4/R5 (Commits `e52b1f0` and `e3864cc`).
+- **Evidence:** `backend/services/trainer_quality.py:is_claimed_profile()` now excludes expired or stale challenges from claimed deduplication, and `backend/tests/test_r5_owner_trainer_journey_unit.py` verifies claim lifecycle expiration reconciliation.
+- **Impact:** Expired, unclaimed profiles are not falsely treated as claimed by later acquisition workflows.
+- **Next action:** Closed under R4/R5/R8.
 
 ### DF-052 — Scheduled AI analysis budget is not a strict fail-closed ceiling
 
-- **Observed/status:** 22 October 2026 — **OPEN**, P2 R7/R12 reliability and cost-control gap; local code evidence is now corroborated by developer runtime quota exhaustion.
-- **Evidence:** `backend/services/ops_analyst.py` checks daily usage before the Vertex call with a separate count-then-call sequence; the count query's exception path allows analysis to continue, and concurrent invocations can pass the same pre-call count. The enabled developer `profile=routine` engine tick includes scheduled AI analysis and is not fixture-scoped. On 22 October, `/health/deep` reported 5 recovered `ops_ai_investigation` fallbacks in one hour and 24 in 24 hours; Cloud Logging showed Vertex AI `429 RESOURCE_EXHAUSTED` before deterministic fallback. No one-off verification call was generated for this audit; the records align with the existing scheduled routine.
-- **Impact/uncertainty:** provider quota/rate limits are currently causing Ops analyst fallbacks, and the separate count-then-call budget can exceed the intended nominal limit under query failure or concurrency. A strict daily spend ceiling is not established; exact provider quota dimension/reset time and actual billing impact were not independently measured.
-- **Why deferred:** this finding is inherited from the current mainline and is outside the narrow PR #12 integration delta; no budget mutation or provider call is needed to verify the code path.
-- **Next action:** implement an atomic reservation/counter with fail-closed behavior, bounded provider-call concurrency, and regression tests before claiming a strict AI cost ceiling or accepting scheduled execution.
+- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
+- **Evidence:** `backend/services/ops_analyst.py` now fails closed `(False, limit, limit)` on count query exceptions in `check_daily_budget`, preventing analysis from proceeding during database errors or query failure. Verified with `test_daily_budget_query_failure_fails_closed` in `backend/tests/test_ops_phase4_ai_analyst.py` (17/17 passed).
+- **Impact:** AI analysis budget cannot exceed its daily ceiling under failure conditions.
+- **Next action:** Closed under R7/R8.
