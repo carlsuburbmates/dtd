@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 def now_iso() -> str:
@@ -128,6 +131,22 @@ async def _send_with_retry(
     attempts = _retry_attempts()
     last_error = ""
 
+    async def record_delivery_event(**event):
+        try:
+            await _record_event(
+                db,
+                dispatch_id=dispatch_id,
+                kind=kind,
+                target_kind=target_kind,
+                target_id=target_id,
+                to_email=to_email,
+                **event,
+            )
+        except Exception:
+            # Logging failure must not be misreported as a Resend failure or trigger
+            # another send after Resend has already accepted the message.
+            logger.exception("Failed to persist Resend delivery event for dispatch %s", dispatch_id)
+
     # Isolated test safety: never hit live api.resend.com during automated test runs unless explicitly mocked
     is_live = bool(os.environ.get("RESEND_LIVE_TEST"))
     is_test = bool(os.environ.get("PYTEST_CURRENT_TEST"))
@@ -151,59 +170,44 @@ async def _send_with_retry(
         )
         return {"status": "sent", "attempts": 1, "dispatch_id": dispatch_id, "provider_id": "mock_test_resend_id"}
 
+    attempts_completed = 0
     for attempt in range(1, attempts + 1):
+        attempts_completed = attempt
         try:
             resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=20)
-            ok = 200 <= resp.status_code < 300
-            provider_id = ""
-            try:
-                provider_id = str((resp.json() or {}).get("id") or "")
-            except Exception:  # noqa: BLE001
-                provider_id = ""
-            if ok:
-                await _record_event(
-                    db,
-                    dispatch_id=dispatch_id,
-                    kind=kind,
-                    target_kind=target_kind,
-                    target_id=target_id,
-                    to_email=to_email,
-                    attempt=attempt,
-                    status="sent",
-                    http_status=resp.status_code,
-                    provider_id=provider_id,
-                )
-                return {"status": "sent", "attempts": attempt, "dispatch_id": dispatch_id, "provider_id": provider_id}
-            last_error = f"http_{resp.status_code}"
-            await _record_event(
-                db,
-                dispatch_id=dispatch_id,
-                kind=kind,
-                target_kind=target_kind,
-                target_id=target_id,
-                to_email=to_email,
-                attempt=attempt,
-                status="failed",
-                http_status=resp.status_code,
-                provider_id=provider_id,
-                error=last_error,
-            )
         except Exception as exc:  # noqa: BLE001
             last_error = str(exc)[:240]
-            await _record_event(
-                db,
-                dispatch_id=dispatch_id,
-                kind=kind,
-                target_kind=target_kind,
-                target_id=target_id,
-                to_email=to_email,
-                attempt=attempt,
-                status="failed",
-                http_status=0,
-                error=last_error,
-            )
+            await record_delivery_event(attempt=attempt, status="failed", http_status=0, error=last_error)
+            continue
 
-    return {"status": "failed", "attempts": attempts, "dispatch_id": dispatch_id, "error": last_error or "unknown"}
+        provider_id = ""
+        try:
+            provider_id = str((resp.json() or {}).get("id") or "")
+        except Exception:  # noqa: BLE001
+            pass
+        if 200 <= resp.status_code < 300:
+            await record_delivery_event(
+                attempt=attempt,
+                status="sent",
+                http_status=resp.status_code,
+                provider_id=provider_id,
+            )
+            return {"status": "sent", "attempts": attempt, "dispatch_id": dispatch_id, "provider_id": provider_id}
+
+        last_error = f"http_{resp.status_code}"
+        await record_delivery_event(
+            attempt=attempt,
+            status="failed",
+            http_status=resp.status_code,
+            provider_id=provider_id,
+            error=last_error,
+        )
+        # Authentication and other permanent client errors will not improve by
+        # repeating the exact request with the same key and payload.
+        if 400 <= resp.status_code < 500 and resp.status_code not in {408, 429}:
+            break
+
+    return {"status": "failed", "attempts": attempts_completed, "dispatch_id": dispatch_id, "error": last_error or "unknown"}
 
 
 def _safe_text(value: Optional[str]) -> str:

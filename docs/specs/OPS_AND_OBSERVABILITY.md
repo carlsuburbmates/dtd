@@ -12,12 +12,12 @@ The approved Operations Console transformation sequence operates under the gover
 The agreed multi-phase roadmap is:
 - **Phase 1 — Noise Elimination & Classification (Implemented & Verified in Developer Sandbox):**
   Eliminates operational noise at its source. Distinguishes routine informational telemetry (e.g. successful HTTP 202 transactional emails, benign initial crawl 404s, expected cold starts) from actionable operational incidents. Enforces cadence-aware bounded grace curves for background loops, evidence-first provider operational status, occurrence fingerprinting for recurrence suppression, and temporal validation for AI degradation events.
-- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (Implemented & Verified in Developer Sandbox):**
-  Transforms fragmented operational events into correlated incidents. Groups retry dispatches, isolates root-cause provider outages, and distinguishes machine `operational_state` (`detected`, `recovering`, `resolved`, `reopened`) from human `review.state`. Implements verified automated recovery (terminal successes clear transient failures, alias resolution for event IDs), robust occurrence identity with genuine recurrence detection, and serverless loop orchestration via Cloud Scheduler `dtd-engine-tick-cron` solving DF-029.
+- **Phase 2 — Incident Correlation, Lifecycle Integrity, & Verified Recovery (PARTIAL; side-effect-safe engine-tick acceptance blocked):**
+  Correlation, lifecycle separation, alias/idempotency, recurrence and read-only oversight have code and sandbox evidence. The developer Scheduler configuration is provisioned and independently inspectable read-only; its `profile=routine` run performs derived and Ops writes and may call Vertex AI, but does not run trainer nurture, reactivation-email or recovery loops. Those effects are not fixture-scoped, so never invoke the scheduled job as a test. Fixture-scoped execution and strict AI budget controls remain open as DF-052; do not claim execution acceptance from Scheduler presence alone.
 - **Phase 3 — Minimal Owner-Facing Operations Console (Implemented & Verified):**
   Transforms `/ops` into a decision-first, mobile-responsive Operations Console for a single non-technical owner. Features a 3-Level hierarchy: Level 1 System Status (plain English headline + 3 supporting metrics: Supply, Commercial Gate, Background loops), Level 2 Needs Your Attention (filtering only genuine actionable cases with 3-question breakdowns: What happened?, Why does it matter?, What can I do?, and 1-click triage actions with high-severity dismissal safeguards), Level 3 Handled Automatically (compact telemetry feed of background engine ticks, Guardian audits, fraud suppressions, and delivery recoveries), and a collapsible Secondary Advanced Diagnostics disclosure preserving 10 deep technical views and all existing test IDs. Mobile touch ergonomics and responsive layouts verified at 390px, 768px, and 1440px.
-- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (Implemented & Verified in Developer Sandbox):**
-  Integrates an intelligent, read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`). Investigates genuine operational exceptions on-demand or during scheduled engine-ticks with zero polling. Enforces strict evidence sanitization and PII redaction, structured output validation, per-occurrence deduplication, daily budget ceilings ($0 risk), manual cooldowns, and a strict read-only boundary with zero mutation authority over operational data or directory collections. Live verified across all 9 acceptance gates in `dogtrainersdirectory-dev`.
+- **Phase 4 — Read-Only, Event-Triggered AI Operations Analyst (IMPLEMENTED; cost-control acceptance PARTIAL):**
+  Integrates a read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`). It investigates operational exceptions on demand or during scheduled routine engine ticks. Evidence sanitization, structured output validation, per-occurrence deduplication, cooldowns and a read-only data boundary have code and sandbox evidence. DF-052 remains open: the daily count check is not atomic and fails open on a database query error, so a strict daily cost ceiling is not established.
 - **Phase 5 — Separately Approved Controlled Automation & Self-Healing Recovery (Implemented & Verified in Developer Sandbox):**
   Introduces strictly controlled, bounded, deterministic automatic recovery routines for safe operational failures under strict multi-layer safeguards (default-disabled posture `OPS_SELF_HEALING_ENABLED=0`, production hard-block, separate per-routine feature flags, atomic distributed claiming preventing concurrent execution, downstream verified recovery, daily budget ceilings, cooldowns, zero business data mutations, and strict isolation from the read-only Gemini AI Analyst).
 - **Phase 5A — Owner Experience Consolidation & Operational Acceptance (Implemented & Verified):**
@@ -225,7 +225,7 @@ The Operations Console comprehensively accounts for all 14 core operational doma
 | 10 | **SEO & Indexation** | Canonical 539 Melbourne suburb page evaluation against supply and content thresholds. | Final indexation decision override when thresholds are met. |
 | 11 | **Audit & Security** | Immutable append-only audit logging (`audit_recent`) and admin passcode session expiry. | High-severity dismissal justification note verification. |
 | 12 | **Provider & Background Loops** | 10 background loops orchestrated via Cloud Scheduler `dtd-engine-tick-cron` with atomic leasing. | Provider outage acknowledgement (`ops-ack-degradation`) if upstream provider is degraded. |
-| 13 | **AI Operations Analyst** | Read-only Gemini 3.5 Flash investigation with strict daily budget ($0 risk) and PII redaction. | Reviewing AI root-cause hypotheses and suggested remediation plans. |
+| 13 | **AI Operations Analyst** | Read-only Gemini 3.5 Flash investigation with evidence sanitization and PII redaction; strict daily cost enforcement is open under DF-052. | Reviewing AI root-cause hypotheses and suggested remediation plans. |
 | 14 | **Self-Healing & Recovery** | Bounded deterministic recovery routines (lease clearing, claim unlock, notification retry). | Reviewing exhausted recovery attempts escalated to Level 2. |
 
 ### Cadence Reconciliation: From Manual Checklist to Exception Triage
@@ -250,7 +250,7 @@ Under Phase 5A, this manual cadence is **fully superseded**:
   - Live sandbox endpoint: `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app`.
   - Live sandbox datastore: MongoDB Atlas `dtd_sandbox`.
 
-### Phase 2 Architecture & Implemented Workstreams (Verified Complete)
+### Phase 2 Architecture & Implemented Workstreams (Partial; sandbox tick gate blocked)
 
 1. **Workstream A — Incident Correlation & Noise Elimination:**
    - Multi-attempt message delivery retries collapse into a single correlated incident keyed by `message:{dispatch_id}`.
@@ -265,11 +265,9 @@ Under Phase 5A, this manual cadence is **fully superseded**:
    - Terminal success events automatically resolve and clear transient delivery failure incidents.
    - Case reviews submitted against constituent event IDs (aliases) resolve seamlessly to primary correlated incident IDs.
    - Idempotent review updates with identical state, owner, and note execute safely without creating duplicate audit records.
-4. **Workstream D — Serverless Background Scheduling & DF-029 Resolution:**
-   - Authenticated Cloud Scheduler cron `dtd-engine-tick-cron` (`*/10 * * * *`, Australia/Melbourne) triggers `/api/internal/jobs/engine-tick` under dedicated service account OIDC authentication (`dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`).
-   - Distributed MongoDB lease `engine_tick_lease` in `system_state` (180s TTL) with atomic `find_one_and_update` prevents concurrent execution races.
-   - Executes 6 core loops (`ranking`, `inference`, `health`, `sponsor_inventory`, `nurture`, `reactivation_route`).
-   - Writes `execution_owner: "cloud_scheduler"`, `last_run`, duration, and overall status to `system_state.engine_tick` telemetry doc.
+4. **Workstream D — Serverless Background Scheduling & DF-029 (provisioning DONE; execution acceptance blocked):**
+   - The developer Scheduler job and authenticated endpoint exist, and the distributed lease records execution telemetry.
+   - The enabled `profile=routine` job runs ranking, inferred-conversion promotion, sponsor inventory, health checks, durable obligation synchronization and scheduled AI analysis. It does not run trainer nurture, reactivation-email or recovery loops. Its derived/Ops writes and possible Vertex AI call are not fixture-scoped, so the live verifier checks configuration read-only and never invokes the job. Fixture-scoped execution and strict AI cost controls remain open under DF-052.
 5. **Workstream E — Occurrence Identity & Genuine Recurrence:**
    - Authoritative occurrence fingerprints (`_case_occurrence_fingerprint`) across all case types prevent false recurrence on browser refresh or snapshot re-reads.
    - When a new failure occurs with distinct error telemetry or higher failure counts, previously dismissed cases reopen automatically to `operational_state: "reopened"` with an explicit `(Recurred)` badge.
@@ -277,14 +275,15 @@ Under Phase 5A, this manual cadence is **fully superseded**:
    - `/ops` Work Queue correctly maps `reopened` into `Needs review` and `recovering` into `In progress`.
    - Message log rows display `Recovering` badges when dispatches are actively recovering.
 
-### Phase 2 Sandbox Acceptance Gate (VERIFIED COMPLETE)
+### Phase 2 Sandbox Acceptance Gate (PARTIAL; Workstream D BLOCKED)
 
-Executed automated isolated acceptance suite (`scripts/verify_sandbox_ops_phase2.py`) against live sandbox deployment `dtd-api-dev-00034-kkv`:
+Historical isolated acceptance on revision `dtd-api-dev-00034-kkv` verified the following safe gates. The 21 October audit supersedes its previous Gate 5 result: `scripts/verify_sandbox_ops_phase2.py` reads Scheduler configuration only. Routine engine-tick effects are not fixture-scoped, so it does not invoke the job.
 - **Gate 1 — Deployed Revision & Environment Isolation:** **PASS** (Active revision `dtd-api-dev-00034-kkv` verified; database available; production environment independently verified untouched and healthy).
 - **Gate 2 — Workstream A: Incident Correlation:** **PASS** (3 retry attempts correctly grouped into exactly 1 incident; terminal success cleared prior transient failures).
 - **Gate 3 — Workstream B & E: Lifecycle & Recurrence:** **PASS** (Dismissal safeguard verified rejecting note < 5 chars; valid dismissal verified; identical refresh produced no false recurrence; genuine failure reopened case with `(Recurred)` badge).
 - **Gate 4 — Workstream C: Alias Resolution & Idempotency:** **PASS** (Alias lookup by constituent event ID resolved to primary case; repeat identical update created 0 duplicate audit records).
-- **Gate 5 — Workstream D: Serverless Scheduling & Engine Tick (DF-029):** **PASS** (`dtd-engine-tick-cron` invoked successfully; telemetry recorded in `system_state.engine_tick` with `execution_owner: cloud_scheduler` and `status: ok` in ~2.3s; autonomous loops executed; distributed lease released).
+- **Gate 5a — Workstream D: Scheduler configuration (DF-029):** **PASS** when the read-only verifier confirms enabled state, cadence, timezone, URI/profile, POST method, `{}` body and exact OIDC service account/audience.
+- **Gate 5b — Side-effect-safe engine-tick execution:** **BLOCKED** because routine effects are not fixture-scoped and scheduled AI cost controls are not strict (DF-052). The routine profile does not run trainer email or recovery loops.
 - **Gate 6 — Read-Only Oversight Invariant (DF-032):** **PASS** (`GET /api/oversight` executed side-effect free with exactly zero database writes to snapshots, state, or audit log).
 - **Gate 7 — Zero-Trace Fixture Disposal:** **PASS** (100% synthetic test fixtures cleaned up from `dtd_sandbox` collections).
 
@@ -383,7 +382,7 @@ The Phase 4 AI Operations Analyst introduces an intelligent, read-only diagnosti
   - Redacts: Bearer tokens (`[REDACTED_TOKEN]`), Resend API keys (`[REDACTED_RESEND_KEY]`), Stripe secrets (`[REDACTED_STRIPE_KEY]`), generic API keys/secrets (`[REDACTED_SECRET]`), Mongo connection URIs (`[REDACTED_MONGO_URL]`), email addresses (`j***@example.com`), and Australian phone numbers (`[REDACTED_PHONE]`).
 - **Cost-Containment & Abuse Safeguards:**
   - **Per-Occurrence Deduplication:** Investigations are cached against an evidence signature and `occurrence_fingerprint`. Repeat inquiries for identical occurrences return cached results without re-inference.
-  - **Daily Budget Ceiling:** `OPS_AI_DAILY_BUDGET=50` (default 50 completed calls per calendar day). When exhausted, investigations fail closed into a graceful `budget_exhausted` state without degrading core operations.
+  - **Configured Daily Limit:** `OPS_AI_DAILY_BUDGET=50` is a nominal count of completed calls per calendar day. The current count-then-call path is non-atomic and fails open on database query errors; DF-052 means this is not a strict cost ceiling.
   - **Manual Request Cooldown:** `OPS_AI_MANUAL_COOLDOWN_SECONDS=60` enforces a 60-second debounce per case, returning HTTP 429 to prevent rapid-click budget exhaustion.
   - **Token & Batch Bounding:** Output tokens bounded (`max_output_tokens=1024`), batch size capped (`max_batch=3` per loop iteration).
 - **Graceful Failure Isolation & Deterministic Fallback:**
@@ -516,7 +515,7 @@ The candidate release payload brings the completed Operations Console transforma
 1. **Phase 1 — Noise Elimination & Incident Triage:** Decoupled machine `operational_state` from human operator review, bounded incident deduplication, high-severity dismissal protection requiring explanatory review notes, and audit log persistence in `ops_case_states`.
 2. **Phase 2 — Incident Correlation, Lifecycle & Background Orchestration:** Grouping of multi-attempt retries into single correlated cases (`message:{dispatch_id}`), terminal success auto-resolution, occurrence fingerprinting (`_case_occurrence_fingerprint`) preventing false recurrence on refresh, and `/api/internal/jobs/engine-tick` serverless execution boundary with distributed MongoDB leases (`system_state.engine_tick_lease`). Supports scoped execution profiles (`profile=readonly`, `profile=maintenance`, `profile=all`) and enforces safe outbound email gating (`ENABLE_REACTIVATION_NOTIFICATIONS=0` by default).
 3. **Phase 3 — Minimal Owner-Facing Operations Console:** 10-second scan hierarchy, single plain-English status headline, and 1-click triage actions (`Acknowledge`, `Resolve`, `Dismiss`).
-4. **Phase 4 — Read-Only Gemini AI Operations Analyst:** Advisory-only intelligence investigating genuine operational exceptions, bounded input payload (4,000 chars), rate-controlled daily budget ceiling (50/day), 24h fingerprint deduplication, and strictly zero mutation tools or state authority.
+4. **Phase 4 — Read-Only Gemini AI Operations Analyst:** Advisory-only intelligence investigating genuine operational exceptions, bounded input payload (4,000 chars), nominal configured count limit (50/day; not a strict cost ceiling because of DF-052), 24h fingerprint deduplication, and strictly zero mutation tools or state authority.
 5. **Phase 5 — Controlled Self-Healing Framework:** Bounded, deterministic automatic recovery routines (`lease_recovery`, `claim_lock_recovery`, `notification_retry`) with code-level production hard-block (`is_production_environment() == True`), ensuring self-healing remains **unconditionally disabled** in production.
 6. **Phase 5A — Owner UX Consolidation & Operational Acceptance:** 10-second owner scannability: Level 1 System Status, Level 2 Needs Your Attention (priority-first sorting, compact severity filter pills, bounded 5-item pagination, progressive disclosure), Level 3 Handled Automatically (collapsed by default aggregate summary bar), and Secondary Advanced Diagnostics (collapsed by default, preserving all 10 diagnostic views).
 

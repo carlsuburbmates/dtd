@@ -17,23 +17,33 @@ fi
 (
   cd "${REPO_ROOT}/frontend"
   yarn build
-  gcloud run deploy "${SERVICE_NAME}" \
-    --project "${PROJECT_ID}" \
-    --region "${REGION}" \
-    --source . \
-    --allow-unauthenticated \
-    --min-instances 0 \
-    --max-instances 2
 )
+
+gcloud run deploy "${SERVICE_NAME}" \
+  --project "${PROJECT_ID}" \
+  --region "${REGION}" \
+  --source "${REPO_ROOT}/frontend" \
+  --allow-unauthenticated \
+  --min-instances 0 \
+  --max-instances 2
 
 WEB_URL="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format='value(status.url)')"
 HTML="$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}/")"
-grep '<div id="root">' >/dev/null <<< "${HTML}"
+case "${HTML}" in
+  *'<div id="root">'*) ;;
+  *)
+    echo "Sandbox frontend HTML does not contain the application root" >&2
+    exit 1
+    ;;
+esac
 MAIN_BUNDLE="$(python3 -c 'import re, sys; match = re.search(r"/(?:assets/index|static/js/main)[^\"]*\.js", sys.stdin.read()); print(match.group(0) if match else "")' <<< "${HTML}")"
 if [ -z "${MAIN_BUNDLE}" ]; then
   echo "Could not find the frontend JavaScript bundle in the sandbox HTML" >&2
   exit 1
 fi
 BUNDLE_CONTENT="$(curl --fail --silent --show-error --location --max-time 15 "${WEB_URL}${MAIN_BUNDLE}")"
-grep "${API_URL}" >/dev/null <<< "${BUNDLE_CONTENT}"
+if [[ "${BUNDLE_CONTENT}" != *"${API_URL}"* ]]; then
+  echo "Sandbox frontend bundle does not use the isolated developer API origin" >&2
+  exit 1
+fi
 echo "Sandbox frontend verified: ${WEB_URL} -> ${API_URL}"

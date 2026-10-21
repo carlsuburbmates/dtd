@@ -90,7 +90,7 @@ def compute_sla(
 
 async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple[bool, str]:
     """Inspect the specific underlying entity in its authoritative datastore.
-    
+
     Returns (True, reason) ONLY when verified positive evidence demonstrates that the
     underlying entity has reached a valid terminal state.
     Returns (False, reason) if the entity is still active, missing without verification,
@@ -117,7 +117,7 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
                 if status in ("rejected", "declined", "withdrawn"):
                     return True, f"Submission {entity_id} reached terminal state '{status}'"
                 return False, f"Submission {entity_id} remains pending (status: {status}, abn_status: {abn_status})"
-            
+
             # If not in submissions, check if already converted to a published trainer
             trainers_coll = getattr(db, "trainers", None)
             if trainers_coll is not None:
@@ -214,7 +214,7 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
             last_run = engine_tick_doc.get("last_run")
             last_status = str(engine_tick_doc.get("last_status") or "").lower()
             failures = int(engine_tick_doc.get("consecutive_failures") or 0)
-            
+
             run_dt = parse_iso(last_run)
             age_s = (now_utc() - run_dt).total_seconds() if run_dt else None
 
@@ -245,7 +245,7 @@ async def verify_obligation_terminal_state(db, obl_doc: Dict[str, Any]) -> Tuple
 
 async def sync_durable_obligations(db, now_dt: Optional[datetime] = None) -> List[Dict[str, Any]]:
     """Scan authoritative system state and synchronize the durable `ops_obligations` collection.
-    
+
     Enforces Evidence-Based Terminal-State Verification:
     Absence from a scan NEVER resolves an obligation.
     Existing obligations remain active until verified positive evidence shows terminal completion

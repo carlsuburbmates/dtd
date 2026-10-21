@@ -789,4 +789,3 @@ async def enrich_cases_with_investigations(
         logger.debug("Failed to enrich cases with investigations: %s", e)
 
     return cases
-

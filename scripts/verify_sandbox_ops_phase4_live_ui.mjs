@@ -99,7 +99,7 @@ async function main() {
             expression: `
                 (() => {
                     const cards = Array.from(document.querySelectorAll('[data-testid^="ops-case-card-"]'));
-                    const target = cards.find(c => c.getAttribute("data-testid")?.includes("${targetDispatchId}")) 
+                    const target = cards.find(c => c.getAttribute("data-testid")?.includes("${targetDispatchId}"))
                                 || cards.find(c => c.innerText.includes("${targetDispatchId}"))
                                 || cards[0];
                     if (target) {

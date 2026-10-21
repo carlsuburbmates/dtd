@@ -497,4 +497,3 @@ def test_run_scheduled_investigations_bounds_batch_size():
         count = await db.ops_ai_investigations.count_documents({})
         assert count == 2
     asyncio.run(_test())
-

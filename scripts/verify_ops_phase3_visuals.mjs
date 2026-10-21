@@ -1,5 +1,6 @@
 import http from "http";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
@@ -7,7 +8,13 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 const BUILD_DIR = path.join(REPO_ROOT, "frontend", "build");
-const ARTIFACT_DIR = "/Users/carlg/.gemini/antigravity/brain/ee690060-7b63-4e07-b276-16fb51ab6219";
+const ARTIFACT_DIR = process.env.DTD_VISUAL_ARTIFACT_DIR || path.join("/tmp", "dtd-ops-phase3-visuals");
+const ADMIN_PASS = process.env.DTD_OPS_TEST_ADMIN_PASS;
+if (!ADMIN_PASS) {
+    throw new Error("Set DTD_OPS_TEST_ADMIN_PASS in the local environment to run this authenticated visual check.");
+}
+fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+const CHROME_PROFILE_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "dtd-ops-phase3-chrome-"));
 const CHROME_PATH = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const SERVER_PORT = 49152;
 const CHROME_PORT = 49153;
@@ -201,11 +208,13 @@ console.log(`Local test server listening on port ${SERVER_PORT}`);
 
 // Launch Chrome
 console.log(`Launching Chrome headless on port ${CHROME_PORT}...`);
-const chrome = spawn(CHROME_PATH, [
+let chrome;
+try {
+chrome = spawn(CHROME_PATH, [
     "--headless=new",
     "--disable-gpu",
     `--remote-debugging-port=${CHROME_PORT}`,
-    "--user-data-dir=/tmp/isolated-chrome-profile-phase3",
+    `--user-data-dir=${CHROME_PROFILE_DIR}`,
     "--no-first-run",
     "--no-default-browser-check",
     "--window-size=1440,900"
@@ -231,7 +240,6 @@ if (!versionData) {
 }
 console.log("Connected to browser:", versionData.Browser);
 
-try {
     const newTabRes = await fetch(`http://127.0.0.1:${CHROME_PORT}/json/new?http://127.0.0.1:${SERVER_PORT}/ops`, { method: "PUT" });
     const tab = await newTabRes.json();
     const wsUrl = tab.webSocketDebuggerUrl;
@@ -265,10 +273,7 @@ try {
     console.log("Injecting admin session storage...");
     await send("Runtime.evaluate", {
         expression: `
-            sessionStorage.setItem("dtd-admin-pass", JSON.stringify({
-                value: "7cBAJEinvqf9R_ha1mgowOW5rWfn8_2heNxflmXHj7SPljas",
-                expiresAt: Date.now() + 3600000
-            }));
+            sessionStorage.setItem("dtd-admin-pass", ${JSON.stringify(JSON.stringify({ value: ADMIN_PASS, expiresAt: Date.now() + 3600000 }))});
             location.reload();
         `
     });
@@ -346,7 +351,8 @@ try {
 } catch (err) {
     console.error("Screenshot capture error:", err);
 } finally {
-    chrome.kill();
+    chrome?.kill();
     server.close();
+    fs.rmSync(CHROME_PROFILE_DIR, { recursive: true, force: true });
     console.log("Chrome and test server terminated.");
 }
