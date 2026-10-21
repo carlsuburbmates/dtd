@@ -42,6 +42,27 @@ for setting in ENABLE_TRAINER_BILLING_CHECKOUT=0 OPS_SELF_HEALING_ENABLED=0; do
   fi
 done
 
+for web_contract in '--to-latest' 'latestCreatedRevisionName' 'latestReadyRevisionName' 'EXPECTED_BUNDLE'; do
+  if ! grep -Fq -- "${web_contract}" "${repo_root}/scripts/deploy_sandbox_frontend.sh"; then
+    echo "Sandbox frontend deployment must verify ${web_contract}" >&2
+    exit 1
+  fi
+done
+
+REPO_ROOT="${repo_root}" python3 - <<'PY'
+import os
+import pathlib
+import re
+
+pattern = r"""/(?:assets/index|static/js/main)[^\"]*\.js"""
+sample = '<script type="module" src="/assets/index-A1b2C3.js"></script>'
+match = re.search(pattern, sample)
+assert match and match.group(0) == "/assets/index-A1b2C3.js", match
+index_html = pathlib.Path(os.environ["REPO_ROOT"]) / "frontend/build/index.html"
+assert index_html.is_file(), f"Expected built index at {index_html}"
+print("Sandbox frontend bundle parser: PASS")
+PY
+
 if ! grep -Fq -- '--update-headers="Content-Type=application/json"' "${repo_root}/scripts/setup_sandbox_ingestion.sh"; then
   echo "Scheduler provisioning must send JSON payloads to the FastAPI endpoint" >&2
   exit 1
