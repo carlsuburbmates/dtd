@@ -33,6 +33,8 @@ Cleanup status for the four workflow fixtures, synthetic auth state and webhook 
 - Fraud confirm-spam fixture: synthetic intro, Ops audit row and auth-limiter state were deleted and confirmed absent; no notification was created.
 - Support concurrency fixture: synthetic thread, message, notification, Ops audit row and auth-limiter state were deleted and confirmed absent. Five concurrent duplicate replies created one provider test-sink message; Resend retains provider-side test metadata only.
 - Support closure fixture: synthetic thread, audit row and auth-limiter state were deleted and confirmed absent.
+- Claim challenge negative-case refresh: synthetic trainer, challenge events and notification rows for invalid OTP, expiry, max-attempt lock, disputed profile, missing claim email, unavailable SMS and verified-event replay were removed; direct queries confirmed no matching application rows remain.
+- Support intake refresh: synthetic support thread, notification and `support_inquiry_created` audit row were removed; direct queries confirmed zero matching application rows. Resend retains test-sink delivery metadata only.
 - No live failure injection, obligations sync, production record, real trainer recipient, billing operation or production configuration was touched. The original trainer-ingest Scheduler stayed PAUSED; engine-tick remained independently enabled.
 
 Cleanup status: **DONE** for all application records created in this refresh. Provider-side test-sink metadata from the single support email remains at Resend and does not contain application fixture records.
