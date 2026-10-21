@@ -35,6 +35,13 @@ if grep -Eq '^[[:space:]]*bash .*setup_sandbox_ingestion\.sh' "${repo_root}/scri
   exit 1
 fi
 
+for setting in ENABLE_TRAINER_BILLING_CHECKOUT=0 OPS_SELF_HEALING_ENABLED=0; do
+  if ! grep -Fq "${setting}" "${repo_root}/scripts/deploy_sandbox.sh"; then
+    echo "Sandbox deployment must explicitly keep ${setting}" >&2
+    exit 1
+  fi
+done
+
 if ! grep -Fq -- '--update-headers="Content-Type=application/json"' "${repo_root}/scripts/setup_sandbox_ingestion.sh"; then
   echo "Scheduler provisioning must send JSON payloads to the FastAPI endpoint" >&2
   exit 1
