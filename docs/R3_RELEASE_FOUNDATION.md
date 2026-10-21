@@ -2,7 +2,7 @@
 
 **Evidence date:** 22 October 2026
 
-**Status:** PARTIAL — PR #17 integration, main CI, DF-046 runtime acceptance and sandbox identity are complete. The two newly surfaced follow-redirects alerts require the reviewed lockfile correction to reach main and a successful rescan.
+**Status:** DONE for the developer release-platform checkpoint. Reviewed code is integrated; main CI and dependency graph passed; zero default-branch Dependabot alerts remain. Product acceptance, provider follow-ups and production retain their later-stage gates.
 **Scope:** Developer sandbox only. This record does not authorise production deployment, provider credential changes, payments, or ingestion activation.
 
 ## 1. Environment and deployment identity
@@ -72,7 +72,7 @@ Provider status statements above distinguish a successful runtime probe from pro
 
 ## 5. Dependency and hosting risk register
 
-- **DF-037 — PARTIAL:** original alerts #253–#256/#258 are fixed after PR #17 integration. Rescan discovered #259/#260 for follow-redirects 1.16.0. Independently accepted local correction resolves 1.16.1, passes frozen install, 74 tests and build, and leaves all 18 static assets byte-identical (manifest SHA256 `f3af48657ae8f3f9eb6cef8761158862f023c51761993e840d50f269024f46ef`). The Node-only adapter is excluded from the browser build and nginx runtime, so this correction requires repository integration/rescan, not frontend redeployment. Motor migration remains TD-001; production compatibility remains R9.
+- **DF-037 — DONE:** original alerts #253–#256/#258 and newly surfaced #259/#260 are fixed. Accepted correction `d0f4096` merged in PR #18 as `48f68f4bb49ac1e8641e515b7a6a0f6713a024da`; main Verify `39642567639`, Push `39642567225` and graph `39643359491` passed. After the supported GitHub refresh, SBOM reports follow-redirects 1.16.1 and no Dependabot alerts are open (alerts #259/#260 fixed at 17:24:28–29 UTC on 21 Oct / 22 Oct Melbourne). Frozen install, 74 tests/build and independent registry/integrity verification passed. All 18 local static files remain byte-identical (manifest SHA256 `f3af48657ae8f3f9eb6cef8761158862f023c51761993e840d50f269024f46ef`); the Node adapter is excluded from the browser/nginx runtime, so no frontend redeploy is required. Motor migration remains TD-001 and production compatibility remains R9.
 - **DF-006 — PARTIAL:** exact-head CI, deployment manifest and live source/image identity are verified. Product workflow acceptance remains R8.
 - **DF-007 — PARTIAL:** canonical public hosting is Firebase; Vercel is not a live project or DTD sandbox. Its Git connection to `carlsuburbmates/dtd` was removed in authenticated project settings on 22 Oct. The historical preview for `906d3bed` predates removal; no deployment exists for later PR head `509d051`. The similarly named `.com` domain's relationship to DTD remains unknown and is not on the active sandbox route.
 - **DF-042 — DONE:** developer web runtime identity fix remains accepted.
@@ -84,4 +84,6 @@ Provider status statements above distinguish a successful runtime probe from pro
 
 ## 6. R3 exit disposition
 
-R3 is **PARTIAL** pending integration and rescan of the narrow follow-redirects correction. DF-046, PR #17 integration, main checks, Vercel disconnection, bounded API recovery, local management-session containment and Cloud Run sandbox identity are evidenced. The API remains `dtd-api-dev-r3-9dd53ed6` and web `dtd-web-dev-00023-phd`, each at 100%; ingestion remains PAUSED and routine engine-tick remains separate. Provider-management work stays assigned to R4 (Atlas/ABR), R7 (Resend/Sentry/alert receipt) and R9 (production/Stripe), retaining DF-001/DF-050. R4 has not started. After the remaining dependency rescan and independent checkpoint acceptance, hand over at the owner's request rather than starting R4 in this session.
+R3 is **DONE for the developer platform/release checkpoint**. DF-046 runtime parity, accepted main integration, successful main CI/graph, closed dependency alerts, Vercel disconnection, bounded API recovery, owner-authorized local management-session containment and the confirmed Cloud Run sandbox identity are evidenced. The API remains `dtd-api-dev-r3-9dd53ed6` and web `dtd-web-dev-00023-phd`, each at 100%; ingestion remains PAUSED and routine engine-tick remains separate. Provider work stays assigned to R4 (Atlas/ABR), R7 (Resend/Sentry/Monitoring receipt) and R9 (production/Stripe), retaining DF-001/DF-050. Existing public-history credential alerts #1/#2 have unknown validity and are not claimed contained; ten existing CodeQL observations are retained for scoped triage in TD-002. R3 dependency closure is not a global security-clean claim.
+
+The owner requested handover after this work. R4 has not started. Use [DTD_NEXT_SESSION_HANDOVER.md](DTD_NEXT_SESSION_HANDOVER.md) when the owner resumes; finish R4's lawful-source/robots/dedup/capability requirements before R5. The eventual owner product audit is after integrated R8 sandbox acceptance. No production release, live payment, source activation or real-data mutation occurred in this checkpoint.
