@@ -284,6 +284,7 @@ def test_resend_webhook_security_and_terminal_protection():
         mock_resend_events = _MockCollection()
         orig_db = server.db
         orig_secret = os.environ.get("RESEND_WEBHOOK_SECRET")
+        orig_event_index_ready = server._RESEND_WEBHOOK_EVENT_INDEX_READY
 
         server.db = _MockDB(
             notification_events=mock_notif,
@@ -343,7 +344,14 @@ def test_resend_webhook_security_and_terminal_protection():
                 res_tampered = await client.post("/resend/webhook", content=tampered_bytes, headers=valid_headers)
                 assert res_tampered.status_code == 401
 
-                # 7. Valid delivery event updates notification_events to 'delivered'
+                # 7. Fail closed when the durable idempotency index is unavailable
+                server._RESEND_WEBHOOK_EVENT_INDEX_READY = False
+                res_no_index = await client.post("/resend/webhook", content=payload_bytes, headers=valid_headers)
+                assert res_no_index.status_code == 503
+                assert await mock_resend_events.count_documents({}) == 0
+                server._RESEND_WEBHOOK_EVENT_INDEX_READY = True
+
+                # 8. Valid delivery event updates notification_events to 'delivered'
                 valid_headers = _make_svix_headers(test_secret, payload_bytes)
                 res_deliv = await client.post("/resend/webhook", content=payload_bytes, headers=valid_headers)
                 assert res_deliv.status_code == 200
@@ -353,7 +361,7 @@ def test_resend_webhook_security_and_terminal_protection():
                 assert updated["status"] == "delivered"
                 assert updated["resend_event_type"] == "email.delivered"
 
-                # 8. Bounce event on another message
+                # 9. Bounce event on another message
                 bounce_payload = {
                     "type": "email.bounced",
                     "data": {
@@ -388,13 +396,14 @@ def test_resend_webhook_security_and_terminal_protection():
                 rechecked = await mock_notif.find_one({"provider_id": "resend_msg_abc"})
                 assert rechecked["status"] == "delivered"
 
-                # 10. Minimal PII recorded in resend_webhook_events
+                # 11. Minimal PII recorded in resend_webhook_events
                 event_record = await mock_resend_events.find_one({"email_id": "resend_msg_abc"})
                 assert event_record is not None
                 assert "to" not in event_record
                 assert "raw_payload" not in event_record
         finally:
             server.db = orig_db
+            server._RESEND_WEBHOOK_EVENT_INDEX_READY = orig_event_index_ready
             if orig_secret is not None:
                 os.environ["RESEND_WEBHOOK_SECRET"] = orig_secret
             else:

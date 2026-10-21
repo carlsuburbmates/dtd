@@ -121,6 +121,7 @@ mongo_client = AsyncIOMotorClient(
 )
 db_name = os.environ.get("DB_NAME", "dtd")
 db = mongo_client[db_name]
+_RESEND_WEBHOOK_EVENT_INDEX_READY = False
 
 app = FastAPI(title="Dog Trainers Directory Match Engine")
 api = APIRouter(prefix="/api")
@@ -8492,6 +8493,9 @@ async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
     event_data = event.get("data") or {}
     email_id = str(event_data.get("email_id") or "")
 
+    if not _RESEND_WEBHOOK_EVENT_INDEX_READY:
+        raise HTTPException(status_code=503, detail="Webhook idempotency storage is unavailable.")
+
     # Idempotency check via resend_events collection with minimal PII
     resend_events_coll = getattr(db, "resend_webhook_events", None)
     if resend_events_coll is not None:
@@ -10092,6 +10096,7 @@ def _cancel_bg_tasks() -> None:
 
 
 async def _ensure_indexes() -> None:
+    await _ensure_resend_webhook_event_index()
     try:
         await db.trainers.create_index("id", unique=True, sparse=True)
         await db.suburbs.create_index("slug", unique=True)
@@ -10191,6 +10196,16 @@ async def _ensure_indexes() -> None:
             await ops_obl_coll.create_index([("status", 1), ("is_overdue", -1)])
     except Exception as exc:
         logger.warning("Startup database index creation non-fatal warning: %s", exc)
+
+
+async def _ensure_resend_webhook_event_index() -> None:
+    global _RESEND_WEBHOOK_EVENT_INDEX_READY
+    _RESEND_WEBHOOK_EVENT_INDEX_READY = False
+    try:
+        await db.resend_webhook_events.create_index("id", unique=True, sparse=True)
+        _RESEND_WEBHOOK_EVENT_INDEX_READY = True
+    except Exception as exc:
+        logger.warning("Resend webhook idempotency index unavailable: %s", exc)
 
 
 async def _seed_urgent_providers_if_empty() -> None:
