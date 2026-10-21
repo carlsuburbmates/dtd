@@ -17,9 +17,10 @@ Read these in order before editing workflow-affecting features:
 2. `.codex/skill-policy.toml`
 3. `docs/README.md` (active documentation map)
 4. `docs/DTD_CURRENT_STATE.md` and `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`
-5. `docs/DTD_TARGETED_POST_LAUNCH_STATE.md` for next-build targets
-6. The relevant active topic file under `docs/specs/`
-7. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` if a prior decision is disputed
+5. `docs/DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md` (R stage and accepted checkpoints)
+6. `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md` and the applicable DF ledger / matching M-package acceptance criteria
+7. `docs/DTD_TARGETED_POST_LAUNCH_STATE.md` for delivery targets, then the relevant active topic file under `docs/specs/`
+8. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` if a prior decision is disputed
 
 `archive/` is historical, outside the active documentation tree. Do not read or search it during ordinary work, even if a stale reference points there. Only inspect it on explicit user request for archival research.
 
@@ -44,13 +45,20 @@ Do not use this skill when the task is mainly:
 
 For those cases, use a more specific workflow or skill.
 
+## Stage and authentication routing
+
+- Start by naming **R0–R13 stage**, applicable existing DF/M identifiers and evidence already accepted. Do not reinvent completion gates. R0 source remediation accepted at SHA `1ac4138`; R1 runtime verification and R2 reconciliation are the next distinct tasks.
+- **R1–R2:** only verify the agreed remediation workflows in the actual sandbox, record the deployed revision and clean up; no blanket redo of Ops Phases 1–5A. **R3–R8:** deliver existing platform/acquisition/owner/matching/Ops gaps with M/DF contracts. **R10–R12:** measure consented marketplace and business outcomes; do not invent numerical targets before observing the baseline.
+- Use authenticated local/remote tools where available to inspect the real GitHub, CI and provider state. For any required missing login, ask for the specific trusted local sign-in/MFA step and resume; do not request credentials in chat. Promote to remote/dev sandbox only after independent acceptance for the exact changed SHA under `AGENTS.md` §6A.
+- Do not treat the strategic North Star as permission to alter locked commercial, safety, privacy, provenance or production boundaries. Approval of a stage objective is not approval of live billing or production changes.
+
 ## Target Operating Context
 
 Assume these truths unless the active task includes an approved change:
 1. DTD is a Greater Melbourne directory and matching platform with public discovery, rich trainer storefronts, protected enquiries, and optional flat SaaS upgrades.
 2. Supply-building means real trainer supply, verified claims, and useful public discovery, not a waitlist-first public posture.
-3. Existing gates, intro-fee loops, passive-owner paths, and prelaunch lifecycle states are migration baseline unless explicitly retained by a blueprint.
-4. Every workflow must preserve explicit data, automation, degraded-state, and `/ops` evidence requirements.
+3. Historical intro-fee loops, passive-owner paths, supply-first claims and prelaunch states are historical migration context—not live policy—unless the active deployment and current decision records demonstrate their applicability. No owner fee or per-introduction charge is permitted.
+4. Every workflow must preserve explicit data, automation, degraded-state, and `/ops` evidence requirements; accept previously passed adjacent paths unless actually changed or contradicted by new evidence.
 5. `/ops` remains protected and evidence-led; it is not broad admin CRUD.
 
 Distinguish migration baseline, target-state behaviour, and explicit external
@@ -110,8 +118,9 @@ Before editing, write or reason through these fields against the relevant active
 11. required `/ops` evidence
 12. exact completion rule
 13. exact verification plan
+14. applicable R-stage acceptance packet and earlier evidence carried forward
 
-If any of these are unknown, inspect until the gap is resolved before implementing.
+If any of these are unknown, inspect proportionately. If a provider cannot be accessed, report that specific gap and continue independent work rather than blocking the entire stage.
 
 ## `/ops` Visibility Rule
 
@@ -145,6 +154,7 @@ Run the smallest useful validation bundle that still proves the workflow:
 3. stored-data verification when records are part of the workflow
 4. `/ops` verification when the workflow requires operator awareness
 5. adjacent-branch regression check for the same lifecycle
+6. exact source SHA, deployed revision (when applicable), namespaced test fixtures and proven cleanup
 
 Use browser or visual verification when the task changes UI behavior.
 
@@ -158,6 +168,7 @@ Report in this order:
 5. `/ops` visibility handled
 6. validation performed and results
 7. remaining gaps or deferred items
+8. stage status, previously accepted evidence reused and one next authorised package
 
 If no files were changed, say so explicitly.
 

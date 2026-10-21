@@ -1,6 +1,6 @@
 ---
 name: dtd-premium-look-audit
-description: Audit and refine DTD public-facing website pages, route groups, navigation, public copy, CTA hierarchy, metadata, and light visual/mobile polish while preserving the current business priority and locked launch posture. Use when an AI, LLM, agent, bot, automated assistant or AI-enabled tool is asked to review or improve the homepage, landing pages, trainer-facing pages, owner waitlist surfaces, navigation, footer, public copy, visual hierarchy, mobile presentation, or premium brand quality across the public website without expanding into backend, billing, auth, database, or major product redesign work.
+description: Audit and refine DTD public-facing website pages, current owner/trainer journeys, navigation, copy, CTAs, accessibility, metadata and mobile visual polish. Align with the current R-stage and verified deployment posture, not obsolete supply-first assumptions; do not expand into backend, billing, auth or major redesign without task authority.
 ---
 
 # DTD Premium look audit
@@ -8,20 +8,16 @@ description: Audit and refine DTD public-facing website pages, route groups, nav
 Use this skill to make restrained, high-impact improvements to DTD's public website.
 Start from business hierarchy and launch posture, not from decoration or generic conversion patterns.
 
-## Source Of Truth
+## Source of truth and route discovery
 
-Read these in order before editing public pages:
-1. `AGENTS.md`
-2. `.codex/skill-policy.toml`
-3. `docs/process/CODEX_EXECUTION_PLAYBOOK.md`
-4. `docs/governance/CURRENT_TRUTH_INDEX.md`
-5. `docs/standards/SSOT.md`
-6. `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`
-7. `docs/design/WEBSITE_WIREFRAME_SPEC.md`
-8. `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md`
-9. `frontend/src/App.js`
+Read proportionately in this order:
+1. `AGENTS.md` and `.codex/skill-policy.toml`.
+2. `docs/README.md`, `docs/DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md` (R stage), `docs/DTD_CURRENT_STATE.md` and `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`.
+3. `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md`, the relevant `docs/specs/` contract (website, matching, acquisition or commercial copy as applicable), and Decision Contract v2 for matching-visible states.
+4. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` only if a previous choice conflicts.
+5. Locate **actual** route components by inspecting current frontend directories/router/source at HEAD; never hardcode an assumed `frontend/src/App.js` or historical design-spec path. Inspect deployed website/flags if making live-posture claims.
 
-Use lower-authority design/process docs only as support material after the canonical pack is clear.
+The former `docs/process/CODEX_EXECUTION_PLAYBOOK.md`, `docs/governance/CURRENT_TRUTH_INDEX.md`, `docs/standards/SSOT.md`, `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`, `docs/design/WEBSITE_WIREFRAME_SPEC.md`, `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `frontend/src/App.js` were absent at the inspected release SHA. Do not create or follow substitute copies as if they were active authority. Archive/history are evidence only when explicitly requested.
 
 ## When To Use
 
@@ -29,14 +25,14 @@ Use this skill when the task is about:
 1. homepage audit or refinement
 2. landing page refinement
 3. trainer-facing page improvement
-4. owner waitlist page improvement
+4. owner questionnaire/results/profile/protected-enquiry and any **actually active** waitlist page refinement
 5. navigation or footer cleanup
 6. CTA hierarchy cleanup
 7. public copy tightening
 8. mobile UI polish
 9. visual hierarchy review
 10. removing cheap, scattered, repetitive, or internal-sounding public wording
-11. locking or updating the public-page operating rules inside the canonical website spec before a broad public-site overhaul
+11. checking applicable current public-page contracts before a broad public-site overhaul; updating an existing active specification only when the authorised task requires it
 
 ## When Not To Use
 
@@ -52,21 +48,17 @@ Do not use this skill when the task mainly requires:
 9. long-form education or curriculum rewrites
 10. `/ops` product work unless the ask is limited to public-facing navigation or copy continuity
 
-If the task crosses into these areas, stop and ask for explicit approval or route to a more appropriate skill or workflow.
+If the task crosses into these areas, route to the suitable skill and existing owner authority; ask only if the needed consequential action has not been authorised. An authorised cross-surface feature task need not stop merely because this visual skill is narrow.
 
-## Locked Business Context
+## Approved current business context
 
-Assume these truths unless the current task explicitly states a different approved posture:
-1. DTD is a guided dog-trainer match-and-intro platform, not a generic directory.
-2. The current launch posture is `supply_first`.
-3. `PUBLIC_MATCHING_ENABLED=false`.
-4. Trainer acquisition is the primary public priority in the current locked posture.
-5. Owner demand capture remains passive through education and waitlist flows.
-6. Public pages must not imply broad live matching is currently open.
-7. `/ops` is a protected oversight surface, not a public marketing route.
+1. DTD serves dog owners and legitimate trainers through trustworthy Greater Melbourne discovery and AI-assisted, evidence-bounded matching, with protected enquiry; it is not merely a generic directory and does not promise training outcomes.
+2. **Do not hardcode** `supply_first`, `PUBLIC_MATCHING_ENABLED=false`, waitlist-first or assumed live matching. Determine present route/feature availability from active source, environment and deployed evidence. The previous documented public phase is `live_matching`, but current deployed status must be verified before copy claims.
+3. Respect both owner and trainer journeys. Select CTA hierarchy using **the actual R stage, live posture, evidence and requested page purpose**, not an obsolete supply priority. Never show a gated CTA as operational.
+4. Free owner use, no per-lead or introduction fees; commercial priority cannot falsify eligibility or fit. Public copy must distinguish actual claims, trainer declarations, official-source facts and review outcomes.
+5. `/ops` is protected owner oversight, not a public marketing route. First Leash remains a separate education deployment with privacy-safe linking.
+6. Visual polishing cannot authorise new matching states, payments, production settings, provider sources or product-policy changes.
 
-Do not hardcode one permanent CTA order across all future tasks.
-Identify the current business priority from the user's prompt first, then preserve that hierarchy consistently across copy, CTA weight, section order, and visual emphasis.
 
 ## Premium Standard
 
@@ -174,18 +166,18 @@ Do not make these changes unless the user explicitly asks:
 7. full redesign
 8. new feature development
 9. broad education-content rewrites
-10. launch-posture changes that would imply live matching is open
+10. changed feature availability, public-policy or launch posture beyond evidence for the current environment
 
 ## Required Workflow
 
-1. Read the task prompt and identify the current business priority.
-2. Read `docs/COMPLETE_WEBSITE_PAGE_SPEC.md` and treat its global public-page operating rules as the mandatory contract for page purpose, CTA hierarchy, public-language discipline, visual weight, and explanation limits.
-3. Identify the relevant public routes from the prompt, `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`, and `frontend/src/App.js`.
-4. Inspect the current implementation files for those routes before suggesting or making changes.
+1. Read the task prompt; identify the R stage, current business priority and previously accepted visual/browser evidence.
+2. Consult the active roadmap, documentation map, invariants and applicable real route/product specifications; do not stop to resurrect missing historical website specs.
+3. Discover relevant public routes from the actual current frontend tree and router and, when applicable, the authenticated developer-sandbox website.
+4. Inspect the implementation and current feature/rollout state before proposing or making changes.
 5. Use browser or Playwright inspection if available when UI changes or visual judgments matter.
 6. Review both desktop and mobile presentation.
 7. Identify hierarchy, CTA, copy, visual, and public-language issues before editing.
-8. If the task reveals the operating rules are missing, contradictory, or too weak for the requested overhaul, stop and update the canonical website spec first before editing implementation.
+8. If active specifications genuinely conflict, resolve the narrow conflict using the existing authority order; record a proposed decision only where owner authority is actually needed. Do not recreate obsolete SSOT files or block minor authorised edits on a missing historical design document.
 9. If the user asked for a review only, stop after findings and do not edit.
 10. If the user asked for improvements, make restrained, high-impact edits only within the allowed scope.
 11. Preserve the current business hierarchy through copy weight, section order, and CTA emphasis.
@@ -212,9 +204,9 @@ Treat the pass as successful only if:
 1. the page clearly supports the current business priority
 2. the main CTA hierarchy is obvious and truthful
 3. public copy feels customer-facing, concise, and deliberate
-4. the page does not imply live capabilities that are currently gated
+4. the page accurately describes verified live capabilities and does not expose a gated or nonfunctional CTA
 5. visual quality improves through restraint, not clutter
 6. mobile presentation remains readable and intentional
 7. no backend, billing, auth, database, or major route scope was changed without explicit approval
 8. validation appropriate to the change scope was completed or the gap was reported clearly
-9. broad public-site work did not proceed without first checking the canonical public-page operating rules in the website spec
+9. broad public-site work was grounded in the active roadmap, real routes, approved specs and current environment state, rather than stale supply-first assumptions
