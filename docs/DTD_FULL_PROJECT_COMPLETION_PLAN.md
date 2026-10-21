@@ -1,8 +1,18 @@
 # DTD Full Project Completion Plan
 
-**Status:** active execution plan — 7 October 2026.  This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
+**Status:** active execution plan — refreshed 21 October 2026. This is the single cross-project completion sequence. It supersedes treating matching, acquisition, website, automation and `/ops` as isolated finish lines; their detailed contracts remain authoritative.
 
-## Current verified baseline
+## Current verified baseline — 21 October 2026
+
+- R0 remains accepted only at exact SHA `1ac4138e4d82991501139298cc624be732661119`. DF-043 remains the separately reviewed suppression fix at `50f3c594d611bede8b7a610d7b09fb3fd8680f23`.
+- Developer web revision uses `dtd-web-dev-runtime`; canary and promoted API-backed catalogue flow passed. DF-042 is DONE within the verified direct-permission and flow scope; inherited organization permissions remain NOT_VERIFIED.
+- Developer trainer-ingest Scheduler is PAUSED with its original schedule, OIDC, deadline, URL and `{}` body. DF-045 robots fail-open and DF-044 URL/domain source approval remain open R4 controls. The enabled engine-tick path does not invoke ingestion. Keep the ingestion job paused until those controls and source execution scope are independently resolved.
+- R1 runtime acceptance is DONE WITH NAMED BLOCKED FOLLOW-UPS on API revision `dtd-api-dev-00054-rvl` (image `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3`, source `fdd2c454`). Current-release synthetic webhook, claim success/negative cases, privacy denial, suppression, delisting, fraud, support intake/concurrency/closure and protected Ops have scenario outcomes and cleanup evidence. DF-051 and positive trainer/privacy/publication journeys are assigned to R5, with an acquisition-dedup regression check required in R4 before activation; safe notifier failure/fallback and scoped obligation resolution/completeness to R7; provider-originated webhook verification and webhook-enabled recovery to R3. Conditional rollback to `00059-hex` was rehearsed and the service restored to `00054-rvl`; ingestion remains PAUSED under the separate R4 gate.
+- DF-038 source retirement is accepted locally in `85bb608` and the developer passcode rotation is verified; remote integration remains an R2 task. No owner action is currently required. R1 permits ingestion to remain PAUSED; DF-044/045 remain separate R4 activation dependencies.
+- The targeted R1 release evidence and cleanup record are [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) and [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md).
+
+## Evidence carried forward from 7 October
+
 
 - Developer sandbox: Cloud Run API `dtd-api-dev-00021-dfd` and isolated frontend `dtd-web-dev-00006-qqx`, both at 100% traffic; the API `/api/health` reports an available database. Both live frontend hostnames were browser-checked against the sandbox API after the canonical-host routing repair in `6957c69`.
 - The sandbox ingestion scheduler `dtd-trainer-ingest-cron` is enabled at 02:00 Australia/Melbourne. Its OIDC subject, canonical regional audience and JSON content type now match the service contract. A real Cloud Scheduler dry-run returned HTTP 200, wrote a zero-mutation run record, and that record was deleted; a real acquisition run remains intentionally unaccepted.

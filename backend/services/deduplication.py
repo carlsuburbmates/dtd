@@ -43,12 +43,19 @@ def identity(candidate: Dict[str, Any]) -> Dict[str, str]:
     }
 
 
-async def suppression_match(db: Any, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def suppression_match(
+    db: Any,
+    candidate: Dict[str, Any],
+    *,
+    trainer_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     coll = getattr(db, "delisted_entities", None)
     if coll is None:
         return None
     keys = identity(candidate)
     clauses = [{key: value} for key, value in keys.items() if value and key != "normalized_name"]
+    if trainer_id:
+        clauses.insert(0, {"trainer_id": trainer_id})
     if not clauses:
         return None
     return await coll.find_one({"$or": clauses}, {"_id": 0})

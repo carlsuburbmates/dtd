@@ -52,7 +52,14 @@ class _MockCollection:
         for r in self.rows:
             match = True
             for k, v in query.items():
-                if isinstance(v, dict) and "$regex" in v:
+                if k == "$or":
+                    if not any(
+                        all(r.get(clause_key) == clause_value for clause_key, clause_value in clause.items())
+                        for clause in v
+                    ):
+                        match = False
+                        break
+                elif isinstance(v, dict) and "$regex" in v:
                     val = str(r.get(k) or "")
                     flags = re.IGNORECASE if v.get("$options") == "i" else 0
                     if not re.search(v["$regex"], val, flags):
@@ -238,6 +245,138 @@ def test_run_batch_ingestion_pipeline_protects_claimed_profile():
         assert trainer["tier"] == "pro"
         assert trainer["claimed"] is True
         assert "source_last_crawled_at" in trainer
+
+
+def _active_ingestion_mocks():
+    fetch_mock = AsyncMock(return_value=(
+        True,
+        "Synthetic trainer source. ABN: 53 780 168 767",
+        {"http_status": 200, "sha256": "synthetic"},
+        "ok",
+    ))
+    return (
+        patch("services.ingestion_manager.polite_fetch_url", new=fetch_mock),
+        patch("services.ai.extract_trainer_source", new=AsyncMock(return_value={
+            "training_philosophy": "Positive reinforcement",
+            "specialties": ["puppy_training"],
+            "service_formats": ["in_home"],
+            "serviced_suburbs": ["Richmond"],
+        })),
+        patch("services.abr_client.AbrClient.lookup", new=AsyncMock(return_value={
+            "ok": True,
+            "data": {
+                "abn": "53780168767",
+                "entity_name": "Synthetic Trainer Pty Ltd",
+                "is_active": True,
+                "status": "Active",
+                "retrieved_at": datetime.now(timezone.utc).isoformat(),
+            },
+        })),
+        fetch_mock,
+    )
+
+
+def test_ingestion_does_not_republish_delisted_unclaimed_trainer(monkeypatch):
+    """A synthetic delisting must block scheduler refresh from republishing the existing identity."""
+    import server
+
+    db = _MockDB()
+    trainer = {
+        "id": "synthetic_delisted_existing",
+        "name": "Synthetic Trainer",
+        "suburb": "Richmond",
+        "website": "https://synthetic-trainer.example",
+        "phone": "+61411222333",
+        "abn": "53780168767",
+        "claimed": False,
+        "claim_status": "unclaimed",
+        "published": False,
+        "is_active": False,
+    }
+    db.trainers.rows.append(dict(trainer))
+    # The authoritative trainer reference must still suppress the record when
+    # every canonical identity field differs from the delisting snapshot.
+    db.delisted_entities.rows.append({
+        "trainer_id": trainer["id"],
+        "abn": "11111111111",
+        "normalized_phone": "+61400999888",
+        "website_domain": "legacy-synthetic.example",
+        "reason": "synthetic_test",
+    })
+    db.discovery_queue.rows.append({
+        "id": "synthetic_existing_refresh",
+        "url": trainer["website"],
+        "status": "pending",
+        "hint_name": trainer["name"],
+        "hint_suburb": trainer["suburb"],
+        "hint_phone": trainer["phone"],
+        "hint_abn": trainer["abn"],
+    })
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setattr(server, "_require_cloud_scheduler_oidc", lambda authorization: None)
+
+    fetch, extract, abr, _ = _active_ingestion_mocks()
+    with fetch, extract, abr:
+        result = asyncio.run(server.run_trainer_ingest_job(
+            payload=server.TrainerIngestJobRequest(batch_size=1),
+            authorization="Bearer synthetic-test-token",
+        ))
+
+    persisted = next(row for row in db.trainers.rows if row["id"] == trainer["id"])
+    assert persisted["published"] is False
+    assert persisted["is_active"] is False
+    assert result["ok"] is True
+    assert result["ingestion"].get("suppressed", 0) == 1
+    assert result["guardian"]["status"] == "clean"
+    assert db.discovery_queue.rows[0]["status"] == "suppressed"
+    assert db.discovery_queue.rows[0]["reason"] == "delisted_identity_match"
+
+
+@pytest.mark.parametrize("identity_key", ["abn", "normalized_phone", "website_domain"])
+def test_ingestion_does_not_insert_new_identity_matching_delisting(monkeypatch, identity_key):
+    """Each canonical synthetic delisting key blocks scheduler creation before fetch."""
+    import server
+    from services.deduplication import identity
+
+    db = _MockDB()
+    candidate = {
+        "name": "Synthetic Trainer",
+        "suburb": "Richmond",
+        "website": "https://synthetic-trainer.example",
+        "source_url": "https://synthetic-trainer.example",
+        "phone": "+61411222333",
+        "abn": "53780168767",
+    }
+    db.delisted_entities.rows.append({
+        identity_key: identity(candidate)[identity_key],
+        "trainer_id": "synthetic_deleted_identity",
+        "reason": "synthetic_test",
+    })
+    db.discovery_queue.rows.append({
+        "id": "synthetic_new_insert",
+        "url": candidate["website"],
+        "status": "pending",
+        "hint_name": candidate["name"],
+        "hint_suburb": candidate["suburb"],
+        "hint_phone": candidate["phone"],
+        "hint_abn": candidate["abn"],
+    })
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setattr(server, "_require_cloud_scheduler_oidc", lambda authorization: None)
+
+    fetch, extract, abr, fetch_mock = _active_ingestion_mocks()
+    with fetch, extract, abr:
+        result = asyncio.run(server.run_trainer_ingest_job(
+            payload=server.TrainerIngestJobRequest(batch_size=1),
+            authorization="Bearer synthetic-test-token",
+        ))
+
+    assert db.trainers.rows == []
+    fetch_mock.assert_not_awaited()
+    assert result["ok"] is True
+    assert result["ingestion"].get("suppressed", 0) == 1
+    assert result["guardian"]["status"] == "clean"
+    assert db.discovery_queue.rows[0]["status"] == "suppressed"
 
 
 def test_run_batch_ingestion_pipeline_logs_failures_to_ops():

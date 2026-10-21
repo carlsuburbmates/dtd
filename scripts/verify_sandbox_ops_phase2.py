@@ -6,8 +6,9 @@ Verifies live runtime behavior on Cloud Run revision dtd-api-dev:
 2. Workstream A: Incident correlation (retry attempts grouped, terminal success clears).
 3. Workstream B & E: Incident lifecycle, dismissal safeguards, and recurrence verification.
 4. Workstream C: Verified recovery, alias resolution, and review idempotency.
-5. Workstream D: Read-only scheduler presence check. The live engine tick is never
-   triggered by this script because it can send real reactivation notifications.
+5. Workstream D: Read-only Scheduler configuration check. The live engine tick is
+   never triggered because routine execution mutates derived and operations state
+   and may call Vertex AI outside fixture-scoped acceptance.
 6. Workstream F: Read-only oversight invariant (zero database writes).
 7. Zero-trace cleanup of disposable test fixtures.
 
@@ -17,6 +18,7 @@ are implemented.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -25,6 +27,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 from urllib.error import HTTPError
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
 from pymongo import MongoClient
@@ -32,6 +35,8 @@ from pymongo import MongoClient
 PROJECT_ID = "dogtrainersdirectory-dev"
 DB_NAME = "dtd_sandbox"
 SERVICE_URL = "https://dtd-api-dev-x2kdoaemtq-ts.a.run.app"
+SCHEDULER_API_URL = "https://dtd-api-dev-625222421634.australia-southeast1.run.app"
+SCHEDULER_SERVICE_ACCOUNT = "dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com"
 
 
 def get_secret(secret_name: str) -> str:
@@ -322,18 +327,52 @@ def main() -> int:
         results["Gate 4 - Workstream C: Alias Resolution & Idempotency"] = "PASS"
 
         # ------------------------------------------------------------------
-        # Gate 5: Workstream D - Serverless Background Scheduling & Engine Tick
+        # Gate 5: Workstream D - Read-only Scheduler configuration and execution safety
         # ------------------------------------------------------------------
-        print("\n--- Gate 5: Workstream D - Serverless Background Scheduling (DF-029) ---")
-        # Deliberately do not execute the scheduler. The engine tick runs production-like
-        # loop functions and may send reactivation emails to real trainers. Its effects
-        # are not fenced to this test_run_id, so a successful API response is not a safe
-        # acceptance test.
-        results["Gate 5 - Workstream D: Serverless Scheduling & Engine Tick (DF-029)"] = (
-            "BLOCKED: live engine-tick execution can send real notifications; "
-            "per-loop bounds and side-effect-safe acceptance are not implemented"
+        print("\n--- Gate 5: Workstream D - Read-only Scheduler configuration ---")
+        scheduler = json.loads(subprocess.check_output(
+            [
+                "gcloud", "scheduler", "jobs", "describe", "dtd-engine-tick-cron",
+                f"--project={PROJECT_ID}", "--location=australia-southeast1", "--format=json",
+            ],
+            text=True,
+        ))
+        target = scheduler.get("httpTarget") or {}
+        target_url = urlparse(str(target.get("uri") or ""))
+        profile = parse_qs(target_url.query).get("profile", [""])[0]
+        audience = (target.get("oidcToken") or {}).get("audience")
+        encoded_body = target.get("body") or ""
+        try:
+            request_body = base64.b64decode(encoded_body, validate=True).decode("utf-8") if encoded_body else ""
+        except (ValueError, UnicodeDecodeError):
+            request_body = "<invalid>"
+        scheduler_ok = (
+            scheduler.get("state") == "ENABLED"
+            and scheduler.get("schedule") == "*/10 * * * *"
+            and scheduler.get("timeZone") == "Australia/Melbourne"
+            and target_url.scheme == "https"
+            and target_url.netloc == urlparse(SCHEDULER_API_URL).netloc
+            and target_url.path == "/api/internal/jobs/engine-tick"
+            and profile == "routine"
+            and target.get("httpMethod") == "POST"
+            and request_body == "{}"
+            and (target.get("oidcToken") or {}).get("serviceAccountEmail") == SCHEDULER_SERVICE_ACCOUNT
+            and audience == SCHEDULER_API_URL
         )
-        print(f"  ! {results['Gate 5 - Workstream D: Serverless Scheduling & Engine Tick (DF-029)']}")
+        results["Gate 5a - Workstream D: Scheduler configuration (read-only)"] = (
+            "PASS" if scheduler_ok else "FAIL: live Scheduler configuration differs from the verified routine profile"
+        )
+        print(f"  {'✓' if scheduler_ok else '✗'} Scheduler state={scheduler.get('state')}, schedule={scheduler.get('schedule')}, profile={profile or 'missing'}, method={target.get('httpMethod') or 'missing'}, target host={target_url.netloc or 'missing'}, request body and OIDC identity/audience checked")
+
+        # The routine profile runs ranking, inferred-conversion promotion, sponsor
+        # inventory, health, durable obligation synchronization, and scheduled Gemini
+        # analysis. Those effects are not scoped to test_run_id, so it is unsafe to
+        # invoke the job as a fixture acceptance test.
+        results["Gate 5b - Workstream D: Side-effect-safe engine-tick acceptance"] = (
+            "BLOCKED: routine tick writes derived and operations state and may call Vertex AI; "
+            "no fixture-scoped execution boundary is available"
+        )
+        print(f"  ! {results['Gate 5b - Workstream D: Side-effect-safe engine-tick acceptance']}")
 
         # ------------------------------------------------------------------
         # Gate 6: Read-only Oversight Invariant (Zero DB Writes)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTD Proactive Owner Assistance"
+  short_description: "Complete current DTD stage, escalate only real decisions"
+  default_prompt: "Use $dtd-proactive-owner-assistance to finish the current R-stage via authenticated local/remote tools, reuse accepted evidence and escalate only consequential missing authority."

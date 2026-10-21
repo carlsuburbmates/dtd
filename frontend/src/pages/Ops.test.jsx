@@ -694,4 +694,632 @@ describe("Ops auth transition", () => {
             view.cleanup();
         }
     });
+
+    describe("Phase 3 - Mobile-First 3-Level Operations Console", () => {
+        it("renders Level 1 'All running normally' status when no actionable cases and loops healthy", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [],
+                    provider_health: { status: "normal" },
+                    ops_investigation: { loop_statuses: { health: { status: "ok" } } },
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level1 = view.container.querySelector("[data-testid='ops-level1-system-status']");
+            expect(level1).not.toBeNull();
+            expect(level1.textContent).toContain("All systems running normally");
+            expect(level1.textContent).toContain("All running normally");
+            expect(level1.textContent).toContain("Directory Supply");
+            expect(level1.textContent).toContain("Commercial Gate");
+            expect(level1.textContent).toContain("Background Systems");
+
+            const level2Empty = view.container.querySelector("[data-testid='ops-attention-empty']");
+            expect(level2Empty).not.toBeNull();
+            expect(level2Empty.textContent).toContain("No action required");
+
+            view.cleanup();
+        });
+
+        it("renders Level 1 'Action required' and Level 2 3-question breakdown when high-severity incident is detected", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "delivery:intro_99",
+                            case_type: "intro_delivery_failure",
+                            workflow: "intro delivery",
+                            title: "Intro Delivery Failed to Trainer",
+                            summary: "Failed to dispatch introduction email due to provider timeout.",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T08:00:00Z",
+                            recommended_next_step: "Review trainer contact and retry introduction dispatch.",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level1 = view.container.querySelector("[data-testid='ops-level1-system-status']");
+            expect(level1.textContent).toContain("Action required on high-priority items");
+            expect(level1.textContent).toContain("Action required");
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-delivery:intro_99']");
+            expect(caseCard).not.toBeNull();
+            expect(caseCard.textContent).toContain("Intro Delivery Failed to Trainer");
+            expect(caseCard.textContent).toContain("What happened:");
+            expect(caseCard.textContent).toContain("Failed to dispatch introduction email");
+            expect(caseCard.textContent).toContain("Why it matters:");
+            expect(caseCard.textContent).toContain("What to do:");
+            expect(caseCard.textContent).toContain("Review trainer contact and retry introduction dispatch.");
+
+            view.cleanup();
+        });
+
+        it("enforces dismissal safeguard on high-severity case in Level 2 console triage", async () => {
+            const postSpy = jest.spyOn(opsApi, "post");
+            getSpy.mockResolvedValue({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "delivery:intro_101",
+                            workflow: "intro delivery",
+                            title: "High Severity Incident",
+                            summary: "Critical failure",
+                            severity: "high",
+                            state: "detected",
+                        },
+                    ],
+                },
+            });
+
+            const promptSpy = jest.spyOn(window, "prompt");
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const dismissBtn = view.container.querySelector("[data-testid='ops-case-quick-dismiss-delivery:intro_101']");
+            expect(dismissBtn).not.toBeNull();
+
+            // 1. Owner cancels prompt -> aborts, no post call
+            promptSpy.mockReturnValueOnce(null);
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).not.toHaveBeenCalled();
+
+            // 2. Owner enters short note (<5 chars) -> aborts with error toast
+            promptSpy.mockReturnValueOnce("bad");
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+            expect(postSpy).not.toHaveBeenCalled();
+            expect(mockToastError).toHaveBeenCalledWith(
+                expect.stringContaining("at least 5 characters")
+            );
+
+            // 3. Owner enters valid note -> executes dismissal
+            postSpy.mockResolvedValueOnce({ data: { ok: true } });
+            promptSpy.mockReturnValueOnce("Verified safe test event dismissal.");
+            await act(async () => {
+                dismissBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+            expect(postSpy).toHaveBeenCalledWith(
+                "/oversight/cases/delivery%3Aintro_101",
+                expect.objectContaining({
+                    state: "dismissed",
+                    note: "Verified safe test event dismissal.",
+                })
+            );
+            expect(mockToastSuccess).toHaveBeenCalledWith("Case marked as dismissed");
+
+            postSpy.mockRestore();
+            promptSpy.mockRestore();
+            view.cleanup();
+        });
+
+        it("renders Level 3 verified automated actions feed and truthful neutral empty state", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    handled_automatically: [
+                        {
+                            id: "auto-1",
+                            title: "Pipeline Guardian Routine Audit",
+                            summary: "Completed automated integrity audit across trainer listings.",
+                            timestamp: "2026-10-16T09:00:00Z",
+                            status: "completed",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const level3 = view.container.querySelector("[data-testid='ops-level3-handled-automatically']");
+            expect(level3).not.toBeNull();
+            expect(level3.textContent).toContain("Handled Automatically");
+            expect(level3.textContent).toContain("Pipeline Guardian Routine Audit");
+            expect(level3.textContent).toContain("Completed automated integrity audit across trainer listings.");
+            expect(level3.textContent).toContain("completed");
+
+            view.cleanup();
+        });
+
+        it("toggles the Advanced Diagnostics disclosure", async () => {
+            getSpy.mockResolvedValueOnce({ data: validSnapshot });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const toggleBtn = view.container.querySelector("[data-testid='ops-diagnostics-toggle']");
+            expect(toggleBtn).not.toBeNull();
+            expect(toggleBtn.textContent).toContain("Show Advanced Diagnostics");
+
+            await act(async () => {
+                toggleBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(toggleBtn.textContent).toContain("Hide Advanced Diagnostics");
+
+            view.cleanup();
+        });
+
+        it("renders the AI Operations Analyst card inside expanded case details", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-case-1",
+                            case_type: "trainer_communications_case",
+                            workflow: "communications",
+                            title: "Message Delivery Failed",
+                            summary: "HTTP 401 Unauthorized from Resend",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "completed",
+                            ai_investigation_id: "inv-12345",
+                            ai_model_used: "gemini-3.5-flash",
+                            ai_analysis: {
+                                summary: "Transactional message delivery failed due to provider authentication error.",
+                                root_cause_classification: "confirmed",
+                                root_cause_hypothesis: "Resend returned HTTP 401 Unauthorized, indicating an invalid API key.",
+                                supporting_evidence: [
+                                    "HTTP status 401 recorded for message.",
+                                    "Secret Manager key version requires validation.",
+                                ],
+                                recommended_action: "Verify and rotate Secret Manager secret dtd-resend-api-key.",
+                                requires_owner_intervention: true,
+                                confidence_score: 0.95,
+                            },
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-case-1']");
+            expect(caseCard).not.toBeNull();
+
+            // Click Details toggle button
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            expect(detailsBtn).not.toBeNull();
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            // Verify AI analysis section rendered
+            const aiCard = caseCard.querySelector("[data-testid='ops-ai-analysis-test-ai-case-1']");
+            expect(aiCard).not.toBeNull();
+            expect(aiCard.textContent).toContain("AI Operations Analyst");
+            expect(aiCard.textContent).toContain("Confirmed Cause");
+            expect(aiCard.textContent).toContain("Transactional message delivery failed due to provider authentication error.");
+            expect(aiCard.textContent).toContain("Resend returned HTTP 401 Unauthorized, indicating an invalid API key.");
+            expect(aiCard.textContent).toContain("Verify and rotate Secret Manager secret dtd-resend-api-key.");
+            expect(aiCard.textContent).toContain("gemini-3.5-flash");
+
+            view.cleanup();
+        });
+
+        it("dispatches investigation request when clicking request button", async () => {
+            const postSpy = jest.spyOn(opsApi, "post").mockResolvedValueOnce({
+                data: {
+                    ok: true,
+                    investigation_id: "inv-999",
+                    status: "completed",
+                    ai_analysis: {
+                        summary: "Fresh analysis result",
+                        root_cause_classification: "likely",
+                        root_cause_hypothesis: "Plausible failure in provider pipeline.",
+                        supporting_evidence: ["Recent timeout observed."],
+                        recommended_action: "Wait for next verified recovery.",
+                    },
+                },
+            });
+
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-case-req",
+                            case_type: "trainer_submission_case",
+                            workflow: "trainer submission",
+                            title: "Held Submission",
+                            summary: "Submission held for ABN verification",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "pending",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-case-req']");
+            expect(caseCard).not.toBeNull();
+
+            // Click Details toggle button
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const requestBtn = caseCard.querySelector("[data-testid='ops-ai-request-button']");
+            expect(requestBtn).not.toBeNull();
+            expect(requestBtn.textContent).toContain("Run AI Investigation");
+
+            await act(async () => {
+                requestBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(postSpy).toHaveBeenCalledWith("/oversight/cases/test-ai-case-req/investigate");
+
+            postSpy.mockRestore();
+            view.cleanup();
+        });
+
+        it("displays graceful state when daily budget is exhausted", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-ai-budget",
+                            case_type: "trainer_submission_case",
+                            workflow: "trainer submission",
+                            title: "Held Submission",
+                            summary: "Submission held for ABN verification",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            ai_investigation_status: "budget_exhausted",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-ai-budget']");
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const aiCard = caseCard.querySelector("[data-testid='ops-ai-analysis-test-ai-budget']");
+            expect(aiCard.textContent).toContain("Daily Budget Enforced ($0 Risk)");
+            expect(aiCard.textContent).toContain("Daily AI investigation budget reached. Deterministic operational telemetry remains fully functional.");
+
+            view.cleanup();
+        });
+    });
+
+    describe("Phase 5 — Autonomous Self-Healing & Recovery", () => {
+        it("renders verified auto-recovery badge and Level 3 feed item", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-recovery-verified-case",
+                            case_type: "trainer_claim_case",
+                            workflow: "trainer claim",
+                            title: "Expired Claim Lock",
+                            summary: "Transient OTP lock expired",
+                            severity: "medium",
+                            state: "resolved",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            auto_recovery_status: "verified",
+                            auto_recovery_routine: "routine:stale_claim_lock_recovery",
+                        },
+                    ],
+                    handled_automatically: [
+                        {
+                            id: "handled_recovery_rec_123",
+                            category: "auto_recovery",
+                            title: "Self-Healed: Stale Claim Lock Recovery",
+                            summary: "System autonomously resolved and verified incident test-recovery-verified-case via Stale Claim Lock Recovery.",
+                            timestamp: "2026-10-16T10:05:00Z",
+                            status: "completed",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Check Level 3 Handled Automatically item
+            const handledSection = view.container.querySelector("[data-testid='ops-level3-handled-automatically']");
+            expect(handledSection.textContent).toContain("Self-Healed: Stale Claim Lock Recovery");
+            expect(handledSection.textContent).toContain("System autonomously resolved and verified incident test-recovery-verified-case");
+
+            view.cleanup();
+        });
+
+        it("allows operator to trigger recovery and calls correct API endpoint", async () => {
+            const postSpy = vi.spyOn(opsApi, "post").mockResolvedValueOnce({
+                data: { ok: true, status: "verified_recovery", routine_id: "routine:background_job_lease_recovery" },
+            });
+
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [
+                        {
+                            case_id: "test-lease-stall",
+                            case_type: "autonomy_serverless_unowned",
+                            workflow: "operations",
+                            title: "Scheduler Lease Stall",
+                            summary: "Engine tick lease expired",
+                            severity: "high",
+                            state: "detected",
+                            detected_at: "2026-10-16T10:00:00Z",
+                            auto_recovery_status: "none",
+                            auto_recovery_routine: null,
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const caseCard = view.container.querySelector("[data-testid='ops-case-card-test-lease-stall']");
+            expect(caseCard).not.toBeNull();
+
+            // Expand details
+            const detailsBtn = caseCard.querySelector("button:has(svg.lucide-chevron-down)");
+            await act(async () => {
+                detailsBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            const recoveryCard = caseCard.querySelector("[data-testid='ops-auto-recovery-test-lease-stall']");
+            expect(recoveryCard).not.toBeNull();
+            expect(recoveryCard.textContent).toContain("Autonomous Self-Healing");
+
+            const triggerBtn = recoveryCard.querySelector("[data-testid='ops-recovery-trigger-button']");
+            expect(triggerBtn).not.toBeNull();
+            expect(triggerBtn.textContent).toContain("Run Safe Recovery");
+
+            await act(async () => {
+                triggerBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(postSpy).toHaveBeenCalledWith("/oversight/cases/test-lease-stall/recover");
+
+            postSpy.mockRestore();
+            view.cleanup();
+        });
+    });
+
+    describe("Phase 5A — Owner Experience Consolidation & No-Noise Operations", () => {
+        it("handles large queue with priority sorting, bounded pagination, and filter pills", async () => {
+            // Generate 8 cases: 2 high, 3 medium, 3 low
+            const mockCases = [
+                { case_id: "case-low-1", title: "Low Case 1", severity: "low", state: "detected", detected_at: "2026-10-16T08:00:00Z" },
+                { case_id: "case-high-1", title: "High Case 1", severity: "high", state: "detected", detected_at: "2026-10-16T09:00:00Z" },
+                { case_id: "case-med-1", title: "Med Case 1", severity: "medium", state: "detected", detected_at: "2026-10-16T09:30:00Z" },
+                { case_id: "case-high-2", title: "High Case 2", severity: "high", state: "detected", detected_at: "2026-10-16T10:00:00Z" },
+                { case_id: "case-med-2", title: "Med Case 2", severity: "medium", state: "detected", detected_at: "2026-10-16T10:30:00Z" },
+                { case_id: "case-low-2", title: "Low Case 2", severity: "low", state: "detected", detected_at: "2026-10-16T11:00:00Z" },
+                { case_id: "case-med-3", title: "Med Case 3", severity: "medium", state: "detected", detected_at: "2026-10-16T11:30:00Z" },
+                { case_id: "case-low-3", title: "Low Case 3", severity: "low", state: "detected", detected_at: "2026-10-16T12:00:00Z" },
+            ];
+
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: mockCases,
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Filter pills check
+            const allFilter = view.container.querySelector("[data-testid='ops-cases-filter-all']");
+            const highFilter = view.container.querySelector("[data-testid='ops-cases-filter-high']");
+            const medFilter = view.container.querySelector("[data-testid='ops-cases-filter-medium']");
+            expect(allFilter).not.toBeNull();
+            expect(highFilter).not.toBeNull();
+            expect(medFilter).not.toBeNull();
+            expect(allFilter.textContent).toContain("All (8)");
+            expect(highFilter.textContent).toContain("High (2)");
+            expect(medFilter.textContent).toContain("Medium (3)");
+
+            // Pagination indicator check
+            const pageIndicator = view.container.querySelector("[data-testid='ops-cases-page-indicator']");
+            expect(pageIndicator).not.toBeNull();
+            expect(pageIndicator.textContent).toContain("Page 1 of 2");
+
+            // Priority sorting: High Case 2 and High Case 1 must be on Page 1
+            expect(view.container.querySelector("[data-testid='ops-case-card-case-high-2']")).not.toBeNull();
+            expect(view.container.querySelector("[data-testid='ops-case-card-case-high-1']")).not.toBeNull();
+
+            // Next page button
+            const nextBtn = view.container.querySelector("[data-testid='ops-cases-next-page']");
+            expect(nextBtn).not.toBeNull();
+            await act(async () => {
+                nextBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(pageIndicator.textContent).toContain("Page 2 of 2");
+
+            // High filter button
+            await act(async () => {
+                highFilter.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            // Filtered to 2 high cases -> only 1 page
+            expect(view.container.querySelector("[data-testid='ops-case-card-case-high-1']")).not.toBeNull();
+            expect(view.container.querySelector("[data-testid='ops-case-card-case-high-2']")).not.toBeNull();
+            expect(view.container.querySelector("[data-testid='ops-case-card-case-med-1']")).toBeNull();
+
+            view.cleanup();
+        });
+
+        it("collapses Level 3 Handled Automatically by default and expands on click", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [],
+                    handled_automatically: [
+                        {
+                            id: "action-1",
+                            category: "routine_maintenance",
+                            title: "Pipeline Guardian Audit",
+                            summary: "Verified 120 listings and integrity checksums.",
+                            timestamp: "2026-10-16T10:00:00Z",
+                            status: "completed",
+                        },
+                        {
+                            id: "action-2",
+                            category: "auto_recovery",
+                            title: "Stale Claim Lock Recovery",
+                            summary: "Resolved expired OTP lock.",
+                            timestamp: "2026-10-16T10:05:00Z",
+                            status: "completed",
+                        },
+                    ],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Summary bar is visible
+            const summaryBar = view.container.querySelector("[data-testid='ops-handled-summary']");
+            expect(summaryBar).not.toBeNull();
+            expect(summaryBar.textContent).toContain("2 routine tasks & verified recoveries handled automatically");
+
+            // List is collapsed (has class hidden)
+            const handledList = view.container.querySelector("[data-testid='ops-handled-list']");
+            expect(handledList).not.toBeNull();
+            expect(handledList.className).toContain("hidden");
+
+            // Toggle expand
+            const toggleBtn = view.container.querySelector("[data-testid='ops-handled-toggle']");
+            expect(toggleBtn).not.toBeNull();
+            expect(toggleBtn.textContent).toContain("Show activity (2)");
+
+            await act(async () => {
+                toggleBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            expect(handledList.className).not.toContain("hidden");
+            expect(toggleBtn.textContent).toContain("Hide activity");
+
+            view.cleanup();
+        });
+
+        it("renders calm empty state when no active cases need attention", async () => {
+            getSpy.mockResolvedValueOnce({
+                data: {
+                    ...validSnapshot,
+                    ops_cases: [],
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const emptyCard = view.container.querySelector("[data-testid='ops-attention-empty']");
+            expect(emptyCard).not.toBeNull();
+            expect(emptyCard.textContent).toContain("No action required");
+            expect(emptyCard.textContent).toContain("Your Work Queue is completely clear");
+
+            view.cleanup();
+        });
+    });
 });
