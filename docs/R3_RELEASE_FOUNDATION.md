@@ -68,7 +68,7 @@ Provider status statements above distinguish a successful runtime probe from pro
 
 ## 5. Dependency and hosting risk register
 
-- **DF-037 — PARTIAL:** candidate API image uses patched compatible PyMongo/Motor versions; frontend lock resolves PostCSS selector parser to 7.1.7. Five Dependabot alerts remain on default `main` until reviewed integration and rescan. Motor reached end of life on 14 May 2026 and receives only critical fixes through 14 May 2027; track PyMongo Async migration separately.
+- **DF-037 — PARTIAL:** default-branch alerts #253–#256 are PyMongo runtime alerts (two high, two medium; GHSA-8fvv-fgr5-f8ch, GHSA-qx36-8mw2-4r3x, GHSA-vp6j-j7w5-5xjj, GHSA-v4x9-3549-crwv); alert #258 is the medium PostCSS selector-parser development alert (GHSA-rj75-hqrm-r3gf). Candidate API image uses patched compatible PyMongo/Motor versions; frontend lock resolves the parser to 7.1.7. The five alerts remain on default `main` until reviewed integration and rescan. Motor reached end of life on 14 May 2026 and receives only critical fixes through 14 May 2027; track PyMongo Async migration separately.
 - **DF-006 — PARTIAL:** exact-head CI, deployment manifest and live source/image identity are verified. Product workflow acceptance remains R8.
 - **DF-007 — PARTIAL:** public-domain ownership is not Vercel, but PR previews still deploy there. The Vercel preview is not the DTD sandbox.
 - **DF-042 — DONE:** developer web runtime identity fix remains accepted.
