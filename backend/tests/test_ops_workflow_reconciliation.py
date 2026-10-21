@@ -27,6 +27,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pymongo.errors import DuplicateKeyError
 
 import server
 from server import app
@@ -86,6 +87,12 @@ def _match_doc(row: Dict[str, Any], filt: Optional[Dict[str, Any]]) -> bool:
                     return False
             elif "$ne" in v:
                 if row.get(k) == v["$ne"]:
+                    return False
+            elif "$exists" in v:
+                if (k in row) != v["$exists"]:
+                    return False
+            elif "$lt" in v:
+                if k not in row or float(row.get(k)) >= float(v["$lt"]):
                     return False
             elif "$lte" in v:
                 if float(row.get(k) or 0) > float(v["$lte"]):
@@ -294,6 +301,7 @@ def test_resend_webhook_security_and_terminal_protection():
         try:
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
                 deliv_payload = {
+                    "created_at": "2026-10-19T00:00:00.000Z",
                     "type": "email.delivered",
                     "data": {
                         "email_id": "resend_msg_abc",
@@ -363,6 +371,7 @@ def test_resend_webhook_security_and_terminal_protection():
 
                 # 9. Bounce event on another message
                 bounce_payload = {
+                    "created_at": "2026-10-19T00:01:00.000Z",
                     "type": "email.bounced",
                     "data": {
                         "email_id": "resend_msg_xyz",
@@ -381,6 +390,7 @@ def test_resend_webhook_security_and_terminal_protection():
 
                 # 9. Terminal status protection: an out-of-order 'email.sent' event CANNOT overwrite 'delivered'
                 sent_payload = {
+                    "created_at": "2026-10-18T23:59:00.000Z",
                     "type": "email.sent",
                     "data": {
                         "email_id": "resend_msg_abc",
@@ -395,6 +405,7 @@ def test_resend_webhook_security_and_terminal_protection():
                 # Status remains 'delivered', not downgraded to 'sent'
                 rechecked = await mock_notif.find_one({"provider_id": "resend_msg_abc"})
                 assert rechecked["status"] == "delivered"
+                assert await mock_resend_events.count_documents({"email_id": "resend_msg_abc"}) == 2
 
                 # 11. Minimal PII recorded in resend_webhook_events
                 event_record = await mock_resend_events.find_one({"email_id": "resend_msg_abc"})
@@ -408,6 +419,295 @@ def test_resend_webhook_security_and_terminal_protection():
                 os.environ["RESEND_WEBHOOK_SECRET"] = orig_secret
             else:
                 os.environ.pop("RESEND_WEBHOOK_SECRET", None)
+
+    asyncio.run(_test())
+
+
+def test_resend_webhook_retry_completes_notification_after_receipt_persisted():
+    """A retry reapplies the idempotent delivery state when the first update failed."""
+    async def _test():
+        test_secret = "whsec_" + base64.b64encode(b"0123456789abcdef0123456789abcdef").decode("ascii")
+
+        class _UniqueEventCollection(_MockCollection):
+            async def insert_one(self, doc):
+                if any(row.get("id") == doc.get("id") for row in self.rows):
+                    raise DuplicateKeyError("duplicate webhook event id")
+                return await super().insert_one(doc)
+
+        class _FailFirstNotificationUpdate(_MockCollection):
+            def __init__(self, *, rows=None):
+                super().__init__(rows=rows)
+                self.update_attempts = 0
+
+            async def update_many(self, filt, update):
+                self.update_attempts += 1
+                if self.update_attempts == 1:
+                    raise RuntimeError("injected notification persistence failure")
+                return await super().update_many(filt, update)
+
+        notification = _FailFirstNotificationUpdate(rows=[{
+            "id": "notif_retry_fixture",
+            "provider_id": "resend_retry_fixture",
+            "status": "sent",
+        }])
+        events = _UniqueEventCollection()
+        original_db = server.db
+        original_secret = os.environ.get("RESEND_WEBHOOK_SECRET")
+        original_index_ready = server._RESEND_WEBHOOK_EVENT_INDEX_READY
+        server.db = _MockDB(notification_events=notification, resend_webhook_events=events)
+        server._RESEND_WEBHOOK_EVENT_INDEX_READY = True
+        os.environ["RESEND_WEBHOOK_SECRET"] = test_secret
+
+        try:
+            payload = json.dumps({
+                "created_at": "2026-10-21T04:00:00.000Z",
+                "type": "email.delivered",
+                "data": {"email_id": "resend_retry_fixture"},
+            }).encode("utf-8")
+            headers = _make_svix_headers(
+                test_secret,
+                payload,
+                svix_id="msg_delivery_retry_fixture",
+            )
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app, raise_app_exceptions=False),
+                base_url="http://test",
+            ) as client:
+                first_attempt = await client.post("/resend/webhook", content=payload, headers=headers)
+                assert first_attempt.status_code == 500
+                assert await events.count_documents({"id": "msg_delivery_retry_fixture"}) == 1
+                assert (await notification.find_one({"provider_id": "resend_retry_fixture"}))[
+                    "status"
+                ] == "sent"
+
+                retry = await client.post("/resend/webhook", content=payload, headers=headers)
+                assert retry.status_code == 200
+                assert retry.json()["duplicate"] is True
+                assert notification.update_attempts == 2
+
+                delivered = await notification.find_one({"provider_id": "resend_retry_fixture"})
+                event = await events.find_one({"id": "msg_delivery_retry_fixture"})
+                assert delivered["status"] == "delivered"
+                assert delivered["resend_event_type"] == "email.delivered"
+                assert delivered["delivered_at"] == event["event_at"]
+                assert delivered["resend_event_at"] == event["event_at"]
+                assert await events.count_documents({"id": "msg_delivery_retry_fixture"}) == 1
+
+                # A completed replay has no additional state effect.
+                replay = await client.post("/resend/webhook", content=payload, headers=headers)
+                assert replay.status_code == 200
+                assert replay.json()["duplicate"] is True
+                assert notification.update_attempts == 3
+                replayed = await notification.find_one({"provider_id": "resend_retry_fixture"})
+                assert replayed == delivered
+                assert await events.count_documents({"id": "msg_delivery_retry_fixture"}) == 1
+        finally:
+            server.db = original_db
+            server._RESEND_WEBHOOK_EVENT_INDEX_READY = original_index_ready
+            if original_secret is None:
+                os.environ.pop("RESEND_WEBHOOK_SECRET", None)
+            else:
+                os.environ["RESEND_WEBHOOK_SECRET"] = original_secret
+
+    asyncio.run(_test())
+
+
+def test_resend_webhook_retry_does_not_restore_stale_terminal_events():
+    """A failed old terminal event cannot overwrite a newer bounce/complaint outcome."""
+    async def _test():
+        test_secret = "whsec_" + base64.b64encode(b"0123456789abcdef0123456789abcdef").decode("ascii")
+
+        class _UniqueEventCollection(_MockCollection):
+            async def insert_one(self, doc):
+                if any(row.get("id") == doc.get("id") for row in self.rows):
+                    raise DuplicateKeyError("duplicate webhook event id")
+                return await super().insert_one(doc)
+
+        class _FailFirstNotificationUpdate(_MockCollection):
+            def __init__(self, *, rows=None, fail_provider_ids=()):
+                super().__init__(rows=rows)
+                self.fail_provider_ids = set(fail_provider_ids)
+
+            async def update_many(self, filt, update):
+                provider_id = filt.get("provider_id")
+                if provider_id in self.fail_provider_ids:
+                    self.fail_provider_ids.remove(provider_id)
+                    raise RuntimeError("injected notification persistence failure")
+                return await super().update_many(filt, update)
+
+        notification = _FailFirstNotificationUpdate(
+            rows=[
+                {"id": "notif_bounce_first", "provider_id": "resend_bounce_first", "status": "sent"},
+                {"id": "notif_complaint_first", "provider_id": "resend_complaint_first", "status": "sent"},
+            ],
+            fail_provider_ids={"resend_bounce_first", "resend_complaint_first"},
+        )
+        events = _UniqueEventCollection()
+        original_db = server.db
+        original_secret = os.environ.get("RESEND_WEBHOOK_SECRET")
+        original_index_ready = server._RESEND_WEBHOOK_EVENT_INDEX_READY
+        server.db = _MockDB(notification_events=notification, resend_webhook_events=events)
+        server._RESEND_WEBHOOK_EVENT_INDEX_READY = True
+        os.environ["RESEND_WEBHOOK_SECRET"] = test_secret
+
+        def _event(event_id, event_type, provider_id, created_at):
+            data = {"email_id": provider_id}
+            if event_type in {"email.bounced", "email.complained"}:
+                data["bounce"] = {"type": "permanent"}
+            return json.dumps({
+                "type": event_type,
+                "created_at": created_at,
+                "data": data,
+            }).encode("utf-8")
+
+        async def _post(client, event_id, payload):
+            headers = _make_svix_headers(test_secret, payload, svix_id=f"msg_{event_id}")
+            return await client.post("/resend/webhook", content=payload, headers=headers)
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app, raise_app_exceptions=False),
+                base_url="http://test",
+            ) as client:
+                old_bounce_id = "evt_bounce_first"
+                old_bounce = _event(old_bounce_id, "email.bounced", "resend_bounce_first", "2026-10-21T04:00:00.000Z")
+                failed_bounce = await _post(client, old_bounce_id, old_bounce)
+                assert failed_bounce.status_code == 500
+
+                new_complaint_id = "evt_complaint_newer"
+                new_complaint = _event(new_complaint_id, "email.complained", "resend_bounce_first", "2026-10-21T04:01:00.000Z")
+                assert (await _post(client, new_complaint_id, new_complaint)).status_code == 200
+
+                mismatched_retry = _event(
+                    old_bounce_id,
+                    "email.complained",
+                    "resend_bounce_first",
+                    "2026-10-21T04:00:00.000Z",
+                )
+                conflict = await _post(client, old_bounce_id, mismatched_retry)
+                assert conflict.status_code == 409
+
+                retried_bounce = await _post(client, old_bounce_id, old_bounce)
+                assert retried_bounce.status_code == 200
+                assert retried_bounce.json()["duplicate"] is True
+                complaint_state = await notification.find_one({"provider_id": "resend_bounce_first"})
+                assert complaint_state["status"] == "complained"
+                assert complaint_state["resend_event_id"] == f"msg_{new_complaint_id}"
+                assert complaint_state["resend_event_at"] == "2026-10-21T04:01:00.000000Z"
+
+                old_complaint_id = "evt_complaint_first"
+                old_complaint = _event(
+                    old_complaint_id,
+                    "email.complained",
+                    "resend_complaint_first",
+                    "2026-10-21T04:00:00.000Z",
+                )
+                failed_complaint = await _post(client, old_complaint_id, old_complaint)
+                assert failed_complaint.status_code == 500
+
+                new_bounce_id = "evt_bounce_newer"
+                new_bounce = _event(
+                    new_bounce_id,
+                    "email.bounced",
+                    "resend_complaint_first",
+                    "2026-10-21T04:01:00.000Z",
+                )
+                assert (await _post(client, new_bounce_id, new_bounce)).status_code == 200
+                retried_complaint = await _post(client, old_complaint_id, old_complaint)
+                assert retried_complaint.status_code == 200
+                assert retried_complaint.json()["duplicate"] is True
+                bounce_state = await notification.find_one({"provider_id": "resend_complaint_first"})
+                assert bounce_state["status"] == "bounced"
+                assert bounce_state["resend_event_id"] == f"msg_{new_bounce_id}"
+                assert bounce_state["resend_event_at"] == "2026-10-21T04:01:00.000000Z"
+
+                assert await events.count_documents({}) == 4
+        finally:
+            server.db = original_db
+            server._RESEND_WEBHOOK_EVENT_INDEX_READY = original_index_ready
+            if original_secret is None:
+                os.environ.pop("RESEND_WEBHOOK_SECRET", None)
+            else:
+                os.environ["RESEND_WEBHOOK_SECRET"] = original_secret
+
+    asyncio.run(_test())
+
+
+def test_resend_webhook_legacy_receipt_does_not_reapply_ambiguous_terminal_state():
+    """Legacy receipts lack event ordering data and must not overwrite newer state."""
+    async def _test():
+        test_secret = "whsec_" + base64.b64encode(b"0123456789abcdef0123456789abcdef").decode("ascii")
+
+        class _UniqueEventCollection(_MockCollection):
+            async def insert_one(self, doc):
+                if any(row.get("id") == doc.get("id") for row in self.rows):
+                    raise DuplicateKeyError("duplicate webhook event id")
+                return await super().insert_one(doc)
+
+        notification = _MockCollection(rows=[{
+            "id": "notif_legacy_fixture",
+            "provider_id": "resend_legacy_fixture",
+            "status": "complained",
+            "resend_event_type": "email.complained",
+            "resend_event_at": "2026-10-21T04:01:00Z",
+        }])
+        events = _UniqueEventCollection(rows=[{
+            # The old handler used data.email_id as the key when the body had
+            # no id; this exercises the compatibility lookup before insert.
+            "id": "resend_legacy_fixture",
+            "type": "email.bounced",
+            "email_id": "resend_legacy_fixture",
+            "created_at": "2026-10-21T04:00:00Z",
+            "bounce_type": "permanent",
+        }])
+        original_db = server.db
+        original_secret = os.environ.get("RESEND_WEBHOOK_SECRET")
+        original_index_ready = server._RESEND_WEBHOOK_EVENT_INDEX_READY
+        server.db = _MockDB(notification_events=notification, resend_webhook_events=events)
+        server._RESEND_WEBHOOK_EVENT_INDEX_READY = True
+        os.environ["RESEND_WEBHOOK_SECRET"] = test_secret
+
+        try:
+            payload = json.dumps({
+                "type": "email.bounced",
+                "created_at": "2026-10-21T04:00:00.000Z",
+                "data": {"email_id": "resend_legacy_fixture", "bounce": {"type": "permanent"}},
+            }).encode("utf-8")
+            headers = _make_svix_headers(test_secret, payload, svix_id="msg_legacy_retry_fixture")
+
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                response = await client.post("/resend/webhook", content=payload, headers=headers)
+                later_event_payload = json.dumps({
+                    "type": "email.delivered",
+                    "created_at": "2026-10-21T04:02:00.000Z",
+                    "data": {"email_id": "resend_legacy_fixture"},
+                }).encode("utf-8")
+                later_event_headers = _make_svix_headers(
+                    test_secret,
+                    later_event_payload,
+                    svix_id="msg_legacy_later_delivery_fixture",
+                )
+                later_event_response = await client.post(
+                    "/resend/webhook",
+                    content=later_event_payload,
+                    headers=later_event_headers,
+                )
+
+            assert response.status_code == 503
+            assert later_event_response.status_code == 503
+            current = await notification.find_one({"provider_id": "resend_legacy_fixture"})
+            assert current["status"] == "complained"
+            assert current["resend_event_type"] == "email.complained"
+            assert current["resend_event_at"] == "2026-10-21T04:01:00Z"
+            assert await events.count_documents({}) == 1
+        finally:
+            server.db = original_db
+            server._RESEND_WEBHOOK_EVENT_INDEX_READY = original_index_ready
+            if original_secret is None:
+                os.environ.pop("RESEND_WEBHOOK_SECRET", None)
+            else:
+                os.environ["RESEND_WEBHOOK_SECRET"] = original_secret
 
     asyncio.run(_test())
 

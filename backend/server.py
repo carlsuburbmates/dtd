@@ -8488,71 +8488,169 @@ async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Malformed JSON payload: {exc}")
 
-    event_id = str(event.get("id") or (event.get("data") or {}).get("email_id") or uuid.uuid4().hex)
+    # Resend's event body does not reliably include an event ID. The signed
+    # Svix message ID identifies this delivery and remains stable on retries.
+    event_id = svix_id
     event_type = str(event.get("type") or "email.unknown")
     event_data = event.get("data") or {}
     email_id = str(event_data.get("email_id") or "")
+    bounce_type = str((event_data.get("bounce") or {}).get("type") or "") if event_type in ("email.bounced", "email.complained") else ""
+
+    event_created_at_raw = event.get("created_at") or event_data.get("created_at")
+    event_timestamp = None
+    event_recorded_at = now_iso()
+    if event_type in {"email.sent", "email.delivered", "email.bounced", "email.complained"} and email_id:
+        try:
+            parsed_event_at = datetime.fromisoformat(str(event_created_at_raw).replace("Z", "+00:00"))
+            if parsed_event_at.tzinfo is None:
+                raise ValueError("Webhook event timestamp must include a timezone")
+            event_timestamp = parsed_event_at.timestamp()
+            event_recorded_at = parsed_event_at.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        except (TypeError, ValueError, OverflowError):
+            raise HTTPException(status_code=400, detail="Webhook event created_at timestamp is missing or invalid.")
 
     if not _RESEND_WEBHOOK_EVENT_INDEX_READY:
         raise HTTPException(status_code=503, detail="Webhook idempotency storage is unavailable.")
 
     # Idempotency check via resend_events collection with minimal PII
     resend_events_coll = getattr(db, "resend_webhook_events", None)
+    receipt_created_at = now_iso()
+    duplicate_event = False
     if resend_events_coll is not None:
+        # Releases before the Svix-ID correction keyed body-ID-less events by
+        # email_id. Detect their receipts before inserting a second identity.
+        legacy_event_id = str(event.get("id") or email_id or "")
+        if legacy_event_id and legacy_event_id != event_id:
+            legacy_receipt = await resend_events_coll.find_one({"id": legacy_event_id}, {"_id": 0})
+            if legacy_receipt:
+                if (
+                    legacy_receipt.get("type") != event_type
+                    or str(legacy_receipt.get("email_id") or "") != email_id
+                    or str(legacy_receipt.get("bounce_type") or "") != bounce_type
+                ):
+                    logger.error("Resend webhook collides with ambiguous legacy receipt: %s", legacy_event_id)
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Legacy webhook receipt requires reconciliation before processing can continue.",
+                    )
+                # The pre-fix receipt records only server receipt time. It
+                # cannot prove whether its business update failed or a newer
+                # event was applied. Return 503 so the provider cannot mistake
+                # this ambiguous legacy state for successful processing.
+                logger.error("Resend webhook requires legacy receipt reconciliation: %s", legacy_event_id)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Legacy webhook receipt requires reconciliation before processing can continue.",
+                )
         try:
             await resend_events_coll.insert_one({
                 "id": event_id,
                 "type": event_type,
                 "email_id": email_id,
-                "created_at": now_iso(),
-                "bounce_type": str((event_data.get("bounce") or {}).get("type") or "") if event_type in ("email.bounced", "email.complained") else None,
+                "created_at": receipt_created_at,
+                "event_at": event_recorded_at,
+                "event_timestamp": event_timestamp,
+                "bounce_type": bounce_type or None,
             })
         except DuplicateKeyError:
-            return {"ok": True, "duplicate": True, "event_id": event_id}
+            # A prior attempt may have persisted the receipt but failed before
+            # updating notification_events. Reapply only when the persisted
+            # receipt matches, and use its original event time for ordering.
+            duplicate_event = True
+            recorded_event = await resend_events_coll.find_one({"id": event_id}, {"_id": 0})
+            if not recorded_event:
+                raise HTTPException(status_code=503, detail="Webhook receipt could not be read for retry.")
+            receipt_timestamp = recorded_event.get("event_timestamp")
+            receipt_at = recorded_event.get("event_at")
+            if (
+                recorded_event.get("type") != event_type
+                or str(recorded_event.get("email_id") or "") != email_id
+                or str(recorded_event.get("bounce_type") or "") != bounce_type
+                or (receipt_timestamp is not None and event_timestamp is not None and float(receipt_timestamp) != event_timestamp)
+            ):
+                raise HTTPException(status_code=409, detail="Webhook event ID conflicts with its stored receipt.")
+            if receipt_timestamp is None or not receipt_at:
+                # A legacy receipt has no provider event ordering evidence. It
+                # cannot safely be replayed over a possibly newer terminal
+                # state, so leave the delivery unacknowledged for reconciliation.
+                logger.error("Resend webhook requires legacy receipt reconciliation: %s", event_id)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Legacy webhook receipt requires reconciliation before processing can continue.",
+                    headers={"Retry-After": "60"},
+                )
+            if receipt_timestamp is not None:
+                event_timestamp = float(receipt_timestamp)
+            event_recorded_at = str(receipt_at)
+
+    event_order_filter = []
+    if event_timestamp is not None:
+        event_order_filter = [
+            {"resend_event_timestamp": {"$exists": False}},
+            {"resend_event_timestamp": {"$lt": event_timestamp}},
+            {"resend_event_id": event_id},
+        ]
 
     # Update notification_events with confirmed delivery/bounce status and terminal protection
     notif_coll = getattr(db, "notification_events", None)
     if notif_coll is not None and email_id:
         if event_type == "email.delivered":
             await notif_coll.update_many(
-                {"provider_id": email_id, "status": {"$nin": ["bounced", "complained"]}},
+                {
+                    "provider_id": email_id,
+                    "status": {"$nin": ["bounced", "complained"]},
+                    "$or": event_order_filter,
+                },
                 {
                     "$set": {
                         "status": "delivered",
-                        "delivered_at": now_iso(),
+                        "delivered_at": event_recorded_at,
                         "resend_event_type": event_type,
-                        "resend_event_at": now_iso(),
+                        "resend_event_at": event_recorded_at,
+                        "resend_event_timestamp": event_timestamp,
+                        "resend_event_id": event_id,
                     }
                 },
             )
         elif event_type in ("email.bounced", "email.complained"):
-            b_reason = str((event_data.get("bounce") or {}).get("type") or event_type)
+            b_reason = bounce_type or event_type
             st = "bounced" if event_type == "email.bounced" else "complained"
             await notif_coll.update_many(
-                {"provider_id": email_id},
+                {"provider_id": email_id, "$or": event_order_filter},
                 {
                     "$set": {
                         "status": st,
                         "bounce_reason": b_reason,
-                        "bounced_at": now_iso(),
+                        "bounced_at": event_recorded_at,
                         "resend_event_type": event_type,
-                        "resend_event_at": now_iso(),
+                        "resend_event_at": event_recorded_at,
+                        "resend_event_timestamp": event_timestamp,
+                        "resend_event_id": event_id,
                     }
                 },
             )
         elif event_type == "email.sent":
             # Out-of-order protection: Do not overwrite terminal status with 'sent'
             await notif_coll.update_many(
-                {"provider_id": email_id, "status": {"$nin": ["delivered", "bounced", "complained"]}},
+                {
+                    "provider_id": email_id,
+                    "status": {"$nin": ["delivered", "bounced", "complained"]},
+                    "$or": event_order_filter,
+                },
                 {
                     "$set": {
                         "resend_event_type": event_type,
-                        "resend_event_at": now_iso(),
+                        "resend_event_at": event_recorded_at,
+                        "resend_event_timestamp": event_timestamp,
+                        "resend_event_id": event_id,
                     }
                 },
             )
 
-    return {"ok": True, "event_id": event_id, "type": event_type}
+    response = {"ok": True, "event_id": event_id, "type": event_type}
+    if duplicate_event:
+        response["duplicate"] = True
+    return response
 
 
 # ---------------------------------------------------------------------------
