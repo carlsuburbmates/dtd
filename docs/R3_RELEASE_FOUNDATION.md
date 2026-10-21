@@ -9,7 +9,7 @@
 
 | Surface | Verified target | Current disposition |
 |---|---|---|
-| DTD public production site | Cloudflare fronts the public domain; repo Firebase defaults select project/site `gen-lang-client-0028123502` (`dogtrainersdirectory`). `firebase.json` routes `/api/**` to `dtd-api` in `australia-southeast1`. | Production-scoped configuration. No Firebase deployment was run. |
+| DTD public production site | Canonical `.com.au` DNS uses VentraIP; apex resolves to Firebase Hosting `199.36.158.100`, and `www` CNAMEs to `gen-lang-client-0028123502.web.app`. Root, `www`, Firebase default hostname and `/api/health` returned HTTP 200 on 22 Oct. Repo Firebase defaults select production project/site `gen-lang-client-0028123502`; `firebase.json` routes `/api/**` to `dtd-api` in `australia-southeast1`. | Google/Firebase production path verified read-only. No Firebase deployment was run. The separate `.com` domain uses Cloudflare and returns an ASP.NET-served page; its relationship to DTD is unknown and it is not used by the canonical repo config. |
 | DTD developer sandbox | Google Cloud project `dogtrainersdirectory-dev`, Cloud Run API `dtd-api-dev`, web `dtd-web-dev`, Atlas database `dtd_sandbox`. | This is the verified sandbox release path used for R3. |
 | PR preview | GitHub reports Vercel Preview deployment `7227055232` for PR #17 head `76e8a010`; `production_environment=false`. | Separate from the public domain and developer sandbox. The preview integration is still active and needs owner disposition. |
 
