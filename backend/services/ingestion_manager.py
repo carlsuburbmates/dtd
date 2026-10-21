@@ -102,17 +102,26 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
         await asyncio.sleep(CRAWL_POLITE_DELAY_S - elapsed)
     _last_domain_crawl_time[domain] = time.monotonic()
 
-    # Parse robots.txt
+    # Parse robots.txt (DF-045: Fail closed / defer on robots retrieval error, unavailable, or malformed)
     robots_url = f"https://{domain}/robots.txt"
     rp = RobotFileParser()
     try:
         r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
-        if r_resp.ok:
-            rp.parse(r_resp.text.splitlines())
-        else:
+        if r_resp.status_code == 200:
+            try:
+                rp.parse(r_resp.text.splitlines())
+            except Exception as parse_exc:
+                return False, None, None, f"robots_malformed:{domain}:{parse_exc}"
+        elif r_resp.status_code == 404:
+            # RFC 9309 2.3.1.2: 404 indicates robots.txt does not exist; crawling is permitted
             rp.parse([])
-    except Exception:
-        rp.parse([])
+        else:
+            # 5xx, 403, 429, etc. -> Fail closed / defer
+            return False, None, None, f"robots_unavailable:http_{r_resp.status_code}:{robots_url}"
+    except (requests.Timeout, requests.RequestException) as net_exc:
+        return False, None, None, f"robots_unavailable:network_error:{net_exc}"
+    except Exception as exc:
+        return False, None, None, f"robots_error:{exc}"
 
     if not rp.can_fetch(USER_AGENT, url):
         return False, None, None, f"robots_denied:{url}"
@@ -272,6 +281,20 @@ async def run_batch_ingestion_pipeline(
             if suppression:
                 summary["suppressed"] += 1
                 await _mark_queue_suppressed(db, item, dry_run=dry_run, at=now_iso())
+                continue
+
+            # DF-044: Verify candidate URL and domain are explicitly authorized by registry
+            url_ok, url_reason = source_approvals.is_candidate_url_approved(registry, url)
+            if not url_ok:
+                summary["held"] += 1
+                fetch_err = f"unapproved_source:{url_reason}"
+                summary["errors"].append({"source_url": url, "error": fetch_err})
+                await record_ingestion_failure(db, url, fetch_err, dry_run=dry_run)
+                if item.get("queue_id") and db is not None and not dry_run:
+                    await db.discovery_queue.update_one(
+                        {"id": item["queue_id"]},
+                        {"$set": {"status": "held", "reason": fetch_err, "processed_at": now_iso()}},
+                    )
                 continue
 
             # 1. Polite fetch & robots check

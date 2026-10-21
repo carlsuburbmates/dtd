@@ -5409,7 +5409,14 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
         "updated_at": now.isoformat(),
     }
     await db.claim_events.insert_one(event)
-    await db.trainers.update_one({"id": trainer_id}, {"$set": {"claim_status": "pending_verification", "claim_pending_at": now.isoformat()}})
+    await db.trainers.update_one(
+        {"id": trainer_id},
+        {"$set": {
+            "claim_status": "pending_verification",
+            "claim_pending_at": now.isoformat(),
+            "claim_expires_at": event["expires_at"],
+        }},
+    )
 
     try:
         delivery = await notifications_service.notify_trainer_claim_otp(db, trainer, to_email=listed_email, otp=otp)

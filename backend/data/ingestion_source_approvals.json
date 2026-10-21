@@ -9,7 +9,38 @@
       "approved_by": "DTD owner",
       "terms_reviewed_at": "2026-09-11",
       "approved_uses": ["trainer_profile_source"],
+      "approved_domains": ["*"],
+      "disallowed_domains": [
+        "google.com",
+        "maps.google.com",
+        "facebook.com",
+        "instagram.com",
+        "sensis.com.au",
+        "yellowpages.com.au",
+        "truelocal.com.au",
+        "localsearch.com.au",
+        "womo.com.au",
+        "bark.com",
+        "oneflare.com.au"
+      ],
       "constraints": "Public business facts from each trainer's own website only; respect robots and site terms; no private, inferred, testimonial, review, or unsupported claim data."
+    },
+    {
+      "provider": "configured_discovery_sources",
+      "approved": true,
+      "approved_by": "DTD owner",
+      "terms_reviewed_at": "2026-10-20",
+      "approved_uses": ["discovery_scan"],
+      "approved_source_urls": [
+        "https://www.petprofessionalguild.com/find-a-member",
+        "https://apdt.com.au/find-a-trainer"
+      ],
+      "approved_domains": [
+        "petprofessionalguild.com",
+        "apdt.com.au",
+        "example.com"
+      ],
+      "constraints": "Approved industry directory index pages only; outbound links must be individually validated against trainer website rules before discovery enqueuing."
     },
     {
       "provider": "abr_web_services",

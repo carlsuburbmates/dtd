@@ -359,10 +359,32 @@ def validate_candidate_schema(cand: Dict[str, Any], *, verify_live_reachability:
     return True, "valid"
 
 
-def is_claimed_profile(trainer_doc: Dict[str, Any]) -> bool:
+def is_claimed_profile(trainer_doc: Dict[str, Any], now: Optional[datetime] = None) -> bool:
     """Determine if an existing profile is claimed or has active ownership/subscription."""
     claim_status = str(trainer_doc.get("claim_status") or "").lower()
-    if claim_status in {"claimed", "pending_verification", "claim_disputed"}:
+    if claim_status in {"claimed", "claim_disputed"}:
+        return True
+    if claim_status == "pending_verification":
+        # DF-051: Expired claim challenge leaves stale pending profile state.
+        # An expired, unclaimed profile must NOT remain protected from acquisition updates.
+        ref_now = now or datetime.now(timezone.utc)
+        expires_at = trainer_doc.get("claim_expires_at")
+        pending_at = trainer_doc.get("claim_pending_at")
+        if expires_at:
+            try:
+                exp_dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                if exp_dt <= ref_now:
+                    return False
+            except Exception:
+                pass
+        if pending_at:
+            try:
+                pend_dt = datetime.fromisoformat(str(pending_at).replace("Z", "+00:00"))
+                # Default OTP TTL is 900s (15 min)
+                if (ref_now - pend_dt).total_seconds() > 900:
+                    return False
+            except Exception:
+                pass
         return True
     tier = str(trainer_doc.get("tier") or "").lower()
     if tier in {"claimed", "pro", "suburb_sponsor", "citywide", "melbourne_sponsor", "featured", "premium"}:

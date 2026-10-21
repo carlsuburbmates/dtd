@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-from . import follow_up_tokens
+from . import follow_up_tokens, source_approvals
 
 
 def _now() -> datetime:
@@ -67,12 +67,13 @@ def _candidate_link(url: str) -> bool:
     return any(n in u for n in needles)
 
 
-async def ingest_discovery_sources(db) -> Dict[str, Any]:
+async def ingest_discovery_sources(db, *, registry: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Scan configured source pages and enqueue candidate URLs for discovery."""
     sources = _parse_csv(os.environ.get("DISCOVERY_SOURCE_URLS", ""))
     if not sources:
         return {"ok": True, "skipped": True, "reason": "no_sources_configured", "sources": 0, "queued": 0}
 
+    reg = registry if registry is not None else source_approvals.load()
     suppress_after_failures = _parse_int_env("SOURCE_INGEST_FAILURE_SUPPRESS_AFTER", 3, minimum=1, maximum=50)
     suppress_hours = _parse_int_env("SOURCE_INGEST_SUPPRESS_HOURS", 24, minimum=1, maximum=720)
     alert_after_failures = _parse_int_env("SOURCE_INGEST_ALERT_AFTER", 2, minimum=1, maximum=50)
@@ -93,6 +94,32 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
             skipped_suppressed += 1
             suppressed_now += 1
             reason_codes.append("source_suppressed")
+            continue
+
+        src_approved, src_reason = source_approvals.is_discovery_source_approved(reg, src)
+        if not src_approved:
+            scanned += 1
+            failed += 1
+            reason_codes.append(f"unapproved_source:{src_reason}")
+            alerts.append(
+                {
+                    "severity": "medium",
+                    "type": "unapproved_discovery_source",
+                    "source": src,
+                    "reason": src_reason,
+                }
+            )
+            await db.source_ingestion_state.update_one(
+                {"source_url": src},
+                {"$set": {
+                    "source_url": src,
+                    "last_checked_at": _now_iso(),
+                    "last_error": f"unapproved_source:{src_reason}",
+                    "last_error_code": "unapproved_discovery_source",
+                    "last_http_status": 0,
+                }},
+                upsert=True,
+            )
             continue
 
         scanned += 1
@@ -120,7 +147,13 @@ async def ingest_discovery_sources(db) -> Dict[str, Any]:
             if len(content) > 2_000_000:
                 raise ValueError("source_response_too_large")
             links = _extract_links(r.text, src)
-            candidates = [u for u in links if _candidate_link(u)]
+            candidates = []
+            for u in links:
+                if not _candidate_link(u):
+                    continue
+                cand_approved, _ = source_approvals.is_candidate_url_approved(reg, u)
+                if cand_approved:
+                    candidates.append(u)
             for candidate in candidates:
                 exists = await db.discovery_queue.find_one({"url": candidate}, {"_id": 0, "id": 1})
                 if exists:
