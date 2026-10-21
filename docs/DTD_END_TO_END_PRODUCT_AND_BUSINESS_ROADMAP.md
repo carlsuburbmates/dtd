@@ -44,6 +44,28 @@ Antigravity reported clean frozen ancestry, GitHub Actions `Verify` success at r
 
 ## 4. Roadmap at a glance
 
+### How to use this roadmap
+
+This document defines the **destination, stage outcomes and dependencies**. Use the linked records for the changing execution details:
+
+- [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md) — current stage status, next authorised action and review checkpoint.
+- [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) and [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) — current implementation evidence and open findings.
+- The stage contracts in §5 — what must be demonstrated to complete each R stage.
+- [DTD_CONFLICT_AND_DECISION_REGISTER.md](DTD_CONFLICT_AND_DECISION_REGISTER.md), approved specifications and `AGENTS.md` — binding decisions and controls.
+
+The groupings below are navigation aids only. They add no gates, change no dependencies and do not replace the existing finding or decision records.
+
+| Horizon | Stages | Outcome |
+|---|---|---|
+| **1. Preserve and prepare** | **R0–R3** | Keep the accepted baseline intact, verify and consolidate the sandbox release, then establish a recoverable release foundation. |
+| **2. Build the trustworthy marketplace** | **R4–R6** | Maintain authorised, current trainer supply; complete owner and trainer journeys; prove safe matching and urgent-support behaviour. |
+| **3. Operate and validate** | **R7–R12** | Accept operational workflows, prove the integrated product, pass separate release gates, then measure marketplace value, commerce and sustainable operation. |
+| **4. Evolve only on evidence** | **R13** | Consider expansion only after the core business outcomes are evidenced and the owner approves a specific opportunity. |
+
+**Current pointer:** R1 runtime acceptance and R2 integration are the active near-term packages. The execution register holds their current status and next actions; the table below is the complete stage map.
+
+### Stage status and expected outcome
+
 | Stage | Name | Current evidence state (21 Oct) | End-of-stage deliverable / required state | Dependency |
 |---|---|---|---|---|
 | **R0** | Remediation Checkpoint 1 | **DONE — accepted code** | Immutable accepted SHA + reconciled SR/CF matrix + reported preflight/CI evidence | Established |
