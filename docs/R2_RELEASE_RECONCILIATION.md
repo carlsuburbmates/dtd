@@ -11,7 +11,7 @@
 | PR #13 | Merged to `main` as `2db0e92807d9e36e0cbdf516aaddeba1a6475188`; DF-050 retry reconciliation remains accepted and is not reopened. |
 | PR #12 | Independent exact-delta review ACCEPT; merge commit `704c8301676792d488faada56a7b9cc6fab702b5`; exact-head Verify, CodeQL and preview checks passed. The intentional Clerk skill deletion remains in the merge. |
 | PR #15 | Independent exact-delta review ACCEPT; explicit sandbox billing/self-healing gates merged as `f24cc49723840028bbe4ea35f6787eed03c440ba`; exact-head Verify, CodeQL and preview checks passed. |
-| Current `main` deployed | `f24cc49723840028bbe4ea35f6787eed03c440ba`. No force push was used. |
+| Deployed runtime source | `f24cc49723840028bbe4ea35f6787eed03c440ba`. PR #16 changes release tooling and documentation only; it does not change the deployed runtime. No force push was used. |
 
 ## Developer sandbox deployment
 
