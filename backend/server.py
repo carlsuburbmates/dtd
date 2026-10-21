@@ -53,6 +53,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from services import ai as ai_service
 from services import claim_engine
+from services import deduplication
 from services import engine as autonomy
 from services import event_contract
 from services import follow_up_tokens
@@ -4993,6 +4994,131 @@ async def submit_discovery(payload: DiscoveryIn) -> Dict[str, Any]:
     return _scrub(doc)
 
 
+def _build_canonical_trainer_document(
+    *,
+    trainer_id: str,
+    submission_id: str,
+    sub: Dict[str, Any],
+    declared_capabilities: Dict[str, Any],
+    score: Dict[str, Any],
+    conf: float,
+    verification_status: str,
+    abn_verified: bool,
+    published: bool,
+    contact_ready: bool,
+    now_ts: str,
+) -> Dict[str, Any]:
+    return {
+        "id": trainer_id,
+        "name": sub.get("name") or "Unnamed Trainer",
+        "suburb": sub.get("suburb") or "",
+        "region": (sub.get("region") or ACTIVE_REGION).strip() or ACTIVE_REGION,
+        "website": sub.get("website", "") or "",
+        "phone": sub.get("phone", "") or "",
+        "email": sub.get("email", "") or "",
+        "categories": sub.get("categories", []),
+        "services": sub.get("services", []),
+        "bio": sub.get("bio", "") or "",
+        "image_url": sub.get("image_url", "") or "",
+        "source_evidence_url": sub.get("source_evidence_url", "") or "",
+        "tier": "unclaimed",
+        "claim_status": "unclaimed",
+        "abn": sub.get("abn", "") or "",
+        "entity_name": sub.get("entity_name", "") or "",
+        "trading_name": sub.get("trading_name", "") or "",
+        "business_type": sub.get("business_type", "") or "",
+        "abn_status": sub.get("abn_status", "not_provided"),
+        "abn_verified": bool(abn_verified),
+        "abn_verified_at": (sub.get("abn_verified_at", "") or now_ts) if abn_verified else "",
+        "abn_verification_reason": sub.get("abn_verification_reason", "") or "",
+        "abn_badge_payload": sub.get("abn_badge_payload"),
+        "training_philosophy": sub.get("training_philosophy", "") or "",
+        "specialties": sub.get("specialties", []),
+        "service_formats": sub.get("service_formats", []),
+        "serviced_suburbs": sub.get("serviced_suburbs", []),
+        "catchment_type": sub.get("catchment_type", "") or "",
+        "capabilities": declared_capabilities,
+        "booking_url": sub.get("booking_url", "") or "",
+        "gallery_images": sub.get("gallery_images", []),
+        "sponsored_suburbs": sub.get("sponsored_suburbs", []),
+        "review_summary": sub.get("review_summary", "") or "",
+        "confidence_score": conf,
+        "verification_status": verification_status,
+        "verification_reasoning": score.get("reasoning", ""),
+        "verification_signals": score.get("signals", []),
+        "verification_model": score.get("model", "heuristic"),
+        "verified_at": now_ts if verification_status == "verified" else "",
+        "outcome_score": 0.05,
+        "intros_30d": 0,
+        "conversions_30d": 0,
+        "published": published,
+        "is_active": True,
+        "contact_ready": contact_ready,
+        "registered_at": now_ts,
+        "created_at": now_ts,
+        "via_submission_id": submission_id,
+    }
+
+
+def _build_canonical_trainer_update_fields(
+    *,
+    submission_id: str,
+    sub: Dict[str, Any],
+    existing: Dict[str, Any],
+    declared_capabilities: Dict[str, Any],
+    score: Dict[str, Any],
+    conf: float,
+    verification_status: str,
+    abn_verified: bool,
+    published: bool,
+    contact_ready: bool,
+    now_ts: str,
+) -> Dict[str, Any]:
+    return {
+        "name": sub.get("name") or existing.get("name"),
+        "suburb": sub.get("suburb") or existing.get("suburb"),
+        "region": sub.get("region") or existing.get("region", ACTIVE_REGION),
+        "website": sub.get("website") or existing.get("website", ""),
+        "phone": sub.get("phone") or existing.get("phone", ""),
+        "email": sub.get("email") or existing.get("email", ""),
+        "categories": sub.get("categories") or existing.get("categories", []),
+        "services": sub.get("services") or existing.get("services", []),
+        "bio": sub.get("bio") or existing.get("bio", ""),
+        "image_url": sub.get("image_url") or existing.get("image_url", ""),
+        "source_evidence_url": sub.get("source_evidence_url") or existing.get("source_evidence_url", ""),
+        "abn": sub.get("abn") or existing.get("abn", ""),
+        "entity_name": sub.get("entity_name") or existing.get("entity_name", ""),
+        "trading_name": sub.get("trading_name") or existing.get("trading_name", ""),
+        "business_type": sub.get("business_type") or existing.get("business_type", ""),
+        "abn_status": sub.get("abn_status") or existing.get("abn_status", "not_provided"),
+        "abn_verified": bool(abn_verified),
+        "abn_verified_at": sub.get("abn_verified_at") or existing.get("abn_verified_at", "") if abn_verified else "",
+        "abn_verification_reason": sub.get("abn_verification_reason") or existing.get("abn_verification_reason", ""),
+        "abn_badge_payload": sub.get("abn_badge_payload") or existing.get("abn_badge_payload"),
+        "training_philosophy": sub.get("training_philosophy") or existing.get("training_philosophy", ""),
+        "specialties": sub.get("specialties") or existing.get("specialties", []),
+        "service_formats": sub.get("service_formats") or existing.get("service_formats", []),
+        "serviced_suburbs": sub.get("serviced_suburbs") or existing.get("serviced_suburbs", []),
+        "catchment_type": sub.get("catchment_type") or existing.get("catchment_type", ""),
+        "capabilities": declared_capabilities,
+        "booking_url": sub.get("booking_url") or existing.get("booking_url", ""),
+        "gallery_images": sub.get("gallery_images") or existing.get("gallery_images", []),
+        "sponsored_suburbs": sub.get("sponsored_suburbs") or existing.get("sponsored_suburbs", []),
+        "review_summary": sub.get("review_summary") or existing.get("review_summary", ""),
+        "confidence_score": conf,
+        "verification_status": verification_status,
+        "verification_reasoning": score.get("reasoning", ""),
+        "verification_signals": score.get("signals", []),
+        "verification_model": score.get("model", "heuristic"),
+        "verified_at": now_ts if verification_status == "verified" else "",
+        "published": published,
+        "is_active": True,
+        "contact_ready": contact_ready,
+        "updated_at": now_ts,
+        "via_submission_id": submission_id,
+    }
+
+
 @api.post("/submissions")
 async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
     """Submit a real Melbourne trainer; publish only with active ABR evidence and the quality gate."""
@@ -5113,103 +5239,39 @@ async def create_submission(payload: SubmissionIn) -> Dict[str, Any]:
         confirmed_at=now_iso(),
     )
 
+    now_ts = now_iso()
     if existing_trainer:
         trainer_id = existing_trainer["id"]
-        update_fields = {
-            "name": sub.get("name") or existing_trainer.get("name"),
-            "suburb": sub.get("suburb") or existing_trainer.get("suburb"),
-            "region": sub.get("region") or existing_trainer.get("region", ""),
-            "website": sub.get("website") or existing_trainer.get("website", ""),
-            "phone": sub.get("phone") or existing_trainer.get("phone", ""),
-            "email": sub.get("email") or existing_trainer.get("email", ""),
-            "categories": sub.get("categories") or existing_trainer.get("categories", []),
-            "services": sub.get("services") or existing_trainer.get("services", []),
-            "bio": sub.get("bio") or existing_trainer.get("bio", ""),
-            "image_url": sub.get("image_url") or existing_trainer.get("image_url", ""),
-            "source_evidence_url": sub.get("source_evidence_url") or existing_trainer.get("source_evidence_url", ""),
-            "abn": sub.get("abn") or existing_trainer.get("abn", ""),
-            "entity_name": sub.get("entity_name") or existing_trainer.get("entity_name", ""),
-            "trading_name": sub.get("trading_name") or existing_trainer.get("trading_name", ""),
-            "business_type": sub.get("business_type") or existing_trainer.get("business_type", ""),
-            "abn_status": sub.get("abn_status") or existing_trainer.get("abn_status", "not_provided"),
-            "abn_verified": bool(sub.get("abn_verified")),
-            "abn_verified_at": sub.get("abn_verified_at") or existing_trainer.get("abn_verified_at", ""),
-            "abn_verification_reason": sub.get("abn_verification_reason") or existing_trainer.get("abn_verification_reason", ""),
-            "abn_badge_payload": sub.get("abn_badge_payload") or existing_trainer.get("abn_badge_payload"),
-            "training_philosophy": sub.get("training_philosophy") or existing_trainer.get("training_philosophy", ""),
-            "specialties": sub.get("specialties") or existing_trainer.get("specialties", []),
-            "service_formats": sub.get("service_formats") or existing_trainer.get("service_formats", []),
-            "serviced_suburbs": sub.get("serviced_suburbs") or existing_trainer.get("serviced_suburbs", []),
-            "catchment_type": sub.get("catchment_type") or existing_trainer.get("catchment_type", ""),
-            "capabilities": declared_capabilities,
-            "booking_url": sub.get("booking_url") or existing_trainer.get("booking_url", ""),
-            "gallery_images": sub.get("gallery_images") or existing_trainer.get("gallery_images", []),
-            "sponsored_suburbs": sub.get("sponsored_suburbs") or existing_trainer.get("sponsored_suburbs", []),
-            "review_summary": sub.get("review_summary") or existing_trainer.get("review_summary", ""),
-            "confidence_score": conf,
-            "verification_status": verification_status,
-            "verification_reasoning": score.get("reasoning", ""),
-            "verification_signals": score.get("signals", []),
-            "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso() if verification_status == "verified" else "",
-            "published": published,
-            "contact_ready": contact_ready,
-            "updated_at": now_iso(),
-            "via_submission_id": sub_doc["id"],
-        }
+        update_fields = _build_canonical_trainer_update_fields(
+            submission_id=sub_doc["id"],
+            sub=sub,
+            existing=existing_trainer,
+            declared_capabilities=declared_capabilities,
+            score=score,
+            conf=conf,
+            verification_status=verification_status,
+            abn_verified=bool(sub.get("abn_verified")),
+            published=published,
+            contact_ready=contact_ready,
+            now_ts=now_ts,
+        )
         await db.trainers.update_one({"id": trainer_id}, {"$set": update_fields})
         trainer_doc = {**existing_trainer, **update_fields}
     else:
         trainer_id = new_id()
-        trainer_doc = {
-            "id": trainer_id,
-            "name": sub.get("name"),
-            "suburb": sub.get("suburb"),
-            "region": sub.get("region", ""),
-            "website": sub.get("website", ""),
-            "phone": sub.get("phone", ""),
-            "email": sub.get("email", ""),
-            "categories": sub.get("categories", []),
-            "services": sub.get("services", []),
-            "bio": sub.get("bio", ""),
-            "image_url": sub.get("image_url", ""),
-            "source_evidence_url": sub.get("source_evidence_url", ""),
-            "tier": "unclaimed",
-            "claim_status": "unclaimed",
-            "abn": sub.get("abn", ""),
-            "entity_name": sub.get("entity_name", ""),
-            "trading_name": sub.get("trading_name", ""),
-            "business_type": sub.get("business_type", ""),
-            "abn_status": sub.get("abn_status", "not_provided"),
-            "abn_verified": bool(sub.get("abn_verified")),
-            "abn_verified_at": sub.get("abn_verified_at", ""),
-            "abn_verification_reason": sub.get("abn_verification_reason", ""),
-            "abn_badge_payload": sub.get("abn_badge_payload"),
-            "training_philosophy": sub.get("training_philosophy", ""),
-            "specialties": sub.get("specialties", []),
-            "service_formats": sub.get("service_formats", []),
-            "serviced_suburbs": sub.get("serviced_suburbs", []),
-            "catchment_type": sub.get("catchment_type", ""),
-            "capabilities": declared_capabilities,
-            "booking_url": sub.get("booking_url", ""),
-            "gallery_images": sub.get("gallery_images", []),
-            "sponsored_suburbs": sub.get("sponsored_suburbs", []),
-            "review_summary": sub.get("review_summary", ""),
-            "confidence_score": conf,
-            "verification_status": verification_status,
-            "verification_reasoning": score.get("reasoning", ""),
-            "verification_signals": score.get("signals", []),
-            "verification_model": score.get("model", "heuristic"),
-            "verified_at": now_iso() if verification_status == "verified" else "",
-            "outcome_score": 0.05,
-            "intros_30d": 0,
-            "conversions_30d": 0,
-            "published": published,
-            "contact_ready": contact_ready,
-            "registered_at": now_iso(),
-            "created_at": now_iso(),
-            "via_submission_id": sub_doc["id"],
-        }
+        trainer_doc = _build_canonical_trainer_document(
+            trainer_id=trainer_id,
+            submission_id=sub_doc["id"],
+            sub=sub,
+            declared_capabilities=declared_capabilities,
+            score=score,
+            conf=conf,
+            verification_status=verification_status,
+            abn_verified=bool(sub.get("abn_verified")),
+            published=published,
+            contact_ready=contact_ready,
+            now_ts=now_ts,
+        )
         await db.trainers.insert_one(trainer_doc.copy())
 
     # Prepare trainer billing profile (fail-soft). This does not block
@@ -5480,7 +5542,7 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         raise HTTPException(status_code=409, detail="This profile has already been claimed.")
     await db.claim_events.update_one(
         {"id": event["id"], "status": "pending_verification"},
-        {"$set": {"status": "verified", "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
+        {"$set": {"status": "verified", "otp_verified": True, "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
     )
     session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
     await _audit("trainer_claim_verified", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
@@ -6766,7 +6828,7 @@ async def _current_ops_cases() -> List[Dict[str, Any]]:
         abn_degradation_cases.extend(trainer_degraded)
 
     try:
-        obligation_cases = await ops_obligations.get_active_obligation_cases(db, now_dt=now_dt)
+        obligation_cases = await ops_obligations.get_active_obligation_cases(db, now_dt=now_dt, read_only=True)
     except Exception as exc:
         logger.warning("Error fetching durable obligation cases: %s", exc)
         obligation_cases = []
@@ -8380,23 +8442,45 @@ async def oversight_trainer_capability_recheck(
 @app.post("/resend/webhook")
 @api.post("/resend/webhook")
 async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
-    """Secure, idempotent receiver for Resend delivery, bounce, and complaint events."""
-    payload_raw = await request.body()
+    """Cryptographically verified, idempotent receiver for Resend delivery, bounce, and complaint events."""
     secret = (os.environ.get("RESEND_WEBHOOK_SECRET") or "").strip()
+    if not secret:
+        raise HTTPException(status_code=500, detail="Webhook signing secret not configured.")
 
-    # If webhook secret is configured, verify signature header
-    if secret:
-        svix_id = request.headers.get("svix-id")
-        svix_timestamp = request.headers.get("svix-timestamp")
-        svix_signature = request.headers.get("svix-signature")
-        if not (svix_id and svix_timestamp and svix_signature):
-            raise HTTPException(status_code=401, detail="Missing required Svix webhook signature headers.")
-        try:
-            ts_epoch = float(svix_timestamp)
-            if abs(time.time() - ts_epoch) > 300:
-                raise HTTPException(status_code=401, detail="Webhook signature timestamp expired.")
-        except ValueError:
-            raise HTTPException(status_code=401, detail="Invalid signature timestamp.")
+    secret_key_str = secret[len("whsec_"):] if secret.startswith("whsec_") else secret
+    try:
+        secret_bytes = base64.b64decode(secret_key_str, validate=True)
+        if not secret_bytes:
+            raise ValueError("Decoded secret bytes empty")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Malformed webhook signing secret configuration.")
+
+    svix_id = request.headers.get("svix-id")
+    svix_timestamp = request.headers.get("svix-timestamp")
+    svix_signature = request.headers.get("svix-signature")
+    if not (svix_id and svix_timestamp and svix_signature):
+        raise HTTPException(status_code=401, detail="Missing required Svix webhook signature headers.")
+
+    try:
+        ts_epoch = float(svix_timestamp)
+        if abs(time.time() - ts_epoch) > 300:
+            raise HTTPException(status_code=401, detail="Webhook signature timestamp expired.")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid signature timestamp.")
+
+    payload_raw = await request.body()
+    to_sign = f"{svix_id}.{svix_timestamp}.".encode("utf-8") + payload_raw
+    computed_sig = base64.b64encode(hmac.new(secret_bytes, to_sign, hashlib.sha256).digest()).decode("utf-8")
+
+    matched = False
+    for item in svix_signature.split(" "):
+        if item.startswith("v1,"):
+            candidate = item.split(",", 1)[1]
+            if hmac.compare_digest(candidate, computed_sig):
+                matched = True
+                break
+    if not matched:
+        raise HTTPException(status_code=401, detail="Invalid webhook signature.")
 
     try:
         event = json.loads(payload_raw.decode("utf-8")) if payload_raw else {}
@@ -8408,7 +8492,7 @@ async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
     event_data = event.get("data") or {}
     email_id = str(event_data.get("email_id") or "")
 
-    # Idempotency check via resend_events collection
+    # Idempotency check via resend_events collection with minimal PII
     resend_events_coll = getattr(db, "resend_webhook_events", None)
     if resend_events_coll is not None:
         try:
@@ -8417,26 +8501,52 @@ async def resend_delivery_webhook(request: Request) -> Dict[str, Any]:
                 "type": event_type,
                 "email_id": email_id,
                 "created_at": now_iso(),
-                "payload": event_data,
+                "bounce_type": str((event_data.get("bounce") or {}).get("type") or "") if event_type in ("email.bounced", "email.complained") else None,
             })
         except DuplicateKeyError:
             return {"ok": True, "duplicate": True, "event_id": event_id}
 
-    # Update notification_events with confirmed delivery/bounce status
+    # Update notification_events with confirmed delivery/bounce status and terminal protection
     notif_coll = getattr(db, "notification_events", None)
     if notif_coll is not None and email_id:
-        update_doc: Dict[str, Any] = {
-            "resend_event_type": event_type,
-            "resend_event_at": now_iso(),
-        }
         if event_type == "email.delivered":
-            update_doc["status"] = "delivered"
-            update_doc["delivered_at"] = now_iso()
+            await notif_coll.update_many(
+                {"provider_id": email_id, "status": {"$nin": ["bounced", "complained"]}},
+                {
+                    "$set": {
+                        "status": "delivered",
+                        "delivered_at": now_iso(),
+                        "resend_event_type": event_type,
+                        "resend_event_at": now_iso(),
+                    }
+                },
+            )
         elif event_type in ("email.bounced", "email.complained"):
-            update_doc["status"] = "bounced" if event_type == "email.bounced" else "complained"
-            update_doc["bounce_reason"] = str((event_data.get("bounce") or {}).get("type") or event_type)
-
-        await notif_coll.update_many({"provider_id": email_id}, {"$set": update_doc})
+            b_reason = str((event_data.get("bounce") or {}).get("type") or event_type)
+            st = "bounced" if event_type == "email.bounced" else "complained"
+            await notif_coll.update_many(
+                {"provider_id": email_id},
+                {
+                    "$set": {
+                        "status": st,
+                        "bounce_reason": b_reason,
+                        "bounced_at": now_iso(),
+                        "resend_event_type": event_type,
+                        "resend_event_at": now_iso(),
+                    }
+                },
+            )
+        elif event_type == "email.sent":
+            # Out-of-order protection: Do not overwrite terminal status with 'sent'
+            await notif_coll.update_many(
+                {"provider_id": email_id, "status": {"$nin": ["delivered", "bounced", "complained"]}},
+                {
+                    "$set": {
+                        "resend_event_type": event_type,
+                        "resend_event_at": now_iso(),
+                    }
+                },
+            )
 
     return {"ok": True, "event_id": event_id, "type": event_type}
 
@@ -8575,48 +8685,125 @@ async def reply_support_thread(
     request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Send an operator reply to customer and update support thread status."""
+    """Send an operator reply to customer with atomic concurrency reservation and guaranteed idempotent dispatch."""
+    if payload.mark_status == "resolved":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot resolve support thread via reply. Use the verified closure endpoint (/close) with verified outcome notes.",
+        )
+
     support_coll = getattr(db, "support_threads", None)
     if support_coll is None:
         raise HTTPException(status_code=503, detail="Store unavailable")
 
-    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
-    if not thread:
-        raise HTTPException(status_code=404, detail="Support thread not found")
-
+    clean_reply = payload.reply_text.strip()
+    reply_hash = hashlib.sha256(clean_reply.encode()).hexdigest()[:16]
     operator_identity = f"ops:{_client_ip(request)}"
     now_ts = now_iso()
+    message_id = f"msg_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
     new_message = {
+        "message_id": message_id,
         "sender": "operator",
         "operator": operator_identity,
-        "text": payload.reply_text.strip(),
+        "text": clean_reply,
+        "reply_hash": reply_hash,
         "created_at": now_ts,
+        "delivery_status": "pending",
     }
 
-    new_status = payload.mark_status if payload.mark_status in ("awaiting_customer_reply", "resolved", "open") else "awaiting_customer_reply"
-
-    await support_coll.update_one(
-        {"case_id": case_id},
+    # Atomic in-flight dispatch reservation:
+    # 1. Blocks duplicate reply if identical text was already successfully dispatched
+    # 2. Blocks concurrent execution if another reply dispatch is currently in flight
+    locked_thread = await support_coll.find_one_and_update(
         {
-            "$push": {"messages": new_message},
-            "$set": {"status": new_status, "updated_at": now_ts},
+            "case_id": case_id,
+            "reply_dispatching": {"$ne": True},
+            "last_reply_hash": {"$ne": reply_hash},
         },
+        {
+            "$set": {
+                "reply_dispatching": True,
+                "reply_dispatching_at": now_ts,
+                "reply_dispatch_id": message_id,
+            },
+            "$push": {"messages": new_message},
+        },
+        return_document=True,
     )
 
-    # Dispatch email reply to customer via Resend
-    notif_res = await notifications_service.notify_support_reply(db, thread, payload.reply_text.strip())
+    if not locked_thread:
+        fresh = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+        if not fresh:
+            raise HTTPException(status_code=404, detail="Support thread not found")
+        if fresh.get("last_reply_hash") == reply_hash:
+            return {"ok": True, "case_id": case_id, "status": fresh.get("status"), "duplicate": True, "dispatched": False, "message": "Duplicate reply detected."}
+        if fresh.get("reply_dispatching") is True:
+            raise HTTPException(status_code=409, detail="A reply dispatch is currently in progress for this support thread. Concurrent duplicate dispatch prevented.")
+        raise HTTPException(status_code=409, detail="Support thread state was modified concurrently.")
+
+    is_accepted = False
+    notif_error = None
+    notif_id = None
+    try:
+        try:
+            notif_res = await notifications_service.notify_support_reply(db, locked_thread, clean_reply)
+            if notif_res and notif_res.get("status") == "sent":
+                is_accepted = True
+                notif_id = notif_res.get("id")
+            else:
+                notif_error = (notif_res or {}).get("error") or "provider_rejected"
+        except Exception as exc:
+            logger.exception("Failed dispatching support reply for case_id=%s: %s", case_id, exc)
+            notif_error = str(exc)
+
+        if is_accepted:
+            new_status = "awaiting_customer_reply"
+            await support_coll.update_one(
+                {"case_id": case_id, "messages.message_id": message_id},
+                {
+                    "$set": {
+                        "status": new_status,
+                        "messages.$.delivery_status": "accepted",
+                        "messages.$.provider_id": notif_id,
+                        "last_reply_hash": reply_hash,
+                        "updated_at": now_ts,
+                    },
+                    "$unset": {"reply_dispatching": "", "reply_dispatching_at": "", "reply_dispatch_id": ""},
+                },
+            )
+        else:
+            new_status = "reply_delivery_failed"
+            await support_coll.update_one(
+                {"case_id": case_id, "messages.message_id": message_id},
+                {
+                    "$set": {
+                        "status": new_status,
+                        "messages.$.delivery_status": "failed",
+                        "messages.$.error": notif_error,
+                        "updated_at": now_ts,
+                    },
+                    "$unset": {"reply_dispatching": "", "reply_dispatching_at": "", "reply_dispatch_id": ""},
+                },
+            )
+    except Exception:
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {"$unset": {"reply_dispatching": "", "reply_dispatching_at": "", "reply_dispatch_id": ""}},
+        )
+        raise
 
     await _audit(
         "support_thread_replied",
         case_id,
-        after={"status": new_status, "operator": operator_identity, "notif_status": notif_res.get("status")},
+        after={"status": new_status, "operator": operator_identity, "dispatched": is_accepted, "message_id": message_id},
         actor="ops",
     )
-    return {"ok": True, "case_id": case_id, "status": new_status, "dispatched": notif_res.get("status") == "sent"}
+    return {"ok": True, "case_id": case_id, "status": new_status, "dispatched": is_accepted, "message_id": message_id}
 
 
 class SupportCloseIn(BaseModel):
-    resolution_notes: str = Field(..., min_length=3)
+    resolution_notes: str = Field(..., min_length=10, description="Substantive explanation of verified outcome")
     confirmed: bool = Field(default=True)
 
 
@@ -8627,31 +8814,64 @@ async def close_support_thread(
     request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Explicitly close a customer support thread with verified outcome notes."""
+    """Explicitly close a customer support thread with verified outcome notes and category safeguards."""
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
+    if not payload.resolution_notes or len(payload.resolution_notes.strip()) < 10:
+        raise HTTPException(status_code=400, detail="Substantive resolution notes (minimum 10 characters) explaining verified outcome are required.")
 
     support_coll = getattr(db, "support_threads", None)
     if support_coll is None:
         raise HTTPException(status_code=503, detail="Store unavailable")
 
+    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Support thread not found")
+
+    category = str(thread.get("category") or "").lower()
+    # Specialized obligations safeguard: Cannot close without underlying positive verified resolution
+    if category == "delisting_request":
+        trainer_id = thread.get("trainer_id")
+        if not trainer_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: no trainer_id linked to verify delisting status.",
+            )
+        trainers_coll = getattr(db, "trainers", None)
+        trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0, "published": 1, "is_active": 1}) if trainers_coll is not None else None
+        if not trainer:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: linked trainer record not found in directory. Missing record cannot certify delisting.",
+            )
+        if trainer.get("published") is True or trainer.get("is_active") is True:
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close delisting support thread: trainer listing remains active and published.",
+            )
+    elif category == "privacy_request":
+        if not thread.get("privacy_processed"):
+            raise HTTPException(
+                status_code=422,
+                detail="Cannot close privacy support thread: privacy data erasure has not been completed.",
+            )
+
+    operator_identity = f"ops:{_client_ip(request)}"
     now_ts = now_iso()
-    res = await support_coll.update_one(
+    await support_coll.update_one(
         {"case_id": case_id},
         {
             "$set": {
                 "status": "resolved",
                 "resolution_notes": payload.resolution_notes.strip(),
                 "closed_at": now_ts,
-                "closed_by": f"ops:{_client_ip(request)}",
+                "closed_by": operator_identity,
                 "updated_at": now_ts,
             }
         },
     )
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Support thread not found")
 
-    await _audit("support_thread_closed", case_id, after={"resolution_notes": payload.resolution_notes}, actor="ops")
+    await _audit("support_thread_closed", case_id, after={"resolution_notes": payload.resolution_notes, "operator": operator_identity}, actor="ops")
     return {"ok": True, "case_id": case_id, "status": "resolved"}
 
 
@@ -8725,60 +8945,173 @@ async def review_held_submission(
         return {"ok": True, "status": "held_awaiting_evidence", "submission_id": submission_id}
 
     # action == "approve"
-    abn_verified = bool(sub.get("abn_verified"))
-    if not abn_verified and not payload.override_abn_unverified:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot approve submission with unverified ABN without explicit override_abn_unverified confirmation.",
+    if current_status in ("rejected", "withdrawn", "cancelled"):
+        raise HTTPException(status_code=409, detail=f"Cannot approve submission in terminal state '{current_status}'.")
+
+    # Atomic lock transition to prevent concurrent approval race
+    locked_sub = await sub_coll.find_one_and_update(
+        {"id": submission_id, "status": {"$in": ["held", "held_awaiting_evidence", "pending", "hold"]}},
+        {"$set": {"status": "publishing", "locked_by": operator_identity, "locked_at": now_ts}},
+        return_document=True,
+    )
+    if not locked_sub:
+        fresh = await sub_coll.find_one({"id": submission_id}, {"_id": 0})
+        fresh_status = str((fresh or {}).get("status") or "")
+        if fresh_status == "published":
+            return {"ok": True, "status": "published", "idempotent": True, "trainer_id": (fresh or {}).get("trainer_id")}
+        if fresh_status == "publishing":
+            raise HTTPException(status_code=409, detail="Concurrent approval in progress for this submission.")
+        raise HTTPException(status_code=409, detail=f"Cannot approve submission in state '{fresh_status}'.")
+
+    try:
+        # Canonical suppression check against delisted entities
+        suppression = await deduplication.suppression_match(db, sub)
+        if suppression:
+            raise HTTPException(status_code=403, detail="Submission matches a delisted or suppressed business entity and cannot be published.")
+
+        # Canonical consent and contact readiness gates
+        if not sub.get("consent_public_listing") or not sub.get("consent_information_accuracy"):
+            raise HTTPException(status_code=400, detail="Submission lacks required public listing and accuracy consent.")
+
+        contact_ready = bool(sub.get("website") or sub.get("phone") or sub.get("email"))
+        if not contact_ready:
+            raise HTTPException(status_code=400, detail="Submission must contain at least one valid contact channel (phone, email, or website).")
+
+        # Source provenance check: submission must have a traceable source (distinct submitter or verifiable source evidence)
+        if not (sub.get("submitter_email") or sub.get("source_evidence_url") or sub.get("source_provenance") or sub.get("submitter_id")):
+            raise HTTPException(status_code=400, detail="Submission lacks source provenance (no submitter email, source evidence URL, or acquisition provenance). Listing email alone does not establish acquisition source.")
+
+        # ABN verification invariants
+        clean_abn = str(sub.get("abn") or "").strip()
+        abn_verified = bool(sub.get("abn_verified"))
+        if clean_abn and not abn_verified and not payload.override_abn_unverified:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot approve submission with unverified ABN without explicit override_abn_unverified confirmation.",
+            )
+
+        # Legitimate ABN-optional listings remain unverified; never award false verified badges
+        verification_status = "verified" if abn_verified else "unverified"
+
+        # Duplicate identity matching
+        trainers_coll = getattr(db, "trainers", None)
+        if trainers_coll is None:
+            raise HTTPException(status_code=503, detail="Trainers store unavailable")
+
+        existing = None
+        if clean_abn:
+            existing = await trainers_coll.find_one({"abn": clean_abn}, {"_id": 0})
+        if not existing and sub.get("email"):
+            existing = await trainers_coll.find_one({"email": str(sub["email"]).strip()}, {"_id": 0})
+        if not existing and sub.get("website"):
+            existing = await trainers_coll.find_one({"website": str(sub["website"]).strip()}, {"_id": 0})
+        if not existing and sub.get("trainer_id"):
+            existing = await trainers_coll.find_one({"id": sub["trainer_id"]}, {"_id": 0})
+        if not existing:
+            existing = await trainers_coll.find_one({"via_submission_id": submission_id}, {"_id": 0})
+
+        if existing:
+            t_claim = str(existing.get("claim_status") or "").lower()
+            if t_claim in ("claimed", "claim_disputed") or existing.get("is_claimed"):
+                raise HTTPException(status_code=409, detail="Competing submission cannot overwrite an already claimed or disputed trainer listing.")
+
+            # Invariant: Matching email/contact details alone must not overwrite an unrelated business record
+            # Only exact matching verified ABN, matching trainer_id, or identical via_submission_id establishes identical business
+            is_same_business = False
+            if sub.get("trainer_id") and existing.get("id") == sub.get("trainer_id"):
+                is_same_business = True
+            elif existing.get("via_submission_id") == submission_id:
+                is_same_business = True
+            elif clean_abn and deduplication.normalize_abn(existing.get("abn")) == clean_abn:
+                is_same_business = True
+
+            if not is_same_business:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Submission matches contact details of an existing trainer with a different business identity. Matching contact details alone cannot authorise overwriting another business listing without verified matching ABN or linked trainer ID.",
+                )
+
+        score = await ai_service.score_trainer(_verification_payload(sub))
+        conf = float(score.get("confidence") or sub.get("confidence_score") or 0.8)
+
+        declared_capabilities = trainer_quality.package_trainer_capabilities(
+            specialties=sub.get("specialties"),
+            service_formats=sub.get("service_formats"),
+            life_stages=sub.get("life_stages"),
+            training_philosophy=sub.get("training_philosophy"),
+            serviced_suburbs=sub.get("serviced_suburbs"),
+            catchment_type=sub.get("catchment_type"),
+            delivery_constraints=sub.get("delivery_constraints"),
+            basis="trainer_declaration",
+            evidence_reference=submission_id,
+            confirmed_at=now_ts,
         )
 
-    verification_status = "verified" if abn_verified else "unverified"
-    trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
-
-    trainers_coll = getattr(db, "trainers", None)
-    if trainers_coll is not None:
-        existing = await trainers_coll.find_one({"$or": [{"id": trainer_id}, {"via_submission_id": submission_id}]}, {"_id": 0, "id": 1})
-        if not existing:
-            trainer_doc = {
-                "id": trainer_id,
-                "name": sub.get("name") or "Unnamed Trainer",
-                "email": sub.get("email"),
-                "phone": sub.get("phone"),
-                "website": sub.get("website"),
-                "abn": sub.get("abn"),
-                "abn_status": sub.get("abn_status", "not_provided"),
-                "abn_verified": abn_verified,
-                "verification_status": verification_status,
-                "serviced_suburbs": sub.get("serviced_suburbs", []),
-                "specialties": sub.get("specialties", []),
-                "capabilities": sub.get("capabilities", []),
-                "published": True,
-                "is_active": True,
-                "contact_ready": True,
-                "outcome_score": 0.05,
-                "registered_at": now_ts,
-                "created_at": now_ts,
-                "via_submission_id": submission_id,
-            }
-            await trainers_coll.insert_one(trainer_doc)
-        else:
-            await trainers_coll.update_one(
-                {"id": existing["id"]},
-                {"$set": {"published": True, "is_active": True, "verification_status": verification_status, "updated_at": now_ts}},
-            )
+        if existing:
             trainer_id = existing["id"]
+            update_fields = _build_canonical_trainer_update_fields(
+                submission_id=submission_id,
+                sub=sub,
+                existing=existing,
+                declared_capabilities=declared_capabilities,
+                score=score,
+                conf=conf,
+                verification_status=verification_status,
+                abn_verified=abn_verified,
+                published=True,
+                contact_ready=contact_ready,
+                now_ts=now_ts,
+            )
+            await trainers_coll.update_one({"id": trainer_id}, {"$set": update_fields})
+            trainer_doc = {**existing, **update_fields}
+        else:
+            trainer_id = sub.get("trainer_id") or f"trn_{uuid.uuid4().hex[:12]}"
+            trainer_doc = _build_canonical_trainer_document(
+                trainer_id=trainer_id,
+                submission_id=submission_id,
+                sub=sub,
+                declared_capabilities=declared_capabilities,
+                score=score,
+                conf=conf,
+                verification_status=verification_status,
+                abn_verified=abn_verified,
+                published=True,
+                contact_ready=contact_ready,
+                now_ts=now_ts,
+            )
+            await trainers_coll.insert_one(trainer_doc)
 
-    await sub_coll.update_one(
-        {"id": submission_id},
-        {
-            "$set": {
-                "status": "published",
-                "trainer_id": trainer_id,
-                "approved_by": operator_identity,
-                "approved_at": now_ts,
-            }
-        },
-    )
+        # Canonical billing profile provisioning & action token issuance
+        billing_profile = await stripe_billing.provision_trainer_billing_profile(
+            db,
+            trainer_doc,
+            consent_granted=bool(sub.get("consent_intro_billing_terms")),
+        )
+        trainer_action_token = _issue_trainer_action_token(
+            trainer_id=trainer_id,
+            submission_id=submission_id,
+        )
+
+        await sub_coll.update_one(
+            {"id": submission_id},
+            {
+                "$set": {
+                    "status": "published",
+                    "trainer_id": trainer_id,
+                    "billing_profile_status": billing_profile.get("billing_profile_status"),
+                    "trainer_action_token": trainer_action_token,
+                    "approved_by": operator_identity,
+                    "approved_at": now_ts,
+                }
+            },
+        )
+    except HTTPException:
+        await sub_coll.update_one({"id": submission_id, "status": "publishing"}, {"$set": {"status": current_status}})
+        raise
+    except Exception as exc:
+        logger.exception("Publication failure for submission %s: %s", submission_id, exc)
+        await sub_coll.update_one({"id": submission_id, "status": "publishing"}, {"$set": {"status": current_status}})
+        raise HTTPException(status_code=500, detail=f"Database failure during publication: {exc}")
 
     try:
         sub_for_notif = dict(sub)
@@ -8859,17 +9192,108 @@ async def review_profile_claim(
             detail="Cannot grant profile ownership without non-empty proof_reference (e.g. ASIC registration, domain WHOIS verification).",
         )
 
-    claimant_email = claim.get("email") or claim.get("claimant_email")
+    claim_status = str(claim.get("status") or "").lower()
+    if claim_status in ("expired", "stale", "locked", "denied", "cancelled"):
+        raise HTTPException(status_code=409, detail=f"Claim in state '{claim_status}' cannot be granted.")
+
+    # Expiry verification
+    expires_at_raw = claim.get("expires_at")
+    if expires_at_raw:
+        expires_at = _parse_iso(str(expires_at_raw))
+        if expires_at and expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=410, detail="Claim verification has expired. Claimant must restart verification challenge.")
+
+    if not trainer_id:
+        raise HTTPException(status_code=400, detail="Claim event has no associated trainer_id.")
+
+    claimant_email = claim.get("claimant_email") or claim.get("email")
+    if not claimant_email:
+        raise HTTPException(status_code=422, detail="Claim event has no verified claimant email.")
+
+    trainer = await trainers_coll.find_one({"id": trainer_id}, {"_id": 0}) if trainers_coll is not None else None
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer record not found")
+
+    t_claim_status = str(trainer.get("claim_status") or "").lower()
+    if t_claim_status in ("claimed", "claim_disputed") or trainer.get("is_claimed"):
+        # Allow idempotent call for the exact same verified claimant
+        if trainer.get("claimed_by") == claimant_email and claim_status == "verified":
+            return {"ok": True, "status": "verified", "claim_id": claim_id, "trainer_id": trainer_id, "idempotent": True}
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot displace an existing verified owner or listing under dispute. Competing claims cannot overwrite ownership without formal dispute resolution.",
+        )
+
+    # Invariant: Arbitrary text reference or self-asserted flags without canonical verification challenge cannot grant ownership.
+    # Verification indicators must originate from a trusted claimant-bound challenge (method + challenge artifact)
+    # or authenticated operator documentary proof (identity_verified_by or identity_provenance).
+    challenge_method = claim.get("method")
+    has_challenge_artifact = bool(
+        claim.get("otp_digest")
+        or claim.get("challenge_token")
+        or claim.get("challenge_token_hash")
+        or claim.get("challenge_id")
+    )
+    is_challenge_verified = bool(
+        str(claim.get("status") or "").lower() == "verified"
+        or claim.get("otp_verified") is True
+        or claim.get("challenge_verified") is True
+    )
+    challenge_delivered = (str(claim.get("delivery_status") or "") == "sent") or (str(claim.get("status") or "").lower() == "verified")
+    trusted_challenge_origin = bool(
+        challenge_method in ("email", "email_otp", "phone_otp", "domain_dns", "abn_signoff", "operator_verified")
+        and has_challenge_artifact
+        and is_challenge_verified
+        and challenge_delivered
+    )
+    trusted_operator_documentary_proof = bool(
+        claim.get("identity_verified") is True
+        and (
+            claim.get("identity_verified_by")
+            or claim.get("identity_verification_method")
+            or claim.get("identity_provenance")
+            or claim.get("identity_verified_at")
+        )
+    )
+
+    if not trusted_challenge_origin and not trusted_operator_documentary_proof:
+        raise HTTPException(
+            status_code=422,
+            detail="Direct ownership assignment via text reference is prohibited. Claimant must complete canonical identity verification challenge with verifiable challenge provenance (method and otp_digest/challenge_token) or verified documentary identity provenance.",
+        )
+
+    # Protection against conflicting verified claims under different claimant
+    conflicting = await claims_coll.find_one(
+        {
+            "trainer_id": trainer_id,
+            "id": {"$ne": claim_id},
+            "status": "verified",
+            "$or": [
+                {"claimant_email": {"$nin": ["", None, claimant_email]}},
+                {"email": {"$nin": ["", None, claimant_email]}},
+            ],
+        },
+        {"_id": 0},
+    )
+    if conflicting:
+        raise HTTPException(
+            status_code=409,
+            detail="A conflicting verified claim exists for this trainer under a different claimant email.",
+        )
+
     if trainers_coll is not None and trainer_id:
         await trainers_coll.update_one(
             {"id": trainer_id},
             {
                 "$set": {
                     "is_claimed": True,
+                    "claim_status": "claimed",
+                    "tier": "claimed",
                     "claimed_by": claimant_email,
                     "claimed_at": now_ts,
                     "claim_proof_reference": payload.proof_reference.strip(),
                     "claim_verified_by": operator_identity,
+                    "updated_at": now_ts,
                 },
                 "$unset": {"claim_in_progress": ""},
             },
@@ -8885,6 +9309,12 @@ async def review_profile_claim(
                 "resolved_at": now_ts,
             }
         },
+    )
+
+    # Supersede competing pending claims for this trainer
+    await claims_coll.update_many(
+        {"trainer_id": trainer_id, "id": {"$ne": claim_id}, "status": {"$in": ["pending_verification", "awaiting_claimant_evidence"]}},
+        {"$set": {"status": "superseded", "superseded_by": claim_id, "updated_at": now_ts}},
     )
 
     await _audit(
@@ -8963,7 +9393,8 @@ async def review_quarantined_intro(
         except Exception as exc:
             logger.exception("Failed releasing quarantined intro_id=%s: %s", intro_id, exc)
 
-    new_state = "delivered" if delivery_status in ("sent", "delivered") else "failed"
+    # Truthful delivery state: Resend acceptance is 'sent' / dispatched, not confirmed inbox delivery
+    new_state = "sent" if delivery_status in ("sent", "delivered") else "failed"
     await intros_coll.update_one(
         {"id": intro_id},
         {"$set": {"delivery_state": new_state, "delivery_status": new_state}},
@@ -9023,6 +9454,24 @@ async def delist_trainer(
         },
     )
 
+    # Authoritative delisted entities suppression for deduplication.suppression_match
+    delisted_entities_coll = getattr(db, "delisted_entities", None)
+    if delisted_entities_coll is not None:
+        ident = deduplication.identity(trainer)
+        await delisted_entities_coll.update_one(
+            {"trainer_id": trainer_id},
+            {
+                "$set": {
+                    **ident,
+                    "trainer_id": trainer_id,
+                    "delisted_at": now_ts,
+                    "reason": payload.reason.strip(),
+                }
+            },
+            upsert=True,
+        )
+
+    # Legacy delist suppression record
     delist_coll = getattr(db, "delisted_suppression_list", None)
     if delist_coll is not None:
         await delist_coll.update_one(
@@ -9038,6 +9487,13 @@ async def delist_trainer(
                 }
             },
             upsert=True,
+        )
+
+    # Commercial safeguard: Explicitly preserve active billing relationships for manual review
+    if trainer.get("stripe_subscription_id") or trainer.get("stripe_customer_id"):
+        await trainers_coll.update_one(
+            {"id": trainer_id},
+            {"$set": {"billing_state": "subscription_active_review_required"}},
         )
 
     try:
@@ -9128,7 +9584,7 @@ async def suppress_trainer_listing(
     request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Immediate statutory compliance or safety suppression of a trainer listing."""
+    """Immediate statutory compliance or safety suppression of a trainer listing with re-ingestion prevention."""
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
 
@@ -9162,6 +9618,25 @@ async def suppress_trainer_listing(
         },
     )
 
+    # Sync to authoritative delisted_entities for re-ingestion suppression
+    delisted_entities_coll = getattr(db, "delisted_entities", None)
+    if delisted_entities_coll is not None:
+        ident = deduplication.identity(trainer)
+        await delisted_entities_coll.update_one(
+            {"trainer_id": trainer_id},
+            {
+                "$set": {
+                    **ident,
+                    "trainer_id": trainer_id,
+                    "compliance_suppressed": True,
+                    "suppression_reason": payload.legal_grounds,
+                    "evidence_reference": payload.evidence_reference.strip(),
+                    "suppressed_at": now_ts,
+                }
+            },
+            upsert=True,
+        )
+
     await _audit(
         "trainer_compliance_suppressed",
         trainer_id,
@@ -9182,6 +9657,8 @@ async def suppress_trainer_listing(
 class OversightPrivacyProcessIn(BaseModel):
     action: str = Field(..., description="Action: authorise_scrub, reject_non_subject, or request_identity_proof")
     notes: Optional[str] = None
+    proof_reference: Optional[str] = Field(default=None, description="Required citation of identity documentation or manual proof verification")
+    proof_method: Optional[str] = Field(default=None, description="Method of identity verification (e.g. passport_match, photo_id, claimant_direct_auth)")
     confirmed: bool = Field(..., description="Explicit confirmation required")
 
 
@@ -9192,9 +9669,13 @@ async def process_privacy_request(
     request: Request,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """Execute statutory privacy data eradication under Australian Privacy Principles with tax retention safeguards."""
+    """Execute statutory privacy data eradication under Australian Privacy Principles with verified subject safeguards."""
     if not payload.confirmed:
         raise HTTPException(status_code=400, detail="Confirmation required.")
+
+    valid_actions = {"authorise_scrub", "reject_non_subject", "request_identity_proof"}
+    if payload.action not in valid_actions:
+        raise HTTPException(status_code=400, detail=f"Invalid action: '{payload.action}'. Must be one of {valid_actions}.")
 
     support_coll = getattr(db, "support_threads", None)
     if support_coll is None:
@@ -9204,6 +9685,9 @@ async def process_privacy_request(
     if not thread:
         raise HTTPException(status_code=404, detail="Privacy request thread not found")
 
+    if str(thread.get("category") or "").lower() != "privacy_request":
+        raise HTTPException(status_code=400, detail="Case is not a privacy request thread.")
+
     operator_identity = f"ops:{_client_ip(request)}"
     now_ts = now_iso()
 
@@ -9211,23 +9695,58 @@ async def process_privacy_request(
         new_status = "rejected" if payload.action == "reject_non_subject" else "awaiting_identity_proof"
         await support_coll.update_one(
             {"case_id": case_id},
-            {"$set": {"status": new_status, "privacy_action_notes": payload.notes, "reviewed_by": operator_identity}},
+            {"$set": {"status": new_status, "privacy_action_notes": payload.notes, "reviewed_by": operator_identity, "updated_at": now_ts}},
         )
         await _audit(f"privacy_{payload.action}", case_id, after={"notes": payload.notes}, actor="ops")
         return {"ok": True, "case_id": case_id, "status": new_status}
 
     # action == "authorise_scrub"
+    if thread.get("privacy_processed") is True and str(thread.get("status") or "") == "resolved":
+        return {
+            "ok": True,
+            "case_id": case_id,
+            "status": "resolved",
+            "already_processed": True,
+            "records_scrubbed": thread.get("scrubbed_records_count", 0),
+        }
+
+    # Strict identity provenance: Notes-based assertions and manual in-request proof shortcuts are prohibited.
+    # The destructive erasure action must remain unavailable until a documented, trustworthy identity-verification
+    # procedure (such as claimant session token, cryptographic OTP, or trusted IdP) supports it.
+    has_trusted_verification = bool(
+        thread.get("identity_verified") is True
+        and thread.get("identity_verified_by")
+        and thread.get("identity_verified_at")
+        and thread.get("identity_verification_method") in {"claimant_session_token", "cryptographic_email_otp", "trusted_idp", "verified_documentary_audit"}
+    )
+    if not has_trusted_verification:
+        raise HTTPException(
+            status_code=403,
+            detail="Destructive privacy data erasure remains unavailable until a documented, trustworthy identity-verification procedure supports it. Requester identity cannot be asserted via manual review parameters. Use 'request_identity_proof' to solicit formal verification or 'reject_non_subject' to deny.",
+        )
+
     target_email = thread.get("sender_email")
     if not target_email:
         raise HTTPException(status_code=400, detail="No sender_email associated with privacy case.")
 
-    scrubbed_count = 0
-    token = f"[SCRUBBED_PRIVACY_{case_id[:12]}]"
-
-    # Scrub in leads/intros
     intros_coll = getattr(db, "intros", None)
-    if intros_coll is not None:
-        res = await intros_coll.update_many(
+    sub_coll = getattr(db, "submissions", None)
+    waitlist_coll = getattr(db, "owner_waitlist", None)
+    claims_coll = getattr(db, "claim_events", None)
+    notif_coll = getattr(db, "notification_events", None)
+
+    if intros_coll is None or sub_coll is None:
+        raise HTTPException(status_code=503, detail="Required data stores unavailable for privacy scrub")
+
+    token = f"[SCRUBBED_PRIVACY_{case_id[:12]}]"
+    scrub_journal: List[Dict[str, Any]] = []
+    total_scrubbed = 0
+    current_step = "init"
+
+    try:
+        # Step 1: intros (leads/enquiries)
+        current_step = "intros"
+        res_intros = await intros_coll.update_many(
             {"$or": [{"owner_email": target_email}, {"client_email": target_email}]},
             {
                 "$set": {
@@ -9240,43 +9759,103 @@ async def process_privacy_request(
                 }
             },
         )
-        scrubbed_count += res.modified_count
+        scrub_journal.append({"collection": "intros", "count": res_intros.modified_count, "status": "completed"})
+        total_scrubbed += res_intros.modified_count
 
-    # Scrub in submissions
-    sub_coll = getattr(db, "submissions", None)
-    if sub_coll is not None:
-        res = await sub_coll.update_many(
-            {"email": target_email},
-            {"$set": {"email": token, "phone": "[SCRUBBED]", "name": token, "privacy_scrubbed_at": now_ts}},
+        # Step 2: submissions
+        current_step = "submissions"
+        res_subs = await sub_coll.update_many(
+            {"$or": [{"email": target_email}, {"submitter_email": target_email}]},
+            {"$set": {"email": token, "submitter_email": token, "phone": "[SCRUBBED]", "name": token, "privacy_scrubbed_at": now_ts}},
         )
-        scrubbed_count += res.modified_count
+        scrub_journal.append({"collection": "submissions", "count": res_subs.modified_count, "status": "completed"})
+        total_scrubbed += res_subs.modified_count
 
-    # Mark thread resolved with compliance certificate
-    await support_coll.update_one(
-        {"case_id": case_id},
-        {
-            "$set": {
-                "status": "resolved",
-                "privacy_scrubbed_at": now_ts,
-                "scrubbed_records_count": scrubbed_count,
-                "scrubbed_token": token,
-                "reviewed_by": operator_identity,
-            }
-        },
-    )
+        # Step 3: owner_waitlist
+        if waitlist_coll is not None:
+            current_step = "owner_waitlist"
+            res_waitlist = await waitlist_coll.update_many(
+                {"email": target_email},
+                {"$set": {"email": token, "name": token, "phone": "[SCRUBBED]", "privacy_scrubbed_at": now_ts}},
+            )
+            scrub_journal.append({"collection": "owner_waitlist", "count": res_waitlist.modified_count, "status": "completed"})
+            total_scrubbed += res_waitlist.modified_count
+
+        # Step 4: claim_events
+        if claims_coll is not None:
+            current_step = "claim_events"
+            res_claims = await claims_coll.update_many(
+                {"$or": [{"claimant_email": target_email}, {"email": target_email}]},
+                {"$set": {"claimant_email": token, "email": token, "phone": "[SCRUBBED]", "privacy_scrubbed_at": now_ts}},
+            )
+            scrub_journal.append({"collection": "claim_events", "count": res_claims.modified_count, "status": "completed"})
+            total_scrubbed += res_claims.modified_count
+
+        # Step 5: notification_events
+        if notif_coll is not None:
+            current_step = "notification_events"
+            res_notifs = await notif_coll.update_many(
+                {"$or": [{"to_email": target_email}, {"email": target_email}, {"recipient": target_email}]},
+                {"$set": {"to_email": token, "email": token, "recipient": token, "privacy_scrubbed_at": now_ts}},
+            )
+            scrub_journal.append({"collection": "notification_events", "count": res_notifs.modified_count, "status": "completed"})
+            total_scrubbed += res_notifs.modified_count
+
+        # Step 6: support_threads (other historical threads, preserving current audit thread)
+        current_step = "support_threads"
+        res_support = await support_coll.update_many(
+            {"sender_email": target_email, "case_id": {"$ne": case_id}},
+            {"$set": {"sender_email": token, "sender_name": token, "privacy_scrubbed_at": now_ts}},
+        )
+        scrub_journal.append({"collection": "support_threads", "count": res_support.modified_count, "status": "completed"})
+        total_scrubbed += res_support.modified_count
+
+        # Mark thread resolved with verified outcome records
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {
+                "$set": {
+                    "status": "resolved",
+                    "privacy_processed": True,
+                    "privacy_scrubbed_at": now_ts,
+                    "scrubbed_records_count": total_scrubbed,
+                    "scrubbed_token": token,
+                    "scrub_journal": scrub_journal,
+                    "reviewed_by": operator_identity,
+                    "updated_at": now_ts,
+                }
+            },
+        )
+    except Exception as exc:
+        logger.exception("Privacy scrub database failure at step '%s' for case_id=%s: %s", current_step, case_id, exc)
+        await support_coll.update_one(
+            {"case_id": case_id},
+            {
+                "$set": {
+                    "status": "privacy_scrub_failed",
+                    "privacy_processed": False,
+                    "privacy_error": str(exc),
+                    "failed_at_step": current_step,
+                    "scrub_journal": scrub_journal,
+                    "updated_at": now_ts,
+                }
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"Database failure during privacy scrub at step '{current_step}': {exc}")
 
     await _audit(
         "privacy_data_scrubbed",
         case_id,
-        after={"target_email_hash": hashlib.sha256(target_email.encode()).hexdigest()[:16], "records_scrubbed": scrubbed_count},
+        after={"target_email_hash": hashlib.sha256(target_email.encode()).hexdigest()[:16], "records_scrubbed": total_scrubbed, "journal": scrub_journal},
         actor="ops",
     )
     return {
         "ok": True,
         "case_id": case_id,
-        "status": "scrubbed_and_resolved",
-        "records_scrubbed": scrubbed_count,
-        "compliance": "APP 12/13 verified; tax financial records preserved",
+        "status": "resolved",
+        "records_scrubbed": total_scrubbed,
+        "scrub_journal": scrub_journal,
+        "action": "privacy_data_scrubbed",
     }
 
 

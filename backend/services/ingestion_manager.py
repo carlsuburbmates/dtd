@@ -68,6 +68,21 @@ def _normalise_html(text: str) -> str:
     return " ".join(decoded.split())
 
 
+async def _mark_queue_suppressed(db: Any, item: Dict[str, Any], *, dry_run: bool, at: str) -> None:
+    """Retire a suppressed queue item without creating trainer/source success records."""
+    queue_id = item.get("queue_id")
+    if db is None or dry_run or not queue_id:
+        return
+    await db.discovery_queue.update_one(
+        {"id": queue_id},
+        {"$set": {
+            "status": "suppressed",
+            "reason": "delisted_identity_match",
+            "processed_at": at,
+        }},
+    )
+
+
 async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]], str]:
     """Fetch an official business page respecting robots.txt and polite crawl delays.
 
@@ -212,6 +227,7 @@ async def run_batch_ingestion_pipeline(
         "total_processed": 0,
         "qualified": 0,
         "held": 0,
+        "suppressed": 0,
         "updated_unclaimed": 0,
         "skipped_claimed": 0,
         "errors": [],
@@ -242,6 +258,22 @@ async def run_batch_ingestion_pipeline(
         summary["total_processed"] += 1
 
         try:
+            # A known delisted identity must never be fetched or reintroduced.
+            suppression = await deduplication.suppression_match(
+                db,
+                {
+                    "name": item.get("hint_name", ""),
+                    "website": url,
+                    "source_url": url,
+                    "phone": item.get("hint_phone", ""),
+                    "abn": item.get("hint_abn", ""),
+                },
+            ) if db is not None else None
+            if suppression:
+                summary["suppressed"] += 1
+                await _mark_queue_suppressed(db, item, dry_run=dry_run, at=now_iso())
+                continue
+
             # 1. Polite fetch & robots check
             fetch_ok, text_content, page_meta, fetch_err = await polite_fetch_url(url, session)
             if not fetch_ok or not text_content:
@@ -317,6 +349,13 @@ async def run_batch_ingestion_pipeline(
                 "abr_evidence": abr_evidence,
             }
 
+            # Recheck with extracted statutory identity before any insert/update.
+            suppression = await deduplication.suppression_match(db, candidate_doc) if db is not None else None
+            if suppression:
+                summary["suppressed"] += 1
+                await _mark_queue_suppressed(db, item, dry_run=dry_run, at=retrieved_at)
+                continue
+
             # 4. Canonical Publishing Quality Assessment
             quality = publishing_quality(candidate_doc)
             is_active_abn = bool(abr_evidence.get("is_active")) and quality.get("active_abn_evidence")
@@ -329,6 +368,17 @@ async def run_batch_ingestion_pipeline(
 
             if existing:
                 trainer_id = existing["id"]
+                # Identity fields may have changed since delisting; the canonical
+                # trainer reference remains authoritative for the existing record.
+                suppression = await deduplication.suppression_match(
+                    db,
+                    candidate_doc,
+                    trainer_id=trainer_id,
+                ) if db is not None else None
+                if suppression:
+                    summary["suppressed"] += 1
+                    await _mark_queue_suppressed(db, item, dry_run=dry_run, at=retrieved_at)
+                    continue
                 if is_claimed_profile(existing):
                     # Unconditional protection for claimed profiles
                     summary["skipped_claimed"] += 1
