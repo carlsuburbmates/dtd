@@ -30,6 +30,17 @@ if bash "${repo_root}/scripts/deploy_sandbox.sh" --skip-tests >/dev/null 2>&1; t
   exit 1
 fi
 
+if ! grep -Fq 'DTD_PREFLIGHT_PYTHON' "${repo_root}/scripts/deploy_sandbox.sh" || ! grep -Fq '"${PREFLIGHT_PYTHON}" backend/scripts/run_isolated_integration_suite.py' "${repo_root}/scripts/deploy_sandbox.sh"; then
+  echo "Sandbox deployment must support an explicit isolated preflight interpreter" >&2
+  exit 1
+fi
+
+invalid_python_output="$(DTD_PREFLIGHT_PYTHON="${repo_root}/does-not-exist" bash "${repo_root}/scripts/deploy_sandbox.sh" 2>&1 || true)"
+if ! grep -Fq 'DTD_PREFLIGHT_PYTHON is not executable' <<<"${invalid_python_output}"; then
+  echo "Sandbox deployment must reject an invalid preflight interpreter before deployment" >&2
+  exit 1
+fi
+
 if grep -Eq '^[[:space:]]*bash .*setup_sandbox_ingestion\.sh' "${repo_root}/scripts/deploy_sandbox.sh"; then
   echo "Deployment must not silently invoke scheduler/IAM provisioning" >&2
   exit 1
