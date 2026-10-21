@@ -21,6 +21,7 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | --- | --- | --- |
 | [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) | What code, tests, deployment and captured runtime evidence show now | Before changing or reporting the product |
 | [DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md](DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md) | Owner-approved R0–R13 stage sequence and separate engineering/product/operational/business outcomes | Stage navigation; existing authority documents still govern implementation |
+| [DTD_NEXT_SESSION_HANDOVER.md](DTD_NEXT_SESSION_HANDOVER.md) | Exact resume checkpoint, current sandbox, retained work and next authorized stage | Resuming after the requested handover |
 | [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md) | Current stage gates, next safe action and review checkpoint | Resuming roadmap execution |
 | [DTD_CODEX_CURRENT_REALITY_AUDIT.md](DTD_CODEX_CURRENT_REALITY_AUDIT.md) | Dated independent evidence for the 20 October baseline and R1 readiness | Reviewing this audit snapshot |
 | [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) | Deduplicated P0–P3 findings mapped to roadmap stages | Prioritizing fixes without creating parallel issue tracking |
