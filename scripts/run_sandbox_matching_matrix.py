@@ -5,8 +5,9 @@ This is deliberately more demanding than the narrow smoke runner.  It creates
 only UUID-tagged sandbox fixtures, proves validation, emergency triage,
 no-confirmed-match, local-plus-expanded matching, opaque context handoff,
 profile visibility, terminal follow-up delivery and protected Ops evidence.
-Every record it creates is removed in ``finally`` and the trainers are checked
-absent from the public API.  It never calls an email provider or billing API:
+Known owned request records are removed in ``finally`` and trainers are checked
+absent from the public API. Unknown IDs after lost responses remain unverified.
+It never calls an email provider or billing API:
 the follow-up fixture is intentionally contact-ready for matching but has no
 email, so its truthful delivery result is ``terminal_failure``.
 """
@@ -190,13 +191,7 @@ def _cleanup(
     trainer_ids: list[str],
     match_ids: list[str],
     intro_ids: list[str],
-    pre_existing_degradation_ids: set[str],
 ) -> Dict[str, int]:
-    new_degradation_ids = [
-        str(row.get("id"))
-        for row in db.ai_degradation_events.find({"operation": "matching"}, {"_id": 0, "id": 1})
-        if row.get("id") and str(row["id"]) not in pre_existing_degradation_ids
-    ]
     queries: Dict[str, Dict[str, Any]] = {
         "trainers": {"id": {"$in": trainer_ids}},
         "match_events": {"id": {"$in": match_ids}} if match_ids else {"id": "__none__"},
@@ -204,7 +199,7 @@ def _cleanup(
         "intros": {"$or": [{"id": {"$in": intro_ids or ["__none__"]}}, {"match_id": {"$in": match_ids or ["__none__"]}}]},
         "engagements": {"match_id": {"$in": match_ids}} if match_ids else {"match_id": "__none__"},
         "notification_events": {"target_id": {"$in": intro_ids}} if intro_ids else {"target_id": "__none__"},
-        "ai_degradation_events": {"id": {"$in": new_degradation_ids}} if new_degradation_ids else {"id": "__none__"},
+        "ai_degradation_events": {"operation": "matching", "match_id": {"$in": match_ids}},
         "audit_log": {"$or": [
             {"target": {"$in": trainer_ids + intro_ids}},
             {"after.match_id": {"$in": match_ids}},
@@ -218,10 +213,10 @@ def _cleanup(
     return deleted
 
 
-def _new_degradation_summary(db: Any, pre_existing_ids: set[str]) -> list[Dict[str, str]]:
+def _new_degradation_summary(db: Any, match_ids: list[str]) -> list[Dict[str, str]]:
     """Return only operationally safe diagnostics for this disposable run."""
     rows = db.ai_degradation_events.find(
-        {"operation": "matching"},
+        {"operation": "matching", "match_id": {"$in": match_ids}},
         {"_id": 0, "id": 1, "error_type": 1, "error_code": 1, "model": 1},
     )
     return [
@@ -232,7 +227,7 @@ def _new_degradation_summary(db: Any, pre_existing_ids: set[str]) -> list[Dict[s
             "model": str(row.get("model") or "unknown"),
         }
         for row in rows
-        if row.get("id") and str(row["id"]) not in pre_existing_ids
+        if row.get("id")
     ]
 
 
@@ -259,13 +254,9 @@ def main() -> int:
     intro_ids: list[str] = []
     client = MongoClient(args.mongo_url, serverSelectionTimeoutMS=10000)
     db = client[SANDBOX_DB]
-    pre_existing_degradation_ids: set[str] = set()
     cleanup_ready = False
     try:
         client.admin.command("ping")
-        pre_existing_degradation_ids = {
-            str(row["id"]) for row in db.ai_degradation_events.find({}, {"_id": 0, "id": 1}) if row.get("id")
-        }
         cleanup_ready = True
 
         # Validation happens before the endpoint body: no match event should be created.
@@ -310,7 +301,7 @@ def main() -> int:
         if normal.get("search_scope") != "expanded":
             raise RuntimeError("Thin local supply did not disclose expanded matching scope.")
         if normal.get("degraded"):
-            diagnostics = _new_degradation_summary(db, pre_existing_degradation_ids)
+            diagnostics = _new_degradation_summary(db, [normal_id])
             print(json.dumps({
                 "diagnostic": "normal_match_degraded",
                 "decision_state": normal.get("decision_state"),
@@ -409,7 +400,6 @@ def main() -> int:
                     trainer_ids=trainer_ids,
                     match_ids=[match_id for match_id in match_ids if match_id],
                     intro_ids=[intro_id for intro_id in intro_ids if intro_id],
-                    pre_existing_degradation_ids=pre_existing_degradation_ids,
                 )
                 _require_public_absence(service_url, trainer_ids)
                 print(json.dumps({"cleanup_complete": True, "deleted": deleted}))

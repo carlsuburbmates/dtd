@@ -73,6 +73,7 @@ export const submitSupportInquiry = (payload) => api.post("/support/contact", pa
 export const listSupportThreads = (params) => opsApi.get("/oversight/support/threads", { params });
 export const getSupportThread = (caseId) => opsApi.get(`/oversight/support/threads/${encodeURIComponent(caseId)}`);
 export const replySupportThread = (caseId, payload) => opsApi.post(`/oversight/support/threads/${encodeURIComponent(caseId)}/reply`, payload);
+export const linkSupportTrainer = (caseId, payload) => opsApi.post(`/oversight/support/threads/${encodeURIComponent(caseId)}/link-trainer`, payload);
 export const closeSupportThread = (caseId, payload) => opsApi.post(`/oversight/support/threads/${encodeURIComponent(caseId)}/close`, payload);
 export const reviewHeldSubmission = (subId, payload) => opsApi.post(`/oversight/submissions/${encodeURIComponent(subId)}/review`, payload);
 export const reviewClaim = (claimId, payload) => opsApi.post(`/oversight/claims/${encodeURIComponent(claimId)}/review`, payload);

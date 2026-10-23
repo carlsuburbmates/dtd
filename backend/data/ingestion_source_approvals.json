@@ -8,8 +8,66 @@
       "approved": true,
       "approved_by": "DTD owner",
       "terms_reviewed_at": "2026-09-11",
-      "approved_uses": ["trainer_profile_source"],
-      "constraints": "Public business facts from each trainer's own website only; respect robots and site terms; no private, inferred, testimonial, review, or unsupported claim data."
+      "approved_uses": [
+        "trainer_profile_source"
+      ],
+      "disallowed_domains": [
+        "google.com",
+        "maps.google.com",
+        "facebook.com",
+        "instagram.com",
+        "sensis.com.au",
+        "yellowpages.com.au",
+        "truelocal.com.au",
+        "localsearch.com.au",
+        "womo.com.au",
+        "bark.com",
+        "oneflare.com.au"
+      ],
+      "constraints": "Public business facts from each trainer's own website only; respect robots and site terms; no private, inferred, testimonial, review, or unsupported claim data.",
+      "approved_source_urls": [
+        "https://kintala.com.au/",
+        "https://www.dogsandbonds.com.au/",
+        "https://www.petpursuits.com.au/",
+        "https://focusondogtraining.com/",
+        "https://www.northsidedogtraining.com.au/",
+        "https://www.northsidedogtraining.com.au/services/puppypreschool",
+        "https://pawsitivebonds.com.au/",
+        "https://pawsitivebonds.com.au/services",
+        "https://pawsitivebonds.com.au/contactus",
+        "https://www.melbournedogtrainers.com.au/",
+        "https://melbournedogtrainers.com.au/",
+        "https://www.fromadogsview.com.au/",
+        "https://www.mindmylead.com.au/",
+        "https://www.thrivecanine.com.au/",
+        "https://dogtraining.com.au/",
+        "https://www.urbandogshq.com/",
+        "https://www.baysidedogbehaviour.com.au/",
+        "https://positivek9training.com.au/",
+        "https://www.whytewhispers.com/",
+        "https://www.westsidepaws.com.au/",
+        "https://www.refineyourcanine.com.au/",
+        "https://www.refineyourcanine.com.au/about",
+        "https://kip.com.au/dog-training/vic/melbourne/",
+        "https://www.hellopuppy.com.au/",
+        "https://www.thepawsitivecanine.com.au/",
+        "https://www.thepawsitivecanine.com.au/about"
+      ],
+      "approval_reference": "backend/data/initial_trainer_batch_apply_manifest.json; backend/data/melbourne_trainers_seed.json"
+    },
+    {
+      "provider": "configured_discovery_sources",
+      "approved": false,
+      "approved_by": "",
+      "terms_reviewed_at": "",
+      "approved_uses": [],
+      "approved_source_urls": [
+        "https://www.petprofessionalguild.com/find-a-member",
+        "https://apdt.com.au/find-a-trainer"
+      ],
+      "constraints": "Disabled pending documented source authority. Any later approval must name exact index URLs and independently admitted official trainer candidate URLs.",
+      "status": "pending_source_authority",
+      "reason": "No owner decision or compatible-terms evidence was found for these proposed association discovery sources. Network scans remain disabled pending documented approval."
     },
     {
       "provider": "abr_web_services",
@@ -17,7 +75,10 @@
       "approved_by": "DTD owner",
       "terms_reviewed_at": "2026-09-11",
       "terms_url": "https://abr.business.gov.au/Tools/WebServicesAgreement",
-      "approved_uses": ["abn_name_search", "abn_verification"],
+      "approved_uses": [
+        "abn_name_search",
+        "abn_verification"
+      ],
       "constraints": "Identity and active-status verification only; retain source attribution, do not imply Commonwealth endorsement, and honour withdrawn or suppressed details."
     },
     {

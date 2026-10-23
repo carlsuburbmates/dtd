@@ -7,7 +7,7 @@ Verifies:
 4. Prompt-injection defense and untrusted content boundaries.
 5. Structured analysis schema validation and root cause discipline (confirmed, likely, unknown).
 6. Deduplication and caching: zero duplicate model calls for same occurrence fingerprint.
-7. Daily budget enforcement and $0 financial risk safeguards.
+7. Daily request attempt budget and bounded provider output.
 8. Manual request rate limiting and cooldown periods (60s).
 9. Strict read-only enforcement: analyst cannot mutate operational or review state.
 10. Failure isolation: Gemini timeouts or provider errors do not disrupt directory operations.
@@ -17,6 +17,7 @@ Verifies:
 import asyncio
 from datetime import datetime, timezone, timedelta
 import json
+import copy
 import pytest
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -43,76 +44,55 @@ class FakeMongoCollection:
     def __init__(self, initial_docs: Optional[List[Dict[str, Any]]] = None):
         self._docs: List[Dict[str, Any]] = list(initial_docs or [])
 
-    async def find_one(self, query: Dict[str, Any], *args, **kwargs) -> Optional[Dict[str, Any]]:
-        for d in self._docs:
-            match = True
-            for k, v in query.items():
-                if d.get(k) != v:
-                    match = False
-                    break
-            if match:
-                return dict(d)
-        return None
+    @staticmethod
+    def _matches(doc, query):
+        for key, value in (query or {}).items():
+            actual = doc.get(key)
+            if isinstance(value, dict):
+                for op, expected in value.items():
+                    if op == "$exists" and (key in doc) != expected:
+                        return False
+                    if op == "$regex" and not str(actual or "").startswith(expected.lstrip("^")):
+                        return False
+                    if op == "$in" and actual not in expected:
+                        return False
+                    if op == "$nin" and actual in expected:
+                        return False
+                    if op == "$lt" and not (actual is not None and actual < expected):
+                        return False
+            elif actual != value:
+                return False
+        return True
 
-    def find(self, query: Dict[str, Any] = None, *args, **kwargs):
-        res = []
-        for d in self._docs:
-            if not query:
-                res.append(dict(d))
-                continue
-            match = True
-            for k, v in query.items():
-                if isinstance(v, dict) and "$in" in v:
-                    if d.get(k) not in v["$in"]:
-                        match = False
-                        break
-                elif d.get(k) != v:
-                    match = False
-                    break
-            if match:
-                res.append(dict(d))
-        return FakeMongoCursor(res)
+    async def find_one(self, query, *args, **kwargs):
+        return next((dict(d) for d in self._docs if self._matches(d, query)), None)
 
-    async def count_documents(self, query: Dict[str, Any]) -> int:
-        count = 0
-        for d in self._docs:
-            match = True
-            for k, v in query.items():
-                if isinstance(v, dict) and "$regex" in v:
-                    prefix = v["$regex"].lstrip("^")
-                    if not str(d.get(k, "")).startswith(prefix):
-                        match = False
-                        break
-                elif isinstance(v, dict) and "$nin" in v:
-                    if d.get(k) in v["$nin"]:
-                        match = False
-                        break
-                elif d.get(k) != v:
-                    match = False
-                    break
-            if match:
-                count += 1
-        return count
+    def find(self, query=None, *args, **kwargs):
+        return FakeMongoCursor([dict(d) for d in self._docs if self._matches(d, query)])
 
-    async def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False):
-        set_fields = update.get("$set", {})
-        for i, d in enumerate(self._docs):
-            match = True
-            for k, v in query.items():
-                if d.get(k) != v:
-                    match = False
-                    break
-            if match:
-                self._docs[i].update(set_fields)
+    async def count_documents(self, query):
+        return sum(self._matches(d, query) for d in self._docs)
+
+    async def update_one(self, query, update, upsert=False):
+        for doc in self._docs:
+            if self._matches(doc, query):
+                doc.update(update.get("$set", {}))
                 return MagicMock(matched_count=1, modified_count=1)
         if upsert:
-            new_doc = {**query, **set_fields}
-            self._docs.append(new_doc)
+            self._docs.append({**query, **update.get("$setOnInsert", {}), **update.get("$set", {})})
             return MagicMock(matched_count=0, upserted_id=1)
         return MagicMock(matched_count=0, modified_count=0)
 
-    async def insert_one(self, doc: Dict[str, Any]):
-        self._docs.append(dict(doc))
+    async def find_one_and_update(self, query, update, **kwargs):
+        for doc in self._docs:
+            if self._matches(doc, query):
+                for field, amount in update.get("$inc", {}).items():
+                    doc[field] = doc.get(field, 0) + amount
+                return dict(doc)
+        return None
+
+    async def insert_one(self, doc):
+        self._docs.append(copy.deepcopy(doc))
         return MagicMock(inserted_id=1)
 
 
@@ -337,9 +317,22 @@ def test_daily_budget_exhaustion_enforces_cost_safeguard(monkeypatch):
             "severity": "high",
             "operational_state": "detected",
         }
-        res = await ops_analyst.analyze_incident(db, case, trigger_reason="automatic")
+        res = await ops_analyst.analyze_incident(db, case, trigger_reason="automatic", override_client=MagicMock())
         assert res["status"] == "budget_exhausted"
-        assert "daily budget reached" in res["analysis"]["summary"].lower()
+        assert "request attempt budget unavailable or exhausted" in res["analysis"]["summary"].lower()
+    asyncio.run(_test())
+
+
+def test_daily_budget_query_failure_fails_closed(monkeypatch):
+    async def _test():
+        db = FakeDatabase()
+        async def failing_count(*args, **kwargs):
+            raise RuntimeError("Database connection timed out")
+        db.ops_ai_investigations.count_documents = failing_count
+
+        within_budget, count, limit = await ops_analyst.check_daily_budget(db)
+        assert within_budget is False
+        assert count == limit
     asyncio.run(_test())
 
 
@@ -492,8 +485,150 @@ def test_run_scheduled_investigations_bounds_batch_size():
         res = await ops_analyst.run_scheduled_investigations(db, cases, max_batch=2)
         assert res["status"] == "ok"
         assert res["investigated_count"] == 2
+        assert res["used_today"] == 0  # Offline fallback incurs no provider attempt.
 
         # Verify only 2 investigations were created
         count = await db.ops_ai_investigations.count_documents({})
         assert count == 2
     asyncio.run(_test())
+
+
+def test_df052_concurrent_investigations_strictly_respect_daily_budget(monkeypatch):
+    """Ensure concurrent requests under limit 1 cannot both call the provider (DF-052)."""
+    async def _test():
+        db = FakeDatabase()
+        monkeypatch.setattr(ops_analyst, "OPS_AI_DAILY_BUDGET", 1)
+
+        provider_calls = 0
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps({
+            "summary": "Simulated slow analysis",
+            "root_cause_classification": "confirmed",
+            "root_cause_hypothesis": "Test hypothesis",
+            "supporting_evidence": ["Evidence"],
+            "confidence_score": 0.9,
+            "operational_impact": "None",
+            "recommended_action": "No action",
+            "requires_owner_intervention": False,
+            "safety_and_governance_notes": "None",
+        })
+        mock_resp.usage_metadata = None
+
+        async def slow_generate(*args, **kwargs):
+            nonlocal provider_calls
+            provider_calls += 1
+            await asyncio.sleep(0.05)
+            return mock_resp
+
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=slow_generate)
+
+        case1 = {"case_id": "case_concurrent_1", "severity": "high", "operational_state": "detected"}
+        case2 = {"case_id": "case_concurrent_2", "severity": "high", "operational_state": "detected"}
+
+        # Fire both concurrently
+        res1, res2 = await asyncio.gather(
+            ops_analyst.analyze_incident(db, case1, trigger_reason="manual_request", override_client=mock_client, force_refresh=True),
+            ops_analyst.analyze_incident(db, case2, trigger_reason="manual_request", override_client=mock_client, force_refresh=True),
+        )
+
+        statuses = {res1.get("status"), res2.get("status")}
+        assert "completed" in statuses
+        assert "budget_exhausted" in statuses
+        assert provider_calls == 1  # Exactly 1 call reached the provider!
+    asyncio.run(_test())
+
+
+def test_df052_repeated_investigations_do_not_overwrite_budget_count(monkeypatch):
+    """Ensure repeated investigations on the same case do not overwrite attempt history and bypass budget limit (DF-052)."""
+    async def _test():
+        db = FakeDatabase()
+        monkeypatch.setattr(ops_analyst, "OPS_AI_DAILY_BUDGET", 2)
+        monkeypatch.setattr(ops_analyst, "OPS_AI_MANUAL_COOLDOWN_SECONDS", 0)
+
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps({
+            "summary": "Repeated analysis run",
+            "root_cause_classification": "confirmed",
+            "root_cause_hypothesis": "Repeated run hypothesis",
+            "supporting_evidence": ["Evidence"],
+            "confidence_score": 0.9,
+            "operational_impact": "None",
+            "recommended_action": "No action",
+            "requires_owner_intervention": False,
+            "safety_and_governance_notes": "None",
+        })
+        mock_resp.usage_metadata = None
+
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+        case = {"case_id": "case_repeated_single", "severity": "high", "operational_state": "detected"}
+
+        # First run succeeds
+        res1 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res1["status"] == "completed"
+
+        # Second run succeeds
+        res2 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res2["status"] == "completed"
+
+        # Third run must be budget_exhausted
+        res3 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res3["status"] == "budget_exhausted"
+    asyncio.run(_test())
+
+
+
+
+@pytest.mark.parametrize("operation", ["find_one", "count_documents", "update_one", "find_one_and_update", "insert_one"])
+def test_df052_budget_storage_failure_prevents_provider_call(monkeypatch, operation):
+    async def run():
+        db = FakeDatabase()
+        monkeypatch.setattr(ops_analyst, "OPS_AI_DAILY_BUDGET", 1)
+        monkeypatch.setattr(db.ops_ai_investigations, operation, AsyncMock(side_effect=RuntimeError("mock store unavailable")))
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock()
+        result = await ops_analyst.analyze_incident(
+            db, {"case_id": "unavailable", "severity": "high"}, override_client=client
+        )
+        assert result["status"] == "budget_exhausted"
+        client.aio.models.generate_content.assert_not_awaited()
+        if operation == "insert_one":
+            # A reservation whose acknowledgement/persistence failed is burned.
+            ledger = next(d for d in db.ops_ai_investigations._docs if d.get("document_type") == "daily_attempt_budget")
+            assert ledger["used"] == 1
+    asyncio.run(run())
+
+
+def test_df052_missing_database_prevents_provider_call():
+    async def run():
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock()
+        assert (await ops_analyst.check_daily_budget(None))[0] is False
+        result = await ops_analyst.analyze_incident(
+            None, {"case_id": "no_db", "severity": "high"}, override_client=client
+        )
+        assert result["status"] == "budget_exhausted"
+        client.aio.models.generate_content.assert_not_awaited()
+    asyncio.run(run())
+
+
+def test_df052_provider_request_bounds_output_and_preserves_json_config(monkeypatch):
+    async def run():
+        config_factory = MagicMock(return_value={"mock_config": True})
+        monkeypatch.setattr(ops_analyst.ai_service, "_generate_content_config", config_factory)
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(return_value=MagicMock(
+            text=json.dumps({"summary": "Bounded mock analysis"}), usage_metadata=None
+        ))
+        result = await ops_analyst.analyze_incident(
+            FakeDatabase(), {"case_id": "bounded_output", "severity": "high"}, override_client=client
+        )
+        assert result["status"] == "completed"
+        config_factory.assert_called_once_with(
+            response_mime_type="application/json", temperature=0.1,
+            max_output_tokens=ops_analyst.MAX_OUTPUT_TOKENS,
+        )
+        assert client.aio.models.generate_content.await_args.kwargs["config"] == {"mock_config": True}
+    asyncio.run(run())

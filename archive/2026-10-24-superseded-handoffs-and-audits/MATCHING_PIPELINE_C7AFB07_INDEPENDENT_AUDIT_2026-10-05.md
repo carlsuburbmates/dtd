@@ -2,7 +2,7 @@
 
 ## Scope and decision
 
-This is Codex's independent local re-audit of Antigravity candidate commit `c7afb0752267332c0f4be30b1bd092ab89c63fb7`, against the prior cumulative implementation `a167478592136bd4e0385f2c6dee3d0377c76222` and the active [completion criteria](MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md).
+This is Codex's independent local re-audit of Antigravity candidate commit `c7afb0752267332c0f4be30b1bd092ab89c63fb7`, against the prior cumulative implementation `a167478592136bd4e0385f2c6dee3d0377c76222` and the active [completion criteria](../../docs/MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md).
 
 **Decision: `PARTIAL` — do not advance to M9 developer-sandbox acceptance.** The commit contains valid, retained repairs. It must receive a narrow follow-up rework for the material items below; it does not need a redesign or rollback.
 

@@ -1,7 +1,7 @@
 """Unit test suite for Acquisition Architecture Audit & Match-Readiness Projection (DF-026).
 
 Verifies the 7 mandatory acceptance criteria specified in:
-docs/ANTIGRAVITY_ACQUISITION_MATCH_READINESS_HANDOFF.md
+archive/2026-10-24-superseded-handoffs-and-audits/ANTIGRAVITY_ACQUISITION_MATCH_READINESS_HANDOFF.md
 Governed by: AGENTS.md Rule 6A, CDR-021, and CDR-022.
 """
 

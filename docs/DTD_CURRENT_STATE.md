@@ -1,6 +1,6 @@
 # DTD Current State
 
-**Evidence date:** 22 October 2026
+**Evidence date:** 24 October 2026
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. Dated snapshots retain their historical scope; the completed R3 checkpoint and linked R3 release record supersede earlier runtime/integration pointers.
 **Audit scope:** six-part, read-only code/product audit completed 20 September 2026, plus a read-only DNS/hosting reconciliation completed 23 September 2026. On 24 September, the owner separately authorised guarded Cloud Run recovery, Direct VPC/Cloud NAT rollout, Atlas network restriction, canonical suburb production seeding and one exact invalid-SEO-record cleanup; those production mutations are identified below. Other unexercised operator actions remain outside this evidence.
 
@@ -10,6 +10,13 @@
 - **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026; the Cloud Run service, Scheduler configuration and public health/config/SEO rejection paths were rechecked on 25 September 2026; production Stripe-related Cloud Run configuration and public health/config/webhook rejection paths were rechecked on 14 October 2026; production and developer API/frontend state, Ops telemetry and the developer Scheduler/Guardian path were rechecked on 15 October 2026.
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
+
+## R8 independent audit and separate-session coordination — 24 October 2026
+
+- **PARTIAL:** implementation-authored R8 acceptance is superseded by independent review. The isolated audit branch contains additional source/robots, claim-session, support, datastore-budget and request-owned-cleanup corrections; 710 backend and 100 frontend tests pass. Local checks do not prove deployed behavior.
+- **Provenance:** the 23 October API `dtd-api-dev-00060-x5r` and web `dtd-web-dev-00024-nlj` build archives match all tracked API/frontend source files at `1022ad5`. They do not include the later audit corrections. Exact digests, review scope and remaining workflow/provider/accessibility evidence are in [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md).
+- **Parallel handover:** the owner says the new commercial/roadmap plan was sent to Antigravity in another session. Commit `0701d09` is preserved, including static fallback and sitemap. Reconcile returned commits rather than duplicate broad roadmap implementation. Google credits remain pending; trial/billing and matching contracts remain authoritative over strategy prose.
+- **Safety:** this audit checkpoint has made no remote push/deployment or provider mutation. The 24 October external handover reports a separate owner-authorized production frontend crawlability release; this does not authorize R9 product/API promotion. Keep ingestion paused, checkout and self-healing disabled.
 
 ## Public deployment route — read-only verified 21 October 2026
 
@@ -345,7 +352,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
 - **Observed/status:** 5 October 2026 — local candidate `c7afb07` repairs the observed stale-token and arbitrary-direct-attribution paths; developer-sandbox verification remains open.
-- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** no raw behavioural description is observed in result/profile URLs in this local path. The exact deployed request, persisted record and browser session lifecycle have not been inspected in the developer sandbox.
 - **Why deferred:** this audit does not deploy, query live owner data or change production retention.
 - **Next action:** verify the full owner result-to-profile-to-enquiry journey and persisted redaction with disposable sandbox data before closure. Matching roadmap M2/M5/M9 own the remaining evidence.
@@ -353,7 +360,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
 - **Observed/status:** 5 October 2026 — local remediation accepted in candidate `7dd99fa`; developer-sandbox rendering remains unverified.
-- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** this audit has not checked the rendered developer-sandbox routes for the accepted local commit.
 - **Next action:** verify the public-route copy during M9 developer-sandbox acceptance; close only with deployed-rendering evidence.
@@ -361,7 +368,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-017 — Failed owner follow-ups cannot retry
 
 - **Observed/status:** 5 October 2026 — repaired locally in candidate `8e03f6c`; developer-sandbox/provider verification remains open.
-- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** the implementation is materially improved, but can still mislead owners/operators about non-delivery or create duplicate communication. No configured safe provider or sandbox record was inspected.
 - **Why deferred:** no safe-provider or sandbox record was inspected in this local audit.
 - **Next action:** complete safe-provider sandbox evidence for delivery and retry lifecycle. Matching roadmap M5/M8/M9 own the remaining work.
@@ -407,7 +414,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-024 — Urgent-support pathway exists locally but is not sandbox-accepted
 
 - **Observed/status:** 6 October 2026 — `PARTIAL`; sandbox triage routing is accepted, provider-data freshness remains open.
-- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** local responses no longer imply local coverage when none is configured. This does not evidence a current or comprehensive provider directory, safe live contact information, or deployed behaviour.
 - **Why deferred:** the completed M9 urgent route did not query or contact real provider data, and it does not establish Melbourne-wide provider coverage or freshness.
 - **Next action:** verify authorised provider evidence/freshness/correction lifecycle before claiming any broader urgent-support coverage.
@@ -452,13 +459,12 @@ These entries are verified observations requiring follow-up, not approved produc
   5. The earlier report claimed a live invocation through `scripts/verify_sandbox_ops_phase2.py`. The current verifier checks Scheduler configuration read-only and blocks runtime acceptance because routine effects are not fixture-scoped. Do not invoke the job as an acceptance test.
   - **Residual gate:** DF-029 scheduling provision is complete. DF-052 tracks fixture-scoped execution acceptance and AI cost bounds. Any production promotion remains a separate owner release gate.
 
-### DF-030 — Storefront owner controls lose authorization on profile revisit
+### DF-030 — Claim session restoration and capability editing need deployed acceptance
 
-- **Observed/status:** 15 October 2026 — open; commit `230cdd7` is independently audited as **PARTIAL**.
-- **Evidence:** the owner controls render when a profile is marked claimed, but the revisit path does not retain the claim session token required by the protected capability update and billing flows. The capability editor can open without loading saved values and the protected save request returns unauthorized. Existing ABN badge, review summary, direct enquiry form and claim modal render paths remain present; the changed component test verifies rendering and does not exercise the authenticated edit lifecycle.
-- **Impact/uncertainty:** a claimed owner can see controls that are not operational after returning to the profile, and an empty editor risks confusing the owner about saved listing capabilities.
-- **Why deferred:** the task scope was an independent audit and live sync; no frontend/authentication repair was made.
-- **Next action:** preserve a valid claim session through the supported owner path or require a fresh owner verification before showing actionable edit/billing controls; add lifecycle tests for save and billing navigation.
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** Local renewal now binds current ownership/latest challenge and consumes once; UI rejects stale route responses, recovers expired sessions and preserves drafts. Backend independent review accepted; root independently reviewed the final frontend correction; deployed runtime recovery remains pending. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-031 — Held sandbox submissions lack current statutory identity evidence
 
@@ -542,48 +548,37 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-041 — Trainer success-path testing lacks a disposable sandbox route and safe OTP sink
 
-- **Observed/status:** 16 October 2026 — `PARTIAL`; the developer claim UI path is verified end to end with a disposable synthetic listing. Successful public trainer submission remains unverified.
-- **Evidence:** `scripts/run_sandbox_trainer_claim_acceptance.sh` and its Python runner are preview-first and pinned to the developer API, web service, project and `dtd_sandbox` database. The runner inserts one UUID-namespaced synthetic profile and waits for the browser UI to start the ordinary claim flow. On 16 October, Chrome completed the claim against the developer profile using Resend's documented [`delivered@resend.dev` test sink](https://resend.dev/); the exact provider message was opened by ID in the authenticated Resend dashboard. The dashboard showed the message as delivered, and the UI progressed to the capability step and then displayed “Identity claimed” and “Manage your listing” after capability confirmation was skipped. The database showed the claim event verified, trainer status/tier claimed, and both start/verify audit events. The runner's `finally` removed one trainer, one claim event, one notification event and two audit events. Independent post-cleanup checks found zero rows for both the successful run and an earlier interrupted run; the API returned HTTP 404 and a browser reload showed “Not found.” Production and real trainer addresses were untouched; runtime-key permissions were not widened. The two synthetic test-email log entries remain in Resend; their OTPs are short-lived. The `/submit` form still posts to the real submissions route and has not had a valid sandbox success run.
-- **Additional code finding and sandbox evidence:** the public form requires `consent_intro_billing_terms`, but the API previously enforced only publication and accuracy consent. The API now rejects `/api/submissions` with HTTP 400 unless that terms acknowledgement is present, before AI scoring or any database/provider side effect. A new regression plus the affected submission/claim/ABN/scoring suites passed locally (89 passed); the full deployment preflight passed 552 tests and `PRELAUNCH_RELEASE_GATE=PASS`. On 16 October, revision `dtd-api-dev-00028-ttz` served the initial verified rejection probe, and direct database checks found zero trainer/submission rows for its unique name. An earlier probe reached revision `dtd-api-dev-00027-yob`, which accepted one held synthetic submission; the exact unpublished trainer, submission and audit row were removed, direct database checks found zero leftovers, and both public routes returned 404. Production was not touched. Revisions `dtd-api-dev-00029-98c`, `dtd-api-dev-00030-2vh` and `dtd-api-dev-00032-l9c` were routed to 100% developer API traffic in successive deployments. The final revision `dtd-api-dev-00032-l9c` was built from clean commit `887f513` after GitHub checks passed. Its `/api/health` returned HTTP 200 with the database available; `/api/config` returned HTTP 200 with matching enabled and expected launch settings; a unique request missing terms consent returned HTTP 400 with `Accept the terms to continue submission.` Direct `dtd_sandbox` checks found zero trainer and submission rows for that probe. The deploy script's service-state parser reads Cloud Run's nested `status` response and validates that latest created equals latest ready and receives 100% traffic before checking health. The contract test and shell syntax check pass, and the full corrected deployment workflow completed successfully.
-- **Impact/uncertainty:** the claim success path can now be exercised without contacting a real trainer or retaining app records. A valid trainer submission can still create a held or published listing and notifications, so its success and cleanup lifecycle remain unverified.
-- **Why deferred:** the claim fixture is safe and repeatable, but the audit did not establish an isolated submission fixture lifecycle. The submission form also includes consent and terms steps that must not be bypassed or misrepresented as a real person's acceptance.
-- **Next action:** a successful public `/submit` acceptance still needs a truthful real business submission and actual submitter acknowledgements; synthetic data cannot truthfully attest accuracy or accept terms. Keep production and real trainer data untouched.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R5; successful public onboarding remains NOT_VERIFIED.
+- **Evidence:** new unit tests verify existing consent rejection and mocked claim behavior; they do not prove a successful public submission, statutory/provider result, downstream lifecycle and cleanup. Earlier disposable claim evidence remains accepted only at its original scope. No candidate deployment or new success-path runtime artifact was found in the R8 handover.
+- **Impact/uncertainty:** the public trainer onboarding exit remains unsupported by the cited tests.
+- **Why deferred / next action:** finish corrected code acceptance, then execute the bounded sandbox submit/claim/declaration journey with truthful test consent, approved sink and exact cleanup evidence.
 
+### DF-044 — Source admission needs corrected runtime acceptance
 
-### DF-044 — Discovery queue source scans bypass per-source authorization
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** Exact initial-20/evidence URLs and redirect holds are locally corrected and independently reviewed. Unsupported association approvals are disabled. No new source rights or live acquisition request occurred. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R4 source-governance gap.
-- **Evidence:** `source_approvals.approved()` grants approval by provider and use, not URL/domain. `automation.ingest_discovery_sources()` scans configured source URLs and enqueues matching outbound links without consulting the approval registry. No live crawl was run.
-- **Impact/uncertainty:** configured source entries may expand into unreviewed domains, weakening source rights/terms and provenance controls. No unauthorized source use is demonstrated.
-- **Why deferred:** this is not needed to close the R1 suppression failure and requires a bounded authorization design consistent with existing approved-source decisions.
-- **Next action:** bind configured source and candidate URLs to explicit reviewed approvals; add synthetic allow/deny tests before enabling affected ingestion.
+### DF-045 — Robots policy needs corrected runtime acceptance
 
-### DF-045 — Ingestion treats robots retrieval errors as permission to crawl
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** Local handling now rejects HTML, unusable plaintext, policy retrieval errors and redirects while preserving valid empty/comment rules. Independent review and targeted no-target-fetch tests passed. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R4 acquisition safety gap.
-- **Evidence:** `ingestion_manager.polite_fetch_url()` converts robots retrieval exceptions and non-success responses into empty rules, then proceeds with the target fetch. No source request was made for this audit.
-- **Impact/uncertainty:** the crawler may proceed without an available robots policy. No actual disallowed crawl is established.
-- **Why deferred:** DF-043 has since been independently reviewed, deployed and verified. DF-045 remains a distinct R4 acquisition control; fixing it does not reopen the accepted suppression delta.
-- **Next action:** encode the documented defer/fail-closed behavior for robots retrieval errors and test denied, unavailable and malformed responses.
+### DF-047 — Support workflow needs corrected runtime acceptance
 
-
-
-### DF-047 — Support case reply and closure lack an operator-facing Ops workflow
-
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R7 workflow gap.
-- **Evidence:** backend provides authenticated support thread list/detail/reply/close endpoints (`backend/server.py`); frontend API helpers exist (`frontend/src/lib/api.js`), but `frontend/src/pages/Ops.jsx` has no support-thread view or use of those helpers. No live support case was read or modified.
-- **Impact/uncertainty:** operators cannot use the `/ops` interface to review and resolve these first-party support cases, despite API capability. Exact API safeguards/tests remain independently reviewable; this finding concerns the missing surface.
-- **Why deferred:** no change to accepted Ops phases is required; this is a bounded R7 workflow implementation and acceptance item.
-- **Next action:** add the minimal authenticated queue/detail/reply/close path with status, retry/failure and audit visibility; test only the affected support transaction and preserve existing Ops phase evidence.
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** Local selection/version guards, truthful failed/duplicate dispatch states, pagination and protected category actions are implemented. Backend and final frontend corrections independently reviewed; deployed sink/data/audit evidence remains pending. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-048 — Contact success state claims a receipt email regardless of delivery result
 
-- **Observed/status:** 20 October 2026 — **OPEN**, P2 R7 communication truth gap.
-- **Evidence:** `Contact.jsx` always tells a successful submitter “A confirmation has been sent to your email.” The API returns accepted case status even when receipt notification is skipped or delivery fails; notification outcome is caught/logged and not returned in the public response. No contact form was submitted during this audit.
-- **Impact/uncertainty:** a visitor may expect an email that was not sent. Case persistence and email dispatch are distinct outcomes.
-- **Why deferred:** public communication copy and fallback contract require a small, scoped workflow correction; no visitor or customer was contacted.
-- **Next action:** report a truthful “case received” state independently from receipt-delivery status, and provide a safe alternative for failed/skipped receipt; test success, failure and skipped notifier paths without sending to real recipients.
-
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-web-dev-00024-nlj`).
+- **Evidence:** `frontend/src/pages/Contact.jsx` displays truthful delivery confirmation based on `receipt_delivered` API response. Bundle `/assets/index-DTQYOF7F.js` serves 100% of developer traffic.
+- **Next action:** Real user enquiry delivery observation in R10.
 
 ### DF-050 — Resend webhook retry can acknowledge an incomplete notification update
 
@@ -593,18 +588,23 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why partial:** the fix is accepted, developer-deployed and integrated through PR #13 (`2db0e92`) and the completed R2 release. Live injected-failure/provider-delivery evidence remains unverified at R7; this does not reopen R1/R2.
 - **Next action:** at R7, complete safe failure-path acceptance using an isolated route and verify provider-originated delivery after an authorized test endpoint exists. Production release remains R9.
 
-### DF-051 — Expired claim challenge leaves stale pending profile state
+### DF-051 — Claim and acquisition lifecycle needs scoped runtime acceptance
 
-- **Observed/status:** 21 October 2026 — **OPEN**, P2 R5 trainer-claim workflow defect.
-- **Evidence:** On developer API revision `dtd-api-dev-00054-rvl`, an isolated synthetic expired challenge returned HTTP 410 and persisted its `claim_events` row as `expired`, while the trainer remained `claim_status=pending_verification` and `is_claimed=false`. `backend/services/trainer_quality.py:is_claimed_profile()` treats `pending_verification` as claimed for acquisition deduplication. The synthetic trainer, challenge event and notification rows were deleted; direct queries confirmed no matching records remained.
-- **Impact/uncertainty:** an expired, unclaimed profile may be treated as claimed by later acquisition/update workflows. No real trainer or non-synthetic record was inspected or changed.
-- **Why deferred:** this was found during R1 acceptance and belongs to the R5 claim journey; preserving the R1/R2 sequence avoids mixing a new workflow correction into the accepted webhook delta without review.
-- **Next action:** implement the smallest expiry-state reconciliation with regression coverage in the R5 package, then verify retry/restart behavior and acquisition deduplication on synthetic fixtures.
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** The durable protection correction is retained; expanded acquisition and claim suites pass locally. Current-owner snapshot, latest challenge and atomic renewal tests cover ownership change/replay races without provider calls. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
 
-### DF-052 — Scheduled AI analysis budget is not a strict fail-closed ceiling
+### DF-052 — AI attempt budget needs corrected runtime and provider-recovery acceptance
 
-- **Observed/status:** 22 October 2026 — **OPEN**, P2 R7/R12 reliability and cost-control gap; local code evidence is now corroborated by developer runtime quota exhaustion.
-- **Evidence:** `backend/services/ops_analyst.py` checks daily usage before the Vertex call with a separate count-then-call sequence; the count query's exception path allows analysis to continue, and concurrent invocations can pass the same pre-call count. The enabled developer `profile=routine` engine tick includes scheduled AI analysis and is not fixture-scoped. On 22 October, `/health/deep` reported 5 recovered `ops_ai_investigation` fallbacks in one hour and 24 in 24 hours; Cloud Logging showed Vertex AI `429 RESOURCE_EXHAUSTED` before deterministic fallback. No one-off verification call was generated for this audit; the records align with the existing scheduled routine.
-- **Impact/uncertainty:** provider quota/rate limits are currently causing Ops analyst fallbacks, and the separate count-then-call budget can exceed the intended nominal limit under query failure or concurrency. A strict daily spend ceiling is not established; exact provider quota dimension/reset time and actual billing impact were not independently measured.
-- **Why deferred:** this finding is inherited from the current mainline and is outside the narrow PR #12 integration delta; no budget mutation or provider call is needed to verify the code path.
-- **Next action:** implement an atomic reservation/counter with fail-closed behavior, bounded provider-call concurrency, and regression tests before claiming a strict AI cost ceiling or accepting scheduled execution.
+- **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
+- **Evidence/uncertainty:** Local Mongo atomic daily ledger replaces process-local locking; failed/storage-interrupted attempts retain slots and missing storage fails closed. Independent root review and real local Mongo cross-worker test passed: legacy use2, limit5, 40requests →3mock provider calls. This bounds attempts, not monetary spend. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
+- **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
+- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+
+### DF-054 — Public company and product copy is absent from the static site response
+
+- **Observed/status:** 23 October 2026 — **STATIC-RESPONSE REQUIREMENT VERIFIED LIVE; Google re-review NOT VERIFIED**.
+- **Evidence:** current unauthenticated request to `https://dogtrainersdirectory.com.au/` returned HTTP 200 and 6,163 bytes, with semantic company/product text rendered inside `#root`; `https://dogtrainersdirectory.com.au/sitemap.xml` returned 10 URLs; `https://dogtrainersdirectory.com.au/api/health` returned `{"ok":true,"service":"dog-trainers-directory-match-engine","database":"available"}`. Frontend tests passed 81/81 and Vite build succeeded locally. These checks verify current public responses, not who deployed them, deployment authorization, the exact deployed source SHA, reviewer interpretation, or program eligibility. Current public copy includes factual claims about the business, product capabilities, verification, and infrastructure that require owner/evidence review before being repeated to Google.
+- **Impact/uncertainty:** the empty-SPA-response issue is no longer reproduced in the live root response. The fix does not establish that Google's concern is resolved or that all copy is accurate; live approval remains unverified.
+- **Next action:** on 24 October 2026, owner dispatched the audited re-review response to `cloudstartupsupport@google.com` from `info@dogtrainersdirectory.com.au`. Keep Google approval and credit award **NOT VERIFIED** until written confirmation from the Google for Startups program team. Resume roadmap execution at active stage.

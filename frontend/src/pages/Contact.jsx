@@ -54,7 +54,10 @@ export default function Contact() {
                 trainer_name: form.trainer_name.trim() || undefined,
             });
             if (res.data && res.data.ok) {
-                setSubmitSuccess({ case_id: res.data.case_id });
+                setSubmitSuccess({
+                    case_id: res.data.case_id,
+                    receipt_delivered: Boolean(res.data.receipt_delivered),
+                });
                 setForm({
                     name: "",
                     email: "",
@@ -110,8 +113,10 @@ export default function Contact() {
                                 <p className="text-dtd-content text-lg mb-4">
                                     Your reference number is: <strong className="font-mono text-dtd-heading bg-muted px-2 py-1 rounded">{submitSuccess.case_id}</strong>
                                 </p>
-                                <p className="text-dtd-content text-sm max-w-md mx-auto mb-6">
-                                    A confirmation has been sent to your email. Our operations team reviews all incoming requests under our standard response SLAs.
+                                <p className="text-dtd-content text-sm max-w-md mx-auto mb-6" data-testid="contact-receipt-status">
+                                    {submitSuccess.receipt_delivered
+                                        ? "A confirmation has been sent to your email. Our operations team reviews all incoming requests under our standard response SLAs."
+                                        : "Your request has been logged in our queue. Our operations team reviews all incoming requests under our standard response SLAs."}
                                 </p>
                                 <button
                                     onClick={() => setSubmitSuccess(null)}
