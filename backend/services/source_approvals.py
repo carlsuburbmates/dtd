@@ -92,14 +92,38 @@ def is_candidate_url_approved(
         if domain == bad_domain or domain.endswith(f".{bad_domain}"):
             return False, f"disallowed_domain:{domain}"
 
-    # Check approved domains allowlist if specified
-    allowed = [str(d).lower().strip() for d in approved_row.get("approved_domains") or []]
-    if allowed and "*" not in allowed:
-        matched = any(domain == d or domain.endswith(f".{d}") for d in allowed)
-        if not matched:
-            return False, f"unapproved_domain:{domain}"
-
+    if not _matches_approved_scope(approved_row, clean_url, domain):
+        return False, f"unapproved_candidate_source:{domain}"
     return True, "approved"
+
+
+def _normalized_source_url(url: str) -> str:
+    """Normalize scheme/host only; paths and query values retain their meaning."""
+    try:
+        parsed = urlparse(url.strip())
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+            return ""
+        if parsed.username is not None or parsed.password is not None:
+            return ""
+        return parsed._replace(
+            scheme=parsed.scheme.lower(), netloc=parsed.netloc.lower(),
+            path=parsed.path or "/", fragment="",
+        ).geturl()
+    except (TypeError, ValueError):
+        return ""
+
+
+def _matches_approved_scope(row: Dict[str, Any], url: str, domain: str) -> bool:
+    normalized = _normalized_source_url(url)
+    if not normalized:
+        return False
+    approved_urls = row.get("approved_source_urls") or []
+    if approved_urls:
+        return normalized in {_normalized_source_url(str(item)) for item in approved_urls}
+    # Named hosts can be approved explicitly. Wildcards and implicit subdomains
+    # cannot establish rights for a previously unreviewed source.
+    approved_domains = {str(item).lower().strip() for item in row.get("approved_domains") or []}
+    return domain in approved_domains and domain != "*"
 
 
 def is_discovery_source_approved(
@@ -136,19 +160,7 @@ def is_discovery_source_approved(
             if any(domain == bad or domain.endswith(f".{bad}") for bad in disallowed):
                 return False, f"disallowed_domain:{domain}"
 
-            approved_urls = [str(u).lower().strip().rstrip("/") for u in row.get("approved_source_urls") or []]
-            clean_normalized = clean_url.lower().rstrip("/")
-
-            # If approved_source_urls is specified, URL must strictly match one of the approved URLs
-            if approved_urls:
-                if clean_normalized in approved_urls:
-                    return True, "approved"
-                # Subdomains or arbitrary unapproved paths on the same domain are rejected
-                continue
-
-            # Fallback to approved domains only if approved_source_urls is not specified, rejecting wildcards
-            approved_domains = [str(d).lower().strip() for d in row.get("approved_domains") or [] if d != "*"]
-            if any(domain == d or domain.endswith(f".{d}") for d in approved_domains):
+            if _matches_approved_scope(row, clean_url, domain):
                 return True, "approved"
 
     return False, f"unapproved_discovery_source:{domain}"

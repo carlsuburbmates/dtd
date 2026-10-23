@@ -54,6 +54,10 @@ class _MockCollection:
         class _Cursor:
             def __init__(self, items):
                 self.items = items
+            def sort(self, key, direction):
+                return _Cursor(sorted(self.items, key=lambda row: row.get(key, ""), reverse=direction < 0))
+            def skip(self, n):
+                return _Cursor(self.items[n:])
             def limit(self, n):
                 return _Cursor(self.items[:n])
             async def to_list(self, n=None):
@@ -106,6 +110,7 @@ class _MockDB:
         self.audit_log = _MockCollection()
         self.billing_profiles = _MockCollection()
         self.system_state = _MockCollection()
+        self.support_threads = _MockCollection()
 
 
 # ==============================================================================
@@ -191,7 +196,8 @@ def test_df051_claim_lifecycle_success(monkeypatch):
     db.trainers.rows.append(dict(trainer_doc))
     monkeypatch.setattr(server, "db", db)
     monkeypatch.setenv("TRAINER_CLAIM_OTP_SECRET", "test-otp-secret")
-    monkeypatch.setenv("TRAINER_CLAIM_SESSION_SECRET", "test-session-secret")
+    monkeypatch.setenv("TRAINER_ACTION_TOKEN_SECRET", "test-session-secret")
+    monkeypatch.setattr(claim_engine, "generate_otp", lambda: "012345")
 
     # Mock OTP notification
     with patch("server.notifications_service.notify_trainer_claim_otp", new=AsyncMock(return_value={"claim_notification_status": "sent", "claim_notification_attempts": 1})):
@@ -212,12 +218,8 @@ def test_df051_claim_lifecycle_success(monkeypatch):
 
     # Find OTP from event digest
     event = next(r for r in db.claim_events.rows if r["id"] == claim_event_id)
-    otp = None
-    for candidate in range(100000, 1000000):
-        if claim_engine.otp_matches(str(candidate), event["otp_digest"]):
-            otp = str(candidate)
-            break
-    assert otp is not None
+    otp = "012345"
+    assert claim_engine.otp_matches(otp, event["otp_digest"])
 
     # Verify claim with correct OTP
     verify_res = asyncio.run(server.verify_trainer_claim(
@@ -273,7 +275,8 @@ def test_df030_claimed_trainer_session_renewal_success(monkeypatch):
     db.trainers.rows.append(dict(trainer_doc))
     monkeypatch.setattr(server, "db", db)
     monkeypatch.setenv("TRAINER_CLAIM_OTP_SECRET", "test-otp-secret")
-    monkeypatch.setenv("TRAINER_CLAIM_SESSION_SECRET", "test-session-secret")
+    monkeypatch.setenv("TRAINER_ACTION_TOKEN_SECRET", "test-session-secret")
+    monkeypatch.setattr(claim_engine, "generate_otp", lambda: "012345")
 
     with patch("server.notifications_service.notify_trainer_claim_otp", new=AsyncMock(return_value={"claim_notification_status": "sent", "claim_notification_attempts": 1})):
         start_res = asyncio.run(server.start_trainer_claim(
@@ -290,12 +293,8 @@ def test_df030_claimed_trainer_session_renewal_success(monkeypatch):
     assert persisted["claim_status"] == "claimed"
 
     event = next(r for r in db.claim_events.rows if r["id"] == claim_event_id)
-    otp = None
-    for candidate in range(100000, 1000000):
-        if claim_engine.otp_matches(str(candidate), event["otp_digest"]):
-            otp = str(candidate)
-            break
-    assert otp is not None
+    otp = "012345"
+    assert claim_engine.otp_matches(otp, event["otp_digest"])
 
     verify_res = asyncio.run(server.verify_trainer_claim(
         "tr_claimed_renew",
@@ -330,3 +329,152 @@ def test_df030_claimed_trainer_other_email_rejected_with_409(monkeypatch):
     assert exc.value.status_code == 409
     assert "already been claimed" in exc.value.detail.lower()
 
+
+
+def _start_session_recovery(monkeypatch):
+    db = _MockDB()
+    db.trainers.rows.append({
+        "id": "recovery-fixture", "name": "Synthetic Trainer", "email": "owner@example.com",
+        "billing_email": "owner@example.com", "claim_status": "claimed", "tier": "pro",
+        "claim_event_id": "original-owner", "claimed_at": "2026-10-01T12:00:00Z",
+    })
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setenv("TRAINER_CLAIM_OTP_SECRET", "test-otp-secret")
+    monkeypatch.setenv("TRAINER_ACTION_TOKEN_SECRET", "test-session-secret")
+    monkeypatch.setattr(claim_engine, "generate_otp", lambda: "012345")
+    notifier = AsyncMock(return_value={"claim_notification_status": "sent"})
+    monkeypatch.setattr(server.notifications_service, "notify_trainer_claim_otp", notifier)
+    response = asyncio.run(server.start_trainer_claim(
+        "recovery-fixture", server.TrainerClaimStartIn(email="owner@example.com", intent="session_recovery"),
+    ))
+    assert notifier.await_args.kwargs["otp"] == "012345"
+    return db, response["claim_event_id"]
+
+
+@pytest.mark.parametrize("changes", [
+    {"email": "new@example.com", "billing_email": "new@example.com"},
+    {"claim_status": "unclaimed"},
+    {"claim_status": "claim_disputed"},
+    {"claim_event_id": "different-owner"},
+])
+def test_df030_session_recovery_rejects_changed_ownership(monkeypatch, changes):
+    db, event_id = _start_session_recovery(monkeypatch)
+    db.trainers.rows[0].update(changes)
+    with patch.object(server, "_issue_trainer_claim_session") as issue_session:
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.verify_trainer_claim("recovery-fixture", server.TrainerClaimVerifyIn(claim_event_id=event_id, otp="012345")))
+        assert exc.value.status_code == 409
+        issue_session.assert_not_called()
+    assert db.claim_events.rows[0]["status"] == "stale"
+
+
+def test_df030_session_recovery_replay_rejected(monkeypatch):
+    db, event_id = _start_session_recovery(monkeypatch)
+    payload = server.TrainerClaimVerifyIn(claim_event_id=event_id, otp="012345")
+    assert asyncio.run(server.verify_trainer_claim("recovery-fixture", payload))["session_renewed"] is True
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.verify_trainer_claim("recovery-fixture", payload))
+    assert exc.value.status_code == 409
+    assert db.trainers.rows[0]["tier"] == "pro"
+
+
+def test_df030_session_recovery_concurrent_consumption_has_one_winner(monkeypatch):
+    db, event_id = _start_session_recovery(monkeypatch)
+    original_find = db.claim_events.find_one
+    async def run():
+        barrier = asyncio.Event()
+        snapshots = 0
+        async def simultaneous_find(query, projection=None):
+            nonlocal snapshots
+            result = await original_find(query, projection)
+            if query.get("id") == event_id:
+                snapshots += 1
+                if snapshots == 2:
+                    barrier.set()
+                await barrier.wait()
+            return result
+        monkeypatch.setattr(db.claim_events, "find_one", simultaneous_find)
+        return await asyncio.gather(*[
+            server.verify_trainer_claim("recovery-fixture", server.TrainerClaimVerifyIn(claim_event_id=event_id, otp="012345"))
+            for _ in range(2)
+        ], return_exceptions=True)
+    results = asyncio.run(run())
+    assert sum(isinstance(result, dict) and result.get("ok") is True for result in results) == 1
+    assert sum(isinstance(result, HTTPException) and result.status_code == 409 for result in results) == 1
+    assert db.claim_events.rows[0]["status"] == "verified"
+
+
+@pytest.mark.parametrize("state,expected_status", [("expired", 410), ("wrong_otp", 400), ("locked", 429)])
+def test_df030_session_recovery_failure_paths_do_not_issue_session(monkeypatch, state, expected_status):
+    db, event_id = _start_session_recovery(monkeypatch)
+    if state == "expired":
+        db.claim_events.rows[0]["expires_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+    if state == "locked":
+        db.claim_events.rows[0]["attempts"] = db.claim_events.rows[0]["max_attempts"]
+    with patch.object(server, "_issue_trainer_claim_session") as issue_session:
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(server.verify_trainer_claim("recovery-fixture", server.TrainerClaimVerifyIn(claim_event_id=event_id, otp="000000" if state == "wrong_otp" else "012345")))
+        assert exc.value.status_code == expected_status
+        issue_session.assert_not_called()
+    assert db.trainers.rows[0]["claim_status"] == "claimed"
+
+
+@pytest.mark.parametrize("changes,confirmed,trainer_id,expected_status", [
+    ({"category": "privacy_request"}, True, "trainer-link", 422),
+    ({"status": "resolved"}, True, "trainer-link", 409),
+    ({"status": "rejected"}, True, "trainer-link", 409),
+    ({}, False, "trainer-link", 400),
+    ({}, True, "missing-trainer", 404),
+    ({"trainer_id": "other-trainer"}, True, "trainer-link", 409),
+])
+def test_support_listing_link_rejects_invalid_context(monkeypatch, changes, confirmed, trainer_id, expected_status):
+    db = _MockDB()
+    db.support_threads.rows.append({"case_id": "support-link", "category": "delisting_request", "status": "open", **changes})
+    db.trainers.rows.append({"id": "trainer-link", "name": "Synthetic Trainer"})
+    monkeypatch.setattr(server, "db", db)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.link_support_thread_trainer("support-link", server.SupportTrainerLinkIn(trainer_id=trainer_id, confirmed=confirmed)))
+    assert exc.value.status_code == expected_status
+
+
+def test_support_listing_link_records_listing_without_identity_assertion(monkeypatch):
+    db = _MockDB()
+    db.support_threads.rows.append({"case_id": "support-link", "category": "delisting_request", "status": "open"})
+    db.trainers.rows.append({"id": "trainer-link", "name": "Synthetic Trainer"})
+    monkeypatch.setattr(server, "db", db)
+    result = asyncio.run(server.link_support_thread_trainer("support-link", server.SupportTrainerLinkIn(trainer_id="trainer-link", confirmed=True)))
+    assert result["thread"]["trainer_id"] == "trainer-link"
+    assert result["thread"]["status"] == "open"
+    assert "identity_verified" not in result["thread"]
+    assert db.audit_log.rows[-1]["action"] == "support_thread_trainer_linked"
+
+
+def test_df030_delivery_completion_cannot_reopen_consumed_recovery(monkeypatch):
+    db = _MockDB()
+    db.trainers.rows.append({"id": "delivery-race", "email": "owner@example.com", "claim_status": "claimed", "tier": "claimed"})
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setenv("TRAINER_CLAIM_OTP_SECRET", "test-otp-secret")
+    monkeypatch.setenv("TRAINER_ACTION_TOKEN_SECRET", "test-session-secret")
+    monkeypatch.setattr(claim_engine, "generate_otp", lambda: "012345")
+    async def delivered_before_completion(*args, **kwargs):
+        event_id = db.claim_events.rows[-1]["id"]
+        await server.verify_trainer_claim("delivery-race", server.TrainerClaimVerifyIn(claim_event_id=event_id, otp=kwargs["otp"]))
+        return {"claim_notification_status": "sent"}
+    monkeypatch.setattr(server.notifications_service, "notify_trainer_claim_otp", delivered_before_completion)
+    result = asyncio.run(server.start_trainer_claim("delivery-race", server.TrainerClaimStartIn(email="owner@example.com", intent="session_recovery")))
+    assert db.claim_events.rows[0]["status"] == "verified"
+    assert db.claim_events.rows[0]["delivery_status"] == "sent"
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.verify_trainer_claim("delivery-race", server.TrainerClaimVerifyIn(claim_event_id=result["claim_event_id"], otp="012345")))
+    assert exc.value.status_code == 409
+
+
+def test_support_thread_pagination_exposes_remaining_cases(monkeypatch):
+    db = _MockDB()
+    db.support_threads.rows = [{"case_id": f"sup_{i}", "created_at": str(i), "status": "open"} for i in range(3)]
+    monkeypatch.setattr(server, "db", db)
+    first = asyncio.run(server.list_support_threads(limit=2, offset=0))
+    second = asyncio.run(server.list_support_threads(limit=2, offset=2))
+    assert first["has_more"] is True
+    assert second["has_more"] is False
+    assert {row["case_id"] for row in first["threads"] + second["threads"]} == {"sup_0", "sup_1", "sup_2"}

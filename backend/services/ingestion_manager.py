@@ -89,7 +89,8 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
     Returns:
         (ok, text_content, page_metadata, error_message)
     """
-    domain = extract_domain(url)
+    parsed_url = urlparse(url)
+    domain = (parsed_url.hostname or "").lower()
     dns_ok, dns_msg = check_dns_resolvable(domain)
     if not dns_ok:
         return False, None, None, f"dns_unresolvable:{dns_msg}"
@@ -103,10 +104,10 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
     _last_domain_crawl_time[domain] = time.monotonic()
 
     # Parse robots.txt (DF-045: Fail closed / defer on robots retrieval error, unavailable, or malformed)
-    robots_url = f"https://{domain}/robots.txt"
+    robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
     rp = RobotFileParser()
     try:
-        r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
+        r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S), allow_redirects=False)
         if r_resp.status_code == 200:
             headers = getattr(r_resp, "headers", {}) or {}
             c_type = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
@@ -117,8 +118,19 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
                 return False, None, None, f"robots_malformed:{domain}:html_content_type"
             if "<!doctype" in lower_text or "<html" in lower_text or "<head" in lower_text or "<body" in lower_text or "<div" in lower_text:
                 return False, None, None, f"robots_malformed:{domain}:html_markup_detected"
+            policy_lines = [line.split("#", 1)[0].strip() for line in raw_text.lstrip("\ufeff").splitlines()]
+            policy_lines = [line for line in policy_lines if line]
+            recognized_fields = {"user-agent", "allow", "disallow", "sitemap", "crawl-delay", "request-rate", "host"}
+            if policy_lines:
+                if any(":" not in line or not line.split(":", 1)[0].strip() for line in policy_lines):
+                    return False, None, None, f"robots_malformed:{domain}:invalid_directive"
+                fields = [line.split(":", 1)[0].strip().lower() for line in policy_lines]
+                if not any(field in recognized_fields for field in fields):
+                    return False, None, None, f"robots_malformed:{domain}:no_robots_directives"
+                if any(field == "user-agent" and not line.split(":", 1)[1].strip() for field, line in zip(fields, policy_lines)):
+                    return False, None, None, f"robots_malformed:{domain}:empty_user_agent"
             try:
-                rp.parse(raw_text.splitlines())
+                rp.parse(raw_text.lstrip("\ufeff").splitlines())
             except Exception as parse_exc:
                 return False, None, None, f"robots_malformed:{domain}:{parse_exc}"
         elif r_resp.status_code == 404:
@@ -137,7 +149,11 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
 
     # Fetch main page
     try:
-        resp = session.get(url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
+        resp = session.get(url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S), allow_redirects=False)
+        if 300 <= resp.status_code < 400:
+            # A redirect cannot widen source approval or reuse the original
+            # site's robots policy. Queue the reviewed canonical URL separately.
+            return False, None, None, f"redirect_requires_separate_source_admission:{url}"
         if not resp.ok:
             return False, None, None, f"http_{resp.status_code}:{url}"
 

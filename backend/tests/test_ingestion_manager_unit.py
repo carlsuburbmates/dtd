@@ -23,6 +23,23 @@ from services import ingestion_manager
 from services.trainer_quality import publishing_quality
 
 
+@pytest.fixture
+def synthetic_source_registry(monkeypatch):
+    """Downstream workflow fixtures have explicit, test-only source authority."""
+    registry = {"sources": [{
+        "provider": "public_business_websites", "approved": True,
+        "approved_by": "synthetic fixture", "terms_reviewed_at": "2026-10-20",
+        "approved_uses": ["trainer_profile_source"],
+        "approved_source_urls": [
+            "https://kintala.com.au", "https://unregistered-trainer.com.au",
+            "https://claimedtrainer.com.au", "https://synthetic-trainer.example",
+            "https://broken-nonexistent-site.local",
+        ],
+    }]}
+    monkeypatch.setattr(ingestion_manager.source_approvals, "load", lambda: registry)
+    return registry
+
+
 class _MockCollection:
     def __init__(self, rows: Optional[List[Dict[str, Any]]] = None):
         self.rows: List[Dict[str, Any]] = [dict(r) for r in (rows or [])]
@@ -132,7 +149,7 @@ def test_resolve_candidate_source_urls_from_queue():
     assert resolved[0]["source"] == "discovery_queue"
 
 
-def test_run_batch_ingestion_pipeline_qualifies_active_abn():
+def test_run_batch_ingestion_pipeline_qualifies_active_abn(synthetic_source_registry):
     db = _MockDB()
 
     mock_html = "<html><body><h1>Kintala Dog Training</h1><p>Puppy school in Heidelberg. Phone: 0394575455. ABN: 53 780 168 767</p></body></html>"
@@ -169,7 +186,7 @@ def test_run_batch_ingestion_pipeline_qualifies_active_abn():
         assert trainer["website"] == "https://kintala.com.au"
 
 
-def test_run_batch_ingestion_pipeline_holds_unverified_abn_df014():
+def test_run_batch_ingestion_pipeline_holds_unverified_abn_df014(synthetic_source_registry):
     """DF-014 Enforcer: AI confidence alone must NEVER publish without active ABR."""
     db = _MockDB()
 
@@ -208,7 +225,7 @@ def test_run_batch_ingestion_pipeline_holds_unverified_abn_df014():
         assert trainer["ingestion_hold_reason"] == "statutory_or_quality_evidence_required"
 
 
-def test_run_batch_ingestion_pipeline_protects_claimed_profile():
+def test_run_batch_ingestion_pipeline_protects_claimed_profile(synthetic_source_registry):
     """Ensures claimed profiles are NEVER overwritten by automated ingestion sweeps."""
     db = _MockDB()
 
@@ -276,7 +293,7 @@ def _active_ingestion_mocks():
     )
 
 
-def test_ingestion_does_not_republish_delisted_unclaimed_trainer(monkeypatch):
+def test_ingestion_does_not_republish_delisted_unclaimed_trainer(monkeypatch, synthetic_source_registry):
     """A synthetic delisting must block scheduler refresh from republishing the existing identity."""
     import server
 
@@ -379,7 +396,7 @@ def test_ingestion_does_not_insert_new_identity_matching_delisting(monkeypatch, 
     assert db.discovery_queue.rows[0]["status"] == "suppressed"
 
 
-def test_run_batch_ingestion_pipeline_logs_failures_to_ops():
+def test_run_batch_ingestion_pipeline_logs_failures_to_ops(synthetic_source_registry):
     """Ensures fetch failures write structured logs to db.source_ingestion_state for /ops."""
     db = _MockDB()
 

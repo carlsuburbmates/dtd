@@ -132,10 +132,13 @@ async def ingest_discovery_sources(db, *, registry: Optional[Dict[str, Any]] = N
                 requests.get,
                 src,
                 timeout=20,
+                allow_redirects=False,
                 headers={"User-Agent": "DTD-Bot/1.0 (+https://dogtrainersdirectory.com.au/trust)"},
             )
             if domain:
                 last_request_by_domain[domain] = time.monotonic()
+            if 300 <= r.status_code < 400:
+                raise ValueError("source_redirect_requires_admission")
             r.raise_for_status()
             headers = getattr(r, "headers", {}) or {}
             content_type = str(headers.get("content-type") or "text/html").lower()
@@ -192,9 +195,10 @@ async def ingest_discovery_sources(db, *, registry: Optional[Dict[str, Any]] = N
                 }},
                 upsert=True,
             )
-        except Exception:
+        except Exception as exc:
             failed += 1
-            reason_codes.append("source_request_failed")
+            error_code = "source_redirect_requires_admission" if str(exc) == "source_redirect_requires_admission" else "source_request_failed"
+            reason_codes.append(error_code)
             prev_failures = int(state.get("consecutive_failures") or 0)
             new_failures = prev_failures + 1
             suppressed_until_value = ""
@@ -217,8 +221,8 @@ async def ingest_discovery_sources(db, *, registry: Optional[Dict[str, Any]] = N
                 {"$set": {
                     "source_url": src,
                     "last_checked_at": _now_iso(),
-                    "last_error": "request_failed",
-                    "last_error_code": "source_request_failed",
+                    "last_error": error_code if error_code == "source_redirect_requires_admission" else "request_failed",
+                    "last_error_code": error_code,
                     "last_http_status": 0,
                     "consecutive_failures": new_failures,
                     "suppressed_until": suppressed_until_value,

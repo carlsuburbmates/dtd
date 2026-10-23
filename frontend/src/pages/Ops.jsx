@@ -18,6 +18,9 @@ import {
     getSupportThread,
     replySupportThread,
     closeSupportThread,
+    linkSupportTrainer,
+    delistTrainer,
+    processPrivacyScrub,
 } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -700,7 +703,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                         ) : null}
 
                         {activeView === "support_threads" ? (
-                            <SupportThreadsView onRefresh={onRefresh} />
+                            <SupportThreadsView onRefresh={onRefresh} trainerInventory={trainerInventory} />
                         ) : null}
 
                         {activeView === "matching" ? (
@@ -3628,7 +3631,7 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
     );
 }
 
-function SupportThreadsView({ onRefresh }) {
+function SupportThreadsView({ onRefresh, trainerInventory = [] }) {
     const [threads, setThreads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -3637,140 +3640,195 @@ function SupportThreadsView({ onRefresh }) {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
-
-    // Reply state
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const selectedCaseRef = useRef(null);
+    const selectionVersionRef = useRef(0);
+    const loadThreadsRef = useRef(null);
+    const detailRequestRef = useRef(0);
+    const listRequestRef = useRef(0);
     const [replyText, setReplyText] = useState("");
-    const [markStatus, setMarkStatus] = useState("awaiting_customer_reply");
     const [replying, setReplying] = useState(false);
-
-    // Close state
     const [closeNotes, setCloseNotes] = useState("");
     const [closeConfirmed, setCloseConfirmed] = useState(false);
     const [closing, setClosing] = useState(false);
     const [actionMsg, setActionMsg] = useState("");
+    const [trainerLinkId, setTrainerLinkId] = useState("");
+    const [categoryNotes, setCategoryNotes] = useState("");
+    const [categoryConfirmed, setCategoryConfirmed] = useState(false);
+    const [categoryBusy, setCategoryBusy] = useState(false);
+    const [privacyAction, setPrivacyAction] = useState("request_identity_proof");
+    const pageSize = 50;
+
+    const clearSelection = useCallback(() => {
+        selectedCaseRef.current = null;
+        selectionVersionRef.current += 1;
+        detailRequestRef.current += 1;
+        setSelectedCaseId(null);
+        setSelectedThread(null);
+        setLoadingDetail(false);
+    }, []);
 
     const loadThreads = useCallback(async () => {
+        const requestId = ++listRequestRef.current;
         setLoading(true);
         setError("");
         try {
-            const params = {};
+            const params = { limit: pageSize, offset };
             if (categoryFilter !== "all") params.category = categoryFilter;
             if (statusFilter !== "all") params.status = statusFilter;
             const res = await listSupportThreads(params);
+            if (requestId !== listRequestRef.current) return;
             const list = res.data?.threads || [];
             setThreads(list);
-            if (selectedCaseId && !list.some((t) => t.case_id === selectedCaseId)) {
-                setSelectedCaseId(null);
-                setSelectedThread(null);
-            }
+            setHasMore(Boolean(res.data?.has_more));
+            if (selectedCaseRef.current && !list.some((t) => t.case_id === selectedCaseRef.current)) clearSelection();
         } catch (err) {
-            setError(err.response?.data?.detail || "Failed to load support threads.");
+            if (requestId === listRequestRef.current) setError(err.response?.data?.detail || "Failed to load support threads.");
         } finally {
-            setLoading(false);
+            if (requestId === listRequestRef.current) setLoading(false);
         }
-    }, [categoryFilter, statusFilter, selectedCaseId]);
+    }, [categoryFilter, statusFilter, offset, clearSelection]);
+
+    loadThreadsRef.current = loadThreads;
 
     useEffect(() => {
+        clearSelection();
         loadThreads();
-    }, [loadThreads]);
+        return () => { listRequestRef.current += 1; detailRequestRef.current += 1; };
+    }, [loadThreads, clearSelection]);
+
+    const refreshDetail = async (caseId) => {
+        if (selectedCaseRef.current !== caseId) return;
+        const requestId = ++detailRequestRef.current;
+        setLoadingDetail(true);
+        try {
+            const res = await getSupportThread(caseId);
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) {
+                setSelectedThread(res.data?.thread?.case_id === caseId ? res.data.thread : null);
+            }
+        } catch (err) {
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) {
+                setSelectedThread(null);
+                toast.error(err.response?.data?.detail || "Failed to load thread details.");
+            }
+        } finally {
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) setLoadingDetail(false);
+        }
+    };
 
     const handleSelectThread = async (caseId) => {
+        selectedCaseRef.current = caseId;
+        selectionVersionRef.current += 1;
         setSelectedCaseId(caseId);
         setSelectedThread(null);
-        setLoadingDetail(true);
         setActionMsg("");
         setReplyText("");
         setCloseNotes("");
         setCloseConfirmed(false);
-        try {
-            const res = await getSupportThread(caseId);
-            setSelectedThread(res.data?.thread || null);
-        } catch (err) {
-            toast.error(err.response?.data?.detail || "Failed to load thread details.");
-        } finally {
-            setLoadingDetail(false);
-        }
+        setTrainerLinkId("");
+        setCategoryNotes("");
+        setCategoryConfirmed(false);
+        setPrivacyAction("request_identity_proof");
+        await refreshDetail(caseId);
+    };
+
+    const activeCase = () => selectedCaseRef.current === selectedCaseId && selectedThread?.case_id === selectedCaseId;
+    const reportActionError = (err, fallback, caseId) => {
+        const detail = err.response?.data?.detail;
+        const message = typeof detail === "string" ? detail : fallback;
+        toast.error(message);
+        if (selectedCaseRef.current === caseId) setActionMsg(message);
     };
 
     const handleReply = async (e) => {
         e.preventDefault();
-        if (!selectedCaseId || !selectedThread || selectedThread.case_id !== selectedCaseId) {
-            toast.error("Active case selection has changed. Please verify the active case before replying.");
-            return;
-        }
-        if (replyText.trim().length < 3) {
-            toast.error("Reply text must be at least 3 characters.");
-            return;
-        }
-        const activeTargetCaseId = selectedCaseId;
+        if (!activeCase() || replyText.trim().length < 3) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
         setReplying(true);
         setActionMsg("");
         try {
-            const res = await replySupportThread(activeTargetCaseId, {
-                reply_text: replyText.trim(),
-                mark_status: markStatus,
-            });
-            if (res.data?.ok) {
-                if (res.data?.dispatched === false) {
-                    toast.warning("Reply recorded, but email delivery failed.");
-                    setActionMsg("Reply recorded to case thread; email notification delivery failed.");
-                } else {
-                    toast.success("Reply dispatched to customer.");
-                    setActionMsg("Reply successfully dispatched.");
-                }
-                setReplyText("");
-                const detailRes = await getSupportThread(activeTargetCaseId);
-                setSelectedThread(detailRes.data?.thread || null);
-                loadThreads();
+            const res = await replySupportThread(caseId, { reply_text: replyText.trim() });
+            if (!res.data?.ok) throw new Error("Reply was not accepted.");
+            const message = res.data.duplicate
+                ? "This reply was already dispatched. No additional email was sent."
+                : res.data.dispatched === true
+                    ? "Reply dispatched to customer."
+                    : "Reply recorded, but email delivery failed.";
+            if (res.data.dispatched === true) toast.success(message);
+            else toast.warning(message);
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
+                setActionMsg(message);
+                if (res.data.dispatched === true || res.data.duplicate) setReplyText("");
+                await refreshDetail(caseId);
             }
+            await loadThreadsRef.current();
         } catch (err) {
-            const msg = err.response?.data?.detail || "Failed to send reply.";
-            toast.error(msg);
-            setActionMsg(msg);
-        } finally {
-            setReplying(false);
-        }
+            reportActionError(err, "Failed to send reply.", caseId);
+        } finally { setReplying(false); }
     };
 
     const handleClose = async (e) => {
         e.preventDefault();
-        if (!selectedCaseId || !selectedThread || selectedThread.case_id !== selectedCaseId) {
-            toast.error("Active case selection has changed. Please verify the active case before closing.");
-            return;
-        }
-        if (closeNotes.trim().length < 10) {
-            toast.error("Resolution notes must be at least 10 characters.");
-            return;
-        }
-        if (!closeConfirmed) {
-            toast.error("Please confirm the verified outcome.");
-            return;
-        }
-        const activeTargetCaseId = selectedCaseId;
+        if (!activeCase() || closeNotes.trim().length < 10 || !closeConfirmed) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
         setClosing(true);
         setActionMsg("");
         try {
-            const res = await closeSupportThread(activeTargetCaseId, {
-                resolution_notes: closeNotes.trim(),
-                confirmed: true,
-            });
-            if (res.data?.ok) {
-                toast.success("Support case verified and closed.");
+            const res = await closeSupportThread(caseId, { resolution_notes: closeNotes.trim(), confirmed: true });
+            if (!res.data?.ok) throw new Error("Closure was not accepted.");
+            toast.success("Support case verified and closed.");
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
                 setActionMsg("Support case successfully closed.");
                 setCloseNotes("");
                 setCloseConfirmed(false);
-                const detailRes = await getSupportThread(activeTargetCaseId);
-                setSelectedThread(detailRes.data?.thread || null);
-                loadThreads();
-                if (onRefresh) onRefresh();
+                await refreshDetail(caseId);
             }
-        } catch (err) {
-            const msg = err.response?.data?.detail || "Failed to close support case.";
-            toast.error(msg);
-            setActionMsg(msg);
-        } finally {
-            setClosing(false);
-        }
+            await loadThreadsRef.current();
+            onRefresh?.();
+        } catch (err) { reportActionError(err, "Failed to close support case.", caseId); }
+        finally { setClosing(false); }
+    };
+
+    const trustedPrivacyIdentity = selectedThread?.identity_verified === true
+        && Boolean(selectedThread.identity_verified_by && selectedThread.identity_verified_at)
+        && ["claimant_session_token", "cryptographic_email_otp", "trusted_idp", "verified_documentary_audit"].includes(selectedThread.identity_verification_method);
+
+    const needsTrainerLink = selectedThread?.category === "delisting_request" && !selectedThread.trainer_id;
+
+    const handleCategoryAction = async (e) => {
+        e.preventDefault();
+        if (!activeCase() || !categoryConfirmed || (!needsTrainerLink && categoryNotes.trim().length < 10)) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
+        setCategoryBusy(true);
+        setActionMsg("");
+        try {
+            let res;
+            if (selectedThread.category === "delisting_request") {
+                if (!selectedThread.trainer_id) {
+                    if (!trainerInventory.some(t => t.id === trainerLinkId)) return;
+                    res = await linkSupportTrainer(caseId, { trainer_id: trainerLinkId.trim(), confirmed: true });
+                } else {
+                    res = await delistTrainer(selectedThread.trainer_id, { reason: categoryNotes.trim(), confirmed: true });
+                }
+            } else if (selectedThread.category === "privacy_request") {
+                if (privacyAction === "authorise_scrub" && !trustedPrivacyIdentity) return;
+                res = await processPrivacyScrub(caseId, { action: privacyAction, notes: categoryNotes.trim(), confirmed: true });
+            }
+            if (!res?.data?.ok) throw new Error("Action was not accepted.");
+            toast.success("Case action recorded. Review the updated evidence before closing.");
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
+                setCategoryConfirmed(false);
+                setCategoryNotes("");
+                await refreshDetail(caseId);
+            }
+            await loadThreadsRef.current();
+            onRefresh?.();
+        } catch (err) { reportActionError(err, "Could not complete the case action.", caseId); }
+        finally { setCategoryBusy(false); }
     };
 
     return (
@@ -3782,7 +3840,7 @@ function SupportThreadsView({ onRefresh }) {
                     <span className="text-xs font-mono text-[#8B9E98] uppercase">Category:</span>
                     <select
                         value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        onChange={(e) => { setOffset(0); setCategoryFilter(e.target.value); }}
                         className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
                         data-testid="ops-support-category-filter"
                     >
@@ -3800,14 +3858,16 @@ function SupportThreadsView({ onRefresh }) {
                     <span className="text-xs font-mono text-[#8B9E98] uppercase">Status:</span>
                     <select
                         value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
+                        onChange={(e) => { setOffset(0); setStatusFilter(e.target.value); }}
                         className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
                         data-testid="ops-support-status-filter"
                     >
                         <option value="all">All Statuses</option>
                         <option value="open">Open</option>
                         <option value="awaiting_customer_reply">Awaiting Customer Reply</option>
-                        <option value="in_progress">In Progress</option>
+                        <option value="reply_delivery_failed">Reply Delivery Failed</option>
+                        <option value="awaiting_identity_proof">Awaiting Identity Proof</option>
+                        <option value="rejected">Rejected</option>
                         <option value="resolved">Resolved</option>
                         <option value="closed">Closed</option>
                     </select>
@@ -3820,6 +3880,12 @@ function SupportThreadsView({ onRefresh }) {
                 >
                     <RefreshCw className="w-3 h-3" /> Refresh
                 </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#8B9E98]" data-testid="ops-support-pagination">
+                <span>{threads.length ? `Showing ${offset + 1}–${offset + threads.length} cases` : "No cases on this page"}{hasMore ? "; more cases available" : ""}</span>
+                <button type="button" className="min-h-11 px-3 border border-[#2A3935] rounded-lg disabled:opacity-40" disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous cases</button>
+                <button type="button" className="min-h-11 px-3 border border-[#2A3935] rounded-lg disabled:opacity-40" disabled={loading || !hasMore} onClick={() => setOffset(offset + pageSize)}>Next cases</button>
             </div>
 
             {error && (
@@ -3940,6 +4006,7 @@ function SupportThreadsView({ onRefresh }) {
                                                 <span>{msg.created_at ? new Date(msg.created_at).toLocaleString() : ""}</span>
                                             </div>
                                             <div className="whitespace-pre-wrap">{msg.text}</div>
+                                            {msg.delivery_status && <div className="mt-1 font-mono">Dispatch: {msg.delivery_status}{msg.delivery_status === "failed" ? " — email was not sent; review and retry the reply." : ""}</div>}
                                         </div>
                                     );
                                 })}
@@ -3951,8 +4018,48 @@ function SupportThreadsView({ onRefresh }) {
                                 </div>
                             )}
 
-                            {selectedThread.status !== "closed" && selectedThread.status !== "resolved" ? (
+                            {!["closed", "resolved", "rejected"].includes(selectedThread.status) ? (
                                 <div className="space-y-4 pt-2 border-t border-[#1E2A27]">
+                                    {["delisting_request", "privacy_request"].includes(selectedThread.category) && (
+                                        <form onSubmit={handleCategoryAction} className="space-y-3 border border-[#2A3935] rounded-xl p-3" data-testid="ops-support-category-action">
+                                            <h4 className="text-sm text-[#F5F2EB]">{selectedThread.category === "delisting_request" ? "Resolve delisting request" : "Process privacy request"}</h4>
+                                            {selectedThread.category === "delisting_request" ? selectedThread.trainer_id ? (
+                                                <p className="text-xs">Linked trainer: <Link to={`/t/${encodeURIComponent(selectedThread.trainer_id)}`} className="underline">{selectedThread.trainer_name || selectedThread.trainer_id}</Link>. Delisting removes the listing and prevents re-ingestion. Active billing remains subject to review.</p>
+                                            ) : (
+                                                <div className="space-y-2 text-xs">
+                                                    <label className="block">Trainer named in this request
+                                                        <select value={trainerLinkId} onChange={(e) => { setTrainerLinkId(e.target.value); setCategoryConfirmed(false); }} data-testid="ops-support-trainer-choice" className="block w-full bg-[#111A17] border rounded p-2 mt-1">
+                                                            <option value="">Choose a trainer from current inventory</option>
+                                                            {trainerInventory.filter(t => t.id).map(t => <option key={t.id} value={t.id}>{t.name} — {t.suburb || "Location unrecorded"}{t.published ? "" : " (not published)"}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    {trainerInventory.some(t => t.id === trainerLinkId) && <Link to={`/t/${encodeURIComponent(trainerLinkId)}`} target="_blank" rel="noreferrer" className="underline">Review selected trainer's public listing</Link>}
+                                                    <p>Compare the selected listing with this request before confirming. Linking does not delist it. If the trainer is missing, refresh the current Trainer Supply inventory.</p>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <label className="block text-xs">Privacy action
+                                                        <select value={privacyAction} onChange={(e) => { setPrivacyAction(e.target.value); setCategoryConfirmed(false); }} data-testid="ops-support-privacy-action" className="block w-full bg-[#111A17] border rounded p-2 mt-1">
+                                                            <option value="request_identity_proof">Request identity verification</option>
+                                                            <option value="reject_non_subject">Reject: requester is not the data subject</option>
+                                                            <option value="authorise_scrub" disabled={!trustedPrivacyIdentity}>Erase verified subject data</option>
+                                                        </select>
+                                                    </label>
+                                                    <p className="text-xs">{trustedPrivacyIdentity ? "Verified identity is recorded. Erasure removes the subject's data across the supported stores and cannot be undone." : "Erasure is blocked until trusted identity verification is recorded. Notes and confirmation cannot establish identity."} These actions send no email. Send any customer reply before recording rejection.</p>
+                                                </>
+                                            )}
+                                            {!needsTrainerLink && <label className="block text-xs">Action notes (minimum 10 characters)
+                                                <textarea value={categoryNotes} onChange={(e) => setCategoryNotes(e.target.value)} data-testid="ops-support-action-notes" className="block w-full bg-[#111A17] border rounded p-2 mt-1" />
+                                            </label>}
+                                            <label className="flex gap-2 items-start text-xs">
+                                                <input type="checkbox" checked={categoryConfirmed} onChange={(e) => setCategoryConfirmed(e.target.checked)} data-testid="ops-support-action-confirm" />
+                                                I verified this case and confirm the selected action and its effects.
+                                            </label>
+                                            <button type="submit" disabled={categoryBusy || replying || closing || !categoryConfirmed || (!needsTrainerLink && categoryNotes.trim().length < 10) || (selectedThread.category === "delisting_request" && !selectedThread.trainer_id && !trainerLinkId.trim())} data-testid="ops-support-action-btn" className="btn-primary text-xs">
+                                                {categoryBusy ? "Processing..." : selectedThread.category === "delisting_request" ? (selectedThread.trainer_id ? "Delist linked trainer" : "Link verified trainer") : "Record privacy action"}
+                                            </button>
+                                        </form>
+                                    )}
                                     <form onSubmit={handleReply} className="space-y-2">
                                         <div className="text-xs font-mono font-bold text-[#F5F2EB] uppercase tracking-wider">
                                             Operator Reply
@@ -3966,20 +4073,10 @@ function SupportThreadsView({ onRefresh }) {
                                             className="w-full bg-[#111A17] border border-[#2A3935] text-[#F5F2EB] text-xs font-sans rounded-xl p-3 focus:outline-none focus:border-[#D9B36C]"
                                         />
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[11px] font-mono text-[#8B9E98]">Mark Status:</span>
-                                                <select
-                                                    value={markStatus}
-                                                    onChange={(e) => setMarkStatus(e.target.value)}
-                                                    className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded px-2 py-1"
-                                                >
-                                                    <option value="awaiting_customer_reply">Awaiting Customer Reply</option>
-                                                    <option value="in_progress">In Progress</option>
-                                                </select>
-                                            </div>
+                                            <span className="text-[11px] font-mono text-[#8B9E98]">After dispatch: Awaiting customer reply</span>
                                             <button
                                                 type="submit"
-                                                disabled={replying || replyText.trim().length < 3}
+                                                disabled={replying || closing || categoryBusy || replyText.trim().length < 3}
                                                 data-testid="ops-support-reply-btn"
                                                 className="btn-primary text-xs px-3 py-1.5 font-mono disabled:opacity-50"
                                             >
@@ -4016,7 +4113,7 @@ function SupportThreadsView({ onRefresh }) {
                                             </label>
                                             <button
                                                 type="submit"
-                                                disabled={closing || closeNotes.trim().length < 10 || !closeConfirmed}
+                                                disabled={closing || replying || categoryBusy || closeNotes.trim().length < 10 || !closeConfirmed}
                                                 data-testid="ops-support-close-btn"
                                                 className="bg-emerald-800 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-mono disabled:opacity-50 transition"
                                             >
@@ -4027,7 +4124,7 @@ function SupportThreadsView({ onRefresh }) {
                                 </div>
                             ) : (
                                 <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-200 text-xs">
-                                    <strong>Case Resolved & Closed.</strong>
+                                    <strong>Case status: {selectedThread.status}.</strong>
                                     {selectedThread.resolution_notes && (
                                         <p className="mt-1 text-[11px] text-emerald-300/80">
                                             Notes: {selectedThread.resolution_notes}

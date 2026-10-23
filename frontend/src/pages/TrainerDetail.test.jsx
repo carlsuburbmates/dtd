@@ -2,10 +2,12 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 
+const routerState = vi.hoisted(() => ({ search: "", id: "trainer_1", set: vi.fn() }));
+
 vi.mock("react-router-dom", () => ({
     Link: ({ children, to, ...props }) => <a href={to} {...props}>{children}</a>,
-    useParams: () => ({ id: "trainer_1" }),
-    useSearchParams: () => [new URLSearchParams(), vi.fn()],
+    useParams: () => ({ id: routerState.id }),
+    useSearchParams: () => [new URLSearchParams(routerState.search), routerState.set],
 }));
 
 vi.mock("@/lib/api", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
@@ -52,7 +54,7 @@ function renderDetail() {
     document.body.appendChild(container);
     const root = createRoot(container);
     act(() => root.render(<TrainerDetail />));
-    return { container, cleanup: () => act(() => root.unmount()) };
+    return { container, rerender: () => act(() => root.render(<TrainerDetail />)), cleanup: () => act(() => root.unmount()) };
 }
 
 function changeValue(element, value) {
@@ -68,6 +70,8 @@ async function settle() {
 describe("TrainerDetail ownership claim", () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        routerState.search = "";
+        routerState.id = "trainer_1";
         document.body.innerHTML = "";
         globalThis.IS_REACT_ACT_ENVIRONMENT = true;
         api.get.mockImplementation((path) => Promise.resolve({
@@ -385,6 +389,196 @@ describe("TrainerDetail ownership claim", () => {
 
         view.cleanup();
     });
+    it("uses protected canonical prefill when reopening capabilities", async () => {
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_1", JSON.stringify({ trainerClaimSession: "valid-token" }));
+        api.get.mockImplementation(path => Promise.resolve({ data: path === "/trainers/trainer_1"
+            ? { ...trainer, claim_status: "claimed" }
+            : path.endsWith("/prefill") ? { prefilled: {
+                specialties: ["puppy_training"], serviced_suburbs: ["Richmond", "Fitzroy"],
+                delivery_constraints: { in_home_available: true, travel_distance_km: 25 },
+            } } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        expect(api.get).toHaveBeenCalledWith("/trainers/trainer_1/capabilities/prefill", { headers: { "X-Trainer-Claim-Session": "valid-token" } });
+        expect(view.container.querySelector('[data-testid="claim-specialty-puppy_training"]').checked).toBe(true);
+        expect(view.container.querySelector('[data-testid="claim-serviced-suburbs"]').value).toBe("Richmond, Fitzroy");
+        expect(view.container.querySelector('[data-testid="claim-delivery-distance"]').value).toBe("25");
+        view.cleanup(); sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("clears a rejected session on prefill and opens recovery", async () => {
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_1", JSON.stringify({ trainerClaimSession: "expired-token", trainerActionToken: "keep-action-token" }));
+        api.get.mockImplementation(path => path.endsWith("/prefill")
+            ? Promise.reject({ response: { status: 401 } })
+            : Promise.resolve({ data: path === "/trainers/trainer_1" ? { ...trainer, claim_status: "claimed" } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
+        expect(JSON.parse(sessionStorage.getItem("dtd-trainer-billing-auth:trainer_1"))).toEqual({ trainerClaimSession: "", trainerActionToken: "keep-action-token" });
+        api.post.mockResolvedValueOnce({ data: { status: "pending_verification", claim_event_id: "renewal" } });
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-email"]'), "owner@example.invalid"));
+        await act(async () => view.container.querySelector('[data-testid="claim-start"]').click());
+        expect(api.post).toHaveBeenCalledWith("/trainers/trainer_1/claim", { email: "owner@example.invalid", method: "email", intent: "session_recovery" });
+        view.cleanup(); sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("retains unsaved capabilities through expired-session renewal", async () => {
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_1", JSON.stringify({ trainerClaimSession: "old-token" }));
+        api.get.mockImplementation(path => Promise.resolve({ data: path === "/trainers/trainer_1"
+            ? { ...trainer, claim_status: "claimed", tier: "pro" }
+            : path.endsWith("/prefill") ? { prefilled: { specialties: ["puppy_training"], serviced_suburbs: ["Richmond"] } }
+            : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        act(() => {
+            changeValue(view.container.querySelector('[data-testid="claim-serviced-suburbs"]'), "Fitzroy, Carlton");
+            view.container.querySelector('[data-testid="claim-confirm-statement"]').click();
+        });
+        api.post.mockRejectedValueOnce({ response: { status: 401, data: { detail: "Trainer claim session expired." } } });
+        await act(async () => view.container.querySelector('[data-testid="claim-confirm-submit"]').click());
+        expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-email"]'), "owner@example.invalid"));
+        api.post.mockResolvedValueOnce({ data: { status: "pending_verification", claim_event_id: "renewal" } });
+        await act(async () => view.container.querySelector('[data-testid="claim-start"]').click());
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-otp"]'), "123456"));
+        api.post.mockResolvedValueOnce({ data: { session: { token: "new-token" }, tier: "pro" } });
+        await act(async () => view.container.querySelector('[data-testid="claim-verify"]').click());
+        expect(view.container.querySelector('[data-testid="claim-serviced-suburbs"]').value).toBe("Fitzroy, Carlton");
+        expect(view.container.querySelector('[data-testid="claim-confirm-statement"]').checked).toBe(false);
+        expect(JSON.parse(sessionStorage.getItem("dtd-trainer-billing-auth:trainer_1")).trainerClaimSession).toBe("new-token");
+        view.cleanup(); sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("removes a rejected query token without restoring it on editor reopen", async () => {
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+        routerState.search = "claimSession=expired-query&plan=pro";
+        api.get.mockImplementation(path => path.endsWith("/prefill")
+            ? Promise.reject({ response: { status: 401 } })
+            : Promise.resolve({ data: path === "/trainers/trainer_1" ? { ...trainer, claim_status: "claimed" } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        expect(routerState.set).toHaveBeenCalledWith(expect.any(URLSearchParams), { replace: true });
+        expect(routerState.set.mock.calls[0][0].has("claimSession")).toBe(false);
+        expect(routerState.set.mock.calls[0][0].get("plan")).toBe("pro");
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        expect(api.get.mock.calls.filter(([path]) => path.endsWith("/prefill"))).toHaveLength(1);
+        expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
+        view.cleanup(); routerState.search = ""; sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("does not carry one trainer's session into another trainer route", async () => {
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_1", JSON.stringify({ trainerClaimSession: "trainer-one-token" }));
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_2");
+        api.get.mockImplementation(path => Promise.resolve({ data: path.startsWith("/trainers/")
+            ? { ...trainer, id: path.split("/")[2], claim_status: "claimed" } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).toContain("trainer-one-token");
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).not.toContain("claimSession");
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
+        view.cleanup(); routerState.id = "trainer_1"; sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("ignores a profile response after navigating to another trainer", async () => {
+        let finishOld;
+        api.get.mockImplementation(path => path === "/trainers/trainer_1"
+            ? new Promise(resolve => { finishOld = resolve; })
+            : Promise.resolve({ data: path === "/trainers/trainer_2" ? { ...trainer, id: "trainer_2", name: "Current trainer" } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        await act(async () => finishOld({ data: { ...trainer, name: "Old trainer" } }));
+        expect(view.container.textContent).toContain("Current trainer");
+        expect(view.container.textContent).not.toContain("Old trainer");
+        view.cleanup(); routerState.id = "trainer_1";
+    });
+
+    it.each(["resolve", "reject"])("ignores an old trainer's pending prefill when it later %ss", async (outcome) => {
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_1", JSON.stringify({ trainerClaimSession: "token-one" }));
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_2", JSON.stringify({ trainerClaimSession: "token-two" }));
+        let finishOld;
+        api.get.mockImplementation(path => path === "/trainers/trainer_1/capabilities/prefill"
+            ? new Promise((resolve, reject) => { finishOld = () => outcome === "resolve"
+                ? resolve({ data: { prefilled: { specialties: ["puppy_training"], serviced_suburbs: ["Richmond"] } } })
+                : reject({ response: { status: 401 } }); })
+            : Promise.resolve({ data: path === "/trainers/trainer_2/capabilities/prefill"
+                ? { prefilled: { specialties: ["obedience"], serviced_suburbs: ["Carlton"] } }
+                : path.startsWith("/trainers/") ? { ...trainer, id: path.split("/")[2], claim_status: "claimed" } : { public_matching_enabled: false } }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        await act(async () => finishOld());
+        expect(view.container.querySelector('[data-testid="claim-serviced-suburbs"]').value).toBe("Carlton");
+        expect(view.container.querySelector('[data-testid="claim-specialty-obedience"]').checked).toBe(true);
+        expect(view.container.querySelector('[data-testid="claim-email"]')).toBeNull();
+        expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).toContain("token-two");
+        view.cleanup(); routerState.id = "trainer_1";
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1"); sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_2");
+    });
+
+    it("ignores a pending verification response after leaving its trainer", async () => {
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+        sessionStorage.setItem("dtd-trainer-billing-auth:trainer_2", JSON.stringify({ trainerClaimSession: "token-two" }));
+        api.get.mockImplementation(path => Promise.resolve({ data: path.endsWith("/prefill")
+            ? { prefilled: { specialties: ["obedience"], serviced_suburbs: ["Carlton"] } }
+            : path.startsWith("/trainers/") ? { ...trainer, claim_status: path.includes("trainer_2") ? "claimed" : "unclaimed" } : { public_matching_enabled: false } }));
+        let finishOld;
+        api.post.mockImplementation(path => path.endsWith("/claim/verify")
+            ? new Promise(resolve => { finishOld = resolve; })
+            : Promise.resolve({ data: { status: "pending_verification", claim_event_id: "claim-one" } }));
+        const view = renderDetail(); await settle();
+        act(() => view.container.querySelector('[data-testid="claim-profile-open"]').click());
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-email"]'), "owner@example.invalid"));
+        await act(async () => view.container.querySelector('[data-testid="claim-start"]').click());
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-otp"]'), "123456"));
+        await act(async () => view.container.querySelector('[data-testid="claim-verify"]').click());
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        await act(async () => finishOld({ data: { session: { token: "old-response-token" }, tier: "claimed" } }));
+        expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).toContain("token-two");
+        expect(sessionStorage.getItem("dtd-trainer-billing-auth:trainer_1")).toBeNull();
+        expect(view.container.querySelector('[data-testid="claim-serviced-suburbs"]').value).toBe("Carlton");
+        view.cleanup(); routerState.id = "trainer_1"; sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_2");
+    });
+
+    it("ignores an old claim-start response after opening another trainer's recovery", async () => {
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1"); sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_2");
+        api.get.mockImplementation(path => Promise.resolve({ data: path.startsWith("/trainers/")
+            ? { ...trainer, claim_status: path.includes("trainer_2") ? "claimed" : "unclaimed" } : { public_matching_enabled: false } }));
+        let finishOld; api.post.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }));
+        const view = renderDetail(); await settle();
+        act(() => view.container.querySelector('[data-testid="claim-profile-open"]').click());
+        act(() => changeValue(view.container.querySelector('[data-testid="claim-email"]'), "owner@example.invalid"));
+        await act(async () => view.container.querySelector('[data-testid="claim-start"]').click());
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        await act(async () => finishOld({ data: { status: "pending_verification", claim_event_id: "old-claim" } }));
+        expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
+        expect(view.container.querySelector('[data-testid="claim-verify"]')).toBeNull();
+        view.cleanup(); routerState.id = "trainer_1";
+    });
+
+    it("ignores an old capability save response while another trainer's editor is open", async () => {
+        for (const suffix of ["1", "2"]) sessionStorage.setItem(`dtd-trainer-billing-auth:trainer_${suffix}`, JSON.stringify({ trainerClaimSession: `token-${suffix}` }));
+        api.get.mockImplementation(path => Promise.resolve({ data: path.endsWith("/prefill")
+            ? { prefilled: { specialties: ["obedience"], serviced_suburbs: [path.includes("trainer_2") ? "Carlton" : "Richmond"] } }
+            : path.startsWith("/trainers/") ? { ...trainer, claim_status: "claimed" } : { public_matching_enabled: false } }));
+        let finishOld; api.post.mockImplementationOnce(() => new Promise(resolve => { finishOld = resolve; }));
+        const view = renderDetail(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        act(() => view.container.querySelector('[data-testid="claim-confirm-statement"]').click());
+        await act(async () => view.container.querySelector('[data-testid="claim-confirm-submit"]').click());
+        routerState.id = "trainer_2"; view.rerender(); await settle();
+        await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
+        await act(async () => finishOld({ data: { ok: true, capabilities: { specialties: { canonical_value: ["puppy_training"] } } } }));
+        expect(view.container.querySelector('[data-testid="claim-capabilities-step"]')).not.toBeNull();
+        expect(view.container.querySelector('[data-testid="claim-serviced-suburbs"]').value).toBe("Carlton");
+        expect(view.container.querySelector('[data-testid="claim-specialty-obedience"]').checked).toBe(true);
+        view.cleanup(); routerState.id = "trainer_1";
+        for (const suffix of ["1", "2"]) sessionStorage.removeItem(`dtd-trainer-billing-auth:trainer_${suffix}`);
+    });
+
 });
 
 describe("TrainerDetail matching enquiry delivery", () => {

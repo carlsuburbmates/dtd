@@ -4112,9 +4112,10 @@ async def instant_match(
 
     # 6. Execute matching with AI adapter & deterministic fallback wrapper (Contract v2 Section 3, 4, 5)
     ai_adapter = globals().get("matching_ai_adapter") or matching_contract_v2.get_default_ai_adapter()
-    decision_resp = await matching_contract_v2.execute_matching_with_adapter_async(
-        req, candidate_pool, ai_adapter, triage_state=triage_state, db=db
-    )
+    with ai_service.matching_degradation_context(match_id):
+        decision_resp = await matching_contract_v2.execute_matching_with_adapter_async(
+            req, candidate_pool, ai_adapter, triage_state=triage_state, db=db
+        )
 
     # 7. Context Token & Persistence (issued only when results exist for profile handoff)
     has_results_for_handoff = len(decision_resp.candidates) > 0
@@ -5420,6 +5421,8 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
         "delivery_status": "pending",
         "expires_at": (now + timedelta(seconds=max(60, TRAINER_CLAIM_OTP_TTL_S))).isoformat(),
         "is_renewal": is_renewal,
+        "owner_claim_event_id": trainer.get("claim_event_id") if is_renewal else None,
+        "owner_claimed_at": trainer.get("claimed_at") if is_renewal else None,
         "created_at": now.isoformat(),
         "updated_at": now.isoformat(),
     }
@@ -5434,12 +5437,20 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
             }},
         )
     else:
-        await db.trainers.update_one(
-            {"id": trainer_id},
-            {"$set": {
-                "claim_session_challenge_at": now.isoformat(),
-            }},
+        challenge_update = await db.trainers.update_one(
+            {
+                "id": trainer_id, "claim_status": "claimed",
+                "email": trainer.get("email"), "billing_email": trainer.get("billing_email"),
+                "claim_event_id": trainer.get("claim_event_id"), "claimed_at": trainer.get("claimed_at"),
+            },
+            {"$set": {"claim_session_challenge_at": now.isoformat(), "claim_session_challenge_id": event["id"]}},
         )
+        if getattr(challenge_update, "matched_count", 0) != 1:
+            await db.claim_events.update_one(
+                {"id": event["id"], "status": "pending_verification"},
+                {"$set": {"status": "stale", "reason": "profile_ownership_changed", "updated_at": now.isoformat()}},
+            )
+            raise HTTPException(status_code=409, detail="Profile ownership changed. Request a new claim code.")
 
     try:
         delivery = await notifications_service.notify_trainer_claim_otp(db, trainer, to_email=listed_email, otp=otp)
@@ -5453,7 +5464,13 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
             await db.trainers.update_one({"id": trainer_id, "claim_status": "pending_verification"}, {"$set": {"claim_status": "unclaimed"}})
     await db.claim_events.update_one(
         {"id": event["id"]},
-        {"$set": {"status": event_status, "delivery_status": delivery_status, "delivery_attempts": int(delivery.get("claim_notification_attempts") or 0), "delivery_error": str(delivery.get("claim_notification_error") or delivery.get("claim_notification_reason") or "")[:240], "updated_at": now_iso()}},
+        {"$set": {"delivery_status": delivery_status, "delivery_attempts": int(delivery.get("claim_notification_attempts") or 0), "delivery_error": str(delivery.get("claim_notification_error") or delivery.get("claim_notification_reason") or "")[:240], "updated_at": now_iso()}},
+    )
+    # Delivery completion cannot reopen a challenge verified or superseded while
+    # the provider request was in flight.
+    await db.claim_events.update_one(
+        {"id": event["id"], "status": "pending_verification"},
+        {"$set": {"status": event_status}},
     )
     await _audit("trainer_claim_started", trainer_id, after={"claim_event_id": event["id"], "delivery_status": delivery_status, "is_renewal": is_renewal}, actor="user")
     return _scrub({
@@ -5499,19 +5516,29 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
     if not claim_engine.otp_matches(payload.otp, str(event.get("otp_digest") or "")):
         next_attempt = attempts + 1
         status = "locked" if next_attempt >= max_attempts else "pending_verification"
-        await db.claim_events.update_one(
-            {"id": event["id"]},
+        attempt_update = await db.claim_events.update_one(
+            {"id": event["id"], "trainer_id": trainer_id, "status": "pending_verification", "attempts": attempts},
             {"$set": {"attempts": next_attempt, "status": status, "updated_at": now.isoformat()}},
         )
+        if getattr(attempt_update, "matched_count", 1) != 1:
+            raise HTTPException(status_code=409, detail="Claim challenge changed. Request a new code or retry verification.")
         if status == "locked":
             raise HTTPException(status_code=429, detail="Claim code is locked. Request a new code.")
         raise HTTPException(status_code=400, detail="Claim code is invalid.")
 
     current_status = str(trainer.get("claim_status") or "").lower()
-    is_renewal = bool(event.get("is_renewal")) or (
-        current_status == "claimed"
-        and _normalize_email_key(str(event.get("claimant_email") or "")) == _normalize_email_key(str(trainer.get("billing_email") or trainer.get("email") or ""))
-    )
+    is_renewal = event.get("is_renewal") is True
+
+    def renewal_context_matches(profile: Dict[str, Any]) -> bool:
+        current_email = _normalize_email_key(str(profile.get("billing_email") or profile.get("email") or ""))
+        return bool(
+            str(profile.get("claim_status") or "").lower() == "claimed"
+            and current_email
+            and current_email == _normalize_email_key(str(event.get("claimant_email") or ""))
+            and profile.get("claim_event_id") == event.get("owner_claim_event_id")
+            and profile.get("claimed_at") == event.get("owner_claimed_at")
+            and profile.get("claim_session_challenge_id") == event["id"]
+        )
 
     if current_status == "claim_disputed":
         await db.claim_events.update_one(
@@ -5521,10 +5548,27 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
 
     if is_renewal:
-        await db.claim_events.update_one(
-            {"id": event["id"], "status": "pending_verification"},
+        if not renewal_context_matches(trainer):
+            await db.claim_events.update_one(
+                {"id": event["id"], "status": "pending_verification"},
+                {"$set": {"status": "stale", "reason": "profile_ownership_changed", "updated_at": now.isoformat()}},
+            )
+            raise HTTPException(status_code=409, detail="Profile ownership changed. Request a new claim code.")
+        consumed = await db.claim_events.update_one(
+            {"id": event["id"], "trainer_id": trainer_id, "status": "pending_verification", "attempts": attempts},
             {"$set": {"status": "verified", "otp_verified": True, "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
         )
+        if getattr(consumed, "matched_count", 0) != 1:
+            raise HTTPException(status_code=409, detail="Claim challenge is no longer available for verification.")
+        # Recheck after consumption: ownership may change while the challenge is
+        # being verified. A stale challenge must never mint a fresh session.
+        fresh_trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0})
+        if not fresh_trainer or not renewal_context_matches(fresh_trainer):
+            await db.claim_events.update_one(
+                {"id": event["id"], "status": "verified"},
+                {"$set": {"status": "stale", "reason": "profile_ownership_changed", "otp_verified": False, "updated_at": now.isoformat()}},
+            )
+            raise HTTPException(status_code=409, detail="Profile ownership changed. Request a new claim code.")
         session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
         await _audit("trainer_session_renewed", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
         return _scrub({
@@ -8788,12 +8832,15 @@ async def list_support_threads(
     category: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 50,
+    offset: int = 0,
     _: None = Depends(require_oversight),
 ) -> Dict[str, Any]:
-    """List customer support threads with filtering by category and status."""
+    """List customer support threads with bounded pagination and category/status filters."""
+    limit = max(1, min(100, int(limit)))
+    offset = max(0, int(offset))
     support_coll = getattr(db, "support_threads", None)
     if support_coll is None:
-        return {"ok": True, "threads": []}
+        return {"ok": True, "threads": [], "count": 0, "has_more": False, "offset": offset, "limit": limit}
 
     query: Dict[str, Any] = {}
     if category:
@@ -8801,8 +8848,12 @@ async def list_support_threads(
     if status:
         query["status"] = status.strip().lower()
 
-    threads = await support_coll.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    return {"ok": True, "threads": threads, "count": len(threads)}
+    cursor = support_coll.find(query, {"_id": 0}).sort("created_at", -1)
+    if offset:
+        cursor = cursor.skip(offset)
+    rows = await cursor.limit(limit + 1).to_list(limit + 1)
+    threads = rows[:limit]
+    return {"ok": True, "threads": threads, "count": len(threads), "has_more": len(rows) > limit, "offset": offset, "limit": limit}
 
 
 @api.get("/oversight/support/threads/{case_id}")
@@ -8820,6 +8871,47 @@ async def get_support_thread(
         raise HTTPException(status_code=404, detail="Support thread not found")
 
     return {"ok": True, "thread": thread}
+
+
+class SupportTrainerLinkIn(BaseModel):
+    trainer_id: str = Field(..., min_length=1, max_length=120)
+    confirmed: bool = Field(default=False, strict=True)
+
+
+@api.post("/oversight/support/threads/{case_id}/link-trainer")
+async def link_support_thread_trainer(
+    case_id: str,
+    payload: SupportTrainerLinkIn,
+    _: None = Depends(require_oversight),
+) -> Dict[str, Any]:
+    """Link a delisting request to a reviewed listing; this is not identity proof."""
+    if payload.confirmed is not True:
+        raise HTTPException(status_code=400, detail="Explicit listing-link confirmation required.")
+    trainer_id = payload.trainer_id.strip()
+    support_coll = getattr(db, "support_threads", None)
+    if support_coll is None:
+        raise HTTPException(status_code=503, detail="Store unavailable")
+    thread = await support_coll.find_one({"case_id": case_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Support thread not found")
+    if thread.get("category") != "delisting_request":
+        raise HTTPException(status_code=422, detail="Listing links are only available for delisting requests.")
+    if thread.get("status") in {"resolved", "closed", "rejected"}:
+        raise HTTPException(status_code=409, detail="Closed support threads cannot be linked.")
+    if thread.get("trainer_id") and thread["trainer_id"] != trainer_id:
+        raise HTTPException(status_code=409, detail="This support thread is already linked to another listing.")
+    trainer = await db.trainers.find_one({"id": trainer_id}, {"_id": 0, "id": 1, "name": 1})
+    if not trainer:
+        raise HTTPException(status_code=404, detail="Trainer not found")
+    linked_at = now_iso()
+    result = await support_coll.update_one(
+        {"case_id": case_id, "category": "delisting_request", "status": thread.get("status"), "trainer_id": thread.get("trainer_id")},
+        {"$set": {"trainer_id": trainer_id, "trainer_name": trainer.get("name") or "", "trainer_linked_at": linked_at, "updated_at": linked_at}},
+    )
+    if getattr(result, "matched_count", 0) != 1:
+        raise HTTPException(status_code=409, detail="Support thread changed. Reload before linking.")
+    await _audit("support_thread_trainer_linked", case_id, after={"trainer_id": trainer_id}, actor="ops")
+    return {"ok": True, "thread": await support_coll.find_one({"case_id": case_id}, {"_id": 0})}
 
 
 class SupportReplyIn(BaseModel):

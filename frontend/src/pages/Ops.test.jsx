@@ -1498,6 +1498,151 @@ describe("Ops auth transition", () => {
 
             view.cleanup();
         });
+
+        const supportCase = (id, fields = {}) => ({
+            case_id: id, subject: `Subject ${id}`, sender_name: id,
+            sender_email: `${id}@example.invalid`, category: "general_inquiry", status: "open",
+            messages: [{ sender: "customer", text: `Body ${id}` }], ...fields,
+        });
+        const openSupport = async (cases, detail = (id) => Promise.resolve({ data: { thread: cases.find(t => t.case_id === id) } })) => {
+            const snapshot = { ...validSnapshot, trainer_inventory: [{ id: "trainer_1", name: "Synthetic Dogs", suburb: "Carlton", published: true }] };
+            getSpy.mockImplementation((url) => {
+                const match = url.match(/support\/threads\/([^/]+)$/);
+                if (match) return detail(match[1]);
+                if (url.includes("/support/threads")) return Promise.resolve({ data: { threads: cases, has_more: false } });
+                return Promise.resolve({ data: snapshot });
+            });
+            const view = renderOps();
+            await act(async () => { await Promise.resolve(); });
+            await act(async () => Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("Support Cases")).click());
+            return view;
+        };
+        const selectSupport = async (view, index) => {
+            await act(async () => view.container.querySelectorAll('[data-testid="ops-support-thread-row"]')[index].click());
+        };
+
+        it("ignores out-of-order detail responses", async () => {
+            const cases = [supportCase("case_a"), supportCase("case_b")];
+            let resolveA;
+            const view = await openSupport(cases, id => id === "case_a"
+                ? new Promise(resolve => { resolveA = resolve; })
+                : Promise.resolve({ data: { thread: cases[1] } }));
+            await selectSupport(view, 0);
+            await selectSupport(view, 1);
+            await act(async () => resolveA({ data: { thread: cases[0] } }));
+            const detail = view.container.querySelector('[data-testid="ops-support-detail"]');
+            expect(detail.textContent).toContain("Body case_b");
+            expect(detail.textContent).not.toContain("Body case_a");
+            view.cleanup();
+        });
+
+        it.each(["reply", "close"])("retains the new selection and its draft when an old %s finishes", async (action) => {
+            const cases = [supportCase("case_a"), supportCase("case_b")];
+            const view = await openSupport(cases);
+            await selectSupport(view, 0);
+            let finish;
+            postSpy.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+            act(() => {
+                if (action === "reply") setFieldValue(view.container.querySelector('[data-testid="ops-support-reply-input"]'), "Reply for A");
+                else {
+                    setFieldValue(view.container.querySelector('[data-testid="ops-support-close-notes"]'), "Verified outcome for A");
+                    view.container.querySelector('[data-testid="ops-support-close-confirm"]').click();
+                }
+            });
+            await act(async () => view.container.querySelector(`[data-testid="ops-support-${action}-btn"]`).click());
+            await selectSupport(view, 1);
+            act(() => setFieldValue(view.container.querySelector('[data-testid="ops-support-reply-input"]'), "Draft for B"));
+            await act(async () => finish({ data: { ok: true, dispatched: true } }));
+            expect(view.container.querySelector('[data-testid="ops-support-detail"]').textContent).toContain("Body case_b");
+            expect(view.container.querySelector('[data-testid="ops-support-reply-input"]').value).toBe("Draft for B");
+            expect(postSpy.mock.calls[0][0]).toContain(`/case_a/${action}`);
+            view.cleanup();
+        });
+
+        it("reports duplicate dispatch without claiming delivery failed", async () => {
+            const view = await openSupport([supportCase("case_a")]);
+            await selectSupport(view, 0);
+            postSpy.mockResolvedValueOnce({ data: { ok: true, duplicate: true, dispatched: false } });
+            act(() => setFieldValue(view.container.querySelector('[data-testid="ops-support-reply-input"]'), "Same reply"));
+            await act(async () => view.container.querySelector('[data-testid="ops-support-reply-btn"]').click());
+            expect(mockToastWarning).toHaveBeenCalledWith("This reply was already dispatched. No additional email was sent.");
+            expect(view.container.textContent).not.toContain("email delivery failed");
+            view.cleanup();
+        });
+
+        it("requires explicit linking then explicit delisting of the linked trainer", async () => {
+            const thread = supportCase("case_a", { category: "delisting_request" });
+            const view = await openSupport([thread]);
+            await selectSupport(view, 0);
+            const button = () => view.container.querySelector('[data-testid="ops-support-action-btn"]');
+            expect(button().disabled).toBe(true);
+            act(() => {
+                setFieldValue(view.container.querySelector('[data-testid="ops-support-trainer-choice"]'), "trainer_1");
+                view.container.querySelector('[data-testid="ops-support-action-confirm"]').click();
+            });
+            postSpy.mockImplementationOnce(async () => { thread.trainer_id = "trainer_1"; return { data: { ok: true, thread } }; });
+            await act(async () => button().click());
+            expect(postSpy).toHaveBeenCalledWith("/oversight/support/threads/case_a/link-trainer", { trainer_id: "trainer_1", confirmed: true });
+            expect(button().textContent).toContain("Delist linked trainer");
+            expect(button().disabled).toBe(true);
+            act(() => {
+                setFieldValue(view.container.querySelector('[data-testid="ops-support-action-notes"]'), "Owner requested voluntary removal");
+                view.container.querySelector('[data-testid="ops-support-action-confirm"]').click();
+            });
+            postSpy.mockResolvedValueOnce({ data: { ok: true } });
+            await act(async () => button().click());
+            expect(postSpy).toHaveBeenCalledWith("/oversight/trainers/trainer_1/delist", { reason: "Owner requested voluntary removal", confirmed: true });
+            view.cleanup();
+        });
+
+        it("blocks privacy erasure without recorded trusted identity and exposes supported review actions", async () => {
+            const view = await openSupport([supportCase("case_a", { category: "privacy_request" })]);
+            await selectSupport(view, 0);
+            const select = view.container.querySelector('[data-testid="ops-support-privacy-action"]');
+            expect(select.querySelector('[value="authorise_scrub"]').disabled).toBe(true);
+            act(() => {
+                setFieldValue(view.container.querySelector('[data-testid="ops-support-action-notes"]'), "Identity verification is required");
+                view.container.querySelector('[data-testid="ops-support-action-confirm"]').click();
+            });
+            postSpy.mockResolvedValueOnce({ data: { ok: true } });
+            await act(async () => view.container.querySelector('[data-testid="ops-support-action-btn"]').click());
+            expect(postSpy).toHaveBeenCalledWith("/oversight/privacy/requests/case_a/process", { action: "request_identity_proof", notes: "Identity verification is required", confirmed: true });
+            expect(postSpy.mock.calls.some(([url, payload]) => payload.action === "authorise_scrub")).toBe(false);
+            view.cleanup();
+        });
+
+        it("navigates older case pages using has_more", async () => {
+            const view = await openSupport([supportCase("case_a")]);
+            getSpy.mockImplementation((url, config) => url.includes("/support/threads")
+                ? Promise.resolve({ data: { threads: [supportCase(config.params.offset ? "older" : "newer")], has_more: !config.params.offset } })
+                : Promise.resolve({ data: validSnapshot }));
+            await act(async () => Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.trim() === "Refresh").click());
+            expect(view.container.querySelector('[data-testid="ops-support-pagination"]').textContent).toContain("more cases available");
+            await act(async () => Array.from(view.container.querySelectorAll("button")).find(b => b.textContent === "Next cases").click());
+            expect(getSpy).toHaveBeenCalledWith("/oversight/support/threads", { params: { limit: 50, offset: 50 } });
+            expect(view.container.textContent).toContain("Subject older");
+            view.cleanup();
+        });
+
+        it("requires a fresh confirmation to erase data with recorded identity verification", async () => {
+            const thread = supportCase("case_a", { category: "privacy_request", identity_verified: true,
+                identity_verified_by: "trusted-test-flow", identity_verified_at: "2026-10-24T00:00:00Z", identity_verification_method: "cryptographic_email_otp" });
+            const view = await openSupport([thread]);
+            await selectSupport(view, 0);
+            const select = view.container.querySelector('[data-testid="ops-support-privacy-action"]');
+            expect(select.querySelector('[value="authorise_scrub"]').disabled).toBe(false);
+            act(() => {
+                setFieldValue(view.container.querySelector('[data-testid="ops-support-action-notes"]'), "Verified subject requested erasure");
+                view.container.querySelector('[data-testid="ops-support-action-confirm"]').click();
+                setFieldValue(select, "authorise_scrub");
+            });
+            expect(view.container.querySelector('[data-testid="ops-support-action-btn"]').disabled).toBe(true);
+            act(() => view.container.querySelector('[data-testid="ops-support-action-confirm"]').click());
+            postSpy.mockResolvedValueOnce({ data: { ok: true } });
+            await act(async () => view.container.querySelector('[data-testid="ops-support-action-btn"]').click());
+            expect(postSpy).toHaveBeenCalledWith("/oversight/privacy/requests/case_a/process", { action: "authorise_scrub", notes: "Verified subject requested erasure", confirmed: true });
+            view.cleanup();
+        });
     });
 });
 

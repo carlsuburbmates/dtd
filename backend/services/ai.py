@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict, deque
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import json
 import logging
@@ -183,6 +185,19 @@ def _extract_json(text: str) -> Optional[Any]:
 
 # ---------- Bounded Degradation Event Persistence ----------
 
+_matching_degradation_id: ContextVar[Optional[str]] = ContextVar("matching_degradation_id", default=None)
+
+
+@contextmanager
+def matching_degradation_context(match_id: str):
+    """Correlate matching diagnostics with their request, including concurrent tasks."""
+    token = _matching_degradation_id.set(match_id)
+    try:
+        yield
+    finally:
+        _matching_degradation_id.reset(token)
+
+
 async def record_degradation_event(
     event_type: str,
     error_code: str,
@@ -212,6 +227,9 @@ async def record_degradation_event(
         "decision_state": decision_state,
         "policy_version": policy_version,
     }
+    match_id = _matching_degradation_id.get()
+    if operation == "matching" and match_id:
+        event["match_id"] = match_id
 
     _degradation_events.append(event)
 

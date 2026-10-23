@@ -106,7 +106,7 @@ def test_df044_candidate_url_approvals_synthetic():
                 "approved_by": "DTD owner",
                 "terms_reviewed_at": "2026-09-11",
                 "approved_uses": ["trainer_profile_source"],
-                "approved_domains": ["*"],
+                "approved_domains": ["kintalaclub.com.au"],
                 "disallowed_domains": [
                     "google.com",
                     "maps.google.com",
@@ -193,7 +193,7 @@ def test_df044_ingest_discovery_sources_filters_unapproved_and_disallowed(monkey
                 "approved_by": "DTD owner",
                 "terms_reviewed_at": "2026-09-11",
                 "approved_uses": ["trainer_profile_source"],
-                "approved_domains": ["*"],
+                "approved_domains": ["goodtrainer.com.au"],
                 "disallowed_domains": ["yellowpages.com.au"],
             },
         ],
@@ -460,8 +460,13 @@ def test_df051_expired_claim_challenge_does_not_block_acquisition_dedup():
 
 
 def test_df044_strict_source_and_subdomain_enforcement():
-    registry = source_approvals.load()
-    # Exact approved discovery URL is approved
+    registry = {"sources": [{
+        "approved": True, "approved_by": "synthetic fixture", "terms_reviewed_at": "2026-10-20",
+        "approved_uses": ["discovery_scan"],
+        "approved_source_urls": ["https://www.petprofessionalguild.com/find-a-member"],
+        "approved_domains": ["petprofessionalguild.com"],
+    }]}
+    # Exact source admission cannot be broadened by a domain fallback.
     ok, _ = source_approvals.is_discovery_source_approved(registry, "https://www.petprofessionalguild.com/find-a-member")
     assert ok is True
 
@@ -495,3 +500,94 @@ def test_df045_robots_200_html_response_fails_closed():
     assert "robots_malformed" in reason
     assert "html" in reason
 
+
+
+def test_df044_default_candidate_scope_preserves_authorised_batch_only():
+    import json
+    from pathlib import Path
+    registry = source_approvals.load()
+    seed = json.loads((Path(__file__).resolve().parents[1] / "data" / "melbourne_trainers_seed.json").read_text())
+    assert len(seed["candidates"]) == 20
+    for trainer in seed["candidates"]:
+        assert source_approvals.is_candidate_url_approved(registry, trainer["website"])[0] is True
+    for url in [
+        "https://www.petprofessionalguild.com/find-a-member", "https://apdt.com.au/find-a-trainer",
+        "https://bing.com/maps/dog-training", "https://example.com/dog-training",
+        "https://kintala.com.au/unreviewed", "https://other.kintala.com.au/",
+    ]:
+        assert source_approvals.is_candidate_url_approved(registry, url)[0] is False
+    for url in ["https://www.petprofessionalguild.com/find-a-member", "https://apdt.com.au/find-a-trainer"]:
+        assert source_approvals.is_discovery_source_approved(registry, url)[0] is False
+
+
+def test_df044_candidate_wildcard_or_absent_scope_fails_closed():
+    row = {"approved": True, "approved_by": "fixture", "terms_reviewed_at": "2026-10-20", "approved_uses": ["trainer_profile_source"]}
+    for scope in [{}, {"approved_domains": ["*"]}]:
+        assert source_approvals.is_candidate_url_approved({"sources": [{**row, **scope}]}, "https://unreviewed.invalid/dog-training")[0] is False
+
+
+def test_df044_approved_url_path_case_is_not_broadened():
+    row = {"approved": True, "approved_by": "fixture", "terms_reviewed_at": "2026-10-20", "approved_uses": ["trainer_profile_source"], "approved_source_urls": ["https://fixture.invalid/Reviewed"]}
+    assert source_approvals.is_candidate_url_approved({"sources": [row]}, "https://fixture.invalid/Reviewed")[0] is True
+    assert source_approvals.is_candidate_url_approved({"sources": [row]}, "https://fixture.invalid/reviewed")[0] is False
+
+
+def test_df044_redirect_does_not_fetch_unadmitted_destination():
+    calls = []
+    class Session:
+        def get(self, url, **kwargs):
+            calls.append((url, kwargs.get("allow_redirects")))
+            if url.endswith("/robots.txt"):
+                return SimpleNamespace(status_code=200, text="User-agent: *\nAllow: /", headers={})
+            return SimpleNamespace(status_code=302, ok=True, headers={"Location": "https://unreviewed.invalid/dog-training"})
+    with patch.object(ingestion_manager, "check_dns_resolvable", return_value=(True, "fixture")), patch.object(ingestion_manager, "CRAWL_POLITE_DELAY_S", 0):
+        ok, _, _, reason = asyncio.run(ingestion_manager.polite_fetch_url("https://www.fixture.invalid/services", Session()))
+    assert ok is False
+    assert reason.startswith("redirect_requires_separate_source_admission:")
+    assert calls == [("https://www.fixture.invalid/robots.txt", False), ("https://www.fixture.invalid/services", False)]
+
+
+@pytest.mark.parametrize("body", ["upstream temporarily unavailable", '{"error":"temporarily unavailable"}', "User-agent: *\nDisallow /private", "User-agent:"])
+def test_df045_plaintext_error_or_invalid_policy_never_fetches_target(body):
+    calls = []
+    def get(url, **kwargs):
+        calls.append(url)
+        if not url.endswith("/robots.txt"):
+            raise AssertionError("Malformed policy must not permit target fetch")
+        return SimpleNamespace(status_code=200, text=body, headers={"content-type": "text/plain"})
+    with patch.object(ingestion_manager, "check_dns_resolvable", return_value=(True, "fixture")), patch.object(ingestion_manager, "CRAWL_POLITE_DELAY_S", 0):
+        ok, _, _, reason = asyncio.run(ingestion_manager.polite_fetch_url("https://fixture.invalid/services", SimpleNamespace(get=get)))
+    assert ok is False
+    assert reason.startswith("robots_malformed:")
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("body", ["", "# No restrictions\n\n# Public site", "Sitemap: https://fixture.invalid/sitemap.xml"])
+def test_df045_empty_comment_or_sitemap_policy_can_fetch(body):
+    calls = []
+    def get(url, **kwargs):
+        calls.append(url)
+        if url.endswith("/robots.txt"):
+            return SimpleNamespace(status_code=200, text=body, headers={"content-type": "text/plain"})
+        return SimpleNamespace(status_code=200, ok=True, text="Synthetic trainer", content=b"Synthetic trainer", url=url)
+    with patch.object(ingestion_manager, "check_dns_resolvable", return_value=(True, "fixture")), patch.object(ingestion_manager, "CRAWL_POLITE_DELAY_S", 0):
+        ok, _, _, _ = asyncio.run(ingestion_manager.polite_fetch_url("https://fixture.invalid/services", SimpleNamespace(get=get)))
+    assert ok is True
+    assert len(calls) == 2
+
+
+def test_df044_discovery_redirect_does_not_fetch_unadmitted_destination(monkeypatch):
+    registry = {"sources": [{"approved": True, "approved_by": "synthetic fixture", "terms_reviewed_at": "2026-10-20", "approved_uses": ["discovery_scan"], "approved_source_urls": ["https://fixture.invalid/index"]}]}
+    monkeypatch.setenv("DISCOVERY_SOURCE_URLS", "https://fixture.invalid/index")
+    requests_seen = []
+    def get(url, **kwargs):
+        requests_seen.append((url, kwargs.get("allow_redirects")))
+        return SimpleNamespace(status_code=302, headers={"Location": "https://unreviewed.invalid/dog-training"})
+    monkeypatch.setattr(automation.requests, "get", get)
+    db = _MockDB()
+    result = asyncio.run(automation.ingest_discovery_sources(db, registry=registry))
+    assert requests_seen == [("https://fixture.invalid/index", False)]
+    assert result["queued"] == 0
+    assert result["failed_sources"] == 1
+    assert "source_redirect_requires_admission" in result["reason_codes"]
+    assert db.source_ingestion_state.rows[0]["last_error_code"] == "source_redirect_requires_admission"

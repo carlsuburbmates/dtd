@@ -178,7 +178,7 @@ def collect_sanitized_evidence(case: Dict[str, Any]) -> Dict[str, Any]:
     if "engine_tick" in case_id.lower() or "lease" in summary.lower():
         known_context.append("Serverless runtime loops: Background tasks run via Cloud Scheduler cron on /api/internal/jobs/engine-tick with 180s distributed MongoDB leases.")
     if "billing" in case_type or "stripe" in case_id.lower():
-        known_context.append("Commercial checkout posture: Gated fail-closed (ENABLE_TRAINER_BILLING_CHECKOUT=0). $0 financial risk.")
+        known_context.append("Commercial checkout posture: Gated fail-closed (ENABLE_TRAINER_BILLING_CHECKOUT=0). Live checkout remains disabled.")
     if "claim" in case_type or "abn" in case_type:
         known_context.append("Directory governance: Profile claims require ABR registration verification; AI scoring cannot verify statutory legal facts.")
 
@@ -342,25 +342,34 @@ def generate_deterministic_analysis(evidence: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-_budget_lock = asyncio.Lock()
+def _budget_day() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+async def _legacy_daily_attempts(collection: Any, day: str) -> int:
+    # Older fallback rows cannot distinguish an absent client from a failed paid
+    # attempt. Count both conservatively during the one-time daily migration.
+    return await collection.count_documents({
+        "created_at": {"$regex": f"^{day}"},
+        "budget_day": {"$exists": False},
+        "model_used": {"$nin": ["cached", "none"]},
+    })
 
 
 async def check_daily_budget(db: Any) -> Tuple[bool, int, int]:
-    """Verify that daily AI investigation count has not exceeded the configured budget."""
+    """Read consumed attempt slots; a missing/unavailable store fails closed."""
+    limit = OPS_AI_DAILY_BUDGET
     if db is None or not hasattr(db, "ops_ai_investigations"):
-        return True, 0, OPS_AI_DAILY_BUDGET
-
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return False, limit, limit
     try:
-        count = await db.ops_ai_investigations.count_documents({
-            "created_at": {"$regex": f"^{today_str}"},
-            "status": {"$in": ["completed", "in_progress", "reserved"]},
-            "model_used": {"$nin": ["cached", "deterministic_analyst_fallback", "none"]},
-        })
-        return count < OPS_AI_DAILY_BUDGET, count, OPS_AI_DAILY_BUDGET
-    except Exception as e:
-        logger.warning("Failed to check daily AI budget, failing closed: %s", e)
-        return False, OPS_AI_DAILY_BUDGET, OPS_AI_DAILY_BUDGET
+        day = _budget_day()
+        collection = db.ops_ai_investigations
+        ledger = await collection.find_one({"_id": f"ops_ai_daily_budget:{day}"})
+        used = int(ledger["used"]) if ledger else await _legacy_daily_attempts(collection, day)
+        return used < limit, used, limit
+    except Exception as exc:
+        logger.warning("Failed to check daily AI budget, failing closed: %s", exc)
+        return False, limit, limit
 
 
 async def reserve_daily_budget(
@@ -370,35 +379,62 @@ async def reserve_daily_budget(
     fingerprint: str,
     trigger_reason: str,
 ) -> Tuple[bool, int, int]:
-    """Atomically verify and reserve 1 attempt slot in the daily AI investigation budget."""
+    """Consume a durable UTC-day attempt slot before contacting the provider.
+
+    Mongo's built-in _id uniqueness initializes one ledger across instances. Its
+    conditional increment is atomic across processes; failed or interrupted
+    attempts are never refunded, even when storing the investigation fails.
+    """
+    limit = OPS_AI_DAILY_BUDGET
     if db is None or not hasattr(db, "ops_ai_investigations"):
-        return True, 0, OPS_AI_DAILY_BUDGET
+        return False, limit, limit
+    try:
+        from pymongo import ReturnDocument
+        from pymongo.errors import DuplicateKeyError
 
-    async with _budget_lock:
-        within_budget, count, limit = await check_daily_budget(db)
-        if not within_budget:
-            return False, count, limit
-
-        reservation_doc = {
+        day = _budget_day()
+        ledger_id = f"ops_ai_daily_budget:{day}"
+        collection = db.ops_ai_investigations
+        ledger = await collection.find_one({"_id": ledger_id})
+        if ledger is None:
+            legacy_used = await _legacy_daily_attempts(collection, day)
+            try:
+                await collection.update_one(
+                    {"_id": ledger_id},
+                    {"$setOnInsert": {
+                        "document_type": "daily_attempt_budget",
+                        "budget_day": day,
+                        "used": legacy_used,
+                        "created_at": now_iso(),
+                    }},
+                    upsert=True,
+                )
+            except DuplicateKeyError:
+                # Another instance initialized the exact same day's ledger.
+                pass
+        ledger = await collection.find_one_and_update(
+            {"_id": ledger_id, "used": {"$lt": limit}},
+            {"$inc": {"used": 1}},
+            return_document=ReturnDocument.AFTER,
+        )
+        if ledger is None:
+            return False, limit, limit
+        await collection.insert_one({
             "investigation_id": investigation_id,
             "case_id": case_id,
             "occurrence_fingerprint": fingerprint,
             "status": "in_progress",
             "model_used": "pending_inference",
+            "provider_attempt_reserved": True,
+            "budget_day": day,
             "trigger_reason": trigger_reason,
             "created_at": now_iso(),
             "updated_at": now_iso(),
-        }
-        try:
-            await db.ops_ai_investigations.update_one(
-                {"investigation_id": investigation_id},
-                {"$set": reservation_doc},
-                upsert=True,
-            )
-            return True, count + 1, limit
-        except Exception as exc:
-            logger.warning("Failed to record budget reservation, failing closed: %s", exc)
-            return False, limit, limit
+        })
+        return True, int(ledger["used"]), limit
+    except Exception as exc:
+        logger.warning("Failed to reserve daily AI attempt, failing closed: %s", exc)
+        return False, limit, limit
 
 
 
@@ -521,14 +557,17 @@ async def analyze_incident(
                 "error": f"Analysis recently requested. Please wait {remaining}s before refreshing.",
             }
 
-    # 4. Acquire investigation ID & Atomically Reserve Daily Budget
+    # 4. Acquire client and reserve only when a provider attempt is possible.
+    active_client = override_client if override_client is not None else ai_service.get_gemini_client()
     investigation_id = f"inv_{uuid.uuid4().hex[:12]}"
     created_ts = now_iso()
     expires_ts = (datetime.now(timezone.utc) + timedelta(hours=OPS_AI_FRESHNESS_HOURS)).isoformat()
 
-    reserved, used_today, budget_limit = await reserve_daily_budget(
-        db, investigation_id, case_id, fingerprint, trigger_reason
-    )
+    reserved, used_today, budget_limit = True, 0, OPS_AI_DAILY_BUDGET
+    if active_client is not None:
+        reserved, used_today, budget_limit = await reserve_daily_budget(
+            db, investigation_id, case_id, fingerprint, trigger_reason
+        )
     if not reserved:
         exhausted_record = {
             "investigation_id": f"inv_budget_{uuid.uuid4().hex[:12]}",
@@ -541,22 +580,21 @@ async def analyze_incident(
             "completed_at": now_iso(),
             "model_used": "none",
             "analysis": {
-                "summary": "AI Operations Analyst daily budget reached ($0 cost protection active).",
+                "summary": "AI Operations Analyst paused: daily request attempt budget unavailable or exhausted.",
                 "root_cause_classification": "unknown",
-                "root_cause_hypothesis": "Automated investigation paused: daily budget ceiling enforced.",
-                "supporting_evidence": [f"Daily budget of {budget_limit} requests reached for today."],
+                "root_cause_hypothesis": "Provider request blocked: daily attempt ceiling reached or durable reservation unavailable.",
+                "supporting_evidence": [f"Daily limit: {budget_limit} provider attempts per UTC day; no reservation available."],
                 "evidence_gaps": ["Live inference paused."],
                 "confidence_score": 0.0,
                 "operational_impact": "Advisory analysis deferred. Deterministic diagnostics remain active.",
                 "recommended_action": "Review deterministic case details in /ops Work Queue.",
                 "requires_owner_intervention": True,
-                "safety_and_governance_notes": "Advisory only; cost safeguard enforced.",
+                "safety_and_governance_notes": "Advisory only; next provider request blocked.",
             },
         }
         return {"ok": True, **exhausted_record}
 
-    # 5. Acquire client & Run Inference
-    active_client = override_client if override_client is not None else ai_service.get_gemini_client()
+    # 5. Run inference
     raw_analysis: Optional[Dict[str, Any]] = None
     model_name = getattr(ai_service, "GEMINI_MODEL", "gemini-3.5-flash")
     token_usage: Dict[str, Any] = {}
@@ -592,6 +630,7 @@ async def analyze_incident(
             config = ai_service._generate_content_config(
                 response_mime_type="application/json",
                 temperature=0.1,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
             )
 
             resp = await asyncio.wait_for(
@@ -657,6 +696,8 @@ async def analyze_incident(
         "completed_at": now_iso(),
         "expires_at": expires_ts,
         "model_used": model_name,
+        "provider_attempt_reserved": active_client is not None,
+        "budget_day": _budget_day(),
         "latency_ms": latency_ms,
         "token_usage": token_usage,
         "sanitized_evidence": sanitized_evidence,
@@ -766,11 +807,12 @@ async def run_scheduled_investigations(
         except Exception as e:
             logger.warning("Error in scheduled investigation for %s: %s", case_id, e)
 
+    _, used_today, _ = await check_daily_budget(db)
     return {
         "status": "ok",
         "investigated_count": investigated,
         "cached_skipped_count": skipped,
-        "used_today": used_today + investigated,
+        "used_today": used_today,
         "budget_limit": budget_limit,
     }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Mail, Phone, Globe, MapPin, ShieldCheck, ArrowRight, CalendarDays, CheckCircle2, ExternalLink } from "lucide-react";
 import { api } from "@/lib/api";
@@ -114,17 +114,36 @@ const CATCHMENT_OPTIONS = [
 
 export default function TrainerDetail() {
     const { id } = useParams();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const queryClaimSession = searchParams?.get?.("claimSession") || "";
+    const rejectedClaimToken = useRef("");
+    const preserveCapabilityDraft = useRef(false);
+    const previousTrainerId = useRef(id);
+    const routeScope = useRef({ id, version: 0 });
+    if (routeScope.current.id !== id) routeScope.current = { id, version: routeScope.current.version + 1 };
+    const routeIsCurrent = (version) => routeScope.current.version === version;
+    useEffect(() => () => { routeScope.current.version += 1; }, []);
     const [claimSessionToken, setClaimSessionToken] = useState(() => queryClaimSession || readStoredClaimAuth(id));
 
     useEffect(() => {
-        if (id) {
-            const token = queryClaimSession || readStoredClaimAuth(id);
-            if (token && token !== claimSessionToken) {
-                setClaimSessionToken(token);
-            }
+        const token = queryClaimSession || readStoredClaimAuth(id);
+        if (previousTrainerId.current !== id) {
+            previousTrainerId.current = id;
+            rejectedClaimToken.current = "";
+            preserveCapabilityDraft.current = false;
+            setClaimOpen(false);
+            setClaimStep("email");
+            setClaimEvent(null);
+            setClaimComplete(false);
+            setClaimBusy(false);
+            setConfirmBusy(false);
+            setClaimEmail("");
+            setClaimCode("");
+            setConfirmStatement(false);
+            setClaimError("");
+            setConfirmError("");
         }
+        setClaimSessionToken(token && token !== rejectedClaimToken.current ? token : "");
     }, [id, queryClaimSession]);
 
     const [matchContextToken, setMatchContextToken] = useState(() => {
@@ -214,11 +233,13 @@ export default function TrainerDetail() {
     }, [matchContextToken]);
 
     useEffect(() => {
+        const version = routeScope.current.version;
+        setLoading(true);
         api
             .get(`/trainers/${id}`)
-            .then((r) => setTrainer(r.data))
-            .catch(() => setTrainer(null))
-            .finally(() => setLoading(false));
+            .then((r) => { if (routeIsCurrent(version)) setTrainer(r.data); })
+            .catch(() => { if (routeIsCurrent(version)) setTrainer(null); })
+            .finally(() => { if (routeIsCurrent(version)) setLoading(false); });
     }, [id]);
 
     useEffect(() => {
@@ -337,6 +358,7 @@ export default function TrainerDetail() {
 
     const startClaim = async (event) => {
         event.preventDefault();
+        const version = routeScope.current.version;
         if (!claimEmail.trim()) {
             setClaimError("Enter the email address recorded on this profile.");
             return;
@@ -350,6 +372,7 @@ export default function TrainerDetail() {
                 method: "email",
                 ...(isClaimedProfile ? { intent: "session_recovery" } : {}),
             });
+            if (!routeIsCurrent(version)) return;
             if (response.data?.status !== "pending_verification") {
                 setClaimError("We could not deliver a claim code. Please try again later.");
                 return;
@@ -357,14 +380,16 @@ export default function TrainerDetail() {
             setClaimEvent(response.data);
             setClaimCode("");
         } catch (error) {
+            if (!routeIsCurrent(version)) return;
             setClaimError(claimErrorMessage(error));
         } finally {
-            setClaimBusy(false);
+            if (routeIsCurrent(version)) setClaimBusy(false);
         }
     };
 
     const verifyClaim = async (event) => {
         event.preventDefault();
+        const version = routeScope.current.version;
         if (claimCode.length !== 6 || !claimEvent?.claim_event_id) {
             setClaimError("Enter the six-digit code from the email.");
             return;
@@ -376,58 +401,39 @@ export default function TrainerDetail() {
                 claim_event_id: claimEvent.claim_event_id,
                 otp: claimCode,
             });
+            if (!routeIsCurrent(version)) return;
             const sessionToken = response.data?.session?.token || response.data?.trainer_claim_session || "";
             setClaimSessionToken(sessionToken);
             writeStoredClaimAuth(id, sessionToken);
-            setTrainer((current) => current ? { ...current, claim_status: "claimed", tier: "claimed" } : current);
+            rejectedClaimToken.current = "";
+            setTrainer((current) => current ? { ...current, claim_status: "claimed", tier: response.data?.tier || current.tier || "claimed" } : current);
 
-            // Fetch prefill facts for Step 2
-            try {
-                const prefillRes = await api.get(`/trainers/${id}/capabilities/prefill`, {
-                    headers: sessionToken ? { "X-Trainer-Claim-Session": sessionToken } : {},
-                });
-                const pData = prefillRes.data || {};
-                const pre = pData.prefilled || pData.prefill || {};
-                const preDelivery = pre.delivery_constraints || {};
-                setClaimPrefill(pData);
-                setConfirmedCaps({
-                    specialties: pre.specialties || [],
-                    service_formats: pre.service_formats || [],
-                    life_stages: pre.life_stages || [],
-                    training_philosophy: pre.training_philosophy || "",
-                    serviced_suburbs: Array.isArray(pre.serviced_suburbs)
-                        ? pre.serviced_suburbs.join(", ")
-                        : (pre.serviced_suburbs || trainer?.suburb || ""),
-                    catchment_type: pre.catchment_type || "specific_suburbs",
-                    delivery_constraints: {
-                        in_home_available: Boolean(preDelivery.in_home_available),
-                        facility_available: Boolean(preDelivery.facility_available),
-                        travel_distance_km: Math.min(200, Math.max(0, Number(preDelivery.travel_distance_km) || 0)),
-                        notes: typeof preDelivery.notes === "string" ? preDelivery.notes.slice(0, 200) : "",
-                    },
-                });
-            } catch {
-                const fallbackDelivery = trainer?.delivery_constraints || {};
-                setConfirmedCaps({
-                    specialties: trainer?.specialties || [],
-                    service_formats: trainer?.service_formats || [],
-                    life_stages: trainer?.life_stages || [],
-                    training_philosophy: trainer?.training_philosophy || "",
-                    serviced_suburbs: trainer?.suburb || "",
-                    catchment_type: "specific_suburbs",
-                    delivery_constraints: {
-                        in_home_available: Boolean(fallbackDelivery.in_home_available),
-                        facility_available: Boolean(fallbackDelivery.facility_available),
-                        travel_distance_km: Math.min(200, Math.max(0, Number(fallbackDelivery.travel_distance_km) || 0)),
-                        notes: typeof fallbackDelivery.notes === "string" ? fallbackDelivery.notes.slice(0, 200) : "",
-                    },
-                });
+            // A renewed session must preserve edits made before authorization expired.
+            if (!preserveCapabilityDraft.current) {
+                try {
+                    const prefillRes = await api.get(`/trainers/${id}/capabilities/prefill`, {
+                        headers: { "X-Trainer-Claim-Session": sessionToken },
+                    });
+                    if (!routeIsCurrent(version)) return;
+                    const pData = prefillRes.data || {};
+                    setClaimPrefill(pData);
+                    setConfirmedCaps(extractInitialCapsFromTrainer(pData.prefilled || pData.prefill || trainer));
+                } catch (error) {
+                    if (!routeIsCurrent(version)) return;
+                    if (error?.response?.status === 401) {
+                        recoverClaimSession(sessionToken);
+                        return;
+                    }
+                    setConfirmedCaps(extractInitialCapsFromTrainer(trainer));
+                }
             }
+            preserveCapabilityDraft.current = false;
             setClaimStep("capabilities");
         } catch (error) {
+            if (!routeIsCurrent(version)) return;
             setClaimError(claimErrorMessage(error));
         } finally {
-            setClaimBusy(false);
+            if (routeIsCurrent(version)) setClaimBusy(false);
         }
     };
 
@@ -452,6 +458,7 @@ export default function TrainerDetail() {
 
     const submitCapabilityConfirmation = async (event) => {
         if (event) event.preventDefault();
+        const version = routeScope.current.version;
         if (confirmedCaps.catchment_type === "radius") {
             setConfirmError("Choose specific served suburbs or Melbourne-Wide coverage. Distance-based matching is not currently supported.");
             return;
@@ -484,16 +491,22 @@ export default function TrainerDetail() {
             }, {
                 headers: claimSessionToken ? { "X-Trainer-Claim-Session": claimSessionToken } : {},
             });
+            if (!routeIsCurrent(version)) return;
             if (res.data?.capabilities) {
                 setTrainer((curr) => curr ? { ...curr, capabilities: res.data.capabilities } : curr);
             }
             setClaimStep("done");
             setClaimComplete(true);
         } catch (err) {
+            if (!routeIsCurrent(version)) return;
+            if (err?.response?.status === 401) {
+                recoverClaimSession(claimSessionToken);
+                return;
+            }
             const detail = err?.response?.data?.detail;
             setConfirmError(typeof detail === "string" ? detail : "Failed to confirm capabilities.");
         } finally {
-            setConfirmBusy(false);
+            if (routeIsCurrent(version)) setConfirmBusy(false);
         }
     };
 
@@ -515,20 +528,51 @@ export default function TrainerDetail() {
         }
     };
 
-    const handleOpenEditCapabilities = () => {
-        const activeToken = claimSessionToken || queryClaimSession || readStoredClaimAuth(id);
-        const existing = extractInitialCapsFromTrainer(trainer);
-        if (existing) {
-            setConfirmedCaps(existing);
+    const recoverClaimSession = (token) => {
+        rejectedClaimToken.current = token || queryClaimSession;
+        preserveCapabilityDraft.current = true;
+        writeStoredClaimAuth(id, "");
+        setClaimSessionToken("");
+        if (queryClaimSession) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("claimSession");
+            setSearchParams(next, { replace: true });
         }
-        if (activeToken) {
-            setClaimSessionToken(activeToken);
-            setClaimStep("capabilities");
-            setClaimOpen(true);
-        } else {
+        setClaimStep("email");
+        setClaimEvent(null);
+        setClaimCode("");
+        setConfirmStatement(false);
+        setClaimError("Your session expired. Verify your business email to continue; your edits are retained.");
+        setClaimOpen(true);
+    };
+
+    const handleOpenEditCapabilities = async () => {
+        const version = routeScope.current.version;
+        const token = claimSessionToken || queryClaimSession || readStoredClaimAuth(id);
+        const activeToken = token !== rejectedClaimToken.current ? token : "";
+        if (!preserveCapabilityDraft.current) setConfirmedCaps(extractInitialCapsFromTrainer(trainer));
+        setClaimOpen(true);
+        if (!activeToken) {
             setClaimStep("email");
             setClaimError("Please verify your business email to manage listing capabilities.");
-            setClaimOpen(true);
+            return;
+        }
+        setClaimSessionToken(activeToken);
+        setClaimStep("capabilities");
+        setConfirmBusy(true);
+        try {
+            const response = await api.get(`/trainers/${id}/capabilities/prefill`, {
+                headers: { "X-Trainer-Claim-Session": activeToken },
+            });
+            if (!routeIsCurrent(version)) return;
+            const pre = response.data?.prefilled || response.data?.prefill;
+            if (pre && !preserveCapabilityDraft.current) setConfirmedCaps(extractInitialCapsFromTrainer(pre));
+        } catch (error) {
+            if (!routeIsCurrent(version)) return;
+            if (error?.response?.status === 401) recoverClaimSession(activeToken);
+            else setConfirmError("Current capabilities could not be refreshed. Review the retained values before saving.");
+        } finally {
+            if (routeIsCurrent(version)) setConfirmBusy(false);
         }
     };
 
