@@ -54,6 +54,8 @@ The local independent-audit checkpoint is `389130e` on `codex/r8-audit-completio
 
 Twelve earlier acquisition/matching briefs and dated audit snapshots moved to the [24 October historical inventory](../archive/2026-10-24-superseded-handoffs-and-audits/README.md). Their evidence is preserved; their old resume/blocked/completed wording is not current execution authority. Follow historical links only for explicitly requested archival research. Current specs, M0–M10 criteria, decisions, release/recovery records and the new handover remain active.
 
+The [generated-file audit](../archive/2026-10-24-superseded-handoffs-and-audits/GENERATED_FILE_AUDIT_2026-10-24.md) records completed private archival and current artifact-retention decisions. It is historical cleanup evidence, not a release or deletion authority.
+
 ## State progression
 
 ```text

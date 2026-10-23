@@ -26,3 +26,7 @@ This directory preserves historical evidence moved out of the active `docs/` tre
 | [MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md](MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md) | Dated 4–5 October exact-SHA matching audit; references retained in active matching criteria/current-state history. | Byte-identical move |
 | [DTD_CODEX_CURRENT_REALITY_AUDIT.md](DTD_CODEX_CURRENT_REALITY_AUDIT.md) | 20 October baseline snapshot; current-state/execution/R8 records govern later state. | Byte-identical move |
 | [DTD_GOVERNANCE_SYNC_EVIDENCE.md](DTD_GOVERNANCE_SYNC_EVIDENCE.md) | Completed governance package reconciliation evidence, not a current implementation brief. | Byte-identical move |
+
+## Generated local files
+
+The subsequent [generated-file audit](GENERATED_FILE_AUDIT_2026-10-24.md) records the private archival of obsolete local outputs and explicit retention decisions for active dependencies/configuration. Raw generated payloads remain outside Git.
