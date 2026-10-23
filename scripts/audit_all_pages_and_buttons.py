@@ -23,6 +23,7 @@ import os
 import sys
 import time
 from typing import Any, Dict, List
+from urllib.parse import urlparse
 from playwright.async_api import async_playwright, Page, BrowserContext
 
 BASE_URL = "https://dtd-web-dev-x2kdoaemtq-ts.a.run.app"
@@ -329,7 +330,8 @@ async def audit_all() -> Dict[str, Any]:
             checkout_resp = await checkout_resp_info.value
             checkout_json = await checkout_resp.json()
             checkout_url = checkout_json.get("url", "")
-            is_stripe_url = "stripe.com" in checkout_url or "checkout.stripe.com" in checkout_url
+            parsed_checkout = urlparse(checkout_url)
+            is_stripe_url = bool(parsed_checkout.hostname and (parsed_checkout.hostname == "stripe.com" or parsed_checkout.hostname.endswith(".stripe.com")))
 
             print(f"  Stripe Checkout Response: HTTP {checkout_resp.status} | URL starts with: {checkout_url[:60]}... | Is Stripe URL: {is_stripe_url}")
 
