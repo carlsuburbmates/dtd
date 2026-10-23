@@ -1,6 +1,6 @@
 # DTD Current State
 
-**Evidence date:** 22 October 2026
+**Evidence date:** 23 October 2026
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. Dated snapshots retain their historical scope; the completed R3 checkpoint and linked R3 release record supersede earlier runtime/integration pointers.
 **Audit scope:** six-part, read-only code/product audit completed 20 September 2026, plus a read-only DNS/hosting reconciliation completed 23 September 2026. On 24 September, the owner separately authorised guarded Cloud Run recovery, Direct VPC/Cloud NAT rollout, Atlas network restriction, canonical suburb production seeding and one exact invalid-SEO-record cleanup; those production mutations are identified below. Other unexercised operator actions remain outside this evidence.
 
@@ -10,6 +10,13 @@
 - **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026; the Cloud Run service, Scheduler configuration and public health/config/SEO rejection paths were rechecked on 25 September 2026; production Stripe-related Cloud Run configuration and public health/config/webhook rejection paths were rechecked on 14 October 2026; production and developer API/frontend state, Ops telemetry and the developer Scheduler/Guardian path were rechecked on 15 October 2026.
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
+
+## R8 independent audit — 23 October 2026
+
+- **NOT ACCEPTED:** cumulative local candidate `a20687e..4a5fe84403f9908c20ab8562552919feccf9513e` has four local R4/R5/R7/R8 commits. Remote main remains `a20687e`; the candidate branch was not found remotely. R0–R3 acceptance is preserved.
+- **Actual developer runtime:** authenticated Cloud Run reads show API `dtd-api-dev-r3-9dd53ed6` and web `dtd-web-dev-00023-phd` at 100%; both predate the candidate. Live web bundle lacks new Support Cases/receipt reporting. Candidate runtime acceptance is NOT_VERIFIED. Exact digests and owner-guide expected/actual coverage are in `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`.
+- **Checks:** 657 isolated backend and 79 frontend tests pass; Vite build, copy guard and release gate pass. Independent isolated reproductions nevertheless prove support case-target mismatch/false dispatch, expired-claim protection regression, overly broad source approvals, malformed robots acceptance, capability-prefill loss, unavailable returning-owner recovery and AI-budget overshoot. Applicable DF entries below retain those failures.
+- **Safety/limits:** developer checkout and self-healing flags are `0`; trainer-ingest is PAUSED. Authenticated Ops displays action required, five high-priority items and nine loop warnings; this snapshot does not establish each warning's cause. No candidate deployment, provider message, sandbox business fixture or production mutation was performed by this audit. R9 is separately gated. The next package is correction of the proven requirements, exact-SHA independent acceptance, then sandbox integration evidence.
 
 ## Public deployment route — read-only verified 21 October 2026
 
@@ -454,10 +461,11 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-030 — Storefront owner controls lose authorization on profile revisit
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R5 (Commit `e3864cc`).
-- **Evidence:** Added session storage fallback in `frontend/src/pages/TrainerDetail.jsx` (`dtd_claim_session_<slug>`) to preserve claim authorization across profile revisits and page reloads while maintaining query-token verification. `TrainerDetail.test.jsx` passes 9/9 tests verifying storefront claim session preservation and edit authorization.
-- **Impact:** Claimed owners retain operational control on revisit without broken edit controls.
-- **Next action:** Closed under R5 and verified in R8 developer sandbox acceptance.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R5; the 22 October closure is not accepted.
+- **Evidence:** `e3864cc` adds same-tab fallback under `dtd-trainer-billing-auth:<trainerId>`. Independent audit found `TrainerDetail.jsx:35–43` reads nonexistent `declared_value` rather than canonical capability facts; structured fixture values become empty/default fields on reopen. The missing-session editor offers email verification, but the actual claim handler rejects a claimed-owner fixture with HTTP 409; expired tokens show 401 without renewal. Candidate is not deployed. Full evidence: `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`.
+- **Impact/uncertainty:** edit/save can lose valid matching capacity, and later returning owners cannot recover management access through the offered path. No real trainer record was changed.
+- **Why deferred:** audit scope records the proven failure; implementation requires a corrected package and independent exact-SHA review.
+- **Next action:** reuse protected canonical prefill, complete bounded session recovery under existing auth policy, then verify load/edit/save/billing and stored projection with owned fixtures.
 
 ### DF-031 — Held sandbox submissions lack current statutory identity evidence
 
@@ -541,38 +549,38 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-041 — Trainer success-path testing lacks a disposable sandbox route and safe OTP sink
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R5 (Commit `e3864cc`).
-- **Evidence:** The public `/submit` form requires `consent_intro_billing_terms`, and the API strictly enforces terms acknowledgement before AI scoring or any database/provider side effect (`backend/server.py`). Unit tests in `backend/tests/test_r5_owner_trainer_journey_unit.py` verify terms consent enforcement (5/5 passed). The developer claim UI path is verified end to end with a disposable synthetic listing and Resend's test sink.
-- **Impact:** Synthetic submissions lacking consent fail closed with HTTP 400; valid claims can be exercised cleanly without real trainer contact.
-- **Next action:** Closed under R5/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R5; successful public onboarding remains NOT_VERIFIED.
+- **Evidence:** new unit tests verify existing consent rejection and mocked claim behavior; they do not prove a successful public submission, statutory/provider result, downstream lifecycle and cleanup. Earlier disposable claim evidence remains accepted only at its original scope. No candidate deployment or new success-path runtime artifact was found in the R8 handover.
+- **Impact/uncertainty:** the public trainer onboarding exit remains unsupported by the cited tests.
+- **Why deferred / next action:** finish corrected code acceptance, then execute the bounded sandbox submit/claim/declaration journey with truthful test consent, approved sink and exact cleanup evidence.
 
 ### DF-044 — Discovery queue source scans bypass per-source authorization
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R4 (Commit `e52b1f0`).
-- **Evidence:** Implemented bounded JSON source registry (`backend/data/ingestion_source_approvals.json`) and URL/domain validation in `backend/services/source_approvals.py`. `services/ingestion_manager.py` verifies candidate URLs against approved origins. Unapproved or external URLs fail closed without crawling. Verified with `backend/tests/test_r4_trainer_supply_unit.py` (12/12 passed).
-- **Impact:** Acquisition scans are strictly bounded to approved source domains.
-- **Next action:** Closed under R4/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R4; closure not accepted.
+- **Evidence:** `e52b1f0` adds checks, but `source_approvals.py:141` permits domain/subdomain scope despite exact approved index URLs; registry includes a test domain. Mocked checks approve unlisted paths and non-trainer candidate pages. Supporting authority for newly asserted association sources was not found in reviewed active records. No external acquisition request occurred.
+- **Impact/uncertainty:** configured source/candidate scope can exceed the stated approved use; no unauthorized live crawl is proven.
+- **Why deferred / next action:** audit records the failure; enforce bounded source/candidate contracts, verify source-use authority and keep ingestion paused pending independent acceptance.
 
 ### DF-045 — Ingestion treats robots retrieval errors as permission to crawl
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R4 (Commit `e52b1f0`).
-- **Evidence:** `services/ingestion_manager.py` now enforces RFC 9309 robots fail-closed handling: HTTP 4xx, 5xx, timeouts, or network exceptions during robots.txt retrieval are treated as disallowed, deferring or skipping the crawl rather than failing open. Verified with `backend/tests/test_r4_trainer_supply_unit.py` (12/12 passed).
-- **Impact:** Crawler never proceeds without a verified, accessible robots policy.
-- **Next action:** Closed under R4/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R4; HTTP/network error correction exists locally, malformed-policy branch remains open.
+- **Evidence:** actual `polite_fetch_url` with mocked HTTP-200 HTML robots response fetched the target and returned success. `RobotFileParser.parse` silently ignores that input; exception-only handling at `ingestion_manager.py:110` does not establish usable policy.
+- **Impact/uncertainty:** acquisition can proceed after an unusable policy response. No live crawl was executed.
+- **Why deferred / next action:** correct the proven branch in the next package; verify valid/missing/denied/unavailable/malformed outcomes and no-target-fetch behavior before code acceptance or ingestion activation.
 
 ### DF-047 — Support case reply and closure lack an operator-facing Ops workflow
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
-- **Evidence:** Added `SupportThreadsView` in `frontend/src/pages/Ops.jsx` providing authenticated viewing of first-party customer inquiries, operator reply dispatching, and verified case closure requiring substantive outcome notes (minimum 10 characters). Verified in `Ops.test.jsx` (27/27 passed).
-- **Impact:** Operators can review, reply to, and resolve first-party support cases directly within `/ops`.
-- **Next action:** Closed under R7/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R7; new UI has material correctness gaps and is absent from live sandbox.
+- **Evidence:** actual React reproduction confirms failed detail selection leaves case A displayed while reply targets case B (`Ops.jsx:3677–3703`). Provider-failure response `dispatched:false` still produces dispatch success notices (`3707–3709`). Category-specific delisting/privacy prerequisites have no completing action in this view; offered `in_progress` is ignored by API, and newest-50 truncation is undisclosed. Existing 27 Ops tests contain no support interaction coverage. No real reply or closure occurred.
+- **Impact/uncertainty:** wrong-case reply/closure risk, false delivery reporting and routine cases that cannot complete through the stated sole operator surface. This is reproduced candidate behavior, not evidence of an actual misdirected message.
+- **Why deferred / next action:** correct identity correlation, dispatch states and bounded category actions, add targeted failure tests, obtain independent acceptance and verify deployed UI/API/data/audit/notification behavior with an approved sink.
 
 ### DF-048 — Contact success state claims a receipt email regardless of delivery result
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
-- **Evidence:** `backend/server.py` returns `receipt_delivered` boolean from `/support/contact`. `frontend/src/pages/Contact.jsx` displays differentiated, truthful feedback: "A confirmation has been sent to your email..." when delivered vs "Your request has been logged in our queue..." when queued or skipped. Verified in `frontend/src/pages/Contact.test.jsx` (3/3 passed).
-- **Impact:** Public contact feedback is completely truthful and decoupled from email delivery assumptions.
-- **Next action:** Closed under R7/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, local correction verified; candidate runtime NOT_VERIFIED.
+- **Evidence:** `671b6f4` returns receipt dispatch metadata and differentiates contact feedback; three Contact tests pass. Live bundle lacks `receipt_delivered` and remains on web revision `00023-phd`; no live inquiry was submitted in this audit.
+- **Impact/uncertainty:** corrected feedback is not delivered to the developer frontend. Provider acceptance is not independently proven mailbox delivery.
+- **Why deferred / next action:** retain valid local correction; after cumulative code acceptance, deploy exact candidate and prove sent/failed/skipped feedback with safe provider evidence and teardown.
 
 ### DF-050 — Resend webhook retry can acknowledge an incomplete notification update
 
@@ -584,14 +592,21 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-051 — Expired claim challenge leaves stale pending profile state
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R4/R5 (Commits `e52b1f0` and `e3864cc`).
-- **Evidence:** `backend/services/trainer_quality.py:is_claimed_profile()` now excludes expired or stale challenges from claimed deduplication, and `backend/tests/test_r5_owner_trainer_journey_unit.py` verifies claim lifecycle expiration reconciliation.
-- **Impact:** Expired, unclaimed profiles are not falsely treated as claimed by later acquisition workflows.
-- **Next action:** Closed under R4/R5/R8.
+- **Observed/status:** 23 October 2026 — **REGRESSED** protection requirement in local R4 candidate; expired-unclaimed handling is only PARTIAL.
+- **Evidence:** `trainer_quality.py:375–385` returns false for expired pending challenges before checking paid tier, prior claim, submission or billing protection. Four isolated protected fixtures all returned false. A future explicit expiry also becomes false when pending age exceeds the fixed 900-second fallback. No live trainer was changed.
+- **Impact/uncertainty:** later acquisition can treat a protected profile as unclaimed and change its state; no actual overwrite is proven.
+- **Why deferred / next action:** restore durable protection and authoritative expiry ordering, then verify expiry/dedup/rerun/suppression together before independent code acceptance and sandbox advancement.
 
 ### DF-052 — Scheduled AI analysis budget is not a strict fail-closed ceiling
 
-- **Observed/status:** 22 October 2026 — **RESOLVED** in R7 (Commit `671b6f4`).
-- **Evidence:** `backend/services/ops_analyst.py` now fails closed `(False, limit, limit)` on count query exceptions in `check_daily_budget`, preventing analysis from proceeding during database errors or query failure. Verified with `test_daily_budget_query_failure_fails_closed` in `backend/tests/test_ops_phase4_ai_analyst.py` (17/17 passed).
-- **Impact:** AI analysis budget cannot exceed its daily ceiling under failure conditions.
-- **Next action:** Closed under R7/R8.
+- **Observed/status:** 23 October 2026 — **PARTIAL**, R7/R12; query-failure correction is valid, strict ceiling remains open.
+- **Evidence:** actual analyst code with mocked provider/in-memory storage makes four provider calls under limit two while one upserted investigation is counted. Two concurrent requests under limit one both call the provider. `check_daily_budget` counts documents rather than reserved attempts; repeated analysis overwrites the same occurrence. Existing query-error test passes. No provider call or charge occurred in reproductions.
+- **Impact/uncertainty:** count-then-call and replacement accounting permit spend beyond the nominal ceiling; this is not a quantified live spend incident. Live Ops also reports AI fallback/provider degradation; provider recovery and fixture-scoped scheduled acceptance remain open.
+- **Why deferred / next action:** implement atomic attempt reservations and bounded concurrency with failure/retry accounting; verify quota/recovery and scheduled evidence within existing gates. Preserve DF-029 scheduling-provision acceptance.
+
+### DF-054 — Public company and product copy is absent from the static site response
+
+- **Observed/status:** 23 October 2026 — **PARTIAL**, Google for Startups re-review remains pending.
+- **Evidence:** unauthenticated requests to `https://dogtrainersdirectory.com.au/` and `/about` returned HTTP 200, but both HTML responses contain only the generic document title, a short meta description, an empty `<div id="root">`, and the JavaScript-required notice. The meta description claims “reviewed, verified dog trainers”; DF-016 already records that some trust wording may exceed the evidenced model. The public sitemap currently lists only the root URL. The normal browser renders the React application; this fetch does not establish how Google's specific reviewer rendered the page. On 16 September, Google's program team said it could not verify the application website because the URL might not load, match the company domain, or contain enough product/company information. The exact cause remains unknown.
+- **Impact/uncertainty:** the static response does not let a non-JavaScript reviewer verify the company's product and model. The HTTP 200 and prior domain/hosting checks do not establish crawlable product information or resolve the program's stated website-verification issue.
+- **Why deferred / next action:** this session collected application evidence and prepared a re-review strategy; it did not authorize a public website change. Publish a crawlable company/product page with accurate entity, product, model, stage, roadmap and contact information, validate the returned HTML and sitemap, then reply in the existing support thread with that exact URL. Keep Google approval **NOT VERIFIED** until written confirmation.

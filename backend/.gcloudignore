@@ -13,3 +13,5 @@ tests/
 .coverage
 htmlcov/
 .mypy_cache/
+.DS_Store
+skills-lock.json
