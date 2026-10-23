@@ -3676,6 +3676,7 @@ function SupportThreadsView({ onRefresh }) {
 
     const handleSelectThread = async (caseId) => {
         setSelectedCaseId(caseId);
+        setSelectedThread(null);
         setLoadingDetail(true);
         setActionMsg("");
         setReplyText("");
@@ -3693,22 +3694,32 @@ function SupportThreadsView({ onRefresh }) {
 
     const handleReply = async (e) => {
         e.preventDefault();
-        if (!selectedCaseId || replyText.trim().length < 3) {
+        if (!selectedCaseId || !selectedThread || selectedThread.case_id !== selectedCaseId) {
+            toast.error("Active case selection has changed. Please verify the active case before replying.");
+            return;
+        }
+        if (replyText.trim().length < 3) {
             toast.error("Reply text must be at least 3 characters.");
             return;
         }
+        const activeTargetCaseId = selectedCaseId;
         setReplying(true);
         setActionMsg("");
         try {
-            const res = await replySupportThread(selectedCaseId, {
+            const res = await replySupportThread(activeTargetCaseId, {
                 reply_text: replyText.trim(),
                 mark_status: markStatus,
             });
             if (res.data?.ok) {
-                toast.success("Reply dispatched to customer.");
-                setActionMsg("Reply successfully dispatched.");
+                if (res.data?.dispatched === false) {
+                    toast.warning("Reply recorded, but email delivery failed.");
+                    setActionMsg("Reply recorded to case thread; email notification delivery failed.");
+                } else {
+                    toast.success("Reply dispatched to customer.");
+                    setActionMsg("Reply successfully dispatched.");
+                }
                 setReplyText("");
-                const detailRes = await getSupportThread(selectedCaseId);
+                const detailRes = await getSupportThread(activeTargetCaseId);
                 setSelectedThread(detailRes.data?.thread || null);
                 loadThreads();
             }
@@ -3723,7 +3734,10 @@ function SupportThreadsView({ onRefresh }) {
 
     const handleClose = async (e) => {
         e.preventDefault();
-        if (!selectedCaseId) return;
+        if (!selectedCaseId || !selectedThread || selectedThread.case_id !== selectedCaseId) {
+            toast.error("Active case selection has changed. Please verify the active case before closing.");
+            return;
+        }
         if (closeNotes.trim().length < 10) {
             toast.error("Resolution notes must be at least 10 characters.");
             return;
@@ -3732,10 +3746,11 @@ function SupportThreadsView({ onRefresh }) {
             toast.error("Please confirm the verified outcome.");
             return;
         }
+        const activeTargetCaseId = selectedCaseId;
         setClosing(true);
         setActionMsg("");
         try {
-            const res = await closeSupportThread(selectedCaseId, {
+            const res = await closeSupportThread(activeTargetCaseId, {
                 resolution_notes: closeNotes.trim(),
                 confirmed: true,
             });
@@ -3744,7 +3759,7 @@ function SupportThreadsView({ onRefresh }) {
                 setActionMsg("Support case successfully closed.");
                 setCloseNotes("");
                 setCloseConfirmed(false);
-                const detailRes = await getSupportThread(selectedCaseId);
+                const detailRes = await getSupportThread(activeTargetCaseId);
                 setSelectedThread(detailRes.data?.thread || null);
                 loadThreads();
                 if (onRefresh) onRefresh();

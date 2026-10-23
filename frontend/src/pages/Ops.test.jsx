@@ -8,10 +8,12 @@ vi.mock("react-router-dom", () => ({
 
 const mockToastError = vi.fn();
 const mockToastSuccess = vi.fn();
+const mockToastWarning = vi.fn();
 vi.mock("sonner", () => ({
     toast: {
         error: (...args) => mockToastError(...args),
         success: (...args) => mockToastSuccess(...args),
+        warning: (...args) => mockToastWarning(...args),
     },
 }));
 
@@ -1322,4 +1324,180 @@ describe("Ops auth transition", () => {
             view.cleanup();
         });
     });
+
+    describe("Support Cases View (DF-047)", () => {
+        let postSpy;
+
+        beforeEach(() => {
+            postSpy = jest.spyOn(opsApi, "post");
+        });
+
+        afterEach(() => {
+            postSpy.mockRestore();
+            mockToastError.mockReset();
+            mockToastSuccess.mockReset();
+            mockToastWarning.mockReset();
+        });
+
+        it("switching threads clears selectedThread immediately to prevent replying to wrong case", async () => {
+            getSpy.mockImplementation((url) => {
+                if (url.includes("/oversight/support/threads/case_1")) {
+                    return Promise.resolve({
+                        data: {
+                            thread: {
+                                case_id: "case_1",
+                                subject: "First Case",
+                                category: "general_inquiry",
+                                severity: "medium",
+                                status: "open",
+                                sender_name: "Alice",
+                                sender_email: "alice@example.com",
+                                messages: [{ sender: "customer", text: "Hello from Alice", created_at: "2026-10-01T10:00:00Z" }],
+                            },
+                        },
+                    });
+                }
+                if (url.includes("/oversight/support/threads/case_2")) {
+                    return new Promise(() => {});
+                }
+                if (url.includes("/oversight/support/threads")) {
+                    return Promise.resolve({
+                        data: {
+                            threads: [
+                                { case_id: "case_1", subject: "First Case", category: "general_inquiry", severity: "medium", status: "open", sender_name: "Alice", sender_email: "alice@example.com" },
+                                { case_id: "case_2", subject: "Second Case", category: "billing_inquiry", severity: "high", status: "open", sender_name: "Bob", sender_email: "bob@example.com" },
+                            ],
+                        },
+                    });
+                }
+                return Promise.resolve({ data: validSnapshot });
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Navigate to Support Cases tab
+            const navBtn = Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("Support Cases"));
+            expect(navBtn).not.toBeNull();
+            await act(async () => {
+                navBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Click case_1
+            const case1Btn = Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("First Case"));
+            expect(case1Btn).not.toBeNull();
+            await act(async () => {
+                case1Btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Verify case_1 details loaded
+            expect(view.container.querySelector("[data-testid='ops-support-detail']")).not.toBeNull();
+            expect(view.container.textContent).toContain("First Case");
+            expect(view.container.textContent).toContain("Alice");
+
+            // Click case_2 (which has network delay)
+            const case2Btn = Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("Second Case"));
+            expect(case2Btn).not.toBeNull();
+            await act(async () => {
+                case2Btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+            });
+
+            // Previous thread must be IMMEDIATELY cleared (showing "Loading case detail...")
+            // so operator cannot submit a reply targeting Alice or Bob mistakenly
+            expect(view.container.textContent).toContain("Loading case detail...");
+            expect(view.container.querySelector("[data-testid='ops-support-reply-btn']")).toBeNull();
+
+            view.cleanup();
+        });
+
+        it("warns operator when reply recorded but email delivery failed (DF-047)", async () => {
+            getSpy.mockImplementation((url) => {
+                if (url.includes("/oversight/support/threads/case_1")) {
+                    return Promise.resolve({
+                        data: {
+                            thread: {
+                                case_id: "case_1",
+                                subject: "Undelivered Case",
+                                category: "general_inquiry",
+                                severity: "medium",
+                                status: "open",
+                                sender_name: "Alice",
+                                sender_email: "alice@example.com",
+                                messages: [{ sender: "customer", text: "Hello", created_at: "2026-10-01T10:00:00Z" }],
+                            },
+                        },
+                    });
+                }
+                if (url.includes("/oversight/support/threads")) {
+                    return Promise.resolve({
+                        data: {
+                            threads: [
+                                { case_id: "case_1", subject: "Undelivered Case", category: "general_inquiry", severity: "medium", status: "open", sender_name: "Alice", sender_email: "alice@example.com" },
+                            ],
+                        },
+                    });
+                }
+                return Promise.resolve({ data: validSnapshot });
+            });
+
+            postSpy.mockResolvedValueOnce({
+                data: {
+                    ok: true,
+                    case_id: "case_1",
+                    status: "reply_delivery_failed",
+                    dispatched: false,
+                },
+            });
+
+            const view = renderOps();
+            await act(async () => {
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Navigate to Support Cases tab
+            const navBtn = Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("Support Cases"));
+            await act(async () => {
+                navBtn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // Click case_1
+            const case1Btn = Array.from(view.container.querySelectorAll("button")).find(b => b.textContent.includes("Undelivered Case"));
+            await act(async () => {
+                case1Btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            const replyInput = view.container.querySelector("[data-testid='ops-support-reply-input']");
+            expect(replyInput).not.toBeNull();
+            act(() => {
+                setFieldValue(replyInput, "This is an operator response.");
+            });
+
+            const replyForm = view.container.querySelector("form");
+            await act(async () => {
+                replyForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+                await Promise.resolve();
+                await Promise.resolve();
+            });
+
+            // toast.warning should have been called, NOT toast.success!
+            expect(mockToastWarning).toHaveBeenCalledWith("Reply recorded, but email delivery failed.");
+            expect(mockToastSuccess).not.toHaveBeenCalled();
+
+            view.cleanup();
+        });
+    });
 });
+

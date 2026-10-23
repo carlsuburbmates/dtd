@@ -83,6 +83,10 @@ class FakeMongoCollection:
                     if not str(d.get(k, "")).startswith(prefix):
                         match = False
                         break
+                elif isinstance(v, dict) and "$in" in v:
+                    if d.get(k) not in v["$in"]:
+                        match = False
+                        break
                 elif isinstance(v, dict) and "$nin" in v:
                     if d.get(k) in v["$nin"]:
                         match = False
@@ -510,3 +514,91 @@ def test_run_scheduled_investigations_bounds_batch_size():
         count = await db.ops_ai_investigations.count_documents({})
         assert count == 2
     asyncio.run(_test())
+
+
+def test_df052_concurrent_investigations_strictly_respect_daily_budget(monkeypatch):
+    """Ensure concurrent requests under limit 1 cannot both call the provider (DF-052)."""
+    async def _test():
+        db = FakeDatabase()
+        monkeypatch.setattr(ops_analyst, "OPS_AI_DAILY_BUDGET", 1)
+
+        provider_calls = 0
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps({
+            "summary": "Simulated slow analysis",
+            "root_cause_classification": "confirmed",
+            "root_cause_hypothesis": "Test hypothesis",
+            "supporting_evidence": ["Evidence"],
+            "confidence_score": 0.9,
+            "operational_impact": "None",
+            "recommended_action": "No action",
+            "requires_owner_intervention": False,
+            "safety_and_governance_notes": "None",
+        })
+        mock_resp.usage_metadata = None
+
+        async def slow_generate(*args, **kwargs):
+            nonlocal provider_calls
+            provider_calls += 1
+            await asyncio.sleep(0.05)
+            return mock_resp
+
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(side_effect=slow_generate)
+
+        case1 = {"case_id": "case_concurrent_1", "severity": "high", "operational_state": "detected"}
+        case2 = {"case_id": "case_concurrent_2", "severity": "high", "operational_state": "detected"}
+
+        # Fire both concurrently
+        res1, res2 = await asyncio.gather(
+            ops_analyst.analyze_incident(db, case1, trigger_reason="manual_request", override_client=mock_client, force_refresh=True),
+            ops_analyst.analyze_incident(db, case2, trigger_reason="manual_request", override_client=mock_client, force_refresh=True),
+        )
+
+        statuses = {res1.get("status"), res2.get("status")}
+        assert "completed" in statuses
+        assert "budget_exhausted" in statuses
+        assert provider_calls == 1  # Exactly 1 call reached the provider!
+    asyncio.run(_test())
+
+
+def test_df052_repeated_investigations_do_not_overwrite_budget_count(monkeypatch):
+    """Ensure repeated investigations on the same case do not overwrite attempt history and bypass budget limit (DF-052)."""
+    async def _test():
+        db = FakeDatabase()
+        monkeypatch.setattr(ops_analyst, "OPS_AI_DAILY_BUDGET", 2)
+        monkeypatch.setattr(ops_analyst, "OPS_AI_MANUAL_COOLDOWN_SECONDS", 0)
+
+        mock_resp = MagicMock()
+        mock_resp.text = json.dumps({
+            "summary": "Repeated analysis run",
+            "root_cause_classification": "confirmed",
+            "root_cause_hypothesis": "Repeated run hypothesis",
+            "supporting_evidence": ["Evidence"],
+            "confidence_score": 0.9,
+            "operational_impact": "None",
+            "recommended_action": "No action",
+            "requires_owner_intervention": False,
+            "safety_and_governance_notes": "None",
+        })
+        mock_resp.usage_metadata = None
+
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_resp)
+
+        case = {"case_id": "case_repeated_single", "severity": "high", "operational_state": "detected"}
+
+        # First run succeeds
+        res1 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res1["status"] == "completed"
+
+        # Second run succeeds
+        res2 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res2["status"] == "completed"
+
+        # Third run must be budget_exhausted
+        res3 = await ops_analyst.analyze_incident(db, case, trigger_reason="manual_request", override_client=mock_client, force_refresh=True)
+        assert res3["status"] == "budget_exhausted"
+    asyncio.run(_test())
+
+

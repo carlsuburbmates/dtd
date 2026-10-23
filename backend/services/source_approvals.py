@@ -131,14 +131,24 @@ def is_discovery_source_approved(
             and str(row.get("terms_reviewed_at") or "").strip()
             and str(row.get("approved_by") or "").strip()
         ):
-            # Check URL match or domain match
-            approved_urls = [str(u).lower().strip().rstrip("/") for u in row.get("approved_source_urls") or []]
-            approved_domains = [str(d).lower().strip() for d in row.get("approved_domains") or []]
+            # Check disallowed domains first
+            disallowed = [str(d).lower().strip() for d in row.get("disallowed_domains") or []]
+            if any(domain == bad or domain.endswith(f".{bad}") for bad in disallowed):
+                return False, f"disallowed_domain:{domain}"
 
+            approved_urls = [str(u).lower().strip().rstrip("/") for u in row.get("approved_source_urls") or []]
             clean_normalized = clean_url.lower().rstrip("/")
-            if clean_normalized in approved_urls:
-                return True, "approved"
-            if "*" in approved_domains or any(domain == d or domain.endswith(f".{d}") for d in approved_domains):
+
+            # If approved_source_urls is specified, URL must strictly match one of the approved URLs
+            if approved_urls:
+                if clean_normalized in approved_urls:
+                    return True, "approved"
+                # Subdomains or arbitrary unapproved paths on the same domain are rejected
+                continue
+
+            # Fallback to approved domains only if approved_source_urls is not specified, rejecting wildcards
+            approved_domains = [str(d).lower().strip() for d in row.get("approved_domains") or [] if d != "*"]
+            if any(domain == d or domain.endswith(f".{d}") for d in approved_domains):
                 return True, "approved"
 
     return False, f"unapproved_discovery_source:{domain}"

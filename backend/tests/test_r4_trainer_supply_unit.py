@@ -419,3 +419,79 @@ def test_df051_expired_claim_challenge_does_not_block_acquisition_dedup():
         "is_claimed": True,
     }
     assert is_claimed_profile(verified_trainer) is True
+
+    # 4. Durable protection preservation (paid tier, submission, claimed_at) with expired pending challenge
+    durable_paid_with_expired_challenge = {
+        "id": "tr_paid_expired_challenge",
+        "name": "Paid Pro Trainer with Expired Reclaim",
+        "claim_status": "pending_verification",
+        "tier": "pro",
+        "is_claimed": True,
+        "claim_expires_at": expired_time,
+    }
+    assert is_claimed_profile(durable_paid_with_expired_challenge) is True, (
+        "Expired challenge on a paid profile must NEVER strip durable acquisition protection"
+    )
+
+    durable_submitted_with_expired_challenge = {
+        "id": "tr_submitted_expired_challenge",
+        "name": "Submitted Trainer with Expired Reclaim",
+        "claim_status": "pending_verification",
+        "via_submission_id": "sub_123",
+        "claim_expires_at": expired_time,
+    }
+    assert is_claimed_profile(durable_submitted_with_expired_challenge) is True, (
+        "Expired challenge on a submitted profile must NEVER strip durable acquisition protection"
+    )
+
+    # 5. Authoritative explicit expiry not overridden by 900s pending_at fallback
+    future_long_expiry = (now + timedelta(hours=2)).isoformat()
+    old_pending_at = (now - timedelta(minutes=25)).isoformat() # > 900s ago
+    long_expiry_trainer = {
+        "id": "tr_explicit_long_expiry",
+        "name": "Long Expiry Trainer",
+        "claim_status": "pending_verification",
+        "claim_expires_at": future_long_expiry,
+        "claim_pending_at": old_pending_at,
+    }
+    assert is_claimed_profile(long_expiry_trainer) is True, (
+        "Explicit future claim_expires_at must NOT be overridden by pending_at fallback"
+    )
+
+
+def test_df044_strict_source_and_subdomain_enforcement():
+    registry = source_approvals.load()
+    # Exact approved discovery URL is approved
+    ok, _ = source_approvals.is_discovery_source_approved(registry, "https://www.petprofessionalguild.com/find-a-member")
+    assert ok is True
+
+    # Arbitrary unapproved path on approved domain is rejected
+    ok, reason = source_approvals.is_discovery_source_approved(registry, "https://www.petprofessionalguild.com/unapproved-directory")
+    assert ok is False
+    assert "unapproved_discovery_source" in reason
+
+    # example.com is strictly rejected
+    ok, reason = source_approvals.is_discovery_source_approved(registry, "https://example.com/find-a-trainer")
+    assert ok is False
+
+
+def test_df045_robots_200_html_response_fails_closed():
+    session = requests.Session()
+    class _HtmlRobotsResponse:
+        status_code = 200
+        headers = {"content-type": "text/html; charset=utf-8"}
+        text = "<!DOCTYPE html><html><head><title>Custom Error Page</title></head><body>Error</body></html>"
+
+    def _mock_session_get(url, *args, **kwargs):
+        if "robots.txt" in url:
+            return _HtmlRobotsResponse()
+        raise AssertionError("Target fetch MUST NOT be called when robots is HTML/malformed")
+
+    with patch("services.ingestion_manager.check_dns_resolvable", return_value=(True, "ok")), \
+         patch.object(session, "get", side_effect=_mock_session_get):
+        ok, content, meta, reason = asyncio.run(ingestion_manager.polite_fetch_url("https://trainer.example.com/services", session))
+
+    assert ok is False
+    assert "robots_malformed" in reason
+    assert "html" in reason
+

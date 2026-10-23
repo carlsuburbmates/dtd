@@ -360,39 +360,61 @@ def validate_candidate_schema(cand: Dict[str, Any], *, verify_live_reachability:
 
 
 def is_claimed_profile(trainer_doc: Dict[str, Any], now: Optional[datetime] = None) -> bool:
-    """Determine if an existing profile is claimed or has active ownership/subscription."""
+    """Determine if an existing profile is claimed or has active ownership/subscription.
+    
+    Durable protections (claimed status, paid tiers, verified claims, submissions,
+    active billing) are evaluated first and can NEVER be overridden by an expired
+    transient verification challenge (DF-051).
+    """
+    if not isinstance(trainer_doc, dict):
+        return False
+
+    # 1. Durable status checks
     claim_status = str(trainer_doc.get("claim_status") or "").lower()
     if claim_status in {"claimed", "claim_disputed"}:
         return True
-    if claim_status == "pending_verification":
-        # DF-051: Expired claim challenge leaves stale pending profile state.
-        # An expired, unclaimed profile must NOT remain protected from acquisition updates.
-        ref_now = now or datetime.now(timezone.utc)
-        expires_at = trainer_doc.get("claim_expires_at")
-        pending_at = trainer_doc.get("claim_pending_at")
-        if expires_at:
-            try:
-                exp_dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
-                if exp_dt <= ref_now:
-                    return False
-            except Exception:
-                pass
-        if pending_at:
-            try:
-                pend_dt = datetime.fromisoformat(str(pending_at).replace("Z", "+00:00"))
-                # Default OTP TTL is 900s (15 min)
-                if (ref_now - pend_dt).total_seconds() > 900:
-                    return False
-            except Exception:
-                pass
+    if trainer_doc.get("is_claimed") is True:
         return True
+
+    # 2. Durable commercial & billing tier checks
     tier = str(trainer_doc.get("tier") or "").lower()
     if tier in {"claimed", "pro", "suburb_sponsor", "citywide", "melbourne_sponsor", "featured", "premium"}:
         return True
+    if trainer_doc.get("stripe_customer_id") or trainer_doc.get("stripe_subscription_id"):
+        return True
+
+    # 3. Durable claim & submission provenance
     if trainer_doc.get("claimed_at") or trainer_doc.get("claim_event_id"):
         return True
     if trainer_doc.get("via_submission_id") or trainer_doc.get("billing_email"):
         return True
+    if str(trainer_doc.get("source") or "").lower() == "submission":
+        return True
+
+    # 4. Transient pending verification challenge (temporary protection while in-flight)
+    if claim_status == "pending_verification":
+        ref_now = now or datetime.now(timezone.utc)
+        expires_at = trainer_doc.get("claim_expires_at")
+        pending_at = trainer_doc.get("claim_pending_at")
+
+        # Authoritative explicit expiry
+        if expires_at:
+            try:
+                exp_dt = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+                return exp_dt > ref_now
+            except Exception:
+                return False
+
+        # Fallback to pending_at + 900s OTP TTL ONLY when explicit expiry is absent
+        if pending_at:
+            try:
+                pend_dt = datetime.fromisoformat(str(pending_at).replace("Z", "+00:00"))
+                return (ref_now - pend_dt).total_seconds() <= 900
+            except Exception:
+                return False
+
+        return False
+
     return False
 
 

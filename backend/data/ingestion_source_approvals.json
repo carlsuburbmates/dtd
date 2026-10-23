@@ -37,8 +37,7 @@
       ],
       "approved_domains": [
         "petprofessionalguild.com",
-        "apdt.com.au",
-        "example.com"
+        "apdt.com.au"
       ],
       "constraints": "Approved industry directory index pages only; outbound links must be individually validated against trainer website rules before discovery enqueuing."
     },

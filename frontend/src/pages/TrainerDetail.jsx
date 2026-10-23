@@ -32,15 +32,21 @@ function writeStoredClaimAuth(trainerId, claimSessionToken) {
 function extractInitialCapsFromTrainer(t) {
     if (!t) return null;
     const caps = t.capabilities || {};
-    const delivery = caps.delivery_constraints?.declared_value || t.delivery_constraints || {};
-    const suburbs = caps.serviced_suburbs?.declared_value || t.serviced_suburbs || t.suburbs || t.suburb || "";
+    const getFactVal = (fact, fallback) => {
+        if (!fact) return fallback;
+        if (typeof fact !== "object") return fact;
+        return fact.canonical_value ?? fact.value ?? fact.raw_value ?? fact.declared_value ?? fallback;
+    };
+    const rawDelivery = getFactVal(caps.delivery_constraints, t.delivery_constraints || {});
+    const delivery = (rawDelivery && typeof rawDelivery === "object") ? rawDelivery : {};
+    const suburbs = getFactVal(caps.serviced_suburbs, t.serviced_suburbs || t.suburbs || t.suburb || "");
     return {
-        specialties: caps.specialties?.declared_value || t.specialties || [],
-        service_formats: caps.service_formats?.declared_value || t.service_formats || [],
-        life_stages: caps.life_stages?.declared_value || t.life_stages || [],
-        training_philosophy: caps.training_philosophy?.declared_value || t.training_philosophy || "",
+        specialties: getFactVal(caps.specialties, t.specialties || []),
+        service_formats: getFactVal(caps.service_formats, t.service_formats || []),
+        life_stages: getFactVal(caps.life_stages, t.life_stages || []),
+        training_philosophy: getFactVal(caps.training_philosophy, t.training_philosophy || ""),
         serviced_suburbs: Array.isArray(suburbs) ? suburbs.join(", ") : String(suburbs || ""),
-        catchment_type: caps.catchment_type?.declared_value || t.catchment_type || "specific_suburbs",
+        catchment_type: getFactVal(caps.catchment_type, t.catchment_type || "specific_suburbs"),
         delivery_constraints: {
             in_home_available: Boolean(delivery.in_home_available),
             facility_available: Boolean(delivery.facility_available),
@@ -338,7 +344,12 @@ export default function TrainerDetail() {
         setClaimBusy(true);
         setClaimError("");
         try {
-            const response = await api.post(`/trainers/${id}/claim`, { email: claimEmail.trim(), method: "email" });
+            const isClaimedProfile = String(trainer?.claim_status || "").toLowerCase() === "claimed";
+            const response = await api.post(`/trainers/${id}/claim`, {
+                email: claimEmail.trim(),
+                method: "email",
+                ...(isClaimedProfile ? { intent: "session_recovery" } : {}),
+            });
             if (response.data?.status !== "pending_verification") {
                 setClaimError("We could not deliver a claim code. Please try again later.");
                 return;

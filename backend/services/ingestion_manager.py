@@ -108,8 +108,17 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
     try:
         r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
         if r_resp.status_code == 200:
+            headers = getattr(r_resp, "headers", {}) or {}
+            c_type = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+            raw_text = r_resp.text or ""
+            lower_text = raw_text.strip().lower()
+            # RFC 9309 / DF-045: HTML error pages or non-robots content returned with 200 must fail closed
+            if "text/html" in c_type or "application/xhtml" in c_type:
+                return False, None, None, f"robots_malformed:{domain}:html_content_type"
+            if "<!doctype" in lower_text or "<html" in lower_text or "<head" in lower_text or "<body" in lower_text or "<div" in lower_text:
+                return False, None, None, f"robots_malformed:{domain}:html_markup_detected"
             try:
-                rp.parse(r_resp.text.splitlines())
+                rp.parse(raw_text.splitlines())
             except Exception as parse_exc:
                 return False, None, None, f"robots_malformed:{domain}:{parse_exc}"
         elif r_resp.status_code == 404:

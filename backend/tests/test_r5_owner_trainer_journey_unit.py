@@ -255,3 +255,78 @@ def test_df051_claim_lifecycle_success(monkeypatch):
     caps = confirm_res["capabilities"]
     assert caps["specialties"]["basis"] == "trainer_declaration"
     assert caps["specialties"]["permitted_in_projection"] is True
+
+
+def test_df030_claimed_trainer_session_renewal_success(monkeypatch):
+    """Ensure a verified/claimed owner can request and verify an OTP to renew their session without 409."""
+    db = _MockDB()
+    trainer_doc = {
+        "id": "tr_claimed_renew",
+        "name": "Bayside K9",
+        "email": "owner@baysidek9.com.au",
+        "billing_email": "owner@baysidek9.com.au",
+        "claim_status": "claimed",
+        "tier": "claimed",
+        "is_claimed": True,
+        "claimed_at": "2026-10-01T12:00:00Z",
+    }
+    db.trainers.rows.append(dict(trainer_doc))
+    monkeypatch.setattr(server, "db", db)
+    monkeypatch.setenv("TRAINER_CLAIM_OTP_SECRET", "test-otp-secret")
+    monkeypatch.setenv("TRAINER_CLAIM_SESSION_SECRET", "test-session-secret")
+
+    with patch("server.notifications_service.notify_trainer_claim_otp", new=AsyncMock(return_value={"claim_notification_status": "sent", "claim_notification_attempts": 1})):
+        start_res = asyncio.run(server.start_trainer_claim(
+            "tr_claimed_renew",
+            server.TrainerClaimStartIn(email="owner@baysidek9.com.au", method="email", intent="session_recovery"),
+        ))
+
+    assert start_res["status"] == "pending_verification"
+    assert start_res["is_renewal"] is True
+    claim_event_id = start_res["claim_event_id"]
+
+    # Verify trainer claim_status remained 'claimed' rather than being wiped
+    persisted = next(r for r in db.trainers.rows if r["id"] == "tr_claimed_renew")
+    assert persisted["claim_status"] == "claimed"
+
+    event = next(r for r in db.claim_events.rows if r["id"] == claim_event_id)
+    otp = None
+    for candidate in range(100000, 1000000):
+        if claim_engine.otp_matches(str(candidate), event["otp_digest"]):
+            otp = str(candidate)
+            break
+    assert otp is not None
+
+    verify_res = asyncio.run(server.verify_trainer_claim(
+        "tr_claimed_renew",
+        server.TrainerClaimVerifyIn(claim_event_id=claim_event_id, otp=otp),
+    ))
+
+    assert verify_res["ok"] is True
+    assert verify_res["session_renewed"] is True
+    assert verify_res["session"]["token"]
+    assert persisted["claim_status"] == "claimed"
+
+
+def test_df030_claimed_trainer_other_email_rejected_with_409(monkeypatch):
+    """Ensure a third party cannot start a claim or renew for an already-claimed trainer."""
+    db = _MockDB()
+    trainer_doc = {
+        "id": "tr_claimed_other",
+        "name": "Bayside K9",
+        "email": "owner@baysidek9.com.au",
+        "claim_status": "claimed",
+        "tier": "claimed",
+        "is_claimed": True,
+    }
+    db.trainers.rows.append(dict(trainer_doc))
+    monkeypatch.setattr(server, "db", db)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(server.start_trainer_claim(
+            "tr_claimed_other",
+            server.TrainerClaimStartIn(email="stranger@otherdomain.com", method="email"),
+        ))
+    assert exc.value.status_code == 409
+    assert "already been claimed" in exc.value.detail.lower()
+

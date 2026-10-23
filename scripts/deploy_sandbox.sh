@@ -115,7 +115,7 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "${REPO_ROOT}"
 DEPLOY_SOURCE_SHA="$(resolve_deploy_source_sha "${REPO_ROOT}")"
-REVISION_SUFFIX="r3-${DEPLOY_SOURCE_SHA:0:8}"
+REVISION_SUFFIX="r8-${DEPLOY_SOURCE_SHA:0:8}"
 echo "Sandbox source revision: ${DEPLOY_SOURCE_SHA} (${REVISION_SUFFIX})"
 
 # 1. Run the mandatory local preflight suite.

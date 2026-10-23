@@ -342,6 +342,9 @@ def generate_deterministic_analysis(evidence: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+_budget_lock = asyncio.Lock()
+
+
 async def check_daily_budget(db: Any) -> Tuple[bool, int, int]:
     """Verify that daily AI investigation count has not exceeded the configured budget."""
     if db is None or not hasattr(db, "ops_ai_investigations"):
@@ -351,13 +354,52 @@ async def check_daily_budget(db: Any) -> Tuple[bool, int, int]:
     try:
         count = await db.ops_ai_investigations.count_documents({
             "created_at": {"$regex": f"^{today_str}"},
-            "status": "completed",
-            "model_used": {"$nin": ["cached", "deterministic_analyst_fallback"]},
+            "status": {"$in": ["completed", "in_progress", "reserved"]},
+            "model_used": {"$nin": ["cached", "deterministic_analyst_fallback", "none"]},
         })
         return count < OPS_AI_DAILY_BUDGET, count, OPS_AI_DAILY_BUDGET
     except Exception as e:
         logger.warning("Failed to check daily AI budget, failing closed: %s", e)
         return False, OPS_AI_DAILY_BUDGET, OPS_AI_DAILY_BUDGET
+
+
+async def reserve_daily_budget(
+    db: Any,
+    investigation_id: str,
+    case_id: str,
+    fingerprint: str,
+    trigger_reason: str,
+) -> Tuple[bool, int, int]:
+    """Atomically verify and reserve 1 attempt slot in the daily AI investigation budget."""
+    if db is None or not hasattr(db, "ops_ai_investigations"):
+        return True, 0, OPS_AI_DAILY_BUDGET
+
+    async with _budget_lock:
+        within_budget, count, limit = await check_daily_budget(db)
+        if not within_budget:
+            return False, count, limit
+
+        reservation_doc = {
+            "investigation_id": investigation_id,
+            "case_id": case_id,
+            "occurrence_fingerprint": fingerprint,
+            "status": "in_progress",
+            "model_used": "pending_inference",
+            "trigger_reason": trigger_reason,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+        try:
+            await db.ops_ai_investigations.update_one(
+                {"investigation_id": investigation_id},
+                {"$set": reservation_doc},
+                upsert=True,
+            )
+            return True, count + 1, limit
+        except Exception as exc:
+            logger.warning("Failed to record budget reservation, failing closed: %s", exc)
+            return False, limit, limit
+
 
 
 async def check_manual_cooldown(db: Any, case_id: str) -> Tuple[bool, int]:
@@ -479,9 +521,15 @@ async def analyze_incident(
                 "error": f"Analysis recently requested. Please wait {remaining}s before refreshing.",
             }
 
-    # 4. Daily Budget Check
-    within_budget, used_today, budget_limit = await check_daily_budget(db)
-    if not within_budget:
+    # 4. Acquire investigation ID & Atomically Reserve Daily Budget
+    investigation_id = f"inv_{uuid.uuid4().hex[:12]}"
+    created_ts = now_iso()
+    expires_ts = (datetime.now(timezone.utc) + timedelta(hours=OPS_AI_FRESHNESS_HOURS)).isoformat()
+
+    reserved, used_today, budget_limit = await reserve_daily_budget(
+        db, investigation_id, case_id, fingerprint, trigger_reason
+    )
+    if not reserved:
         exhausted_record = {
             "investigation_id": f"inv_budget_{uuid.uuid4().hex[:12]}",
             "case_id": case_id,
@@ -508,10 +556,6 @@ async def analyze_incident(
         return {"ok": True, **exhausted_record}
 
     # 5. Acquire client & Run Inference
-    investigation_id = f"inv_{uuid.uuid4().hex[:12]}"
-    created_ts = now_iso()
-    expires_ts = (datetime.now(timezone.utc) + timedelta(hours=OPS_AI_FRESHNESS_HOURS)).isoformat()
-
     active_client = override_client if override_client is not None else ai_service.get_gemini_client()
     raw_analysis: Optional[Dict[str, Any]] = None
     model_name = getattr(ai_service, "GEMINI_MODEL", "gemini-3.5-flash")
@@ -624,7 +668,7 @@ async def analyze_incident(
     if db is not None and hasattr(db, "ops_ai_investigations"):
         try:
             await db.ops_ai_investigations.update_one(
-                {"case_id": case_id, "occurrence_fingerprint": fingerprint},
+                {"investigation_id": investigation_id},
                 {"$set": investigation_doc},
                 upsert=True,
             )
@@ -704,6 +748,10 @@ async def run_scheduled_investigations(
             skipped += 1
             continue
 
+        within_budget, _, _ = await check_daily_budget(db)
+        if not within_budget:
+            break
+
         try:
             res = await analyze_incident(
                 db,
@@ -711,6 +759,8 @@ async def run_scheduled_investigations(
                 trigger_reason="automatic_event_trigger",
                 force_refresh=False,
             )
+            if res.get("status") == "budget_exhausted":
+                break
             if res.get("ok") and not res.get("cached"):
                 investigated += 1
         except Exception as e:

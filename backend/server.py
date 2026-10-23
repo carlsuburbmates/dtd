@@ -624,6 +624,7 @@ class TrainerClaimStartIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
     email: EmailStr
     method: str = "email"
+    intent: Optional[str] = "claim"
 
 
 class TrainerClaimVerifyIn(BaseModel):
@@ -5312,11 +5313,23 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
     method = (payload.method or "email").strip().lower()
 
     current_status = str(trainer.get("claim_status") or "").lower()
-    if current_status in {"claimed", "claim_disputed"}:
+    intent = str(getattr(payload, "intent", None) or "claim").strip().lower()
+    if current_status == "claim_disputed":
         raise HTTPException(
             status_code=409,
-            detail="This profile already has a claim. A review case has been opened." if current_status == "claim_disputed" else "This profile has already been claimed.",
+            detail="This profile already has a claim. A review case has been opened.",
         )
+    if current_status == "claimed":
+        if intent not in ("session_recovery", "recovery", "renewal"):
+            raise HTTPException(
+                status_code=409,
+                detail="This profile has already been claimed.",
+            )
+        if claimant_email != listed_email:
+            raise HTTPException(
+                status_code=409,
+                detail="This profile has already been claimed.",
+            )
 
     if method != "email":
         event = {
@@ -5393,6 +5406,7 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
         {"$set": {"status": "superseded", "updated_at": now.isoformat()}},
     )
     otp = claim_engine.generate_otp()
+    is_renewal = (current_status == "claimed" and claimant_email == listed_email and intent in ("session_recovery", "recovery", "renewal"))
     event = {
         "id": new_id(),
         "trainer_id": trainer_id,
@@ -5405,18 +5419,27 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
         "status": "pending_verification",
         "delivery_status": "pending",
         "expires_at": (now + timedelta(seconds=max(60, TRAINER_CLAIM_OTP_TTL_S))).isoformat(),
+        "is_renewal": is_renewal,
         "created_at": now.isoformat(),
         "updated_at": now.isoformat(),
     }
     await db.claim_events.insert_one(event)
-    await db.trainers.update_one(
-        {"id": trainer_id},
-        {"$set": {
-            "claim_status": "pending_verification",
-            "claim_pending_at": now.isoformat(),
-            "claim_expires_at": event["expires_at"],
-        }},
-    )
+    if not is_renewal:
+        await db.trainers.update_one(
+            {"id": trainer_id},
+            {"$set": {
+                "claim_status": "pending_verification",
+                "claim_pending_at": now.isoformat(),
+                "claim_expires_at": event["expires_at"],
+            }},
+        )
+    else:
+        await db.trainers.update_one(
+            {"id": trainer_id},
+            {"$set": {
+                "claim_session_challenge_at": now.isoformat(),
+            }},
+        )
 
     try:
         delivery = await notifications_service.notify_trainer_claim_otp(db, trainer, to_email=listed_email, otp=otp)
@@ -5426,18 +5449,20 @@ async def start_trainer_claim(trainer_id: str, payload: TrainerClaimStartIn) -> 
     delivery_status = str(delivery.get("claim_notification_status") or "failed")
     event_status = "pending_verification" if delivery_status == "sent" else "delivery_failed"
     if event_status == "delivery_failed":
-        await db.trainers.update_one({"id": trainer_id, "claim_status": "pending_verification"}, {"$set": {"claim_status": "unclaimed"}})
+        if not is_renewal:
+            await db.trainers.update_one({"id": trainer_id, "claim_status": "pending_verification"}, {"$set": {"claim_status": "unclaimed"}})
     await db.claim_events.update_one(
         {"id": event["id"]},
         {"$set": {"status": event_status, "delivery_status": delivery_status, "delivery_attempts": int(delivery.get("claim_notification_attempts") or 0), "delivery_error": str(delivery.get("claim_notification_error") or delivery.get("claim_notification_reason") or "")[:240], "updated_at": now_iso()}},
     )
-    await _audit("trainer_claim_started", trainer_id, after={"claim_event_id": event["id"], "delivery_status": delivery_status}, actor="user")
+    await _audit("trainer_claim_started", trainer_id, after={"claim_event_id": event["id"], "delivery_status": delivery_status, "is_renewal": is_renewal}, actor="user")
     return _scrub({
         "claim_event_id": event["id"],
         "status": event_status,
         "delivery_status": delivery_status,
         "masked_destination": event["masked_destination"],
         "expires_at": event["expires_at"],
+        "is_renewal": is_renewal,
     })
 
 
@@ -5483,18 +5508,41 @@ async def verify_trainer_claim(trainer_id: str, payload: TrainerClaimVerifyIn) -
         raise HTTPException(status_code=400, detail="Claim code is invalid.")
 
     current_status = str(trainer.get("claim_status") or "").lower()
-    if current_status == "claimed":
-        await db.claim_events.update_one(
-            {"id": event["id"]},
-            {"$set": {"status": "stale", "reason": "profile_already_claimed", "updated_at": now.isoformat()}},
-        )
-        raise HTTPException(status_code=409, detail="This profile has already been claimed.")
+    is_renewal = bool(event.get("is_renewal")) or (
+        current_status == "claimed"
+        and _normalize_email_key(str(event.get("claimant_email") or "")) == _normalize_email_key(str(trainer.get("billing_email") or trainer.get("email") or ""))
+    )
+
     if current_status == "claim_disputed":
         await db.claim_events.update_one(
             {"id": event["id"]},
             {"$set": {"status": "stale", "reason": "profile_claim_disputed", "updated_at": now.isoformat()}},
         )
         raise HTTPException(status_code=409, detail="This profile is under ownership dispute and cannot be claimed automatically.")
+
+    if is_renewal:
+        await db.claim_events.update_one(
+            {"id": event["id"], "status": "pending_verification"},
+            {"$set": {"status": "verified", "otp_verified": True, "verified_at": now.isoformat(), "updated_at": now.isoformat()}},
+        )
+        session = _issue_trainer_claim_session(trainer_id=trainer_id, claim_event_id=event["id"])
+        await _audit("trainer_session_renewed", trainer_id, after={"claim_event_id": event["id"]}, actor="user")
+        return _scrub({
+            "ok": True,
+            "trainer_id": trainer_id,
+            "claim_status": current_status,
+            "tier": trainer.get("tier") or "claimed",
+            "capabilities_confirmed": bool(trainer.get("capabilities_confirmed_at")),
+            "session": session,
+            "session_renewed": True,
+        })
+
+    if current_status == "claimed":
+        await db.claim_events.update_one(
+            {"id": event["id"]},
+            {"$set": {"status": "stale", "reason": "profile_already_claimed", "updated_at": now.isoformat()}},
+        )
+        raise HTTPException(status_code=409, detail="This profile has already been claimed.")
 
     # R2: Keep identity/ownership claim verification separate from capability confirmation.
     # The server MUST NOT promote capabilities solely because OTP verification succeeded.
