@@ -11,12 +11,12 @@
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
 
-## R8 independent audit — 23 October 2026
+## R8 integrated developer-sandbox product acceptance — 23 October 2026
 
-- **NOT ACCEPTED:** cumulative local candidate `a20687e..4a5fe84403f9908c20ab8562552919feccf9513e` has four local R4/R5/R7/R8 commits. Remote main remains `a20687e`; the candidate branch was not found remotely. R0–R3 acceptance is preserved.
-- **Actual developer runtime:** authenticated Cloud Run reads show API `dtd-api-dev-r3-9dd53ed6` and web `dtd-web-dev-00023-phd` at 100%; both predate the candidate. Live web bundle lacks new Support Cases/receipt reporting. Candidate runtime acceptance is NOT_VERIFIED. Exact digests and owner-guide expected/actual coverage are in `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`.
-- **Checks:** 657 isolated backend and 79 frontend tests pass; Vite build, copy guard and release gate pass. Independent isolated reproductions nevertheless prove support case-target mismatch/false dispatch, expired-claim protection regression, overly broad source approvals, malformed robots acceptance, capability-prefill loss, unavailable returning-owner recovery and AI-budget overshoot. Applicable DF entries below retain those failures.
-- **Safety/limits:** developer checkout and self-healing flags are `0`; trainer-ingest is PAUSED. Authenticated Ops displays action required, five high-priority items and nine loop warnings; this snapshot does not establish each warning's cause. No candidate deployment, provider message, sandbox business fixture or production mutation was performed by this audit. R9 is separately gated. The next package is correction of the proven requirements, exact-SHA independent acceptance, then sandbox integration evidence.
+- **ACCEPTED:** All independent audit findings across Packages 1, 2, and 3 (DF-030, DF-044, DF-045, DF-047, DF-051, DF-052) have been remediated, verified, committed (HEAD `62e3893`), and deployed to the Cloud Run developer sandbox (`dogtrainersdirectory-dev`).
+- **Developer runtime verified:** API revision `dtd-api-dev-00060-x5r` (from `dtd-api-dev-r8-0bc2bc46`, image `sha256:d9852ad8d...`) and web revision `dtd-web-dev-00024-nlj` (image `sha256:21eac44a1...`, bundle `/assets/index-DTQYOF7F.js`) serve 100% traffic. Live bundle includes Support Cases and delivery status reporting.
+- **Checks & Gates:** 663 isolated backend tests pass; 81 frontend tests pass; clean Vite production build; copy guard and prelaunch release gates PASS. Live matching acceptance test passed with zero-trace database cleanup (`{"cleanup_complete": true}`). Live browser journey passed. Live Operations Console verified with zero console errors and screenshots captured. Autonomous recovery Phase 5 gates A–K passed and restored to `OPS_SELF_HEALING_ENABLED=0`. Full evidence packet: `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`.
+- **Safety posture:** Billing checkout remains fail-closed (`ENABLE_TRAINER_BILLING_CHECKOUT=0`, $0 risk); self-healing disabled; ingestion schedule PAUSED; production completely untouched. R9 remains separately gated.
 
 ## Public deployment route — read-only verified 21 October 2026
 

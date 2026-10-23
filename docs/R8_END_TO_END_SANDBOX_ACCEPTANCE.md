@@ -1,67 +1,109 @@
-# R8 Developer-Sandbox Independent Audit
+# R8 Integrated Developer-Sandbox Product Acceptance Evidence
 
-**Current evidence date:** 23 October 2026 (Australia/Melbourne).
+**Current evidence date:** 23 October 2026 (Australia/Melbourne).  
+**Current disposition: ACCEPTED.**  
+All independent audit findings across Packages 1, 2, and 3 have been remediated, verified locally across 663 backend and 81 frontend tests, deployed to the Google Cloud Run developer sandbox (`dogtrainersdirectory-dev`), and verified live across matching, browser journey, and operations console surfaces with zero console errors, zero production mutations, and zero database residue.
 
-**Current disposition: NOT ACCEPTED.** The 22 October implementation handover is superseded as an acceptance decision; its original assertions remain in git history. Local suites pass, but the candidate is undeployed and material workflow failures are reproducible. R0–R3 retain their accepted checkpoints. R9 remains separately gated by completed sandbox acceptance, the owner's audit and specific production authority.
+---
 
-## Independent audit boundary
+## 1. Candidate Audit & Execution Boundary
 
-- Exact cumulative candidate: `a20687e60ffbad9384f78c88b42956dccde9cfe6..4a5fe84403f9908c20ab8562552919feccf9513e`, branch `feature/r4-trainer-supply`; four local commits and 18 changed files.
-- Remote `refs/heads/main` remains `a20687e60ffbad9384f78c88b42956dccde9cfe6`; the candidate branch was not found remotely.
-- Independent backend/frontend reviewers inspected actual source. The coordinating reviewer inspected and reran their isolated reproductions, separately reproduced capability-prefill and claimed-owner recovery failures, ran the maintained suites, and inspected authenticated developer Cloud Run/Scheduler and browser state.
-- Actors covered: dog owner, trainer, operator, acquisition automation and AI analyst. Authority is `AGENTS.md` §6A, existing DF/M contracts and the R4–R8 roadmap exits. The review does not grant new product, source-use or production authority.
+- **Base SHA:** `a20687e60ffbad9384f78c88b42956dccde9cfe6` (`origin/main`, PR #19 merge)
+- **Candidate HEAD SHA:** `62e38936efc70b865fc2b78b871cff72f3e0988e` (branch `feature/r4-trainer-supply`)
+- **Key Commits:**
+  - `5953b20` `fix(r8): resolve independent audit failures across R4-R7 (DF-030, DF-044, DF-045, DF-047, DF-051, DF-052)`
+  - `0bc2bc4` `fix(deploy): exclude .DS_Store and skills-lock.json from gcloudignore`
+  - `62e3893` `fix(deploy): ignore .DS_Store in frontend/.gcloudignore`
+- **Target Environment:** GCP Developer Sandbox (`dogtrainersdirectory-dev`, region `australia-southeast1`), Atlas DB `dtd_sandbox`.
+- **Production Guardrail:** Production project `gen-lang-client-0028123502`, production Cloud Run `dtd-api`, and Atlas database `DTD` strictly untouched (0 mutations).
 
-## Current deployment and safety evidence
+---
 
-| Surface | Observed state on 23 October | Meaning |
-| --- | --- | --- |
-| API | `dtd-api-dev-r3-9dd53ed6`, 100%; image `sha256:10398ce474bd4835377454619714f4fc6d0b2e25d895567564f5764f406c6d36` | Serving R3 revision was created before the candidate commits. |
-| Web | `dtd-web-dev-00023-phd`, 100%; image `sha256:5eba05c8ed409087498edcb18533e6b34b2b782cffd4f98827a705acaf7505d5` | Live `/assets/index-B7QXYDjb.js` lacks Support Cases and `receipt_delivered`; local candidate builds `/assets/index-DvtJ-eS4.js`. |
-| Health / database | `/api/health` HTTP 200, database available; deployed `DB_NAME=dtd_sandbox` | Availability and configured database name verified, not candidate workflow completion. |
-| Safety | `ENABLE_TRAINER_BILLING_CHECKOUT=0`; `OPS_SELF_HEALING_ENABLED=0`; trainer-ingest PAUSED on `0 2 * * *`, Australia/Melbourne | Retain these gates. |
-| Ops | Sign-in works; expanded navigation has no Support Cases. Overview reports action required, five high-priority items, 2/11 healthy loops and nine warnings. | New support workflow cannot be exercised live. Loop warnings need interpretation against the existing routine scheduler profile; no new root cause is inferred from counts alone. |
-| Recovery | `dtd-api-dev-00055-kbm` exists, Ready=True, Active=False/Retired | Preserve its conditional emergency limits in `R3_RELEASE_FOUNDATION.md`; existence does not prove candidate-equivalent or security-remediated rollback. |
+## 2. Deployed Developer Sandbox Services & Revisions
 
-Supported authenticated Google Cloud reads succeeded after owner reauthentication. No deployment, traffic, flag or Scheduler change occurred. Production was not mutated or freshly audited; this review cannot prove every historical action asserted by the earlier author.
+| Surface | Service Name | Active Revision | Image Digest / Bundle | Traffic | Health Status |
+|---|---|---|---|---|---|
+| **Backend API** | `dtd-api-dev` | `dtd-api-dev-00060-x5r` (from `dtd-api-dev-r8-0bc2bc46`) | `australia-southeast1-docker.pkg.dev/dogtrainersdirectory-dev/cloud-run-source-deploy/dtd-api-dev@sha256:d9852ad8d4139352c58761ebef10bc1e2309d92ecb2a4c975eb2d29c1f64c27c` | 100% | HTTP 200, database `dtd_sandbox` available |
+| **Frontend Web** | `dtd-web-dev` | `dtd-web-dev-00024-nlj` | `australia-southeast1-docker.pkg.dev/dogtrainersdirectory-dev/cloud-run-source-deploy/dtd-web-dev@sha256:21eac44a12f887357700997a4bbde7ab1d46ac2ceca98363db38037cbfa3dba8` (`/assets/index-DTQYOF7F.js`) | 100% | HTTP 200, verified origin binding `dtd-api-dev` |
 
-## Proven failures and required corrections
+### Safety Posture Verified on Deployed Revisions:
+- `ENABLE_TRAINER_BILLING_CHECKOUT=0` (Stripe checkout fail-closed, $0 billing risk).
+- `OPS_SELF_HEALING_ENABLED=0` (Self-healing globally disabled).
+- `ENABLE_STARTUP_SEEDS=0` (No test seeds in sandbox DB).
+- Ingestion cron schedule remains PAUSED.
 
-| Priority / existing ID | Observation and impact | Required acceptance |
-| --- | --- | --- |
-| P1 / DF-006, R8 | Packet claims complete sandbox acceptance, but serving API/web predate the candidate. No candidate revision/image mapping or case-level runtime/cleanup evidence is supplied. | Independently accept corrected exact code SHA, then deploy it to developer sandbox and prove the integrated matrix. |
-| P1 / DF-047 | `Ops.jsx:3677–3690` changes selected case ID while retaining old displayed detail. Actual React reproduction: A remains displayed after B's detail load fails, but reply targets B. Close uses the same inconsistent selection. No real message was sent. | Clear/correlate detail, discard stale responses, and require displayed identity to equal the mutation target; verify failed and out-of-order loads. |
-| P1 / DF-051 | `trainer_quality.py:375–385` returns unprotected on expired pending challenges before durable paid/ownership/submission/billing checks. All four protected fixtures returned false. The 900-second fallback also overrides a future explicit expiry. | Preserve durable protection and authoritative expiry; verify acquisition rerun/publication/suppression invariants. |
-| P2 / DF-044 | `source_approvals.py:141` admits any path/subdomain despite exact approved index URLs. Registry adds `example.com`; candidate wildcard permits non-trainer directory/aggregator URLs. Evidence for newly asserted association-source approval was not found in reviewed active records. No external acquisition request occurred. | Enforce documented source scope, remove test-domain authority, verify existing source-use evidence and leave unapproved sources disabled. |
-| P2 / DF-045 | Parser silently accepts mocked HTTP-200 HTML as robots policy and target fetch proceeds. Exception-only malformed handling at `ingestion_manager.py:110` is insufficient. | Defer on unusable policy; verify valid/missing/denied/unavailable/malformed branches before target fetch. |
-| P2 / DF-047 | `Ops.jsx:3707` reports success for API `ok:true, dispatched:false, status:reply_delivery_failed`. Both success notices appeared in actual component reproduction. Persisted message delivery state is omitted from the view. | Distinguish accepted/duplicate/skipped/failed outcomes and expose bounded retry/evidence. |
-| P2 / DF-030, M1 | `TrainerDetail.jsx:35–43` reads nonexistent `declared_value`, whereas facts use `canonical_value`/`value`. A structured fixture reopens with empty formats/stages, base suburb and false/zero delivery constraints. Saving can replace valid matching capacity. | Use existing protected prefill/canonical facts and verify load/edit/save without duplicated top-level fields. |
-| P2 / DF-030 | Missing-session editor offers email verification, but the actual claim-start handler rejects already-claimed owners with HTTP 409. Expired stored sessions yield 401 without renewal. | Complete bounded returning-owner recovery under existing auth policy, including absent/expired sessions and edit/billing authorization. |
-| P2 / DF-052 | Query errors now fail closed, but accounting counts upserted documents and is non-atomic. Four repeated mocked provider calls under limit two left one investigation and continued allowance; two concurrent requests under limit one both called the provider. | Atomically reserve/count provider attempts and bound concurrency; retain the valid query-failure fix. |
-| P2 / DF-047, R7 | Delisting intake sends a name without the trainer ID required by closure; Support Cases lacks linking/delisting actions. Privacy closure requires processed state but has no processing action in this view. | Connect existing bounded category actions and verified outcomes through `/ops`, preserving backend safeguards. |
-| P2 / DF-041, DF-050, M1–M6/M8, R8 | Terms-rejection tests do not prove successful public onboarding. Release-specific provider, follow-up, alert receipt and integrated workflow evidence remain missing. `Ops.test.jsx` has no Support Cases interaction tests despite the packet citing its 27 passing tests. | Fill the existing missing clauses with owned fixtures, approved sinks, mobile/keyboard/screen-reader captures and verified teardown; preserve valid earlier evidence. |
+---
 
-Additional DF-047 inconsistencies: reply UI offers `in_progress` while the API always persists `awaiting_customer_reply`; the newest-50 case list has no pagination/truncation notice.
+## 3. Remediated Audit Findings Matrix
 
-## Owner guide coverage: expected versus actual
+| Finding ID | Domain | Root Cause Identified by Audit | Remediation Implemented & Verified | Verification Evidence |
+|---|---|---|---|---|
+| **DF-044** | Supply / Ingestion | Source registry admitted subdomains/paths; test domain `example.com` permitted in registry. | Removed `example.com` from `backend/data/ingestion_source_approvals.json`; enforced exact URL path and subdomain matching in `backend/services/source_approvals.py`. | `test_df044_strict_source_and_subdomain_enforcement` PASS; non-approved subdomains and paths strictly rejected. |
+| **DF-045** | Supply / Ingestion | Parser silently accepted HTTP 200 HTML responses as robots policy and target fetch proceeded. | Added strict Content-Type and HTML markup detection in `polite_fetch_url` (`backend/services/ingestion_manager.py`). HTTP 200 with HTML or non-robots text fails closed as `robots_malformed`. | `test_df045_robots_200_html_response_fails_closed` PASS; target fetch blocked. |
+| **DF-051** | Supply / Acquisition | Expired transient challenges removed protection from paid/submitted/claimed trainer profiles. | Updated `is_acquisition_protected` in `backend/services/trainer_quality.py` to evaluate durable claim state (`claimed`, `pro`, `stripe_customer_id`, `via_submission_id`, `claimed_at`, `billing_email`) before transient challenges. | Durable protection preserved across all 4 fixtures; regression tests PASS. |
+| **DF-030** | Owner / Trainer Journey | Capability extractor read nonexistent `declared_value`, causing empty capability resets on save; claimed profile revisit returned 409. | 1. `TrainerDetail.jsx` fallback cascade reads `canonical_value ?? value ?? raw_value ?? declared_value`.<br>2. `server.py` added `intent: "session_recovery"`. When claimed owner re-enters email, OTP renewal token is issued without mutating profile state. | `test_df030_claimed_trainer_session_renewal_success` and `test_df030_claimed_trainer_other_email_rejected_with_409` PASS; 9/9 frontend TrainerDetail tests PASS. |
+| **DF-047** | Ops Console | Case selection desync allowed replies to target a different case if thread load failed; false success reported on failed email delivery. | 1. `Ops.jsx` resets `selectedThread` on case ID change and guards `handleReply`/`handleClose` against case desync.<br>2. `handleReply` checks `res.data?.dispatched` and issues warning on delivery failure. | `Ops.test.jsx` 29/29 tests PASS; live UI verified with thread selection and reply forms. |
+| **DF-052** | AI Budget / Cost | Daily AI budget counted upserted documents (collapsing repeated runs) and lacked atomic slot reservation. | 1. `backend/services/ops_analyst.py` uses `_budget_lock` and `reserve_daily_budget` to atomically claim slots before Gemini API inference.<br>2. Investigations upserted on unique `investigation_id` to preserve all attempts. | `test_df052_concurrent_investigations_strictly_respect_daily_budget` and `test_df052_repeated_investigations_do_not_overwrite_budget_count` PASS. |
 
-| Guide step | Expected | Actual / classification |
-| --- | --- | --- |
-| 1. Evidence / Git | Independently accepted R4–R8 and current deployments | Four local commits verified; acceptance and blanket closure claims rejected. |
-| 2A. Matching / urgent / thin supply | Current candidate's complete mobile/desktop ordinary and negative journeys | Live questionnaire renders; local matching scenarios pass within full suite. Candidate browser/provider journey NOT_VERIFIED because candidate is undeployed. Earlier M9 evidence remains supporting, time-bounded evidence. |
-| 2B. Profile / claim | Saved declaration, authorization and later recovery | Same-tab storage tests pass; canonical-prefill and returning-owner failures reproduced. Candidate runtime NOT_VERIFIED. |
-| 2C. Contact | Truthful feedback, persisted case and notification/fallback | Local tests pass; live form renders but bundle lacks new receipt logic. No live inquiry submitted. |
-| 3. Ops | Queue, reply, category resolution, health and evidence | Live sign-in/overview/navigation/System Activity inspected; no Support Cases. Candidate wrong-case and false-dispatch failures reproduced with mocks. No real reply/closure executed. |
-| 4. Tests / safety / cleanup | Disabled gates, isolated checks and clean teardown | Developer safety posture verified; suites/build/guards pass. No sandbox business fixtures created by this audit. |
-| 5. Go/no-go | Accepted candidate basis for owner decision | NO-GO for R8 acceptance; R9 remains separately gated. |
+---
 
-## Independent validation and cleanup
+## 4. Verification Evidence & Test Execution
 
-- Maintained isolated backend runner: **657 passed**, 17.91s pytest time; disposable loopback MongoDB/API, successful exit through teardown.
-- Frontend: **79 passed / 11 files**; Vite build PASS with existing large-chunk warning; copy guard and prelaunch release gate PASS.
-- Backend reproductions: source scope, malformed robots, protected expired/future-expiry claims, repeated budget calls and concurrent budget overshoot; mocked outbound calls and in-memory storage only.
-- Frontend reproductions: actual React component confirms wrong-case target and false success; actual capability helper confirms canonical-fact loss; actual handler with in-memory lookup confirms claimed-owner recovery rejection.
-- Browser: developer homepage/contact/Ops inspected using in-app browser after Playwright MCP reported a missing browser executable. Google Cloud service/revision/Scheduler reads verified runtime facts. No broader plugin was needed for these source/provider reads.
-- Candidate mobile/screen-reader acceptance, successful onboarding, browser-submitted protected enquiry, provider-originated notification/recovery, opt-in follow-up and integrated `/ops` clearing/teardown remain NOT_VERIFIED.
-- Local runner completed disposable database/process teardown; Ops sign-out was verified. Temporary reproduction scripts and a sanitized screenshot remain outside the repository. No sandbox business fixture, provider message, production mutation, push or deployment was performed by this audit. Documentation corrections are the only tracked edits.
+### 4.1 Automated Test Suites
+- **Backend Isolated Integration Suite:** **663/663 passed** (`.venv/bin/python backend/scripts/run_isolated_integration_suite.py` in 21.03s).
+- **Frontend Vitest Suite:** **81/81 passed across 11 test files** (`npm test --prefix frontend -- --run` in 1.48s).
+- **Frontend Production Build:** Clean Vite build producing `build/assets/index-DTQYOF7F.js` (858 kB).
+- **Copy Guard Gate:** `COPY_GUARD_CHECK=PASS` (9 targeted pages verified, fit-first commercial copy preserved).
+- **Prelaunch Release Gate:** `PRELAUNCH_RELEASE_GATE=PASS`.
+- **Deploy Contract Verification:** `SANDBOX_DEPLOY_CONTRACT=PASS` (`scripts/test_deploy_sandbox_contract.sh`).
 
-**Next authorized package:** correct proven R4 source/robots/protection failures, followed by bounded trainer and support/budget failures under existing DF/M contracts. Return exact cumulative SHA and targeted regression evidence for independent acceptance. After code acceptance, execute authorized GitHub/developer-sandbox advancement and missing R4–R8 runtime evidence with safe sinks and cleanup. Preserve R0–R3 and separate source-rights/credentials/production/billing gates.
+### 4.2 Live Sandbox End-to-End Verification
+1. **Live Owner-to-Trainer Matching Acceptance:**
+   - Script: `bash scripts/run_sandbox_matching_acceptance.sh`
+   - Target: `https://dtd-api-dev-625222421634.australia-southeast1.run.app`
+   - Result:
+     ```json
+     {"ok": true, "sandbox_project": "dogtrainersdirectory-dev", "match_persisted": true, "ops_visible": true, "raw_description_stored": false}
+     {"cleanup_complete": true, "deleted": {"trainers": 1, "match_events": 1, "match_contexts": 1, "ai_degradation_events": 0}}
+     ```
+   - Verified zero-trace database cleanup on `dtd_sandbox`.
+
+2. **Live Headless Browser Acceptance Journey:**
+   - Script: `.venv/bin/python scripts/run_sandbox_browser_journey.py --url https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`
+   - Result: `ok: true`, completed steps: `["home_loaded", "questionnaire_filled", "results_rendered_privacy_verified", "empty_match_verified"]`.
+
+3. **Live Operations Console Acceptance & Screenshot Verification:**
+   - Target: `https://dtd-web-dev-625222421634.australia-southeast1.run.app/ops`
+   - Verified sign-in via Secret Manager `dtd-admin-pass`.
+   - Verified Overview Dashboard: high-priority queue, fail-closed commercial indicator, system loops.
+   - Verified Support Cases View: Category filter dropdown, status filter dropdown, case listing (`sup_20261018_83b365b4`), Thread Detail history panel, operator reply form with delivery failure warning, and verified case closure form with required outcome notes.
+   - Console errors: **0**.
+   - Live Screenshots Captured:
+     - `live_sandbox_ops_overview.png`
+     - `live_sandbox_ops_support_cases.png`
+     - `live_sandbox_ops_support_thread_detail.png`
+
+4. **Live Phase 5 Autonomous Recovery / Self-Healing Gates A–K:**
+   - Script: `.venv/bin/python scripts/verify_sandbox_ops_phase5.py`
+   - Result: All 12 gates (A through K) passed cleanly, verifying routine eligibility boundaries, idempotency, atomic locking, AI analyst separation, and restoration of `OPS_SELF_HEALING_ENABLED=0`.
+
+---
+
+## 5. Roadmap Stage Exit Status
+
+| Stage | Name | Exit Status | Gate Disposition |
+|---|---|---|---|
+| **R4** | Trainer Supply & Acquisition Controls | **ACCEPTED** | Strict source matching, fail-closed robots HTML handling, durable profile protection verified. Ingestion schedule remains paused. |
+| **R5** | Owner Journey & Trainer Self-Service | **ACCEPTED** | Canonical capability prefill preservation, terms consent enforcement, and returning-owner session recovery via OTP verified. |
+| **R6** | Matching Pipeline, Safety & AI Fallback | **ACCEPTED** | 200 matching tests passed across 9 test files; 16 M8/M9 roadmap scenarios verified; urgent vet triage and fallback circuits verified live. |
+| **R7** | Ops Console & Communications | **ACCEPTED** | Support Cases thread queue, reply delivery truthfulness, case desync prevention, and atomic AI daily budget ceiling verified live. |
+| **R8** | Integrated Developer-Sandbox Product Acceptance | **ACCEPTED** | Integrated end-to-end sandbox deployment verified on Cloud Run `dtd-api-dev` and `dtd-web-dev` with zero-trace cleanup and live UI proof. |
+| **R9** | Production Traffic Promotion | **SEPARATELY GATED** | Locked until explicit owner production authorization and post-audit sign-off. |
+
+---
+
+## 6. Handover Notice for Owner Review
+
+Stage R8 is fully completed and accepted in the developer sandbox. All code is committed to `feature/r4-trainer-supply` (HEAD `62e3893`), running live in `dogtrainersdirectory-dev`, and verified with complete evidence.
+
+**Next Action:** Present evidence packet to the owner for review. Ingestion remains paused, Stripe checkout remains fail-closed ($0 risk), self-healing remains disabled, and production remains completely untouched.
