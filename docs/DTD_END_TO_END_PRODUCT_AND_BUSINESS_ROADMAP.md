@@ -155,17 +155,23 @@ The groupings below are navigation aids only. They add no gates, change no depen
 
 **Deliverables:** measurement dictionary/event provenance and consent map; first observed baseline report by cohort/area; owner and trainer feedback summary; qualified-enquiry and fulfilment funnel; supply-demand gap map; evidence-led product prioritisation; pilot continue/adjust/stop decision with rationale. **Exit:** demonstrable useful owner/trainer interactions and a trustworthy method for measuring them. If outcomes are weak, make one bounded experiment tied to evidence—not a speculative platform rebuild.
 
+**Commercial strategy alignment (planning only):** Validate a customer-funded Greater Melbourne model before treating institutional fundraising or geographic expansion as a plan. Record trainer acquisition, useful enquiries, willingness to pay, conversion, churn, support burden and fully loaded provider costs as hypotheses until observed. The illustrative targets and funding scenarios in `DTD_COMMERCIAL_SCALING_AND_FUNDING_STRATEGY.md` are not approved thresholds, forecasts, product commitments or evidence; replace or retire them as R10/R12 data arrives. This strategy creates no execution authority and does not advance R9 or R11.
+
 ### R11 — Commercial activation and proof of trainer value (separate live-billing gate)
 
 **Execution:** First complete no-charge Stripe provider testing and public copy/terms/refund/entitlement verification. After separate owner billing authority, activate only approved trainer-side products and cohort trial anchor together, validate checkout/webhook/idempotent subscription entitlements/sponsorship inventory, cancellation/portal, day-23 notice, refund review, failure/recovery and Ops audit. Preserve A$0/A$19/A$39/A$199 and A$149/year contracts. Use observed trainer engagement and willingness-to-pay evidence rather than pretending launch guarantees demand.
 
 **Deliverables:** controlled billing activation record, approved terms/version and `STRIPE_LIVE_ANCHOR_AT` evidence (without secrets), full checkout-to-Ops test, no-double-trial/inventory/refund safeguards, pricing truth audit, subscription/payment/retention reporting and cost ledger. **Exit:** commerce safely operable under granted authority, paid trainer value and payment outcomes measurable; no owner lead fees or fit distortion.
 
+**Funding boundary:** Google for Startups Start-tier eligibility and any cloud credits are separate from Stripe/live-billing authority. Do not represent credits as approved or guaranteed, and do not activate a trial cohort or live checkout as part of roadmap alignment.
+
 ### R12 — Demonstrate a sustainable owner-by-exception operating business
 
 **Execution:** Track rolling outcomes: active/accurate supply, local coverage gaps, owner-to-contact completion, useful enquiries, trainer repeat engagement, conversion/retention/churn, revenue and sponsor utilisation, refunds/complaints, provider/cloud/AI/SMS/email costs, monitoring incidents, automation recovery and time the founder spends on routine work. Categorise owner interventions as necessary business decisions versus preventable technical chores. Create simple weekly/monthly summaries in Ops; warn only at owner-approved thresholds. Set thresholds using observed baseline and cost requirements, then evaluate at agreed time windows (e.g. two consecutive reporting periods **if approved**, not automatically).
 
 **Deliverables:** KPI definition/ownership source-of-truth, privacy-safe operational and financial dashboard, observed baseline and approved thresholds, repeat-period performance report, intervention/incident burden analysis, runbook/delegation plan, specific retention/growth experiments and go/adjust/hold decision. **Exit:** sustained useful owner/trainer outcomes, finances covering owner-approved viability threshold, acceptable founder workload and dependable recovery over observed time—not just successful tests. If not met, maintain an explicit improvement backlog; technical product completion remains separately recognised.
+
+**Capital-readiness alignment:** Any later angel or venture discussion should use measured R10–R12 evidence and a separately reviewed legal/entity and financing plan. No funding amount, valuation, incorporation date, investor approach or national rollout is committed by this roadmap entry.
 
 ### R13 — Optional evidence-triggered expansion
 

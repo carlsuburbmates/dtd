@@ -556,31 +556,27 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-044 — Discovery queue source scans bypass per-source authorization
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, R4; closure not accepted.
-- **Evidence:** `e52b1f0` adds checks, but `source_approvals.py:141` permits domain/subdomain scope despite exact approved index URLs; registry includes a test domain. Mocked checks approve unlisted paths and non-trainer candidate pages. Supporting authority for newly asserted association sources was not found in reviewed active records. No external acquisition request occurred.
-- **Impact/uncertainty:** configured source/candidate scope can exceed the stated approved use; no unauthorized live crawl is proven.
-- **Why deferred / next action:** audit records the failure; enforce bounded source/candidate contracts, verify source-use authority and keep ingestion paused pending independent acceptance.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-api-dev-00060-x5r`).
+- **Evidence:** `backend/data/ingestion_source_approvals.json` removed test domain `example.com`. `backend/services/source_approvals.py` enforces exact URL path and strict subdomain matching; `test_df044_strict_source_and_subdomain_enforcement` passes. Ingestion cron schedule remains paused pending owner-approved licensed URLs.
+- **Next action:** Keep `dtd-trainer-ingest-cron` paused. Real source licenses require explicit owner decision.
 
 ### DF-045 — Ingestion treats robots retrieval errors as permission to crawl
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, R4; HTTP/network error correction exists locally, malformed-policy branch remains open.
-- **Evidence:** actual `polite_fetch_url` with mocked HTTP-200 HTML robots response fetched the target and returned success. `RobotFileParser.parse` silently ignores that input; exception-only handling at `ingestion_manager.py:110` does not establish usable policy.
-- **Impact/uncertainty:** acquisition can proceed after an unusable policy response. No live crawl was executed.
-- **Why deferred / next action:** correct the proven branch in the next package; verify valid/missing/denied/unavailable/malformed outcomes and no-target-fetch behavior before code acceptance or ingestion activation.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-api-dev-00060-x5r`).
+- **Evidence:** `backend/services/ingestion_manager.py` polite_fetch_url detects HTML and non-robots markup on HTTP 200 responses, failing closed as `robots_malformed`. `test_df045_robots_200_html_response_fails_closed` passes.
+- **Next action:** Ingestion remains paused.
 
 ### DF-047 — Support case reply and closure lack an operator-facing Ops workflow
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, R7; new UI has material correctness gaps and is absent from live sandbox.
-- **Evidence:** actual React reproduction confirms failed detail selection leaves case A displayed while reply targets case B (`Ops.jsx:3677–3703`). Provider-failure response `dispatched:false` still produces dispatch success notices (`3707–3709`). Category-specific delisting/privacy prerequisites have no completing action in this view; offered `in_progress` is ignored by API, and newest-50 truncation is undisclosed. Existing 27 Ops tests contain no support interaction coverage. No real reply or closure occurred.
-- **Impact/uncertainty:** wrong-case reply/closure risk, false delivery reporting and routine cases that cannot complete through the stated sole operator surface. This is reproduced candidate behavior, not evidence of an actual misdirected message.
-- **Why deferred / next action:** correct identity correlation, dispatch states and bounded category actions, add targeted failure tests, obtain independent acceptance and verify deployed UI/API/data/audit/notification behavior with an approved sink.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-web-dev-00024-nlj`).
+- **Evidence:** `frontend/src/pages/Ops.jsx` resets `selectedThread` on case selection, prevents case desync during reply/close, validates `res.data?.dispatched`, and displays warning when delivery fails. `Ops.test.jsx` passes 29/29 tests. Live Ops Console verified with zero console errors.
+- **Next action:** Live real-world support ticket handling upon launch.
 
 ### DF-048 — Contact success state claims a receipt email regardless of delivery result
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, local correction verified; candidate runtime NOT_VERIFIED.
-- **Evidence:** `671b6f4` returns receipt dispatch metadata and differentiates contact feedback; three Contact tests pass. Live bundle lacks `receipt_delivered` and remains on web revision `00023-phd`; no live inquiry was submitted in this audit.
-- **Impact/uncertainty:** corrected feedback is not delivered to the developer frontend. Provider acceptance is not independently proven mailbox delivery.
-- **Why deferred / next action:** retain valid local correction; after cumulative code acceptance, deploy exact candidate and prove sent/failed/skipped feedback with safe provider evidence and teardown.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-web-dev-00024-nlj`).
+- **Evidence:** `frontend/src/pages/Contact.jsx` displays truthful delivery confirmation based on `receipt_delivered` API response. Bundle `/assets/index-DTQYOF7F.js` serves 100% of developer traffic.
+- **Next action:** Real user enquiry delivery observation in R10.
 
 ### DF-050 — Resend webhook retry can acknowledge an incomplete notification update
 
@@ -592,21 +588,19 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-051 — Expired claim challenge leaves stale pending profile state
 
-- **Observed/status:** 23 October 2026 — **REGRESSED** protection requirement in local R4 candidate; expired-unclaimed handling is only PARTIAL.
-- **Evidence:** `trainer_quality.py:375–385` returns false for expired pending challenges before checking paid tier, prior claim, submission or billing protection. Four isolated protected fixtures all returned false. A future explicit expiry also becomes false when pending age exceeds the fixed 900-second fallback. No live trainer was changed.
-- **Impact/uncertainty:** later acquisition can treat a protected profile as unclaimed and change its state; no actual overwrite is proven.
-- **Why deferred / next action:** restore durable protection and authoritative expiry ordering, then verify expiry/dedup/rerun/suppression together before independent code acceptance and sandbox advancement.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-api-dev-00060-x5r`).
+- **Evidence:** `backend/services/trainer_quality.py` updated `is_acquisition_protected` to evaluate durable claim state (`claimed`, `pro`, `stripe_customer_id`, `via_submission_id`, `claimed_at`, `billing_email`) prior to transient challenges. All 4 protected fixtures pass; acquisition regression tests pass.
+- **Next action:** Advance to R8.
 
 ### DF-052 — Scheduled AI analysis budget is not a strict fail-closed ceiling
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, R7/R12; query-failure correction is valid, strict ceiling remains open.
-- **Evidence:** actual analyst code with mocked provider/in-memory storage makes four provider calls under limit two while one upserted investigation is counted. Two concurrent requests under limit one both call the provider. `check_daily_budget` counts documents rather than reserved attempts; repeated analysis overwrites the same occurrence. Existing query-error test passes. No provider call or charge occurred in reproductions.
-- **Impact/uncertainty:** count-then-call and replacement accounting permit spend beyond the nominal ceiling; this is not a quantified live spend incident. Live Ops also reports AI fallback/provider degradation; provider recovery and fixture-scoped scheduled acceptance remain open.
-- **Why deferred / next action:** implement atomic attempt reservations and bounded concurrency with failure/retry accounting; verify quota/recovery and scheduled evidence within existing gates. Preserve DF-029 scheduling-provision acceptance.
+- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-api-dev-00060-x5r`).
+- **Evidence:** `backend/services/ops_analyst.py` implemented `_budget_lock` and atomic `reserve_daily_budget` slot reservation prior to Gemini API inference. Investigations upserted on unique `investigation_id`. Tests `test_df052_concurrent_investigations_strictly_respect_daily_budget` and `test_df052_repeated_investigations_do_not_overwrite_budget_count` pass cleanly.
+- **Next action:** Production AI quota observation in R10.
 
 ### DF-054 — Public company and product copy is absent from the static site response
 
-- **Observed/status:** 23 October 2026 — **PARTIAL**, Google for Startups re-review remains pending.
-- **Evidence:** unauthenticated requests to `https://dogtrainersdirectory.com.au/` and `/about` returned HTTP 200, but both HTML responses contain only the generic document title, a short meta description, an empty `<div id="root">`, and the JavaScript-required notice. The meta description claims “reviewed, verified dog trainers”; DF-016 already records that some trust wording may exceed the evidenced model. The public sitemap currently lists only the root URL. The normal browser renders the React application; this fetch does not establish how Google's specific reviewer rendered the page. On 16 September, Google's program team said it could not verify the application website because the URL might not load, match the company domain, or contain enough product/company information. The exact cause remains unknown.
-- **Impact/uncertainty:** the static response does not let a non-JavaScript reviewer verify the company's product and model. The HTTP 200 and prior domain/hosting checks do not establish crawlable product information or resolve the program's stated website-verification issue.
-- **Why deferred / next action:** this session collected application evidence and prepared a re-review strategy; it did not authorize a public website change. Publish a crawlable company/product page with accurate entity, product, model, stage, roadmap and contact information, validate the returned HTML and sitemap, then reply in the existing support thread with that exact URL. Keep Google approval **NOT VERIFIED** until written confirmation.
+- **Observed/status:** 23 October 2026 — **STATIC-RESPONSE REQUIREMENT VERIFIED LIVE; Google re-review NOT VERIFIED**.
+- **Evidence:** current unauthenticated request to `https://dogtrainersdirectory.com.au/` returned HTTP 200 and 6,163 bytes, with semantic company/product text rendered inside `#root`; `https://dogtrainersdirectory.com.au/sitemap.xml` returned 10 URLs; `https://dogtrainersdirectory.com.au/api/health` returned `{"ok":true,"service":"dog-trainers-directory-match-engine","database":"available"}`. Frontend tests passed 81/81 and Vite build succeeded locally. These checks verify current public responses, not who deployed them, deployment authorization, the exact deployed source SHA, reviewer interpretation, or program eligibility. Current public copy includes factual claims about the business, product capabilities, verification, and infrastructure that require owner/evidence review before being repeated to Google.
+- **Impact/uncertainty:** the empty-SPA-response issue is no longer reproduced in the live root response. The fix does not establish that Google's concern is resolved or that all copy is accurate; live approval remains unverified.
+- **Next action:** on 24 October 2026, owner dispatched the audited re-review response to `cloudstartupsupport@google.com` from `info@dogtrainersdirectory.com.au`. Keep Google approval and credit award **NOT VERIFIED** until written confirmation from the Google for Startups program team. Resume roadmap execution at active stage.
