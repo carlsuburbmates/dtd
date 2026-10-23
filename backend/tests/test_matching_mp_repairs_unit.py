@@ -1,7 +1,7 @@
 """Dedicated unit test suite covering the 5 repair blockers (MP-001 through MP-005).
 
 Governed by:
-- MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md (Codex independent audit)
+- archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md (Codex independent audit)
 - DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md
 - AGENTS.md (Rule 6A, Evidence-first owner-assistance)
 """

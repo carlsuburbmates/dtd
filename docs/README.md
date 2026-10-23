@@ -1,6 +1,6 @@
 # DTD Documentation
 
-**Reconciled:** 22 October 2026 (R3 API release evidence and hosting boundary added; product synthesis remains governed by linked sources)
+**Reconciled:** 24 October 2026 (superseded handovers/audits archived; current R8 checkpoint and external Antigravity stream remain separate)
 **Scope:** the main Dog Trainers Directory repository. The separately deployed First Leash application owns its own product documentation.
 
 This folder is both the map of DTD's authoritative documentation and a readable synthesis of the project. The synthesis below introduces no independent facts: every substantive statement is governed by one of the linked state, constraint, decision, or specification documents.
@@ -23,12 +23,10 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | [DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md](DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md) | Owner-approved R0–R13 stage sequence and separate engineering/product/operational/business outcomes | Stage navigation; existing authority documents still govern implementation |
 | [DTD_NEXT_SESSION_HANDOVER.md](DTD_NEXT_SESSION_HANDOVER.md) | Exact resume checkpoint, current sandbox, retained work and next authorized stage | Resuming after the requested handover |
 | [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md) | Current stage gates, next safe action and review checkpoint | Resuming roadmap execution |
-| [DTD_CODEX_CURRENT_REALITY_AUDIT.md](DTD_CODEX_CURRENT_REALITY_AUDIT.md) | Dated independent evidence for the 20 October baseline and R1 readiness | Reviewing this audit snapshot |
 | [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) | Deduplicated P0–P3 findings mapped to roadmap stages | Prioritizing fixes without creating parallel issue tracking |
 | [DTD_ROADMAP_RECONCILIATION.md](DTD_ROADMAP_RECONCILIATION.md) | R-stage mapping to existing completion plans, findings and decisions | Reconciling existing plans |
 | [R2_RELEASE_RECONCILIATION.md](R2_RELEASE_RECONCILIATION.md) | Exact merged main SHA, developer Cloud Run revisions, checks, safety flags, scheduler state and recovery evidence | Reviewing R2 consolidation and sandbox deployment |
 | [R3_RELEASE_FOUNDATION.md](R3_RELEASE_FOUNDATION.md) | Exact R3 developer API release, dependency/source verification, health, scheduler, recovery limits and hosting/provider gaps | Reviewing R3 release foundation and current sandbox boundary |
-| [DTD_GOVERNANCE_SYNC_EVIDENCE.md](DTD_GOVERNANCE_SYNC_EVIDENCE.md) | ZIP integrity, repository comparison and governance review handoff | Reviewing governance synchronization |
 | [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md) | Exact DF-043 commit/build/revision, sandbox suppression checks, identity verification and R1 gate | Reviewing developer release evidence |
 | [R1_FIXTURE_CLEANUP.md](R1_FIXTURE_CLEANUP.md) | Bounded synthetic fixture and temporary Scheduler cleanup record | Verifying sandbox fixture cleanup |
 | [ANTIGRAVITY_GOOGLE_STARTUPS_RESEARCH_HANDOFF.md](ANTIGRAVITY_GOOGLE_STARTUPS_RESEARCH_HANDOFF.md) | Initial Antigravity prompt: establish a reusable Google for Startups program baseline, then independently assess the DTD application | Continuing the startup application review; not permission to send, publish, or mutate provider state |
@@ -49,6 +47,12 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 | [specs/OPS_AND_OBSERVABILITY.md](specs/OPS_AND_OBSERVABILITY.md) | Operator workflows, automation and degraded states | `/ops`, alerts or production operations |
 | [specs/SANDBOX_VERIFICATION_MATRIX.md](specs/SANDBOX_VERIFICATION_MATRIX.md) | Mandatory pre-flight checklist and sandbox gates | Testing features before production promotion |
 | [specs/ACQUISITION_AND_INGESTION.md](specs/ACQUISITION_AND_INGESTION.md) | Lawful trainer sourcing, verification and lifecycle | Any data acquisition or profile ingestion work |
+
+## Current checkpoint and historical records
+
+The local independent-audit checkpoint is `389130e` on `codex/r8-audit-completion`; corrected runtime acceptance remains **PARTIAL**, not deployed. Use [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md), [current state](DTD_CURRENT_STATE.md) and [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md) for its scope. The owner sent the new `0701d09` commercial/roadmap handover to another Antigravity session; reconcile that session's returned commits before overlapping advancement. The active next-session and Google research handovers remain in `docs/`.
+
+Twelve earlier acquisition/matching briefs and dated audit snapshots moved to the [24 October historical inventory](../archive/2026-10-24-superseded-handoffs-and-audits/README.md). Their evidence is preserved; their old resume/blocked/completed wording is not current execution authority. Follow historical links only for explicitly requested archival research. Current specs, M0–M10 criteria, decisions, release/recovery records and the new handover remain active.
 
 ## State progression
 

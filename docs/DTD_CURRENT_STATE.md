@@ -352,7 +352,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
 - **Observed/status:** 5 October 2026 — local candidate `c7afb07` repairs the observed stale-token and arbitrary-direct-attribution paths; developer-sandbox verification remains open.
-- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** no raw behavioural description is observed in result/profile URLs in this local path. The exact deployed request, persisted record and browser session lifecycle have not been inspected in the developer sandbox.
 - **Why deferred:** this audit does not deploy, query live owner data or change production retention.
 - **Next action:** verify the full owner result-to-profile-to-enquiry journey and persisted redaction with disposable sandbox data before closure. Matching roadmap M2/M5/M9 own the remaining evidence.
@@ -360,7 +360,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
 - **Observed/status:** 5 October 2026 — local remediation accepted in candidate `7dd99fa`; developer-sandbox rendering remains unverified.
-- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** this audit has not checked the rendered developer-sandbox routes for the accepted local commit.
 - **Next action:** verify the public-route copy during M9 developer-sandbox acceptance; close only with deployed-rendering evidence.
@@ -368,7 +368,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-017 — Failed owner follow-ups cannot retry
 
 - **Observed/status:** 5 October 2026 — repaired locally in candidate `8e03f6c`; developer-sandbox/provider verification remains open.
-- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** the implementation is materially improved, but can still mislead owners/operators about non-delivery or create duplicate communication. No configured safe provider or sandbox record was inspected.
 - **Why deferred:** no safe-provider or sandbox record was inspected in this local audit.
 - **Next action:** complete safe-provider sandbox evidence for delivery and retry lifecycle. Matching roadmap M5/M8/M9 own the remaining work.
@@ -414,7 +414,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-024 — Urgent-support pathway exists locally but is not sandbox-accepted
 
 - **Observed/status:** 6 October 2026 — `PARTIAL`; sandbox triage routing is accepted, provider-data freshness remains open.
-- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** local responses no longer imply local coverage when none is configured. This does not evidence a current or comprehensive provider directory, safe live contact information, or deployed behaviour.
 - **Why deferred:** the completed M9 urgent route did not query or contact real provider data, and it does not establish Melbourne-wide provider coverage or freshness.
 - **Next action:** verify authorised provider evidence/freshness/correction lifecycle before claiming any broader urgent-support coverage.
