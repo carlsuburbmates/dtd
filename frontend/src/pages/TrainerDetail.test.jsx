@@ -289,7 +289,11 @@ describe("TrainerDetail ownership claim", () => {
         view.cleanup();
     });
 
-    it("renders verified storefront owner controls when trainer is claimed", async () => {
+    it("renders verified storefront owner controls when trainer is claimed and authenticated", async () => {
+        sessionStorage.setItem(
+            "dtd-trainer-billing-auth:trainer_1",
+            JSON.stringify({ trainerClaimSession: "test-auth-token" })
+        );
         const claimedTrainer = { ...trainer, claim_status: "claimed", tier: "core" };
         api.get.mockImplementation((path) => Promise.resolve({
             data: path === "/trainers/trainer_1" ? claimedTrainer : { public_matching_enabled: false },
@@ -303,6 +307,26 @@ describe("TrainerDetail ownership claim", () => {
         expect(ownerControls.textContent).toContain("Manage your listing");
         expect(view.container.querySelector("[data-testid='edit-capabilities-open']")).not.toBeNull();
         expect(view.container.querySelector("[data-testid='trainer-billing-link']")).not.toBeNull();
+
+        view.cleanup();
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+    });
+
+    it("renders discreet login prompt without leaking owner controls when public visitor views claimed profile (DF-030)", async () => {
+        sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");
+        const claimedTrainer = { ...trainer, claim_status: "claimed", tier: "core" };
+        api.get.mockImplementation((path) => Promise.resolve({
+            data: path === "/trainers/trainer_1" ? claimedTrainer : { public_matching_enabled: false },
+        }));
+        const view = renderDetail();
+        await settle();
+
+        expect(view.container.querySelector("[data-testid='trainer-owner-controls']")).toBeNull();
+        const loginPrompt = view.container.querySelector("[data-testid='trainer-owner-login-prompt']");
+        expect(loginPrompt).not.toBeNull();
+        expect(loginPrompt.textContent).toContain("Verified storefront");
+        expect(view.container.querySelector("[data-testid='edit-capabilities-open']")).not.toBeNull();
+        expect(view.container.querySelector("[data-testid='trainer-billing-link']")).toBeNull();
 
         view.cleanup();
     });
@@ -374,9 +398,9 @@ describe("TrainerDetail ownership claim", () => {
         const view = renderDetail();
         await settle();
 
-        // Billing link does not include an unauthorized token
+        // Billing link is not leaked to unauthenticated visitors
         const billingLink = view.container.querySelector("[data-testid='trainer-billing-link']");
-        expect(billingLink.getAttribute("href")).not.toContain("claimSession=");
+        expect(billingLink).toBeNull();
 
         // Clicking edit prompts the owner to verify ownership first
         act(() => {
@@ -474,7 +498,7 @@ describe("TrainerDetail ownership claim", () => {
         const view = renderDetail(); await settle();
         expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).toContain("trainer-one-token");
         routerState.id = "trainer_2"; view.rerender(); await settle();
-        expect(view.container.querySelector('[data-testid="trainer-billing-link"]').getAttribute("href")).not.toContain("claimSession");
+        expect(view.container.querySelector('[data-testid="trainer-billing-link"]')).toBeNull();
         await act(async () => view.container.querySelector('[data-testid="edit-capabilities-open"]').click());
         expect(view.container.querySelector('[data-testid="claim-email"]')).not.toBeNull();
         view.cleanup(); routerState.id = "trainer_1"; sessionStorage.removeItem("dtd-trainer-billing-auth:trainer_1");

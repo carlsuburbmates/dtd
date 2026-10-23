@@ -671,30 +671,46 @@ export default function TrainerDetail() {
                         <button type="button" onClick={() => setClaimOpen(true)} className="btn-primary mt-4 sm:mt-0" data-testid="claim-profile-open">Claim this profile</button>
                     </section>
                 ) : claimStatus === "claimed" ? (
-                    <section className="mt-8 rounded-2xl border border-[#1A3A32]/20 bg-[#FAF8F5] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 shadow-sm" data-testid="trainer-owner-controls">
-                        <div>
-                            <div className="small-caps text-[#5C6D59] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#1A3A32]" /> Verified Storefront Owner</div>
-                            <h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Manage your listing</h2>
-                            <p className="mt-1 text-sm text-[#4A615A]">Update your active specialties, service formats, suburbs, or review visibility upgrades.</p>
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-2.5 sm:mt-0">
+                    claimSessionToken ? (
+                        <section className="mt-8 rounded-2xl border border-[#1A3A32]/20 bg-[#FAF8F5] p-5 sm:flex sm:items-center sm:justify-between sm:gap-6 shadow-sm" data-testid="trainer-owner-controls">
+                            <div>
+                                <div className="small-caps text-[#5C6D59] flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-[#1A3A32]" /> Verified Storefront Owner</div>
+                                <h2 className="mt-1 font-serif text-2xl text-[#1A3A32]">Manage your listing</h2>
+                                <p className="mt-1 text-sm text-[#4A615A]">Update your active specialties, service formats, suburbs, or review visibility upgrades.</p>
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2.5 sm:mt-0">
+                                <button
+                                    type="button"
+                                    onClick={handleOpenEditCapabilities}
+                                    className="btn-secondary text-xs py-2.5 px-4"
+                                    data-testid="edit-capabilities-open"
+                                >
+                                    Edit specialties &amp; formats
+                                </button>
+                                <Link
+                                    to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${claimSessionToken ? `&claimSession=${encodeURIComponent(claimSessionToken)}` : ""}`}
+                                    className="btn-primary text-xs py-2.5 px-4"
+                                    data-testid="trainer-billing-link"
+                                >
+                                    Billing &amp; upgrades
+                                </Link>
+                            </div>
+                        </section>
+                    ) : (
+                        <div className="mt-6 pt-4 border-t border-[#E5DFD3]/60 flex items-center justify-between text-xs text-[#5C6D59]" data-testid="trainer-owner-login-prompt">
+                            <span className="flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-[#5C6D59]" /> Verified storefront
+                            </span>
                             <button
                                 type="button"
                                 onClick={handleOpenEditCapabilities}
-                                className="btn-secondary text-xs py-2.5 px-4"
+                                className="text-xs font-medium text-[#1A3A32] hover:text-[#5C6D59] underline underline-offset-2 transition-colors"
                                 data-testid="edit-capabilities-open"
                             >
-                                Edit specialties &amp; formats
+                                Own this business? Log in to manage listing
                             </button>
-                            <Link
-                                to={`/trainer/billing?trainerId=${encodeURIComponent(id)}${(claimSessionToken || readStoredClaimAuth(id)) ? `&claimSession=${encodeURIComponent(claimSessionToken || readStoredClaimAuth(id))}` : ""}`}
-                                className="btn-primary text-xs py-2.5 px-4"
-                                data-testid="trainer-billing-link"
-                            >
-                                Billing &amp; upgrades
-                            </Link>
                         </div>
-                    </section>
+                    )
                 ) : null}
                 </section>
 

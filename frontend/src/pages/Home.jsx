@@ -15,6 +15,7 @@ import { api, audCents } from "@/lib/api";
 import { FIRST_LEASH_URL } from "@/lib/educationBridge";
 import { PublicHeader, PublicFooter } from "@/components/PublicChrome";
 import OwnerWaitlistForm from "@/components/OwnerWaitlistForm";
+import SuburbCombobox from "@/components/SuburbCombobox";
 
 const CANONICAL_CONCERNS = [
     { id: "basic_manners", label: "Basic Manners" },
@@ -414,21 +415,15 @@ export default function Home() {
                                         <label htmlFor="match-suburb" className="block text-xs font-semibold text-[#1A3A32] uppercase tracking-wider mb-1.5">
                                             Suburb or Postcode <span className="text-rose-600">*</span>
                                         </label>
-                                        <input
+                                        <SuburbCombobox
                                             id="match-suburb"
-                                            data-testid="match-suburb"
-                                            className="w-full bg-white border border-[#E5DFD3] rounded-xl p-3.5 text-sm focus:outline-none focus:border-[#1A3A32] focus:ring-1 focus:ring-[#1A3A32] transition-all shadow-sm"
+                                            dataTestId="match-suburb"
                                             placeholder="e.g. Richmond or 3121"
                                             value={suburbOrPostcode}
                                             onChange={(e) => setSuburbOrPostcode(e.target.value)}
-                                            list="home-suburbs"
+                                            availableSuburbs={matchSuburbs}
                                             required
                                         />
-                                        <datalist id="home-suburbs">
-                                            {matchSuburbs.map((s) => (
-                                                <option key={s} value={s} />
-                                            ))}
-                                        </datalist>
                                     </div>
 
                                     {/* 2. Dog Age & Life Stage */}
