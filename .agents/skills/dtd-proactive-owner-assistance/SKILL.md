@@ -31,7 +31,7 @@ For owner-to-trainer matching, preserve the current decisions in `docs/specs/MAT
 
 ## Roadmap continuity and business outcomes
 
-- **R0 is accepted** at `1ac4138`; the immediate current work is **R1 sandbox verification and R2 release consolidation**, then existing DF/M work at R3–R8. Do not reopen the remediation merely because `/ops` is discussed.
+- **R0 is accepted** at `1ac4138`. Resolve the current stage and exact source/runtime checkpoint from `docs/DTD_ROADMAP_EXECUTION_REGISTER.md` and `docs/DTD_CURRENT_STATE.md`; do not restart completed R1–R3 from an older handover. Integrate commercial work through CDR-028 and the existing R stages, preserving separate runtime acceptance and production/billing gates. Do not reopen accepted remediation merely because `/ops` is discussed.
 - **Ops Phases 1–5A** have historical implementation/verification evidence; preserve it and validate only touched paths or actual regressions. Owner-facing `/ops` remains exception-led and nontechnical.
 - **R9** production promotion and **R11** live charging each retain their own explicit decision gates. Neither can be inferred from roadmap approval.
 - **R10–R12** add measured owner usefulness, trainer value, trustworthy supply, retention/revenue/costs and founder workload. Choose baselines and later thresholds from verified, consented data; these are **not** prereqs for R1–R2.

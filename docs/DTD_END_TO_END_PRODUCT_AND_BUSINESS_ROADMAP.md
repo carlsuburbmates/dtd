@@ -1,6 +1,6 @@
 # Dog Trainers Directory — End-to-End Product & Business Roadmap
 
-**Version:** Strategic roadmap v1.0 — 20 October 2026 (owner-approved North Star; implementation gates remain governed)
+**Version:** Strategic roadmap v1.1 — commercial integration reconciled 26 October 2026; original North Star approved 20 October. Stage identifiers, accepted checkpoints and action gates remain governed.
 **Starting artifact:** `dtd_remediation_release_checkpoint1_reconciled_matrix.md` (Antigravity's corrected Checkpoint 1 evidence; supplied in conversation; not asserted to be committed to GitHub)
 **Frozen accepted remediation code:** `1ac4138e4d82991501139298cc624be732661119` on `fix/ops-security-integrity-d83c7f4`
 **Existing implementation authority:** `AGENTS.md`, `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`, `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md`, approved specifications and applicable decision contracts.
@@ -62,7 +62,7 @@ The groupings below are navigation aids only. They add no gates, change no depen
 | **3. Operate and validate** | **R7–R12** | Accept operational workflows, prove the integrated product, pass separate release gates, then measure marketplace value, commerce and sustainable operation. |
 | **4. Evolve only on evidence** | **R13** | Consider expansion only after the core business outcomes are evidenced and the owner approves a specific opportunity. |
 
-**Current pointer (24 October 2026):** R0–R3 remain accepted. Independent review found additional defects after `1022ad5`; local audit corrections pass 710 backend and 100 frontend tests, but corrected integrated runtime acceptance is still PARTIAL. Preserve separate-session handover `0701d09`, including static HTML fallback/sitemap, and reconcile the other Antigravity session's exact commits before overlapping promotion. Detailed source/review/runtime boundaries: `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`. Production R9 and live billing remain separately gated; commercial targets are not measured outcomes.
+**Current pointer (26 October 2026):** R0–R3 remain accepted. PR #20 integrated independently reviewed source `79b8165` as `4e54968`, followed by source/Git consolidation and the separately approved 25 October developer credential containment. This closes source consolidation and the scoped credential/flag findings, not the corrected R4–R8 runtime matrix. The containment reused the prior image; do not infer current-main deployment from it. Use `DTD_CURRENT_STATE.md` for exact source/runtime and recovery evidence. The commercial plan now forms one mapped business workflow inside R0–R13 under CDR-028. Production R9 and live commerce R11 remain separately gated.
 
 ### Stage status and expected outcome
 
@@ -84,6 +84,19 @@ The groupings below are navigation aids only. They add no gates, change no depen
 | **R13** | Evidence-triggered evolution (optional) | **VISION ONLY** | Owner-approved expansion only when explicit trigger and cost/benefit evidence exist | R12 + new decision |
 
 **Ordering is dependency-based, not an instruction to repeat tests already valid for unchanged code.** Historical Ops phase acceptance and M0 DONE are carried forward. Mark every older claim as independently confirmed, stale, PARTIAL or not relevant, rather than automatically revoking it.
+
+### Commercial workflow integrated into these stages
+
+At the owner's direction in the 23–24 October Antigravity discussions, the [commercial strategy](DTD_COMMERCIAL_SCALING_AND_FUNDING_STRATEGY.md) refines this roadmap; it does not create a second execution track. The intended production journey is useful local discovery → eligible paid-neutral matching → explicit consented contact → truthful notification and trainer participation → free claim/capability management → optional, separately authorised Pro/sponsorship → measured value and sustainable owner workload.
+
+| Business engine | Existing R stages | Contract to preserve |
+|---|---|---|
+| Local discovery and suburb SEO | R4 supply; R5 website/indexation; R8 connected proof; R10 outcomes | Existing `/melbourne/:suburb` route, real supply/content eligibility, accurate structured data; no promised search ranking or zero acquisition cost. |
+| Guided matching and useful owner contact | R5–R6; R7 delivery; R8 connected proof | Current v2 eligibility/AI/fallback/urgent contract, 0.05 presentation band and explicit enquiry consent; no automatic lead broadcast from a match result. |
+| Free trainer claim and optional Pro trial | R4–R5 facts/session; R7 notifications; R8 safe proof; R11 live commerce | Free/Core enquiries remain free. Eligible trial starts on authorised Stripe subscription creation, not on claiming alone; day-23 warning, cancellation and failure truth remain required. |
+| Sponsorship and business sustainability | R6 presentation; R8 safe inventory proof; R11 commerce; R10/R12 measurement; optional R13 | Two sponsors/suburb, four suburbs/business default, paid-neutral fit, genuine availability and provider-backed inventory; no guaranteed top placement, margin, financing or expansion. |
+
+The present release goal is the integrated production service after the final sandbox/owner audit and R9 authority. The Google re-review describes a demonstrable MVP and a funding direction; it does not certify all live workflows, award credits, or activate R11. Cost, revenue, workload, valuation and fundraising examples remain hypotheses until measured/reviewed at their assigned stages. R7 remains Ops/communications; SEO is included through existing website/indexation and integrated acceptance work.
 
 ## 5. Stage-by-stage execution and exit contracts
 

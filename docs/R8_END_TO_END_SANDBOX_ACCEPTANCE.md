@@ -1,5 +1,7 @@
 # R8 Integrated Developer-Sandbox Product Acceptance Evidence
 
+> **26 October reconciliation:** PR #20 integrated reviewed source `79b8165` as `4e54968`; the old isolated/remote-branch instructions in this dated packet are historical. The separately approved 25 October developer credential containment reused the previous image, so corrected R4–R8 runtime acceptance remains PARTIAL. Use `DTD_CURRENT_STATE.md` and `DTD_ROADMAP_EXECUTION_REGISTER.md` for current source/runtime, safe credentials and the remaining exact-SHA acceptance package; do not repeat merged implementation. CDR-028 and the revised commercial strategy integrate the two Antigravity sessions without granting new production or billing authority. The observations and test evidence below retain their original date and scope.
+
 **Evidence date:** 24 October 2026 (Australia/Melbourne).
 
 **Disposition: PARTIAL — integrated runtime acceptance remains open.**
