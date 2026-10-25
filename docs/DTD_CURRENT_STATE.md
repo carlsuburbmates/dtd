@@ -17,7 +17,7 @@ The main working checkout was clean at `4f47fea`; the latest storefront delta wa
 
 Current deployed credential equivalence and sandbox flags are **NEEDS_AUTH / NOT_VERIFIED** because gcloud requires owner reauthentication. DF-055 records the remaining credential-history/recovery gate. Restoring source defaults makes no provider change. The older master audit guide's reported enabled sandbox flags remain a dated report, not current verified configuration or fresh activation authority.
 
-Branch/worktree preservation and retirement decisions are in [the consolidation record](../archive/2026-10-25-branch-consolidation/README.md). Accepted R0–R3 evidence and R8 runtime limitations remain unchanged.
+PR20 merged reviewed source `79b8165` as `4e54968`; source PR/Push Verify and CodeQL passed (backend705passed/5skipped; no new local suite run).17local/12remote obsolete branches were retired after exact ancestry/blob-equivalence checks and private preservation. Main remains the only branch; worktree directories and the existing stash are retained. Full evidence: [consolidation record](../archive/2026-10-25-branch-consolidation/README.md). Accepted R0–R3 evidence and R8 runtime limitations remain unchanged.
 
 ## R8 independent audit and separate-session coordination — 24 October 2026
 

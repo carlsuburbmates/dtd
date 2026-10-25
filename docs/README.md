@@ -51,7 +51,7 @@ The active cross-project execution sequence is [DTD Full Project Completion Plan
 
 ## Current checkpoint and historical records
 
-**25 October Git audit:** source and branch consolidation is recorded in the [branch inventory](../archive/2026-10-25-branch-consolidation/README.md). Runtime acceptance and credential-history verification remain separately tracked in current state / DF-055.
+**25 October Git audit:** PR20 source consolidation is merged;17local/12remote obsolete branches retired with private preservation. See the [branch inventory](../archive/2026-10-25-branch-consolidation/README.md). Runtime acceptance and credential-history verification remain separately tracked in current state / DF-055.
 
 
 The local independent-audit checkpoint is `389130e` on `codex/r8-audit-completion`; corrected runtime acceptance remains **PARTIAL**, not deployed. Use [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md), [current state](DTD_CURRENT_STATE.md) and [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md) for its scope. The owner sent the new `0701d09` commercial/roadmap handover to another Antigravity session; reconcile that session's returned commits before overlapping advancement. The active next-session and Google research handovers remain in `docs/`.
