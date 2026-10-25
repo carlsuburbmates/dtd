@@ -1,4 +1,5 @@
-// Canonical Greater Melbourne suburbs with primary postcodes and regional clusters
+// Derived from backend/data/dtd_melbourne_suburbs.v1.json.
+// Primary postcodes label results; postcodes retains canonical alternatives where present.
 export const MELBOURNE_SUBURBS = [
   {
     "name": "Abbotsford",
@@ -1593,6 +1594,7 @@ export const MELBOURNE_SUBURBS = [
   {
     "name": "Melbourne",
     "postcode": "3000",
+    "postcodes": ["3000", "3004"],
     "region": "Melbourne - Inner"
   },
   {
@@ -1973,6 +1975,7 @@ export const MELBOURNE_SUBURBS = [
   {
     "name": "Plumpton",
     "postcode": "3037",
+    "postcodes": ["3037", "3335", "3427"],
     "region": "Melbourne - West"
   },
   {

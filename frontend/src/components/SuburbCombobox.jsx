@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { MapPin, Search, X, ChevronDown } from "lucide-react";
 import { MELBOURNE_SUBURBS } from "@/data/melbourneSuburbs";
 
+const EMPTY_SUBURBS = [];
+
 // Curated popular hubs for zero-input / initial focus state
 const POPULAR_HUBS = [
   "Richmond",
@@ -23,7 +25,7 @@ export default function SuburbCombobox({
   placeholder = "e.g. Richmond or 3121",
   required = false,
   className = "",
-  availableSuburbs = [], // optional filter from /config
+  availableSuburbs = EMPTY_SUBURBS, // additional names from /config
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -63,13 +65,10 @@ export default function SuburbCombobox({
 
     return catalogue
       .filter((item) => {
-        if (isNumeric) {
-          return item.postcode.startsWith(query);
-        }
-        return (
-          item.name.toLowerCase().includes(query) ||
-          item.postcode.startsWith(query)
+        const postcodeMatches = (item.postcodes || [item.postcode]).some((postcode) =>
+          postcode.startsWith(query)
         );
+        return isNumeric ? postcodeMatches : item.name.toLowerCase().includes(query) || postcodeMatches;
       })
       .sort((a, b) => {
         const aName = a.name.toLowerCase();
@@ -89,6 +88,7 @@ export default function SuburbCombobox({
     function handleClickOutside(event) {
       if (containerRef.current && !containerRef.current.contains(event.target)) {
         setIsOpen(false);
+        setActiveIndex(-1);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -118,8 +118,9 @@ export default function SuburbCombobox({
     if (onSelect) {
       onSelect(suburb);
     }
-    setIsOpen(false);
     inputRef.current?.focus();
+    setIsOpen(false);
+    setActiveIndex(-1);
   };
 
   const handleClear = (e) => {
@@ -128,12 +129,21 @@ export default function SuburbCombobox({
       onChange({ target: { value: "", id, name: id } });
     }
     setIsOpen(true);
+    setActiveIndex(-1);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e) => {
     if (!isOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
       setIsOpen(true);
+      setActiveIndex(filteredSuburbs.length ? (e.key === "ArrowDown" ? 0 : filteredSuburbs.length - 1) : -1);
+      return;
+    }
+
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !filteredSuburbs.length) {
+      e.preventDefault();
+      setActiveIndex(-1);
       return;
     }
 
@@ -152,8 +162,10 @@ export default function SuburbCombobox({
         e.preventDefault();
         handleSelect(filteredSuburbs[activeIndex]);
       }
-    } else if (e.key === "Escape") {
+    } else if (e.key === "Escape" || e.key === "Tab") {
+      if (e.key === "Escape") e.preventDefault();
       setIsOpen(false);
+      setActiveIndex(-1);
     }
   };
 
@@ -180,7 +192,12 @@ export default function SuburbCombobox({
   const isZeroState = !value || !value.trim();
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className="relative w-full" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        setIsOpen(false);
+        setActiveIndex(-1);
+      }
+    }}>
       {/* Input Field with contextual icons */}
       <div className="relative flex items-center">
         <span className="absolute left-3.5 flex items-center pointer-events-none text-[#5C6D59]">
@@ -197,7 +214,8 @@ export default function SuburbCombobox({
           aria-autocomplete="list"
           aria-controls={`${id}-listbox`}
           aria-activedescendant={
-            activeIndex >= 0 ? `${id}-item-${activeIndex}` : undefined
+            isOpen && activeIndex >= 0 && activeIndex < filteredSuburbs.length
+              ? `${id}-item-${activeIndex}` : undefined
           }
           className={`w-full bg-white border border-[#E5DFD3] rounded-xl pl-10 pr-10 py-3.5 text-sm text-[#1A3A32] placeholder-[#4A615A]/60 focus:outline-none focus:border-[#1A3A32] focus:ring-2 focus:ring-[#1A3A32]/10 transition-all shadow-sm ${className}`}
           placeholder={placeholder}
@@ -246,6 +264,7 @@ export default function SuburbCombobox({
         <div
           id={`${id}-listbox`}
           role="listbox"
+          aria-label="Suburb suggestions"
           className="absolute z-50 left-0 right-0 mt-2 bg-white/95 backdrop-blur-md border border-[#E5DFD3] rounded-2xl shadow-xl shadow-stone-900/10 overflow-hidden transition-all duration-150 animate-in fade-in-0 slide-in-from-top-1"
         >
           {/* Section Header */}
@@ -261,12 +280,16 @@ export default function SuburbCombobox({
             {filteredSuburbs.length > 0 ? (
               filteredSuburbs.map((suburb, index) => {
                 const isSelected = activeIndex === index;
+                const matchingPostcode = /^\d+$/.test(value.trim())
+                  ? (suburb.postcodes || [suburb.postcode]).find((postcode) => postcode.startsWith(value.trim())) || suburb.postcode
+                  : suburb.postcode;
                 return (
                   <div
                     key={`${suburb.name}-${suburb.postcode}-${index}`}
                     id={`${id}-item-${index}`}
                     role="option"
                     aria-selected={isSelected}
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleSelect(suburb)}
                     onMouseEnter={() => setActiveIndex(index)}
                     className={`flex items-center justify-between px-4 py-2.5 cursor-pointer text-sm transition-colors duration-100 ${
@@ -298,9 +321,9 @@ export default function SuburbCombobox({
                     </div>
 
                     {/* Postcode Pill Badge */}
-                    {suburb.postcode && (
+                    {matchingPostcode && (
                       <span className="ml-3 shrink-0 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium tracking-tight bg-[#E8EFEA] text-[#1A3A32] border border-[#1A3A32]/10">
-                        {renderHighlighted(suburb.postcode, value)}
+                        {renderHighlighted(matchingPostcode, value)}
                       </span>
                     )}
                   </div>

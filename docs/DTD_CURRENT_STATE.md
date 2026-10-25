@@ -1,6 +1,6 @@
 # DTD Current State
 
-**Evidence date:** 24 October 2026
+**Evidence date:** 25 October 2026
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. Dated snapshots retain their historical scope; the completed R3 checkpoint and linked R3 release record supersede earlier runtime/integration pointers.
 **Audit scope:** six-part, read-only code/product audit completed 20 September 2026, plus a read-only DNS/hosting reconciliation completed 23 September 2026. On 24 September, the owner separately authorised guarded Cloud Run recovery, Direct VPC/Cloud NAT rollout, Atlas network restriction, canonical suburb production seeding and one exact invalid-SEO-record cleanup; those production mutations are identified below. Other unexercised operator actions remain outside this evidence.
 
@@ -10,6 +10,14 @@
 - **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026; the Cloud Run service, Scheduler configuration and public health/config/SEO rejection paths were rechecked on 25 September 2026; production Stripe-related Cloud Run configuration and public health/config/webhook rejection paths were rechecked on 14 October 2026; production and developer API/frontend state, Ops telemetry and the developer Scheduler/Guardian path were rechecked on 15 October 2026.
 - **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
 - A feature is not called live merely because code or a provider integration exists.
+
+## Git/source consolidation checkpoint — 25 October 2026
+
+The main working checkout was clean at `4f47fea`; the latest storefront delta was one commit ahead of the public feature branch. Independent review found unsafe audit scripts and combobox defects. Local corrections remove embedded credentials/forged trainer tokens and authenticated-URL logging, limit page inventory/checkout inspection to read-only scope, restore checkout/refund/self-healing deployment defaults to zero and preserve canonical alternate postcodes plus keyboard/ARIA behavior. Corrections have independent source review; this is not runtime R8 acceptance. No new tests were run locally for this Git audit; exact-head remote CI is required before merge.
+
+Current deployed credential equivalence and sandbox flags are **NEEDS_AUTH / NOT_VERIFIED** because gcloud requires owner reauthentication. DF-055 records the remaining credential-history/recovery gate. Restoring source defaults makes no provider change. The older master audit guide's reported enabled sandbox flags remain a dated report, not current verified configuration or fresh activation authority.
+
+Branch/worktree preservation and retirement decisions are in [the consolidation record](../archive/2026-10-25-branch-consolidation/README.md). Accepted R0–R3 evidence and R8 runtime limitations remain unchanged.
 
 ## R8 independent audit and separate-session coordination — 24 October 2026
 
@@ -608,3 +616,11 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** current unauthenticated request to `https://dogtrainersdirectory.com.au/` returned HTTP 200 and 6,163 bytes, with semantic company/product text rendered inside `#root`; `https://dogtrainersdirectory.com.au/sitemap.xml` returned 10 URLs; `https://dogtrainersdirectory.com.au/api/health` returned `{"ok":true,"service":"dog-trainers-directory-match-engine","database":"available"}`. Frontend tests passed 81/81 and Vite build succeeded locally. These checks verify current public responses, not who deployed them, deployment authorization, the exact deployed source SHA, reviewer interpretation, or program eligibility. Current public copy includes factual claims about the business, product capabilities, verification, and infrastructure that require owner/evidence review before being repeated to Google.
 - **Impact/uncertainty:** the empty-SPA-response issue is no longer reproduced in the live root response. The fix does not establish that Google's concern is resolved or that all copy is accurate; live approval remains unverified.
 - **Next action:** on 24 October 2026, owner dispatched the audited re-review response to `cloudstartupsupport@google.com` from `info@dogtrainersdirectory.com.au`. Keep Google approval and credit award **NOT VERIFIED** until written confirmation from the Google for Startups program team. Resume roadmap execution at active stage.
+
+### DF-055 — Authentication literals in public audit-script history need provider reconciliation
+
+- **Observed/status:** 25 October 2026 — **OPEN / NEEDS_AUTH** for credential-history/provider verification; current source correction independently reviewed.
+- **Evidence/uncertainty:** public feature commits include literal admin/signing values in `scripts/audit_all_pages_and_buttons.py` and the checkout verifier. The scripts also constructed authenticated trainer URLs and logged checkout/session details. The corrected working tree removes those values, token minting and URL logging; the page inventory blocks write requests and explicitly leaves business workflows unverified. Existing public Git history retains the old material. Actual equivalence to developer or production credentials is NOT_VERIFIED; supported provider reads failed on expired local gcloud authentication. No secret value or private artifact URL is recorded here.
+- **Impact:** if a historical value matches an active credential, removing the source literal does not contain the credential exposure. This is not evidence of credential use or customer impact.
+- **Why deferred:** exact provider comparison requires the owner to complete the existing supported login flow. No credential is created/revoked or silently rotated by this Git-consolidation task.
+- **Next action:** resume secret-safe equality/revocation-state checks after reauthentication; if active equivalence is proven, obtain the applicable credential action authority and follow managed replacement/canary/observation/revocation recovery. Keep production/financial gates separate and preserve DF-001's broader scope.

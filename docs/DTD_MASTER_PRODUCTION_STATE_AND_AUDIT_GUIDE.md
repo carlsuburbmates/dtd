@@ -1,5 +1,7 @@
 # DTD Master Expected Production State & Sandbox Audit Guide
 
+> **25 October source-audit note:** configuration/revision values below are the implementation session's dated report, not a fresh provider verification. The reviewed deployment script now defaults checkout, refunds and self-healing to zero; actual current runtime state requires authenticated provider reconciliation. This guide does not override locked decisions or authorize activation. The legacy page-inventory script now performs read-only inspection and cannot certify the end-to-end write flows in this checklist. See `DTD_CURRENT_STATE.md` / DF-055 and R8 evidence.
+
 **Evidence Date:** 24 October 2026 (Australia/Melbourne)  
 **Authority:** Consolidates and updates all prior target documents:
 - [`docs/DTD_TARGETED_POST_LAUNCH_STATE.md`](DTD_TARGETED_POST_LAUNCH_STATE.md)

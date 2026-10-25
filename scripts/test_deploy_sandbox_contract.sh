@@ -140,7 +140,7 @@ if grep -Eq '^[[:space:]]*bash .*setup_sandbox_ingestion\.sh' "${repo_root}/scri
   exit 1
 fi
 
-for setting in ENABLE_TRAINER_BILLING_CHECKOUT=1 OPS_SELF_HEALING_ENABLED=1; do
+for setting in ENABLE_TRAINER_BILLING_CHECKOUT=0 ENABLE_OPS_STRIPE_REFUNDS=0 OPS_SELF_HEALING_ENABLED=0; do
   if ! grep -Fq "${setting}" "${repo_root}/scripts/deploy_sandbox.sh"; then
     echo "Sandbox deployment must explicitly keep ${setting}" >&2
     exit 1
