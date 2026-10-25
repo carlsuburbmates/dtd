@@ -1,6 +1,6 @@
 # DTD Master Expected Production State & Sandbox Audit Guide
 
-> **25 October source-audit note:** configuration/revision values below are the implementation session's dated report, not a fresh provider verification. The reviewed deployment script now defaults checkout, refunds and self-healing to zero; actual current runtime state requires authenticated provider reconciliation. This guide does not override locked decisions or authorize activation. The legacy page-inventory script now performs read-only inspection and cannot certify the end-to-end write flows in this checklist. See `DTD_CURRENT_STATE.md` / DF-055 and R8 evidence.
+> **25 October independent provider reconciliation:** the table below remains the implementation session's dated report. Authenticated reads now verify API `dtd-api-dev-00064-p8b` at 100% traffic with checkout, refunds and self-healing all `1`, despite reviewed source defaults of zero. Trainer ingestion remains PAUSED. DF-055 confirms exposed developer authentication values still match enabled runtime secret references; containment requires the scoped credential action. DF-056 records the runtime flag discrepancy. No provider state was changed. This guide does not override locked decisions or authorize activation. The page-inventory script performs read-only inspection and cannot certify the end-to-end write flows below. See `DTD_CURRENT_STATE.md` and R8 evidence.
 
 **Evidence Date:** 24 October 2026 (Australia/Melbourne)  
 **Authority:** Consolidates and updates all prior target documents:
