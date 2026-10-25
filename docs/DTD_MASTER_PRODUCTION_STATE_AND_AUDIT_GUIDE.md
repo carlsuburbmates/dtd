@@ -1,6 +1,6 @@
 # DTD Master Expected Production State & Sandbox Audit Guide
 
-> **25 October independent provider reconciliation:** the table below remains the implementation session's dated report. Authenticated reads now verify API `dtd-api-dev-00064-p8b` at 100% traffic with checkout, refunds and self-healing all `1`, despite reviewed source defaults of zero. Trainer ingestion remains PAUSED. DF-055 confirms exposed developer authentication values still match enabled runtime secret references; containment requires the scoped credential action. DF-056 records the runtime flag discrepancy. No provider state was changed. This guide does not override locked decisions or authorize activation. The page-inventory script performs read-only inspection and cannot certify the end-to-end write flows below. See `DTD_CURRENT_STATE.md` and R8 evidence.
+> **25 October independent containment checkpoint:** owner-approved developer credential replacement is complete. API `dtd-api-dev-contain-1025111028` serves 100% traffic with numeric replacement secret references, checkout/refunds/self-healing all `0`, and no canary tags. Exposed versions are disabled; health, new/old authentication and claim-session rejection checks passed. Trainer ingestion remains PAUSED. The image was reused; this does not deploy the later main source corrections or accept R8. Production was unchanged. DF-055/056 are closed for this containment scope; historical access and DF-001's broader findings remain unresolved. See `DTD_CURRENT_STATE.md`. The table below is a historical implementation report. This guide does not authorise activation; the read-only page inventory cannot certify the write flows below.
 
 **Evidence Date:** 24 October 2026 (Australia/Melbourne)  
 **Authority:** Consolidates and updates all prior target documents:
@@ -19,8 +19,8 @@
 
 This document establishes the **single unified benchmark** for the expected production state of Dog Trainers Directory (DTD). It defines the complete, production-grade operating model and serves as your **practical, step-by-step Audit Checklist** for testing the three live developer sandbox surfaces.
 
-### Active Sandbox Environment (Updated 24 October 2026):
-| Surface | Active Endpoint / Service | Active Revision | Current Deployed Configuration |
+### Implementation-reported Sandbox Environment — 24 October 2026 (historical):
+| Surface | Reported Endpoint / Service | Reported Revision | Reported Configuration |
 |---|---|---|---|
 | **Frontend Web** | `https://dtd-web-dev-x2kdoaemtq-ts.a.run.app` | `dtd-web-dev-00025-6z2` | Clean Vite production build; 6,163-byte static fallback HTML in `<div id="root">`; 10-route sitemap; verified origin binding to `dtd-api-dev`. |
 | **Backend API** | `https://dtd-api-dev-x2kdoaemtq-ts.a.run.app` | `dtd-api-dev-00062-jxv` | `DB_NAME=dtd_sandbox`; `ENABLE_TRAINER_BILLING_CHECKOUT=1` (Active); `ENABLE_OPS_STRIPE_REFUNDS=1` (Active); `STRIPE_LIVE_ANCHOR_AT=2026-10-24T00:00:00Z` (Active); `OPS_SELF_HEALING_ENABLED=1` (Active). |
