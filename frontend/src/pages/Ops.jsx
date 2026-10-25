@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { Lock, Terminal, RefreshCw, Activity, AlertTriangle, ArrowRight, ShieldCheck, Cpu, RotateCcw, CheckCircle, XCircle, DollarSign, Sliders, TrendingUp, AlertOctagon, CheckCircle2, ChevronDown, ChevronUp, Sparkles, MessageSquare } from "lucide-react";
 import {
     setAdminPass,
     getAdminPass,
@@ -14,6 +14,13 @@ import {
     getAttributionOversight,
     getMaintenanceMode,
     setMaintenanceMode,
+    listSupportThreads,
+    getSupportThread,
+    replySupportThread,
+    closeSupportThread,
+    linkSupportTrainer,
+    delistTrainer,
+    processPrivacyScrub,
 } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -22,6 +29,7 @@ const VIEW_ORDER = [
     "pipeline_flow",
     "attribution",
     "work_queue",
+    "support_threads",
     "matching",
     "trainer_supply",
     "seo_indexation",
@@ -32,7 +40,7 @@ const VIEW_ORDER = [
 ];
 
 const VIEW_GROUPS = [
-    { title: "Daily Operations", keys: ["overview", "work_queue", "matching", "messages"] },
+    { title: "Daily Operations", keys: ["overview", "work_queue", "support_threads", "matching", "messages"] },
     { title: "Supply & Pipeline", keys: ["trainer_supply", "pipeline_flow", "attribution", "seo_indexation"] },
     { title: "Platform & Governance", keys: ["billing_reactivation", "system_activity", "recent_changes"] },
 ];
@@ -42,6 +50,7 @@ const VIEW_LABELS = {
     pipeline_flow: "Pipeline Flow",
     attribution: "Attribution & Revenue",
     work_queue: "Work Queue",
+    support_threads: "Support Cases",
     matching: "Matching Engine",
     trainer_supply: "Trainer Supply",
     seo_indexation: "SEO & Indexation",
@@ -56,6 +65,7 @@ const PAGE_INTROS = {
     pipeline_flow: "Monitor the live throughput of the platform: Demand → Supply → Introductions → Outcomes.",
     attribution: "Joined first-party report linking acquisition sources, trainer tiers, customer introductions, and Stripe revenue.",
     work_queue: "Review one item at a time, understand the decision needed, and record the safest next step.",
+    support_threads: "Review, reply to, and close first-party customer support, complaint, delisting, and privacy inquiries.",
     matching: "Monitor AI-assisted matching, search scope expansion, fallback circuit status, urgent vet triage, and outcome follow-up health.",
     trainer_supply: "See whether supply is strong enough to proceed, where it is thin, and what is blocking readiness.",
     seo_indexation: "Review stored suburb pages against current canonical, supply, content and robots requirements before any indexation decision.",
@@ -488,6 +498,11 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
             value: formatShortNumber(needsReview),
             note: needsReview ? "Open the queue before moving on." : "No queue items are waiting right now.",
         },
+        support_threads: {
+            eyebrow: "Support Cases",
+            value: "Queue",
+            note: "First-party customer and trainer inquiries.",
+        },
         matching: {
             eyebrow: "Match events",
             value: formatShortNumber(matchingOversight?.total_events || 0),
@@ -568,7 +583,7 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                                                 >
                                                     <span className="truncate">{VIEW_LABELS[key]}</span>
                                                     <span className="shrink-0 text-[10px] font-mono opacity-80 ml-2">
-                                                        {summary.value}
+                                                        {summary?.value || ""}
                                                     </span>
                                                 </button>
                                             );
@@ -685,6 +700,10 @@ function OperationsConsole({ snap, loading, error, onRefresh, onSignOut }) {
                                 onSelectCase={setSelectedCaseId}
                                 onRefresh={onRefresh}
                             />
+                        ) : null}
+
+                        {activeView === "support_threads" ? (
+                            <SupportThreadsView onRefresh={onRefresh} trainerInventory={trainerInventory} />
                         ) : null}
 
                         {activeView === "matching" ? (
@@ -3608,6 +3627,515 @@ function MatchingView({ matchingOversight = {}, onRefresh }) {
                     </table>
                 </div>
             </section>
+        </section>
+    );
+}
+
+function SupportThreadsView({ onRefresh, trainerInventory = [] }) {
+    const [threads, setThreads] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [selectedCaseId, setSelectedCaseId] = useState(null);
+    const [selectedThread, setSelectedThread] = useState(null);
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [offset, setOffset] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+    const selectedCaseRef = useRef(null);
+    const selectionVersionRef = useRef(0);
+    const loadThreadsRef = useRef(null);
+    const detailRequestRef = useRef(0);
+    const listRequestRef = useRef(0);
+    const [replyText, setReplyText] = useState("");
+    const [replying, setReplying] = useState(false);
+    const [closeNotes, setCloseNotes] = useState("");
+    const [closeConfirmed, setCloseConfirmed] = useState(false);
+    const [closing, setClosing] = useState(false);
+    const [actionMsg, setActionMsg] = useState("");
+    const [trainerLinkId, setTrainerLinkId] = useState("");
+    const [categoryNotes, setCategoryNotes] = useState("");
+    const [categoryConfirmed, setCategoryConfirmed] = useState(false);
+    const [categoryBusy, setCategoryBusy] = useState(false);
+    const [privacyAction, setPrivacyAction] = useState("request_identity_proof");
+    const pageSize = 50;
+
+    const clearSelection = useCallback(() => {
+        selectedCaseRef.current = null;
+        selectionVersionRef.current += 1;
+        detailRequestRef.current += 1;
+        setSelectedCaseId(null);
+        setSelectedThread(null);
+        setLoadingDetail(false);
+    }, []);
+
+    const loadThreads = useCallback(async () => {
+        const requestId = ++listRequestRef.current;
+        setLoading(true);
+        setError("");
+        try {
+            const params = { limit: pageSize, offset };
+            if (categoryFilter !== "all") params.category = categoryFilter;
+            if (statusFilter !== "all") params.status = statusFilter;
+            const res = await listSupportThreads(params);
+            if (requestId !== listRequestRef.current) return;
+            const list = res.data?.threads || [];
+            setThreads(list);
+            setHasMore(Boolean(res.data?.has_more));
+            if (selectedCaseRef.current && !list.some((t) => t.case_id === selectedCaseRef.current)) clearSelection();
+        } catch (err) {
+            if (requestId === listRequestRef.current) setError(err.response?.data?.detail || "Failed to load support threads.");
+        } finally {
+            if (requestId === listRequestRef.current) setLoading(false);
+        }
+    }, [categoryFilter, statusFilter, offset, clearSelection]);
+
+    loadThreadsRef.current = loadThreads;
+
+    useEffect(() => {
+        clearSelection();
+        loadThreads();
+        return () => { listRequestRef.current += 1; detailRequestRef.current += 1; };
+    }, [loadThreads, clearSelection]);
+
+    const refreshDetail = async (caseId) => {
+        if (selectedCaseRef.current !== caseId) return;
+        const requestId = ++detailRequestRef.current;
+        setLoadingDetail(true);
+        try {
+            const res = await getSupportThread(caseId);
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) {
+                setSelectedThread(res.data?.thread?.case_id === caseId ? res.data.thread : null);
+            }
+        } catch (err) {
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) {
+                setSelectedThread(null);
+                toast.error(err.response?.data?.detail || "Failed to load thread details.");
+            }
+        } finally {
+            if (selectedCaseRef.current === caseId && requestId === detailRequestRef.current) setLoadingDetail(false);
+        }
+    };
+
+    const handleSelectThread = async (caseId) => {
+        selectedCaseRef.current = caseId;
+        selectionVersionRef.current += 1;
+        setSelectedCaseId(caseId);
+        setSelectedThread(null);
+        setActionMsg("");
+        setReplyText("");
+        setCloseNotes("");
+        setCloseConfirmed(false);
+        setTrainerLinkId("");
+        setCategoryNotes("");
+        setCategoryConfirmed(false);
+        setPrivacyAction("request_identity_proof");
+        await refreshDetail(caseId);
+    };
+
+    const activeCase = () => selectedCaseRef.current === selectedCaseId && selectedThread?.case_id === selectedCaseId;
+    const reportActionError = (err, fallback, caseId) => {
+        const detail = err.response?.data?.detail;
+        const message = typeof detail === "string" ? detail : fallback;
+        toast.error(message);
+        if (selectedCaseRef.current === caseId) setActionMsg(message);
+    };
+
+    const handleReply = async (e) => {
+        e.preventDefault();
+        if (!activeCase() || replyText.trim().length < 3) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
+        setReplying(true);
+        setActionMsg("");
+        try {
+            const res = await replySupportThread(caseId, { reply_text: replyText.trim() });
+            if (!res.data?.ok) throw new Error("Reply was not accepted.");
+            const message = res.data.duplicate
+                ? "This reply was already dispatched. No additional email was sent."
+                : res.data.dispatched === true
+                    ? "Reply dispatched to customer."
+                    : "Reply recorded, but email delivery failed.";
+            if (res.data.dispatched === true) toast.success(message);
+            else toast.warning(message);
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
+                setActionMsg(message);
+                if (res.data.dispatched === true || res.data.duplicate) setReplyText("");
+                await refreshDetail(caseId);
+            }
+            await loadThreadsRef.current();
+        } catch (err) {
+            reportActionError(err, "Failed to send reply.", caseId);
+        } finally { setReplying(false); }
+    };
+
+    const handleClose = async (e) => {
+        e.preventDefault();
+        if (!activeCase() || closeNotes.trim().length < 10 || !closeConfirmed) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
+        setClosing(true);
+        setActionMsg("");
+        try {
+            const res = await closeSupportThread(caseId, { resolution_notes: closeNotes.trim(), confirmed: true });
+            if (!res.data?.ok) throw new Error("Closure was not accepted.");
+            toast.success("Support case verified and closed.");
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
+                setActionMsg("Support case successfully closed.");
+                setCloseNotes("");
+                setCloseConfirmed(false);
+                await refreshDetail(caseId);
+            }
+            await loadThreadsRef.current();
+            onRefresh?.();
+        } catch (err) { reportActionError(err, "Failed to close support case.", caseId); }
+        finally { setClosing(false); }
+    };
+
+    const trustedPrivacyIdentity = selectedThread?.identity_verified === true
+        && Boolean(selectedThread.identity_verified_by && selectedThread.identity_verified_at)
+        && ["claimant_session_token", "cryptographic_email_otp", "trusted_idp", "verified_documentary_audit"].includes(selectedThread.identity_verification_method);
+
+    const needsTrainerLink = selectedThread?.category === "delisting_request" && !selectedThread.trainer_id;
+
+    const handleCategoryAction = async (e) => {
+        e.preventDefault();
+        if (!activeCase() || !categoryConfirmed || (!needsTrainerLink && categoryNotes.trim().length < 10)) return;
+        const caseId = selectedCaseId;
+        const selectionVersion = selectionVersionRef.current;
+        setCategoryBusy(true);
+        setActionMsg("");
+        try {
+            let res;
+            if (selectedThread.category === "delisting_request") {
+                if (!selectedThread.trainer_id) {
+                    if (!trainerInventory.some(t => t.id === trainerLinkId)) return;
+                    res = await linkSupportTrainer(caseId, { trainer_id: trainerLinkId.trim(), confirmed: true });
+                } else {
+                    res = await delistTrainer(selectedThread.trainer_id, { reason: categoryNotes.trim(), confirmed: true });
+                }
+            } else if (selectedThread.category === "privacy_request") {
+                if (privacyAction === "authorise_scrub" && !trustedPrivacyIdentity) return;
+                res = await processPrivacyScrub(caseId, { action: privacyAction, notes: categoryNotes.trim(), confirmed: true });
+            }
+            if (!res?.data?.ok) throw new Error("Action was not accepted.");
+            toast.success("Case action recorded. Review the updated evidence before closing.");
+            if (selectedCaseRef.current === caseId && selectionVersionRef.current === selectionVersion) {
+                setCategoryConfirmed(false);
+                setCategoryNotes("");
+                await refreshDetail(caseId);
+            }
+            await loadThreadsRef.current();
+            onRefresh?.();
+        } catch (err) { reportActionError(err, "Could not complete the case action.", caseId); }
+        finally { setCategoryBusy(false); }
+    };
+
+    return (
+        <section className="admin-card p-5 mt-4" data-testid="ops-support-view">
+            <PageHeader title="Support Cases" description={PAGE_INTROS.support_threads} />
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-[#8B9E98] uppercase">Category:</span>
+                    <select
+                        value={categoryFilter}
+                        onChange={(e) => { setOffset(0); setCategoryFilter(e.target.value); }}
+                        className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
+                        data-testid="ops-support-category-filter"
+                    >
+                        <option value="all">All Categories</option>
+                        <option value="complaint">Complaint</option>
+                        <option value="delisting_request">Delisting Request</option>
+                        <option value="privacy_request">Privacy Request</option>
+                        <option value="listing_correction">Listing Correction</option>
+                        <option value="billing_question">Billing Question</option>
+                        <option value="general_inquiry">General Inquiry</option>
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-[#8B9E98] uppercase">Status:</span>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => { setOffset(0); setStatusFilter(e.target.value); }}
+                        className="bg-[#111A17] border border-[#2A3935] text-[#C9C2B1] text-xs font-mono rounded-lg px-2.5 py-1.5"
+                        data-testid="ops-support-status-filter"
+                    >
+                        <option value="all">All Statuses</option>
+                        <option value="open">Open</option>
+                        <option value="awaiting_customer_reply">Awaiting Customer Reply</option>
+                        <option value="reply_delivery_failed">Reply Delivery Failed</option>
+                        <option value="awaiting_identity_proof">Awaiting Identity Proof</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+
+                <button
+                    type="button"
+                    onClick={loadThreads}
+                    className="ml-auto inline-flex items-center gap-1.5 text-xs font-mono px-3 py-1.5 rounded-lg border border-[#2A3935] bg-[#111A17] text-[#C9C2B1] hover:text-white"
+                >
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                </button>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[#8B9E98]" data-testid="ops-support-pagination">
+                <span>{threads.length ? `Showing ${offset + 1}–${offset + threads.length} cases` : "No cases on this page"}{hasMore ? "; more cases available" : ""}</span>
+                <button type="button" className="min-h-11 px-3 border border-[#2A3935] rounded-lg disabled:opacity-40" disabled={loading || offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous cases</button>
+                <button type="button" className="min-h-11 px-3 border border-[#2A3935] rounded-lg disabled:opacity-40" disabled={loading || !hasMore} onClick={() => setOffset(offset + pageSize)}>Next cases</button>
+            </div>
+
+            {error && (
+                <div className="mt-3 p-3 rounded-xl bg-rose-950/40 border border-rose-800 text-rose-200 text-xs">
+                    {error}
+                </div>
+            )}
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr,1.3fr]">
+                <div className="border border-[#1E2A27] rounded-2xl bg-[#0D1412] p-3 max-h-[700px] overflow-y-auto">
+                    {loading ? (
+                        <div className="py-8 text-center text-xs font-mono text-[#8B9E98]">Loading support cases...</div>
+                    ) : threads.length === 0 ? (
+                        <div className="py-8 text-center text-xs font-mono text-[#8B9E98]">
+                            No support cases matching current filters.
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {threads.map((t) => {
+                                const isSelected = selectedCaseId === t.case_id;
+                                const isHigh = t.severity === "high";
+                                return (
+                                    <button
+                                        key={t.case_id}
+                                        type="button"
+                                        onClick={() => handleSelectThread(t.case_id)}
+                                        data-testid="ops-support-thread-row"
+                                        className={`w-full text-left p-3 rounded-xl border transition flex flex-col gap-1.5 ${
+                                            isSelected
+                                                ? "border-[#D9B36C] bg-[#1A2622]"
+                                                : "border-[#1E2A27] bg-[#111A17] hover:bg-[#16221F]"
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-mono text-xs font-semibold text-[#F5F2EB] truncate">
+                                                {t.subject || "No Subject"}
+                                            </span>
+                                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full uppercase ${
+                                                isHigh ? "bg-rose-950 text-rose-300 border border-rose-800" : "bg-amber-950 text-amber-300 border border-amber-800"
+                                            }`}>
+                                                {t.category?.replace("_", " ")}
+                                            </span>
+                                        </div>
+                                        <div className="text-[11px] text-[#8B9E98] truncate">
+                                            From: {t.sender_name} ({t.sender_email})
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] font-mono text-[#667A74]">
+                                            <span>{t.case_id}</span>
+                                            <span className={`px-1.5 py-0.5 rounded ${
+                                                t.status === "resolved" || t.status === "closed"
+                                                    ? "bg-emerald-950 text-emerald-300"
+                                                    : "bg-blue-950 text-blue-300"
+                                            }`}>
+                                                {t.status}
+                                            </span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <div className="border border-[#1E2A27] rounded-2xl bg-[#0D1412] p-4">
+                    {!selectedCaseId ? (
+                        <div className="py-16 text-center text-xs font-mono text-[#8B9E98]">
+                            Select a support case from the list to view thread details, reply, or verify closure.
+                        </div>
+                    ) : loadingDetail ? (
+                        <div className="py-16 text-center text-xs font-mono text-[#8B9E98]">Loading case detail...</div>
+                    ) : !selectedThread ? (
+                        <div className="py-16 text-center text-xs font-mono text-rose-300">Case details not found.</div>
+                    ) : (
+                        <div className="space-y-4" data-testid="ops-support-detail">
+                            <div className="border-b border-[#1E2A27] pb-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h3 className="text-sm font-semibold text-[#F5F2EB] font-serif">
+                                        {selectedThread.subject}
+                                    </h3>
+                                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#1B2824] text-[#D9B36C]">
+                                        {selectedThread.case_id}
+                                    </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[#8B9E98]">
+                                    <span>Category: <strong>{selectedThread.category}</strong></span>
+                                    <span>·</span>
+                                    <span>Severity: <strong className={selectedThread.severity === "high" ? "text-rose-400" : "text-amber-400"}>{selectedThread.severity}</strong></span>
+                                    <span>·</span>
+                                    <span>Status: <strong>{selectedThread.status}</strong></span>
+                                    {selectedThread.trainer_name && (
+                                        <>
+                                            <span>·</span>
+                                            <span>Trainer: <strong>{selectedThread.trainer_name}</strong></span>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="mt-1 text-xs text-[#8B9E98]">
+                                    Sender: <span className="text-[#C9C2B1]">{selectedThread.sender_name}</span> &lt;{selectedThread.sender_email}&gt;
+                                </div>
+                            </div>
+
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                                {(selectedThread.messages || []).map((msg, idx) => {
+                                    const isCustomer = msg.sender === "customer";
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                                                isCustomer
+                                                    ? "bg-[#111A17] border-[#223530] text-[#C9C2B1]"
+                                                    : "bg-[#162722] border-[#2E4A40] text-[#E0EFEA]"
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between font-mono text-[10px] text-[#8B9E98] mb-1">
+                                                <span className="font-semibold uppercase text-[#D9B36C]">
+                                                    {isCustomer ? "Customer" : "Operator"}
+                                                </span>
+                                                <span>{msg.created_at ? new Date(msg.created_at).toLocaleString() : ""}</span>
+                                            </div>
+                                            <div className="whitespace-pre-wrap">{msg.text}</div>
+                                            {msg.delivery_status && <div className="mt-1 font-mono">Dispatch: {msg.delivery_status}{msg.delivery_status === "failed" ? " — email was not sent; review and retry the reply." : ""}</div>}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {actionMsg && (
+                                <div className="p-3 rounded-xl bg-[#1B2824] border border-[#2A3935] text-xs font-mono text-[#D9B36C]">
+                                    {actionMsg}
+                                </div>
+                            )}
+
+                            {!["closed", "resolved", "rejected"].includes(selectedThread.status) ? (
+                                <div className="space-y-4 pt-2 border-t border-[#1E2A27]">
+                                    {["delisting_request", "privacy_request"].includes(selectedThread.category) && (
+                                        <form onSubmit={handleCategoryAction} className="space-y-3 border border-[#2A3935] rounded-xl p-3" data-testid="ops-support-category-action">
+                                            <h4 className="text-sm text-[#F5F2EB]">{selectedThread.category === "delisting_request" ? "Resolve delisting request" : "Process privacy request"}</h4>
+                                            {selectedThread.category === "delisting_request" ? selectedThread.trainer_id ? (
+                                                <p className="text-xs">Linked trainer: <Link to={`/t/${encodeURIComponent(selectedThread.trainer_id)}`} className="underline">{selectedThread.trainer_name || selectedThread.trainer_id}</Link>. Delisting removes the listing and prevents re-ingestion. Active billing remains subject to review.</p>
+                                            ) : (
+                                                <div className="space-y-2 text-xs">
+                                                    <label className="block">Trainer named in this request
+                                                        <select value={trainerLinkId} onChange={(e) => { setTrainerLinkId(e.target.value); setCategoryConfirmed(false); }} data-testid="ops-support-trainer-choice" className="block w-full bg-[#111A17] border rounded p-2 mt-1">
+                                                            <option value="">Choose a trainer from current inventory</option>
+                                                            {trainerInventory.filter(t => t.id).map(t => <option key={t.id} value={t.id}>{t.name} — {t.suburb || "Location unrecorded"}{t.published ? "" : " (not published)"}</option>)}
+                                                        </select>
+                                                    </label>
+                                                    {trainerInventory.some(t => t.id === trainerLinkId) && <Link to={`/t/${encodeURIComponent(trainerLinkId)}`} target="_blank" rel="noreferrer" className="underline">Review selected trainer's public listing</Link>}
+                                                    <p>Compare the selected listing with this request before confirming. Linking does not delist it. If the trainer is missing, refresh the current Trainer Supply inventory.</p>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <label className="block text-xs">Privacy action
+                                                        <select value={privacyAction} onChange={(e) => { setPrivacyAction(e.target.value); setCategoryConfirmed(false); }} data-testid="ops-support-privacy-action" className="block w-full bg-[#111A17] border rounded p-2 mt-1">
+                                                            <option value="request_identity_proof">Request identity verification</option>
+                                                            <option value="reject_non_subject">Reject: requester is not the data subject</option>
+                                                            <option value="authorise_scrub" disabled={!trustedPrivacyIdentity}>Erase verified subject data</option>
+                                                        </select>
+                                                    </label>
+                                                    <p className="text-xs">{trustedPrivacyIdentity ? "Verified identity is recorded. Erasure removes the subject's data across the supported stores and cannot be undone." : "Erasure is blocked until trusted identity verification is recorded. Notes and confirmation cannot establish identity."} These actions send no email. Send any customer reply before recording rejection.</p>
+                                                </>
+                                            )}
+                                            {!needsTrainerLink && <label className="block text-xs">Action notes (minimum 10 characters)
+                                                <textarea value={categoryNotes} onChange={(e) => setCategoryNotes(e.target.value)} data-testid="ops-support-action-notes" className="block w-full bg-[#111A17] border rounded p-2 mt-1" />
+                                            </label>}
+                                            <label className="flex gap-2 items-start text-xs">
+                                                <input type="checkbox" checked={categoryConfirmed} onChange={(e) => setCategoryConfirmed(e.target.checked)} data-testid="ops-support-action-confirm" />
+                                                I verified this case and confirm the selected action and its effects.
+                                            </label>
+                                            <button type="submit" disabled={categoryBusy || replying || closing || !categoryConfirmed || (!needsTrainerLink && categoryNotes.trim().length < 10) || (selectedThread.category === "delisting_request" && !selectedThread.trainer_id && !trainerLinkId.trim())} data-testid="ops-support-action-btn" className="btn-primary text-xs">
+                                                {categoryBusy ? "Processing..." : selectedThread.category === "delisting_request" ? (selectedThread.trainer_id ? "Delist linked trainer" : "Link verified trainer") : "Record privacy action"}
+                                            </button>
+                                        </form>
+                                    )}
+                                    <form onSubmit={handleReply} className="space-y-2">
+                                        <div className="text-xs font-mono font-bold text-[#F5F2EB] uppercase tracking-wider">
+                                            Operator Reply
+                                        </div>
+                                        <textarea
+                                            value={replyText}
+                                            onChange={(e) => setReplyText(e.target.value)}
+                                            placeholder="Compose official reply to sender..."
+                                            rows={3}
+                                            data-testid="ops-support-reply-input"
+                                            className="w-full bg-[#111A17] border border-[#2A3935] text-[#F5F2EB] text-xs font-sans rounded-xl p-3 focus:outline-none focus:border-[#D9B36C]"
+                                        />
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className="text-[11px] font-mono text-[#8B9E98]">After dispatch: Awaiting customer reply</span>
+                                            <button
+                                                type="submit"
+                                                disabled={replying || closing || categoryBusy || replyText.trim().length < 3}
+                                                data-testid="ops-support-reply-btn"
+                                                className="btn-primary text-xs px-3 py-1.5 font-mono disabled:opacity-50"
+                                            >
+                                                {replying ? "Dispatching..." : "Dispatch Reply"}
+                                            </button>
+                                        </div>
+                                    </form>
+
+                                    <form onSubmit={handleClose} className="space-y-2 pt-3 border-t border-[#1E2A27]">
+                                        <div className="text-xs font-mono font-bold text-[#F5F2EB] uppercase tracking-wider">
+                                            Verified Case Closure
+                                        </div>
+                                        <p className="text-[11px] text-[#8B9E98] leading-normal">
+                                            Requires substantive verified outcome notes (min 10 characters). Delisting or privacy requests require underlying resolution proof.
+                                        </p>
+                                        <textarea
+                                            value={closeNotes}
+                                            onChange={(e) => setCloseNotes(e.target.value)}
+                                            placeholder="Explain verified outcome and actions taken (minimum 10 characters)..."
+                                            rows={2}
+                                            data-testid="ops-support-close-notes"
+                                            className="w-full bg-[#111A17] border border-[#2A3935] text-[#F5F2EB] text-xs font-sans rounded-xl p-3 focus:outline-none focus:border-[#D9B36C]"
+                                        />
+                                        <div className="flex items-center justify-between gap-3">
+                                            <label className="flex items-center gap-2 text-xs text-[#C9C2B1] cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={closeConfirmed}
+                                                    onChange={(e) => setCloseConfirmed(e.target.checked)}
+                                                    data-testid="ops-support-close-confirm"
+                                                    className="rounded border-[#2A3935] text-[#D9B36C] focus:ring-0"
+                                                />
+                                                <span className="text-[11px] font-mono">Confirm verified resolution</span>
+                                            </label>
+                                            <button
+                                                type="submit"
+                                                disabled={closing || replying || categoryBusy || closeNotes.trim().length < 10 || !closeConfirmed}
+                                                data-testid="ops-support-close-btn"
+                                                className="bg-emerald-800 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-mono disabled:opacity-50 transition"
+                                            >
+                                                {closing ? "Closing..." : "Verify & Close"}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            ) : (
+                                <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800 text-emerald-200 text-xs">
+                                    <strong>Case status: {selectedThread.status}.</strong>
+                                    {selectedThread.resolution_notes && (
+                                        <p className="mt-1 text-[11px] text-emerald-300/80">
+                                            Notes: {selectedThread.resolution_notes}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
         </section>
     );
 }

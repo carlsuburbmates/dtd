@@ -213,6 +213,7 @@ def test_ingest_discovery_sources_applies_failure_suppression(monkeypatch):
     monkeypatch.setenv("DISCOVERY_SOURCE_URLS", "https://bad.example.com")
     monkeypatch.setenv("SOURCE_INGEST_FAILURE_SUPPRESS_AFTER", "2")
     monkeypatch.setenv("SOURCE_INGEST_SUPPRESS_HOURS", "24")
+    monkeypatch.setattr(automation.source_approvals, "is_discovery_source_approved", lambda *args, **kwargs: (True, "approved"))
     monkeypatch.setattr(automation.requests, "get", _fail_get)
 
     first = asyncio.run(automation.ingest_discovery_sources(fake_db))
@@ -439,6 +440,8 @@ def test_ingest_discovery_sources_recovers_after_failure(monkeypatch):
     monkeypatch.setenv("DISCOVERY_SOURCE_URLS", "https://source.example.com")
     monkeypatch.setenv("SOURCE_INGEST_FAILURE_SUPPRESS_AFTER", "3")
     monkeypatch.setenv("SOURCE_INGEST_SUPPRESS_HOURS", "24")
+    monkeypatch.setattr(automation.source_approvals, "is_discovery_source_approved", lambda *args, **kwargs: (True, "approved"))
+    monkeypatch.setattr(automation.source_approvals, "is_candidate_url_approved", lambda *args, **kwargs: (True, "approved"))
     monkeypatch.setattr(automation.requests, "get", _flip_get)
 
     first = asyncio.run(automation.ingest_discovery_sources(fake_db))

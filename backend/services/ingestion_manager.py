@@ -89,7 +89,8 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
     Returns:
         (ok, text_content, page_metadata, error_message)
     """
-    domain = extract_domain(url)
+    parsed_url = urlparse(url)
+    domain = (parsed_url.hostname or "").lower()
     dns_ok, dns_msg = check_dns_resolvable(domain)
     if not dns_ok:
         return False, None, None, f"dns_unresolvable:{dns_msg}"
@@ -102,24 +103,57 @@ async def polite_fetch_url(url: str, session: requests.Session) -> Tuple[bool, O
         await asyncio.sleep(CRAWL_POLITE_DELAY_S - elapsed)
     _last_domain_crawl_time[domain] = time.monotonic()
 
-    # Parse robots.txt
-    robots_url = f"https://{domain}/robots.txt"
+    # Parse robots.txt (DF-045: Fail closed / defer on robots retrieval error, unavailable, or malformed)
+    robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
     rp = RobotFileParser()
     try:
-        r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
-        if r_resp.ok:
-            rp.parse(r_resp.text.splitlines())
-        else:
+        r_resp = session.get(robots_url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S), allow_redirects=False)
+        if r_resp.status_code == 200:
+            headers = getattr(r_resp, "headers", {}) or {}
+            c_type = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
+            raw_text = r_resp.text or ""
+            lower_text = raw_text.strip().lower()
+            # RFC 9309 / DF-045: HTML error pages or non-robots content returned with 200 must fail closed
+            if "text/html" in c_type or "application/xhtml" in c_type:
+                return False, None, None, f"robots_malformed:{domain}:html_content_type"
+            if "<!doctype" in lower_text or "<html" in lower_text or "<head" in lower_text or "<body" in lower_text or "<div" in lower_text:
+                return False, None, None, f"robots_malformed:{domain}:html_markup_detected"
+            policy_lines = [line.split("#", 1)[0].strip() for line in raw_text.lstrip("\ufeff").splitlines()]
+            policy_lines = [line for line in policy_lines if line]
+            recognized_fields = {"user-agent", "allow", "disallow", "sitemap", "crawl-delay", "request-rate", "host"}
+            if policy_lines:
+                if any(":" not in line or not line.split(":", 1)[0].strip() for line in policy_lines):
+                    return False, None, None, f"robots_malformed:{domain}:invalid_directive"
+                fields = [line.split(":", 1)[0].strip().lower() for line in policy_lines]
+                if not any(field in recognized_fields for field in fields):
+                    return False, None, None, f"robots_malformed:{domain}:no_robots_directives"
+                if any(field == "user-agent" and not line.split(":", 1)[1].strip() for field, line in zip(fields, policy_lines)):
+                    return False, None, None, f"robots_malformed:{domain}:empty_user_agent"
+            try:
+                rp.parse(raw_text.lstrip("\ufeff").splitlines())
+            except Exception as parse_exc:
+                return False, None, None, f"robots_malformed:{domain}:{parse_exc}"
+        elif r_resp.status_code == 404:
+            # RFC 9309 2.3.1.2: 404 indicates robots.txt does not exist; crawling is permitted
             rp.parse([])
-    except Exception:
-        rp.parse([])
+        else:
+            # 5xx, 403, 429, etc. -> Fail closed / defer
+            return False, None, None, f"robots_unavailable:http_{r_resp.status_code}:{robots_url}"
+    except (requests.Timeout, requests.RequestException) as net_exc:
+        return False, None, None, f"robots_unavailable:network_error:{net_exc}"
+    except Exception as exc:
+        return False, None, None, f"robots_error:{exc}"
 
     if not rp.can_fetch(USER_AGENT, url):
         return False, None, None, f"robots_denied:{url}"
 
     # Fetch main page
     try:
-        resp = session.get(url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S))
+        resp = session.get(url, timeout=(DEFAULT_CONNECT_TIMEOUT_S, DEFAULT_READ_TIMEOUT_S), allow_redirects=False)
+        if 300 <= resp.status_code < 400:
+            # A redirect cannot widen source approval or reuse the original
+            # site's robots policy. Queue the reviewed canonical URL separately.
+            return False, None, None, f"redirect_requires_separate_source_admission:{url}"
         if not resp.ok:
             return False, None, None, f"http_{resp.status_code}:{url}"
 
@@ -272,6 +306,20 @@ async def run_batch_ingestion_pipeline(
             if suppression:
                 summary["suppressed"] += 1
                 await _mark_queue_suppressed(db, item, dry_run=dry_run, at=now_iso())
+                continue
+
+            # DF-044: Verify candidate URL and domain are explicitly authorized by registry
+            url_ok, url_reason = source_approvals.is_candidate_url_approved(registry, url)
+            if not url_ok:
+                summary["held"] += 1
+                fetch_err = f"unapproved_source:{url_reason}"
+                summary["errors"].append({"source_url": url, "error": fetch_err})
+                await record_ingestion_failure(db, url, fetch_err, dry_run=dry_run)
+                if item.get("queue_id") and db is not None and not dry_run:
+                    await db.discovery_queue.update_one(
+                        {"id": item["queue_id"]},
+                        {"$set": {"status": "held", "reason": fetch_err, "processed_at": now_iso()}},
+                    )
                 continue
 
             # 1. Polite fetch & robots check

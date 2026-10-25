@@ -4,9 +4,10 @@
 The runner is deliberately opt-in and sandbox-only. It creates a uniquely
 tagged trainer with confirmed structured capability facts, performs a public
 ``POST /api/match``, verifies the protected matching Ops read model, then
-removes the fixture and every matching record produced by the test in a
-``finally`` block. It never submits an enquiry, so it cannot send email or
-touch billing. Secrets are provided only through process environment variables
+removes the fixture and matching records for returned request IDs in a
+``finally`` block. An unknown ID after a lost response is preserved, not inferred
+from other visitors selecting the fixture. It never submits an enquiry or
+touches billing. Secrets are provided only through process environment variables
 by the small shell wrapper and are never printed.
 """
 from __future__ import annotations
@@ -116,31 +117,16 @@ def _cleanup(
     run_id: str,
     trainer_id: str,
     match_id: str | None,
-    pre_existing_degradation_ids: set[str],
 ) -> Dict[str, int]:
-    # Matching may enter its safe Gemini fallback. The current degradation
-    # record schema has no request correlation field, so snapshot IDs before
-    # the test and remove only the newly-created matching entries afterwards.
-    # This runner is restricted to the isolated developer sandbox for that
-    # reason; it must never be used against shared production traffic.
-    new_degradation_ids = [
-        str(row.get("id"))
-        for row in db.ai_degradation_events.find({"operation": "matching"}, {"_id": 0, "id": 1})
-        if row.get("id") and str(row.get("id")) not in pre_existing_degradation_ids
-    ]
-    matching_event_ids = {
-        str(row.get("id"))
-        for row in db.match_events.find({"result_ids": trainer_id}, {"_id": 0, "id": 1})
-        if row.get("id")
-    }
-    if match_id:
-        matching_event_ids.add(match_id)
+    # A concurrent visitor could select this temporary trainer too. Only the
+    # returned request ID establishes ownership of its events and context.
+    matching_event_ids = {match_id} if match_id else set()
     context_query: Dict[str, Any] = {"match_id": {"$in": sorted(matching_event_ids)}} if matching_event_ids else {"match_id": "__none__"}
     queries = {
         "trainers": {"test_run_id": run_id},
-        "match_events": {"id": {"$in": sorted(matching_event_ids)}} if matching_event_ids else {"result_ids": trainer_id},
+        "match_events": {"id": {"$in": sorted(matching_event_ids)}},
         "match_contexts": context_query,
-        "ai_degradation_events": {"id": {"$in": new_degradation_ids}} if new_degradation_ids else {"id": "__none__"},
+        "ai_degradation_events": {"operation": "matching", "match_id": {"$in": sorted(matching_event_ids)}},
     }
     deleted: Dict[str, int] = {}
     for collection, query in queries.items():
@@ -170,16 +156,8 @@ def main() -> int:
     client = MongoClient(args.mongo_url, serverSelectionTimeoutMS=10000)
     db = client[SANDBOX_DB]
     match_id: str | None = None
-    pre_existing_degradation_ids: set[str] = set()
-    degradation_snapshot_ready = False
     try:
         client.admin.command("ping")
-        pre_existing_degradation_ids = {
-            str(row.get("id"))
-            for row in db.ai_degradation_events.find({}, {"_id": 0, "id": 1})
-            if row.get("id")
-        }
-        degradation_snapshot_ready = True
         db.trainers.insert_one(dict(fixture))
         response = _json_request(
             f"{args.service_url.rstrip('/')}/api/match",
@@ -218,7 +196,6 @@ def main() -> int:
                 run_id=run_id,
                 trainer_id=str(fixture["id"]),
                 match_id=match_id,
-                pre_existing_degradation_ids=pre_existing_degradation_ids if degradation_snapshot_ready else {str(row.get("id")) for row in db.ai_degradation_events.find({}, {"_id": 0, "id": 1}) if row.get("id")},
             )
             _require_public_absence(args.service_url, str(fixture["id"]))
             print(json.dumps({"cleanup_complete": True, "deleted": deleted}))

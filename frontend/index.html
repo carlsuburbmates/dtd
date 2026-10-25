@@ -4,7 +4,7 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#000000" />
-        <meta name="description" content="Discover reviewed, verified dog trainers across Greater Melbourne by suburb and specialty. Direct enquiries and transparent training methods." />
+        <meta name="description" content="Discover curated dog trainers across Greater Melbourne by suburb, training philosophy, and specialty. Direct enquiries and transparent training methods." />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@500;600;700;800;900&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -13,7 +13,50 @@
     </head>
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
-        <div id="root"></div>
+        <div id="root">
+            <header style="max-width:800px;margin:0 auto;padding:40px 20px 20px;font-family:system-ui,-apple-system,sans-serif;">
+                <h1 style="font-size:32px;color:#1A3A32;margin-bottom:8px;">Dog Trainers Directory</h1>
+                <p style="font-size:18px;color:#4A615A;line-height:1.5;">Connecting dog owners with independent dog trainers across Greater Melbourne through automated discovery and guided matching.</p>
+            </header>
+            <main style="max-width:800px;margin:0 auto;padding:0 20px 40px;font-family:system-ui,-apple-system,sans-serif;color:#2D3748;line-height:1.6;">
+                <section style="margin-bottom:32px;background:#F7FAFC;padding:24px;border-radius:8px;border:1px solid #E2E8F0;">
+                    <h2 style="font-size:20px;color:#1A3A32;margin-top:0;">About the Platform</h2>
+                    <p>Dog Trainers Directory (DTD) is a digital-native technology platform and discovery directory designed for Greater Melbourne. The service allows dog owners to browse curated local trainers by suburb, filter by training philosophy and behavioral specialty, and submit direct enquiries with zero intro or commission fees.</p>
+                </section>
+                <section style="margin-bottom:32px;display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div style="background:#FFFFFF;padding:20px;border-radius:8px;border:1px solid #E2E8F0;">
+                        <h3 style="font-size:18px;color:#1A3A32;margin-top:0;">For Dog Owners</h3>
+                        <p style="font-size:15px;color:#4A615A;">Free access to discover local Melbourne trainers, view transparent methodologies, and use our guided matching engine tailored to specific behavioral needs.</p>
+                        <a href="/trainers" style="display:inline-block;margin-top:12px;color:#1A3A32;font-weight:600;text-decoration:underline;">Browse Melbourne Trainers &rarr;</a>
+                    </div>
+                    <div style="background:#FFFFFF;padding:20px;border-radius:8px;border:1px solid #E2E8F0;">
+                        <h3 style="font-size:18px;color:#1A3A32;margin-top:0;">For Dog Trainers</h3>
+                        <p style="font-size:15px;color:#4A615A;">Claim your free business profile, declare service areas, receive verified owner enquiries directly, and access optional Pro and Suburb Sponsorship visibility tiers.</p>
+                        <a href="/about" style="display:inline-block;margin-top:12px;color:#1A3A32;font-weight:600;text-decoration:underline;">Learn About Directory Listings &rarr;</a>
+                    </div>
+                </section>
+                <section style="margin-bottom:32px;background:#EDF2F7;padding:20px;border-radius:8px;">
+                    <h2 style="font-size:18px;color:#1A3A32;margin-top:0;">Technology & Cloud Infrastructure</h2>
+                    <p style="font-size:14px;color:#4A5568;margin-bottom:8px;">Dog Trainers Directory is built as a modern cloud-native web application hosted on Google Cloud Platform:</p>
+                    <ul style="font-size:14px;color:#4A5568;padding-left:20px;margin:0 0 12px;">
+                        <li><strong>Frontend:</strong> React Single-Page Application deployed via Google Firebase Hosting.</li>
+                        <li><strong>Backend API:</strong> Containerized Python service hosted on Google Cloud Run (Health check: <code>/api/health</code>).</li>
+                        <li><strong>Database & Telemetry:</strong> MongoDB Atlas cloud database and Sentry application monitoring.</li>
+                    </ul>
+                    <p style="font-size:13px;color:#718096;margin:0;">Registered Australian Business operating in Melbourne, Victoria. Contact: <code>admin@dogtrainersdirectory.com.au</code>.</p>
+                </section>
+                <nav style="padding-top:20px;border-top:1px solid #E2E8F0;font-size:14px;">
+                    <a href="/" style="margin-right:16px;color:#4A615A;">Home</a>
+                    <a href="/about" style="margin-right:16px;color:#4A615A;">About</a>
+                    <a href="/trainers" style="margin-right:16px;color:#4A615A;">Directory</a>
+                    <a href="/how-it-works" style="margin-right:16px;color:#4A615A;">How It Works</a>
+                    <a href="/pricing" style="margin-right:16px;color:#4A615A;">Pricing</a>
+                    <a href="/contact" style="margin-right:16px;color:#4A615A;">Contact</a>
+                    <a href="/privacy" style="margin-right:16px;color:#4A615A;">Privacy Policy</a>
+                    <a href="/terms" style="color:#4A615A;">Terms of Service</a>
+                </nav>
+            </main>
+        </div>
         <script type="module" src="/src/index.jsx"></script>
     </body>
 </html>
