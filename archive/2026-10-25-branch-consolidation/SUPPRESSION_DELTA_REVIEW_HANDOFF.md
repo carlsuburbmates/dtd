@@ -6,8 +6,8 @@ Preserved on 25 October 2026. The original handoff below predates accepted commi
 
 # DF-043 Suppression Fix — Independent Delta Review Handoff
 
-**Base:** accepted R0 `1ac4138e4d82991501139298cc624be732661119`  
-**Worktree:** `/Users/carlg/.codex/worktrees/dtd-suppression-safety/dtd`  
+**Base:** accepted R0 `1ac4138e4d82991501139298cc624be732661119`
+**Worktree:** `/Users/carlg/.codex/worktrees/dtd-suppression-safety/dtd`
 **Current state:** three source/test files modified plus this handoff; uncommitted. No push, PR, provider mutation or deployment.
 
 ## Finding and reproduction
