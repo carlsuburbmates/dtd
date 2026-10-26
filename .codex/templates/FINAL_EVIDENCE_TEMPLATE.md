@@ -1,6 +1,6 @@
 # Final Evidence Template
 
-Use this before completion.
+Optional completion format when it improves clarity; follow the task scope and AGENTS.md.
 
 ## Capabilities used
 - capability:

@@ -4,7 +4,7 @@ Orientation only. This README is not implementation authority.
 
 Canonical truth starts at `docs/README.md`. Read its active authority map before
 loading the state, invariants, decision register and relevant topic specification.
-The repository-root `archive/` is historical and excluded from ordinary tasks.
+Historical documentation is kept outside the checkout and in Git history; it is not an active instruction source.
 
 ## What this project is
 
@@ -13,6 +13,8 @@ matching platform: real supply, rich trainer storefronts, guided owner matching,
 flat SaaS upgrades, and automation-first operations with bounded oversight.
 
 ## Quick start
+
+Use the example environment files only for synthetic local development. Runtime/provider credentials belong in managed secret stores and must not be copied into local `.env` files.
 
 Backend:
 
@@ -59,7 +61,7 @@ It never uses the production canonical trainer seed or external providers.
 Frontend:
 
 ```bash
-cd frontend && yarn test --watch=false
+cd frontend && yarn test
 cd frontend && yarn build
 ```
 
@@ -67,19 +69,18 @@ cd frontend && yarn build
 
 - `backend/` FastAPI app, runtime services, tests
 - `frontend/` React app and public/operator pages
-- `docs/` current, target and vision state, invariant rules, decisions and focused specs
-- `archive/` historical documents, separate from active docs and excluded from routine searches
+- `docs/` authoritative roadmap, current evidence, decisions, invariants and focused specs
 
 ## Where truth lives
 
 Read `docs/README.md`, then `docs/DTD_CURRENT_STATE.md` and
 `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`. Use the relevant file in `docs/specs/`
 and `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` for disputed decisions.
-Do not consult `archive/` unless the user explicitly requests historical research.
+Consult historical Git versions or the external documentation archive only for explicitly requested historical research.
 
 ## Next docs to read
 
 - `docs/README.md`
 - `docs/DTD_CURRENT_STATE.md`
-- `docs/DTD_TARGETED_POST_LAUNCH_STATE.md`
+- `docs/DTD_ROADMAP_EXECUTION_REGISTER.md`
 - `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`

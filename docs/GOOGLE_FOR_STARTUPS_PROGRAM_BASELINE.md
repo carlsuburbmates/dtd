@@ -104,11 +104,8 @@ Google explicitly excludes the following entity types across all tiers:
 ## 6. Review Process, Support & Reapplication Routes
 
 - **Initial Timeline:** Google's FAQ says most applicants are informed within a few business days; applications requiring further manual review may take 10 days or more. This is an estimate, not a service guarantee.
-- **Action Needed Notices:** Sent from `cloudstartupsupport-noreply@google.com` with a designated `Reply-To: cloudstartupsupport@google.com`.
-- **Resolution Channel:** Google explicitly directs applicants with verification blockers, rejection questions, or re-review requests to reply directly to `cloudstartupsupport@google.com` or consult their assigned Google Cloud representative.
-- **Reapplication vs. Re-Review:**
-  - Replying to the existing `[Action Needed]` thread with evidence/clarification maintains application continuity and allows the reviewer to update the original case without creating duplicate billing associations.
-  - Submitting a brand-new application is recommended only if the original case is formally closed or if requested by the support team.
+- **Case-correspondence evidence:** the September DTD notice used a program-support Reply-To and invited a response after website clarification or reapplication. This is a dated case observation, not a general published program rule. Verify the sender, Reply-To and current instructions against the actual authenticated thread before any response.
+- **Recommended route:** continue the existing verified program thread with truthful evidence where its instructions permit. Ask the program team whether reapplication is needed; this recommendation does not guarantee continuity, acceptance or particular billing-association behavior. Sending, reapplying and account changes retain their separate owner authority.
 
 ---
 

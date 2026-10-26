@@ -1,6 +1,6 @@
 ---
 name: dtd-premium-look-audit
-description: Audit and refine DTD public-facing website pages, current owner/trainer journeys, navigation, copy, CTAs, accessibility, metadata and mobile visual polish. Align with the current R-stage and verified deployment posture, not obsolete supply-first assumptions; do not expand into backend, billing, auth or major redesign without task authority.
+description: "Audit and refine DTD public-facing website pages, current owner/trainer journeys, navigation, copy, CTAs, accessibility, metadata and mobile visual polish. Align with the current R-stage and verified deployment posture, not obsolete supply-first assumptions; do not expand into backend, billing, auth or major redesign without task authority."
 ---
 
 # DTD Premium look audit
@@ -13,11 +13,11 @@ Start from business hierarchy and launch posture, not from decoration or generic
 Read proportionately in this order:
 1. `AGENTS.md` and `.codex/skill-policy.toml`.
 2. `docs/README.md`, `docs/DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md` (R stage), `docs/DTD_CURRENT_STATE.md` and `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`.
-3. `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md`, the relevant `docs/specs/` contract (website, matching, acquisition or commercial copy as applicable), and Decision Contract v2 for matching-visible states.
+3. `docs/DTD_ROADMAP_EXECUTION_REGISTER.md`, the relevant `docs/specs/` contract (website, matching, acquisition or commercial copy as applicable), and Decision Contract v2 for matching-visible states.
 4. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` only if a previous choice conflicts.
 5. Locate **actual** route components by inspecting current frontend directories/router/source at HEAD; never hardcode an assumed `frontend/src/App.js` or historical design-spec path. Inspect deployed website/flags if making live-posture claims.
 
-The former `docs/process/CODEX_EXECUTION_PLAYBOOK.md`, `docs/governance/CURRENT_TRUTH_INDEX.md`, `docs/standards/SSOT.md`, `docs/COMPLETE_WEBSITE_PAGE_SPEC.md`, `docs/design/WEBSITE_WIREFRAME_SPEC.md`, `docs/INITIAL_LAUNCH_GOALS_SUPPLY_FIRST.md` and `frontend/src/App.js` were absent at the inspected release SHA. Do not create or follow substitute copies as if they were active authority. Archive/history are evidence only when explicitly requested.
+Do not resurrect superseded specifications or assume historical route paths. Discover current routes from source. Historical documentation outside the checkout or in Git history is evidence only when explicitly requested.
 
 ## When To Use
 

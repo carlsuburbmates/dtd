@@ -1,15 +1,15 @@
 # DTD Current State
 
 **Evidence date:** 26 October 2026
-**Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. Dated snapshots retain their historical scope; the completed R3 checkpoint and linked R3 release record supersede earlier runtime/integration pointers.
-**Audit scope:** six-part, read-only code/product audit completed 20 September 2026, plus a read-only DNS/hosting reconciliation completed 23 September 2026. On 24 September, the owner separately authorised guarded Cloud Run recovery, Direct VPC/Cloud NAT rollout, Atlas network restriction, canonical suburb production seeding and one exact invalid-SEO-record cleanup; those production mutations are identified below. Other unexercised operator actions remain outside this evidence.
+**Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. The 25 October containment checkpoint below governs developer runtime/recovery. Dated finding evidence retains its original scope; it is not a current traffic, credential or deployment instruction. Stage acceptance lives in the execution register.
+**Scope:** current source/runtime checkpoints and unresolved findings, carrying dated evidence from earlier audits. This documentation consolidation makes no new runtime/provider verification or production-readiness claim. Full original snapshots are preserved outside the checkout and in Git history.
 
 ## Evidence boundaries
 
-- **Repository evidence:** source, configuration, tests and git state inspected locally.
-- **Live evidence:** public API and sites checked read-only on 19–20 September 2026; DNS, Vercel and hosting endpoints rechecked on 23 September 2026; the Cloud Run service, Scheduler configuration and public health/config/SEO rejection paths were rechecked on 25 September 2026; production Stripe-related Cloud Run configuration and public health/config/webhook rejection paths were rechecked on 14 October 2026; production and developer API/frontend state, Ops telemetry and the developer Scheduler/Guardian path were rechecked on 15 October 2026.
-- **Captured operator evidence:** authenticated `/ops` snapshot captured during the preceding implementation audit; refresh before an operational decision.
-- A feature is not called live merely because code or a provider integration exists.
+- Source, tests/CI, deployment configuration and actual workflow/provider behavior are distinct evidence states.
+- R0–R3 scoped acceptance is preserved in the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md). Corrected R4–R8 runtime acceptance remains PARTIAL in [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md).
+- The dated 25 October image/credential checkpoint below supersedes older developer recovery references. Read current provider state before any operational action.
+- Historical snapshots and resolved findings are recoverable through the documentation map's historical-evidence pointer; they are not active instructions.
 
 ## Antigravity knowledge reconciliation — 26 October 2026
 
@@ -26,7 +26,7 @@ The main working checkout was clean at `4f47fea`; the latest storefront delta wa
 
 **25 October credential containment DONE:** after explicit owner approval, the exposed developer credentials were replaced in managed Secret Manager and the replacement revision was verified on a no-traffic canary, promoted, observed and rechecked. Serving API `dtd-api-dev-contain-1025111028` has 100% traffic, no tags and checkout/refunds/self-healing all `0`. The exposed versions are disabled; new numeric references are pinned. DF-055's active developer credential exposure and DF-056's runtime flag discrepancy are closed at this scope. Historical-access/misuse uncertainty and DF-001's broader provider/history findings remain open. Production was unchanged.
 
-PR20 merged reviewed source `79b8165` as `4e54968`; source PR/Push Verify and CodeQL passed (backend705passed/5skipped; no new local suite run).17local/12remote obsolete branches were retired after exact ancestry/blob-equivalence checks and private preservation. Main remains the only branch; worktree directories and the existing stash are retained. Full evidence: [consolidation record](../archive/2026-10-25-branch-consolidation/README.md). Accepted R0–R3 evidence and R8 runtime limitations remain unchanged.
+PR20 merged reviewed source `79b8165` as `4e54968`; source PR/Push Verify and CodeQL passed (backend705passed/5skipped; no new local suite run).17local/12remote obsolete branches were retired after exact ancestry/blob-equivalence checks and private preservation. Main remains the only branch; worktree directories and the existing stash are retained. Full evidence: [consolidation record](https://github.com/carlsuburbmates/dtd/blob/1a0b0ff0cdffaeb753dc6ae53e0ef09ae653f188/archive/2026-10-25-branch-consolidation/README.md). Accepted R0–R3 evidence and R8 runtime limitations remain unchanged.
 
 ## Developer credential containment checkpoint — 25 October 2026
 
@@ -44,243 +44,18 @@ PR20 merged reviewed source `79b8165` as `4e54968`; source PR/Push Verify and Co
 - **Git completion:** `main` at `d290b26` matched the remote; Verify passed for that exact SHA. No open PRs, no extra local/remote branches and no uncommitted files were found. All 12 retained worktrees were clean. The historical documentation stash and detached worktrees remain intentionally preserved; prior branch/file recovery archives remain the cleanup record. This check found no new work requiring merge or deletion.
 - **Connector limit:** the installed DTD Listings MCP responds, but its read-only cached packet is from the legacy checkout and dated May 2026. Its cached read still works after rotation; live access through that connector was not exercised. This response is not current DTD inventory or readiness evidence. DF-057 records the separate reconciliation requirement.
 
-## R8 independent audit and separate-session coordination — 24 October 2026
+## Implementation and acceptance orientation
 
-- **PARTIAL:** implementation-authored R8 acceptance is superseded by independent review. The isolated audit branch contains additional source/robots, claim-session, support, datastore-budget and request-owned-cleanup corrections; 710 backend and 100 frontend tests pass. Local checks do not prove deployed behavior.
-- **Provenance:** the 23 October API `dtd-api-dev-00060-x5r` and web `dtd-web-dev-00024-nlj` build archives match all tracked API/frontend source files at `1022ad5`. They do not include the later audit corrections. Exact digests, review scope and remaining workflow/provider/accessibility evidence are in [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md).
-- **Parallel handover:** the owner says the new commercial/roadmap plan was sent to Antigravity in another session. Commit `0701d09` is preserved, including static fallback and sitemap. Reconcile returned commits rather than duplicate broad roadmap implementation. Google credits remain pending; trial/billing and matching contracts remain authoritative over strategy prose.
-- **Safety:** this audit checkpoint has made no remote push/deployment or provider mutation. The 24 October external handover reports a separate owner-authorized production frontend crawlability release; this does not authorize R9 product/API promotion. Keep ingestion paused, checkout and self-healing disabled.
-
-## Public deployment route — read-only verified 21 October 2026
-
-- **Public frontend:** `dogtrainersdirectory.com.au` resolves to `199.36.158.100`, the Firebase Hosting endpoint; `www.dogtrainersdirectory.com.au` is a CNAME to `gen-lang-client-0028123502.web.app`. Firebase Hosting reports both custom domains active with host, ownership and certificate checks passing (certificate expiry `2026-12-18`) on site `gen-lang-client-0028123502` in project `gen-lang-client-0028123502`. The root and `www` returned HTTP 200 and identical HTML assets (`/assets/index-C0hDcFGr.js`, `/assets/index-BFwCnvTH.css`).
-- **Firebase release:** current release `sites/gen-lang-client-0028123502/releases/1792053117314000` was finalized at `2026-10-15T08:31:57Z`, using Hosting version `1ea8597fa3891b38`. This read-only verification did not establish a source commit for that frontend artifact.
-- **Public API:** `firebase.json` rewrites `/api/**` to Cloud Run service `dtd-api` in `australia-southeast1`. Production service URL is `https://dtd-api-72mpr43wra-ts.a.run.app`; latest ready revision `dtd-api-00058-ter` has 100% traffic and image digest `sha256:e17c691c567867c351d3a49af23226c6e7b44c50523d64c67c7659249cf69c61`. `/api/health` returned `{"ok":true,"service":"dog-trainers-directory-match-engine","database":"available"}` through both the public domain and Firebase default hostname.
-- **Google release automation:** the authenticated read-only Cloud Build trigger inventory returned zero triggers in both production and developer projects; `origin/main` contains only the GitHub Verify workflow. No automatic Google deploy trigger was identified. Firebase Hosting release metadata does not establish a source commit for the live frontend artifact.
-- **Vercel distinction:** the retired project has no DTD public custom domain, is non-live, and protects default domains with SSO. Its DTD Git connection was removed and verified on 22 October before PR #17 integration. Historical deployments are retained as history; Vercel is not a DTD delivery path.
-
-## R3 completed platform checkpoint — 22 October 2026
-
-- **R3 / DF-037 DONE:** PR #18 merged accepted correction `d0f4096` as `48f68f4bb49ac1e8641e515b7a6a0f6713a024da`. Main Verify `39642567639`, Push `39642567225` and graph `39643359491` passed. Authenticated GitHub graph now resolves follow-redirects 1.16.1; alerts #259/#260 are fixed and the default branch has zero open Dependabot alerts. All five original alerts are also fixed. This is dependency-remediation evidence, not blanket CodeQL/credential or production acceptance. TD-001/TD-002 and DF-001 retain the remaining work. The owner requested handover here; R4 has not started.
-- **DF-038 DONE (documentation reconciliation):** the retired Ops runner in main has the same blob as independently accepted `85bb608` (`b6ddcf7e1a26493432c32c8dea81559016cbf067`); the earlier pending-R2 wording was stale. The developer credential replacement remains accepted; public history is retained.
-- **DF-049 DONE for sandbox remediation:** the accepted unique-receipt/index correction is integrated through the accepted R2 release and retained in current main. Its synthetic first/replay/invalid-signature, single-row persistence and cleanup evidence remain accepted. Provider-originated behavior stays under DF-050/R7; production acceptance is R9.
-- **DF-046 DONE:** accepted API source `9dd53ed` and its five-scenario sandbox matrix are integrated through PR #17 at `ca744434`; all main checks passed. All 14 synthetic records were previously deleted and verified absent. Detailed runtime/recovery evidence remains in `R3_RELEASE_FOUNDATION.md`.
-- **DF-053 SUPERSEDED:** the owner explicitly clarified that the developer sandbox is Cloud Run `dtd-web-dev`/`dtd-api-dev` plus Atlas `dtd_sandbox`; Firebase Hosting is production-only (CDR-027). Authenticated Hosting REST reads now succeed: the dev project has zero sites, and the production DTD site has only its live channel. Its deployed rewrite targets `dtd-api`; both canonical custom domains are active. No missing Firebase sandbox or Hosting Viewer grant is required. Repository Firebase defaults remain production-only and must not be used for sandbox deployment.
-- **Local management-session containment DONE:** the earlier Firebase CLI diagnostic printed OAuth fields into private tool output. Under the owner's specific authorization, official account-scoped logout succeeded; a subsequent CLI inventory found zero accounts. A separate gcloud project read still succeeded. No credential value was copied into repository artifacts and no runtime secret was changed. This verifies logout, not absence of historical access or misuse.
-
-## Independent audit refresh — 20 October 2026
-
-- **Production control-plane snapshot:** Cloud Run `dtd-api` in `gen-lang-client-0028123502` serves `dtd-api-00058-ter` at 100% traffic under `dtd-runtime`; two older revisions retain audit tags. The only production Scheduler job listed in `australia-southeast1` is `dtd-pro-trial-warnings`, enabled at 09:00 Melbourne. Firebase Hosting site inventory succeeds for the production project. Exact production source SHA/image-to-commit provenance and current end-to-end health were not established in this read-only snapshot. No production service, job, site or data was changed.
-- **R0 remains frozen and accepted:** `1ac4138e4d82991501139298cc624be732661119`. This refresh does not rewrite that commit or reopen accepted Ops phases.
-- **Developer runtime identity remediation:** `dtd-web-dev` now runs as dedicated `dtd-web-dev-runtime`; its direct project role inventory is empty and no Secret Manager binding was found. The zero-role identity was tested on a canary, promoted to 100%, and the API-backed catalogue rendered. Previous web revision `dtd-web-dev-00021-pzw` remains available for rollback. DF-042 is **DONE** for the developer web boundary; effective permissions via inherited organization policies were not independently simulated because Policy Troubleshooter is disabled.
-- **Ingestion safety and scheduler:** DF-043 suppression bypass was reproduced on isolated fixtures, independently reviewed, committed as `50f3c594d611bede8b7a610d7b09fb3fd8680f23` (parent frozen R0), deployed to API revision `dtd-api-dev-00050-7r7`, and passed targeted tests plus live synthetic verification. Existing and newly discovered delisted identities were both suppressed. DF-045 remains an R4 safety gap: robots retrieval error/non-success can proceed to target fetch. The original trainer-ingest Scheduler job is currently verified **PAUSED** with its original URL, `{}` body, OIDC audience, daily 02:00 Melbourne schedule and 180-second deadline. It was briefly enabled administratively during the post-deploy assessment, then re-paused when DF-045 was recognized; no scheduled invocation occurred in that interval. The separate engine-tick Scheduler job remains enabled every 10 minutes with `profile=routine`, authenticated by the dedicated developer runtime identity; it does not invoke trainer ingestion. Do not resume ingestion until DF-045 and source-scope controls are resolved and reviewed.
-- **Developer data isolation:** API secret binding resolves to database `dtd_sandbox` on the dedicated Atlas `dtd-sandbox` cluster; an in-memory ping succeeded. No production data was queried or modified.
-- **Sandbox suburb catalogue:** the database has zero active `suburbs` v1 rows; the API currently falls back to its 539-entry static catalogue, which the public config returned. This is sandbox seed-state drift, not a public outage or R1 safety blocker. Database-backed seed parity remains `NOT_VERIFIED`.
-- **R1 runtime acceptance disposition (21 October):** API revision `dtd-api-dev-00054-rvl` serves image `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3` at 100%, built from reviewed commit `fdd2c45431dfeccf405a14ebdb46b45d545fa6ca`; web revision `dtd-web-dev-webidentity` remains at 100%. Signed webhook/replay/invalid signature, ordinary and negative claim paths, privacy denial, suppression/republication, delisting, fraud confirm-spam, support intake/concurrency/closure, protected Ops and health checks passed with synthetic cleanup. The retry-reconciliation patch has independent ACCEPT and passing CI; injected live database failure remains `NOT_VERIFIED`. Under the written R1 exit contract, runtime acceptance is **DONE WITH NAMED BLOCKED FOLLOW-UPS**: positive trainer/privacy/publication journeys and the claim-lifecycle correction for DF-051 are assigned to R5, with acquisition-update regression verification carried into R4 before ingestion activation; support notifier failure/fallback and scoped obligation resolution/completeness are R7; provider-originated Resend delivery is carried to R7 communications acceptance, while the later R3 runbook supersedes this historical recovery pointer. Conditional rollback to `00059-hex` was rehearsed and traffic restored to `00054-rvl`. The ingestion scheduler remains PAUSED; DF-044/045 remain R4 activation dependencies. Full matrix and cleanup proof: `R1_SANDBOX_RELEASE_EVIDENCE.md` and `R1_FIXTURE_CLEANUP.md`.
-- **AI degradation telemetry:** at the earlier R1 observation, 25 sandbox events were inspected; all were marked recovered and used fallback. Twenty-three were Ops analyst inference failures and two trainer-verification scoring timeouts; none were matching calls. The 22 October pre-fix refresh found 50 events and confirmed DF-046. Its correction is now deployed in the developer sandbox and passed the live API/Ops matrix below; PR #17 has since integrated it as `ca744434` with passing main CI. No provider call was made by the fixture run.
-- **Rollback:** revisions `dtd-api-dev-00049-brd` and `dtd-api-dev-00027-yob` predate DF-043 and are unsafe. During the 21 October rollback rehearsal, `00054-rvl` was the serving revision. Conditional rollback to `00059-hex` was rehearsed with API health/database and public trainer read checks passing; traffic was restored to `00054-rvl` and health passed. The authenticated Resend dashboard showed no webhook endpoints and trainer-ingest remained PAUSED. `00059-hex` carries suppression and the unique receipt index but predates retry reconciliation, so it was an emergency fallback only while those conditions held. The later R3 recovery record supersedes this R1 snapshot and identifies `00055-kbm` only as a conditional emergency traffic-return target. The later R3 rehearsal uses `00055-kbm`, which includes the webhook retry correction; its bounded emergency-recovery limits remain explicit in `R3_RELEASE_FOUNDATION.md`. See `R1_SANDBOX_RELEASE_EVIDENCE.md` for the dated rehearsal.
-- **R1 scheduler contract:** the master mandate requires inspection of Scheduler state and safety but does not require trainer ingestion to be enabled for R1 exit. Keep `dtd-trainer-ingest-cron` **PAUSED**. DF-044 and DF-045 are R4 dependencies for any later activation, not grounds to restart the whole roadmap.
-- **Earlier Firebase access limit (superseded):** the earlier CLI inventory failed with 403. Authenticated gcloud-backed REST reads later succeeded on 22 October; CDR-027 confirms that Hosting is production-only. The owner-authorized Firebase CLI logout is complete; no developer Hosting access is required.
-
-## Historical R2 checkpoint — 22 October 2026, before R3
-
-At the completed R2 checkpoint, PR #12 and safety follow-up PR #15 had merged and `origin/main` was `e8c66318724e9fe0c5f00c293898a1a7fa213d35`. Developer API `dtd-api-dev-00055-kbm` and web `dtd-web-dev-00023-phd` then served 100%. The API image was `sha256:d0846a21e73642376c3e5f145f0791fb1456b185624bd8c12ab773f64fc3b764`; all 46 archived backend build-context files matched that R2 source byte-for-byte. Health/database checks passed; deep health retained the pre-fix DF-046 interpretation and dependency exposure. Dedicated runtime identity, isolated `dtd_sandbox`, managed secret references, disabled checkout/autonomy/seeding/self-healing, paused ingestion and separate routine engine tick were verified.
-
-This is historical release evidence, not the current main or API traffic target. R3 subsequently deployed `dtd-api-dev-r3-9dd53ed6` and integrated the reviewed corrections; its current runtime and main pointers are above and in `R3_RELEASE_FOUNDATION.md`. Revision `00055-kbm` is retained only for the rehearsed conditional emergency traffic-return procedure and must not be described as a security-remediated image. No fixture, provider message, live payment, production service or production data was touched by this R2 inspection. Full R2 evidence remains in `R2_RELEASE_RECONCILIATION.md`.
-
-## Live refresh — 7 October 2026
-
-- The developer sandbox now serves Cloud Run revision `dtd-api-dev-00021-dfd` at 100% traffic using the dedicated runtime service account `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com`; `/api/health` returned an available database. The default Compute service account is no longer the Cloud Run runtime identity. Its explicit Vertex model is `gemini-3.5-flash`, replacing the unavailable legacy default observed in the prior sandbox run. The constrained matcher uses a bounded JSON schema with automatic function calling and thinking disabled; the live M9 provider case returned non-degraded results within its five-second boundary.
-- Deployment, runtime-IAM provisioning and scheduler provisioning are split into separate idempotent scripts. The enabled scheduler uses that dedicated identity, canonical regional Cloud Run OIDC audience and `application/json` payload. A manual scheduler dry-run returned HTTP 200 on 5 October, created a zero-mutation `ingestion_runs` record, and that disposable record was deleted. Real acquisition processing remains unaccepted until a namespaced approved-source run is designed.
-- `scripts/run_sandbox_matching_acceptance.sh` completed twice against the live sandbox. The broader `scripts/run_sandbox_matching_matrix.sh` has now passed its self-cleaning API/Ops matrix: validation, immediate-danger and urgent-health stops, no-match, expanded scope, a live non-degraded Gemini case, context header/query and forced-expiry boundaries, public profile, terminal no-recipient follow-up, idempotency, Ops visibility and public absence. It created only UUID-prefixed fixtures, did not contact an email provider, and removed every record it created.
-- `scripts/run_sandbox_matching_parity.sh` passed its controlled same-fixture live parity run. It first proved a non-degraded Gemini result, then temporarily set an intentionally invalid model only on `dtd-api-dev` to force the bounded deterministic fallback, verified the degraded event in protected Ops, restored `gemini-3.5-flash`, and proved a second normal Gemini result. All three paths returned the same isolated candidate and the required capability reason; the runner removed its trainer, three match events, contexts and temporary degradation event, then verified public absence.
-- The isolated Cloud Run frontend `dtd-web-dev-00006-qqx` serves 100% of developer-sandbox traffic. A 7 October mobile browser check of both its canonical regional and generated `a.run.app` hostnames showed the guided questionnaire, a successful config request to the isolated sandbox API, and no horizontal overflow. The canonical hostname had previously routed API calls to the static frontend and displayed the fallback waitlist; commit `6957c69` repaired that routing and a regression test covers both hosts. Remote Verify run `37551814408` passed at that exact commit: 532 backend and 51 frontend tests plus build. An earlier live browser submission produced a disposable result/profile handoff; its trainer and associated match records were removed and verified absent. The final protected-enquiry browser submit remains unexercised; production Firebase was not changed.
-
-## Live refresh — 14 October 2026
-
-- Production Cloud Run service `dtd-api` in `australia-southeast1` is serving revision `dtd-api-00033-cpz` at 100% traffic. The environment-only revision pins `dtd-stripe-secret-key` and `dtd-stripe-webhook-secret` to Secret Manager version 2 and explicitly sets `ENABLE_TRAINER_BILLING_CHECKOUT=0`; checkout remains fail-closed.
-- On `https://dogtrainersdirectory.com.au`, `/api/health` and `/api/config` returned HTTP 200 on the new revision. An unsigned `POST /api/stripe/webhook` returned HTTP 400, confirming signature enforcement on that revision. This verifies the public route and fail-closed webhook behavior; it does not verify a provider-signed production event or downstream billing effects.
-- The Stripe event handler fix using `event.to_dict()` is present on remote branch `feature/matching-implementation` at commit `21472c853f57e8a2c14fbe79607faaf7e1494530`. No checkout, charge, refund, or customer action was performed as part of this deployment.
-
-## Live refresh — 15 October 2026
-
-- Branch `feature/matching-implementation` is at pushed commit `230cdd7`. Its storefront owner-management controls were independently audited against `938ac14..230cdd7` and classified **PARTIAL**: the ABN badge, review summary, enquiry form and existing claim modal remain in the reviewed render path, but after a claimed owner revisits a profile the management controls lack the claim session token required by protected edit/billing calls. The edit modal can open without loading saved capability values and its save request is unauthorized. The test change covers rendering, not that authenticated lifecycle. See DF-030.
-- Production Firebase Hosting serves JavaScript asset `index-B0KVx6z6.js` and CSS asset `index-CiXd5jGR.css` (HTTP 200). A Vite 8 local production build produced the same hashes. Developer frontend revision `dtd-web-dev-00010-qwt` serves 100% of traffic and the same asset hashes; its JavaScript includes the canonical developer API origin. The public root and both production and developer `/api/health` and `/api/config` endpoints returned HTTP 200. Production API revision `dtd-api-00033-cpz` and developer API revision `dtd-api-dev-00025-slz` each serve 100%; public matching configuration and fail-closed billing setting are aligned. This is configuration/frontend parity evidence, not proof of backend image or dataset parity. No production service was modified.
-- Verification: `npm --prefix frontend test` passed 54 tests; `npm --prefix frontend run build` succeeded; `.venv/bin/python backend/scripts/run_isolated_integration_suite.py` passed 534 tests. The separately requested broad `uv run pytest backend/tests` run had 491 passed, 34 failed and 9 errors; failures include legacy/local-server assumptions and stale contract assertions, so this broad command is not a green release gate. `git diff --check` is recorded after this documentation update.
-- Developer Ops readiness remains `attention_needed`, with 20 intro-ready and 2 blocked; `held_or_unpublished` remains because the underlying submissions remain held. Both specified submissions were checked against official ABR name search: each supplied ABN was malformed and neither produced an exact current Victorian name match. Their confidence remains 0.1. The two case notes were moved from `detected` to `investigating` with evidence and a keep-held disposition; no trainer was published or changed. Triage updates case workflow state only and does not clear statutory or publication blockers.
-- Resend delivery is verified healthy on 15 October. The developer Secret Manager key version 1 returned Resend HTTP 401 with `API key is invalid`; the already-active version 2 returned HTTP 200 when checked against Resend's test recipient, and the developer app recorded two HTTP 200 sends afterward. All 15 historical developer 401 Ops cases were moved from `deferred` to `resolved` with an audit note; no historical message was resent. Production's 12 401 events date from 26–28 May; the production Messages view now shows zero open delivery issues and 29 successful sends, and its current runtime key returned HTTP 200 to the same test recipient. No customer was contacted and no key was changed during this verification. `provider:resend` remains `investigating`: the separate provider-management recovery path and least-privilege sending-key posture remain unverified. In the developer database, claim records retain OTP digests, expiry and masked destinations but no recoverable raw OTP; failed delivery returns the claim to `unclaimed`, so a fresh claim request can be made if a future send fails. One failed matching follow-up remains persisted and visible to Ops with owner data retained; it was not retried after its earlier 401.
-- Cloud Scheduler's developer job `dtd-trainer-ingest-cron` is enabled daily at `0 2 * * *`, OIDC-authenticated to `/api/internal/jobs/trainer-ingest`. A bounded invocation supplied an empty explicit source URL and `run_guardian=true`; it resolved and processed zero candidates, then ran Guardian at 16:04:58Z (15 October in Melbourne). Guardian scanned 22 records (20 published), found zero duplicates and zero statutory violations plus one schema violation, and applied zero remediations. The scheduler's original `{}` request body was restored and verified. Production's `dtd-pro-trial-warnings` job was not run. In both Cloud Run projects, runtime daemon loops are disabled (`DISABLE_AUTONOMY=1`, `AUTONOMY_LOOP_OWNER=none`); no `engine-tick` scheduler job exists. Empty loop-state dictionaries therefore do not prove a crashed process: the serverless runtime needs an external scheduled invocation, which is currently missing for those loops. See DF-029.
-- Administrative secret rotation executed on 15 October 2026: `dtd-admin-pass` was rotated to Version 3 (`enabled`) in Secret Manager. A zero-traffic canary revision `dtd-api-00058-ter` was deployed to Cloud Run (`australia-southeast1`) and verified: `/api/health` returned HTTP 200, `/api/oversight` with Version 3 returned HTTP 200, and with Version 2 returned HTTP 401. Production traffic was then promoted to 100% on `dtd-api-00058-ter`. Public endpoints `/api/health` and `/api/config` returned HTTP 200 on `dogtrainersdirectory.com.au`; authenticated `/api/oversight` returned HTTP 200 with Version 3 and HTTP 401 with Version 2. Version 2 was subsequently disabled in Secret Manager (not destroyed, preserving auditability and rollback capability). Zero errors were recorded in Cloud Run logging during the deployment and promotion window.
-
-## Live refresh — 16 October 2026
-
-- Google Cloud verification shows developer API revision `dtd-api-dev-00038-s6w` and developer web revision `dtd-web-dev-00016-b2d` serving 100% of traffic in `dogtrainersdirectory-dev`. The API `/api/health` and `/api/config` returned HTTP 200; health reported the database available, and public config reported matching enabled, phase `live_matching`, flat-subscription copy, and a 30-day Pro trial. Production backend remains untouched and strictly pinned to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`.
-- Historical 16 October Phase 2 evidence is superseded by the 21 October safety audit below. Incident/lifecycle/read-only checks and fixture cleanup were verified. The current verifier checks Scheduler configuration read-only and does not invoke the engine tick; fixture-scoped execution acceptance remains blocked because routine execution writes derived and operations state and may call Vertex AI. It does not run nurture, reactivation-email or recovery loops.
-- Cloud Scheduler cron `dtd-engine-tick-cron` is enabled in `dogtrainersdirectory-dev` (`*/10 * * * *`, Australia/Melbourne), targets `/api/internal/jobs/engine-tick?profile=routine`, and uses the dedicated developer runtime identity. The current deployed handler uses a 180-second lease; the reviewed R2 candidate extends that to 420 seconds for the 300-second Cloud Run timeout and uses a unique owner token with fail-closed lease-store handling. DF-029 remains DONE for developer scheduling provision; DF-052 tracks safe fixture-scoped execution and AI cost controls.
-- Operations Console Phase 3 implementation and live developer-sandbox deployment are complete: `/ops` is transformed into an exception-driven, mobile-first Operations Console for a single non-technical owner with a 3-Level hierarchy and collapsible Advanced Diagnostics disclosure. All 7 sandbox acceptance gates passed (`scripts/verify_sandbox_ops_phase3_live.mjs`).
-- Operations Console Phase 4 implementation and live developer-sandbox deployment are complete: introduces a read-only AI Operations Analyst powered by Gemini on Vertex AI (`gemini-3.5-flash`), with deterministic secret/PII sanitization, structured JSON validation, per-occurrence deduplication, a 60-second manual cooldown and a read-only data boundary. The configured nominal 50-call daily limit is not a strict cost ceiling: its count-then-call path is non-atomic and fails open on count-query errors (DF-052).
-- Phase 4 Verification:
-  - Frontend Vitest: 69/69 tests passed across 10 test files (including 22/22 in `Ops.test.jsx`). Vite production build clean in 626ms.
-  - Backend Pytest: 513/513 unit and ops tests passed across Phase 1, Phase 2, and Phase 4 (`test_ops_phase4_ai_analyst.py`).
-  - Live Sandbox Acceptance: 9/9 gates passed (`scripts/verify_sandbox_ops_phase4.py` and `scripts/verify_sandbox_ops_phase4_live_ui.mjs`) on `dtd-api-dev-00038-s6w` and `dtd-web-dev-00016-b2d`:
-    - Gate A (Real incident trigger): `PASS` (synthetic failure fixture generated and detected).
-    - Gate B & D (Live Gemini inference with structured schema): `PASS` (Gemini on Vertex AI returned valid structured analysis with confirmed classification, root-cause hypothesis, supporting evidence, and safe recommended action).
-    - Gate C (Deduplication & Caching): `PASS` (exactly 1 investigation document persisted in MongoDB; repeat requests served from cache without extra inference cost).
-    - Gate E (Evidence Minimization & Sanitization): `PASS` (credentials, API keys, and client emails strictly redacted with `[REDACTED_RESEND_KEY]`).
-    - Gate F (Strict Read-Only Invariant): `PASS` (zero mutations to operational case states, reviews, trainers, or submissions).
-    - Gate G (Manual Request Cooldown): `PASS` (rapid repeat requests returned HTTP 429 rate limit).
-    - Gate H (/api/oversight Read-Only Enrichment): `PASS` (oversight endpoint enriches cases with cached AI analysis at $0 extra cost).
-    - Gate I (Live UI Acceptance & Screenshots): `PASS` (`AiAnalysisCard` DOM verified rendering in `/ops` across Mobile 390x844, Tablet 768x1024, Desktop 1440x900, and Expanded AI Analysis Detail 1440x1200).
-    - Zero-Trace Teardown: `PASS` (100% of test fixtures and synthetic investigations cleaned up).
-- Operations Console Phase 5 implementation and live developer-sandbox acceptance are complete: Introduces strictly controlled, bounded, deterministic automatic recovery routines for safe operational failures under strict multi-layer safeguards (default-disabled posture `OPS_SELF_HEALING_ENABLED=0`, production hard-block, separate per-routine feature flags, atomic distributed claiming in `ops_recovery_executions` preventing duplicate concurrent execution, downstream verified recovery, daily budget ceilings, cooldowns, zero business data mutations, and strict isolation from the read-only Gemini AI Analyst).
-- Phase 5 Verification:
-  - Frontend Vitest: 71/71 tests passed across 10 test files (including 24/24 in `Ops.test.jsx`). Vite production build clean in 637ms.
-  - Backend Pytest: 52/52 ops tests passed across Phase 1, Phase 2, Phase 4, and Phase 5 (`test_ops_phase5_recovery.py`); 592/592 tests passed in the isolated integration suite (`run_isolated_integration_suite.py`).
-  - Live Sandbox Acceptance: 11/11 acceptance gates passed (`scripts/verify_sandbox_ops_phase5.py` and `scripts/verify_sandbox_ops_phase5_live_ui.mjs`) on `dtd-api-dev-00047-kfd` and `dtd-web-dev-00018-98h`:
-    - Gate A (Safe Default-Disabled Posture): `PASS` (`self_healing_globally_enabled: False` by default; recovery evaluation while disabled returns `eligible: False`).
-    - Gate B (Routine Eligibility Boundaries): `PASS` (permanent errors like HTTP 401 rejected with `eligible: False`; recovery attempt returned HTTP 422).
-    - Gate C (Dry-Run & Idempotency): `PASS` (dry run evaluated eligible with zero database mutations).
-    - Gate D (Distributed Concurrency Control): `PASS` (active worker lease in `ops_recovery_executions` blocked concurrent recovery with HTTP 409).
-    - Gate E & F (Real Sandbox Recovery Execution & Verified Resolution): `PASS` (recovery returned `status: "verified_recovery"`; claim marked expired; trainer lock released with zero ownership mutations; `ops_recovery_executions` verified; `ops_case_states` resolved).
-    - Gate G (Failure Handling, Cooldown & Max Attempts): `PASS` (cooldown active returned HTTP 409; max attempts ceiling 2/2 returned HTTP 400).
-    - Gate H (AI Separation): `PASS` (Gemini Analyst confirmed strictly read-only with zero mutation tools attached).
-    - Gate I (Operations Console UX & Handled Automatically Feed): `PASS` (verified auto-recovery rendered in Level 3 Handled Automatically feed: `Self-Healed: Stale Claim Lock Recovery`, `status: "completed"`).
-    - Gate J (Production Isolation): `PASS` (production backend confirmed locked to `dtd-api-00058-ter`).
-    - Gate K (Zero-Trace Cleanup & Reset Posture): `PASS` (100% of test fixtures removed; Cloud Run environment restored to default-disabled; live status confirmed `self_healing_globally_enabled: False`).
-    - Visual Verification Screenshots: Desktop 1440x900 (`ops_live_phase5_desktop_1440.png`), Tablet 768x1024 (`ops_live_phase5_tablet_768.png`), Mobile 390x844 (`ops_live_phase5_mobile_390.png`), and Handled Automatically View (`ops_live_phase5_handled_automatically.png`).
-- Operations Console Phase 5A implementation and live acceptance are complete: Owner Experience Consolidation & Operational Acceptance. Consolidates Phases 1–5 into a unified, mobile-first interface for a single non-technical founder. Reconciles the outdated 11-step manual checklist in `docs/specs/OPS_AND_OBSERVABILITY.md` with an exception-driven operating model. Enforces 10-second owner scannability: Level 1 System Status (single plain English headline, calm healthy state, zero decorative gauges), Level 2 Needs Your Attention (actionable exceptions only, priority-first sorting, bounded pagination and compact filter tabs for 20–30 cases, progressive disclosure for AI analyst and self-healing telemetry, high-severity dismissal protection), Level 3 Handled Automatically (collapsed-by-default truthful aggregate summary of routine passes and verified recoveries, expandable on demand), and Secondary Advanced Diagnostics (collapsed by default, preserving all 10 diagnostic views). Explicitly accounts for all 14 operational domains and notes residual manual gates.
-- Phase 5A Verification & Deployment:
-  - Developer Sandbox Frontend: Deployed to `dogtrainersdirectory-dev` Cloud Run service `dtd-web-dev`, revision `dtd-web-dev-00019-ks5` serving 100% of traffic. Verified at `https://dtd-web-dev-625222421634.australia-southeast1.run.app/ops`.
-  - Developer Sandbox Backend: Active at `dtd-api-dev` (revision `dtd-api-dev-00047-kfd`), connected to `dtd_sandbox`.
-  - Live UI Acceptance Suite: 100% PASS via `scripts/verify_sandbox_ops_phase5a_live_ui.mjs` against live sandbox with Secret Manager admin authentication.
-  - Live Responsive Verification Screenshots: Desktop 1440x900 (`ops_live_phase5a_desktop_1440.png`), Tablet 768x1024 (`ops_live_phase5a_tablet_768.png`), Mobile 390x844 (`ops_live_phase5a_mobile_390.png`), Level 3 Handled Automatically Expanded (`ops_live_phase5a_handled_expanded.png`), and Secondary Advanced Diagnostics Expanded (`ops_live_phase5a_diagnostics_expanded.png`).
-  - Frontend Vitest: 74/74 tests passed across 10 test files (including 27/27 in `Ops.test.jsx`). Vite production build clean in 674ms.
-  - Backend Pytest & Integration Suite: 592/592 tests passed via `backend/scripts/run_isolated_integration_suite.py`; 13/13 recovery tests passed via `test_ops_phase5_recovery.py`.
-  - Production Backend Posture: Strictly preserved at `dtd-api-00058-ter` in project `gen-lang-client-0028123502` with zero production deployment or self-healing activation.
-- Consolidated Operations Console Production-Readiness Assessment (Phases 1–5A) is complete on 17 October 2026: Overall status is **CONDITIONALLY READY FOR OWNER APPROVAL**. All code, build, visual, architectural, and test contracts pass (74/74 frontend tests, 592/592 backend integration tests, 29/29 AI analyst & recovery tests). Production self-healing is code-level hard-blocked (`is_production_environment() == True`). Commercial gate remains fail-closed ($0 live risk). Firebase Hosting frontend compatibility is verified with polymorphic API routing. Startup indexing in `server.py` defensively provisions collections without migrations. Rollback procedures for Cloud Run (`dtd-api-00058-ter`) and Firebase Hosting (`f92934ec71003666`) are established. Outstanding prerequisites before live execution: separate owner production deployment authorisation, optional IAM `roles/aiplatform.user` on `dtd-runtime` for live Vertex AI calls (otherwise deterministic heuristic fallback applies), and optional Cloud Scheduler cron `dtd-engine-tick-cron`.
-- Production backend remains strictly locked to revision `dtd-api-00058-ter` in project `gen-lang-client-0028123502`. Zero production mutations.
-- PR #11 remains open; branch checks do not mean it was merged or that production changed.
-- DF-041 is **PARTIAL** in the developer sandbox. The normal trainer claim UI success path now has a disposable fixture, but the public `/submit` success path has not been exercised end to end.
-
-## Live refresh — 18 October 2026
-
-- Critical Unified Operations Completion Mandate & Independent Re-Audit Resolution:
-  Addressed the 5 findings raised in the independent review of commit `bc4e6d4` to guarantee that no owner responsibility can silently disappear in the background.
-- 1. Durable Owner Responsibility Ledger (`backend/services/ops_obligations.py`):
-  - Created dedicated MongoDB persistence collection `db.ops_obligations` with unique index on `obligation_id` and compound index on `(status, is_overdue)`.
-  - Authoritative SLA windows per operational domain: scheduler (1h), claim_lock (4h), provider (6h), client_enquiry (12h), directory_guardian (24h), trainer_verification (48h), billing (72h).
-  - Multi-tier escalation logic: breaches auto-flag `is_overdue=True`, promote to severity `"high"` with `[OVERDUE ESCALATION]` badge, and sort to the top of `/ops` Work Queue (priority rank -1 or -2).
-  - Positive-Evidence Terminal Resolution Invariant: Absence from a scan NEVER resolves an obligation. Query exceptions, collection timeouts, missing source rows, and scan truncations preserve the obligation in its pending/escalated state. An obligation is resolved ONLY when dedicated verifier `verify_obligation_terminal_state` inspects the underlying entity and finds verified positive evidence that it reached a terminal state, or an explicit operator review action resolves it.
-  - Review State Decoupling: Review acknowledgment (`state: "investigating"`) or dismissal (`state: "dismissed"`) updates `review.review_state` but does NOT resolve the obligation or falsely certify business completion.
-  - Recurrence Safety: If an entity re-fails after being resolved, sync detects recurrence, increments `recurrence_count`, prepends `(Recurred xN)` badge, and reopens the obligation without flapping or history deletion.
-- 2. Truthful Scheduler Execution Contract & Outcome Tracking:
-  - `profile="monitoring"` (default): **Strictly ZERO customer/trainer/derived entity mutations.** No profile edits, ranking score updates, conversion promotions, sponsor inventory changes, nurture sequences, reactivation routing, external emails, or self-healing routines. Permitted internal operational-state writes only: `system_state` (telemetry/leases), `ops_obligations` (durable ledger sync), and `ops_ai_investigations` (advisory analysis).
-  - `profile="routine"`: Core data pipeline (ranking, conversions, sponsor inventory, health, obligations, AI analyst).
-  - `profile="maintenance"`: Routine plus trainer nurture and reactivation routing.
-  - `profile="all"`: Full execution profile including recovery evaluation (hard-blocked in production).
-  - Fail-closed Profile Validation: Unknown or malformed profiles fail closed with `HTTP 400`.
-  - Subtask error tracking: Captures subtask exceptions without crashing the tick, records `last_status: "partial_error"`, persists `last_error: error_summary`, and increments `consecutive_failures`.
-  - Loop status immediately flags `"investigate"` or `"escalate"` if `last_status == "partial_error"`, regardless of timestamp freshness.
-  - Unified freshness threshold: strictly aligned at 750 seconds (600s cadence + 150s grace) across `/ops` loop monitoring and `/api/health/deep`.
-- 3. Independent Edge Outage Detection, Decoupled Alerting & Coverage Matrix:
-  - Idempotent script `scripts/setup_edge_monitoring.sh` provisions Google Cloud Monitoring multi-region external uptime check probing `/api/health` every 5m.
-  - Configures email notification channel to `admin@dogtrainersdirectory.com.au`, fully decoupled from Cloud Run container execution.
-  - Verification test `scripts/test_edge_monitoring_delivery.py` passed 5/5 gates: live health probe (HTTP 200), deep diagnostics, container crash and database outage detection simulation, decoupled owner alert notification payload contract, and failure coverage matrix evaluation.
-  - Coverage Matrix: Edge probe covers container crash (502/503), OOM, and database unreachability (<5m latency). Internal watchdogs & durable ledger in `/ops` cover scheduler stalls (1h SLA), unverified trainers (48h SLA), stuck claim locks (4h SLA), failed messages (12h SLA), and provider degradation (6h SLA).
-- 4. Verified Production Rollback Runbook:
-  - Corrected previous invalid `firebase hosting:clone` command syntax. Documented 3 supported, verified rollback procedures:
-    1. Firebase Console 1-Click Rollback (Fastest/Instant) via Hosting Release History.
-    2. Firebase Hosting REST API Rollback via Google Cloud OAuth token.
-    3. Deterministic Git Source Re-Deploy (`git checkout 5733d4d`).
-- 5. Practical Non-Technical Owner Escalation Hierarchy:
-  - Existing cases in `/ops` refactored to eliminate CLI, Python code, or database instructions.
-  - Infrastructure issues display `"Technical assistance may be required."`, clear business impact, explicit `safe_operating_state` (reassuring that DTD directory browsing is safe), and a sanitized technical handoff text.
-- 6. Live Developer Sandbox Deployment & Decoupled Observability Provisioned:
-  - Developer Sandbox Backend: Built and deployed Cloud Run revision `dtd-api-dev-00048-z2q` serving 100% of traffic in project `dogtrainersdirectory-dev` (`australia-southeast1`). Verified live `/api/health` (HTTP 200, database available) and `/api/health/deep` (HTTP 200, DB latency 3.37ms, scheduler age ~310s, status `fresh`, owner `cloud_scheduler`).
-  - Developer Sandbox Frontend: Built and deployed Cloud Run revision `dtd-web-dev-00020-mzc` serving 100% of traffic. HTML root and API origin routing verified (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`).
-  - Edge Observability Provisioned on Google Cloud: Global multi-region Uptime Check `projects/dogtrainersdirectory-dev/uptimeCheckConfigs/dtd-sandbox-api-edge-uptime-check-T1on-IuZZxc` probing `/api/health` every 5m; notification channel `projects/dogtrainersdirectory-dev/notificationChannels/4089283914703348618` (`admin@dogtrainersdirectory.com.au`); and Alerting Policy `projects/dogtrainersdirectory-dev/alertPolicies/7642136980479273232` (Immediate Owner Escalation).
-- 7. Verification Suite Execution:
-  - Isolated backend integration suite: **603 / 603 passed** in 1.46s (`backend/scripts/run_isolated_integration_suite.py`).
-  - Targeted operational pytest suite: **120 / 120 passed** in 0.40s across `test_ops_phase2_incident_lifecycle.py`, `test_ops_phase4_ai_analyst.py`, `test_ops_phase5_recovery.py`, and `test_public_mode_unit.py`.
-  - Edge monitoring test: **5 / 5 passed** in 2.50s (`scripts/test_edge_monitoring_delivery.py`) verifying live health, deep diagnostics, container crash and database outage detection, decoupled alert delivery, and failure coverage boundaries.
-  - Frontend Vitest suite: **74 / 74 passed** in 1.52s across 10 test files.
-  - Frontend production build: Vite v8.3.4 clean production compilation in 689ms (`frontend/build`).
-- Production Boundaries Strictly Respected:
-  - Production backend remains locked to `dtd-api-00058-ter` in `gen-lang-client-0028123502`.
-  - Production frontend remains served by Firebase Hosting release `1792053117314000` (Version `f92934ec71003666`).
-  - Commercial checkout remains fail-closed (`ENABLE_TRAINER_BILLING_CHECKOUT=0`).
-  - Zero production mutations executed. Execution stops strictly at the production authorization gate.
-
-
-## Product and deployment
-
-- The main directory frontend and Cloud Run API are publicly reachable. On 15 October 2026, Cloud Run production backend service `dtd-api` was promoted to revision `dtd-api-00058-ter` serving 100% of traffic, following the successful zero-traffic canary deployment and verification of rotated Secret Manager secret `dtd-admin-pass` version 3 (`enabled`) with version 2 (`disabled`). Public health, configuration, and authenticated oversight checks passed before and after the shift.
-- The Google Cloud technical migration plan is complete. Firebase Hosting serves the public frontend in project `gen-lang-client-0028123502`; Cloud Run service `dtd-api` in `australia-southeast1` serves the backend; Firebase routes the public `/api/*` path to Cloud Run; and the production domain is managed through VentraIP DNS with Firebase, `learn` and mail records preserved. The public root, `www`, `robots.txt`, `sitemap.xml` and `/api/health` checks passed on 23 September 2026.
-- Google Cloud account and billing reconciliation on 24 September 2026 confirmed that project `gen-lang-client-0028123502` is linked to billing account `0104B3-AB5AF0-8F0A01` (`My Billing Account`) under the `dogtrainersdirectory.com.au` organisation. The authenticated Cloud Console management view and local project-level checks were consistent; no billing account or IAM mutation was made. Existing project Owner access for the owner's personal identity is intentionally retained for this one-owner project.
-- The Google for Startups Cloud Program application remains a separate external review state. The owner-provided Google guidance identified missing public frontend visibility as the review issue; the technical remediation is now complete. No sent support re-review request, Google approval, credits, or support re-review result has been verified or recorded in this repository.
-- Public phase is `live_matching`; trainer onboarding and public matching are enabled.
-- Stripe webhook handling is enabled on production revision `dtd-api-00058-ter`; checkout remains fail-closed with `ENABLE_TRAINER_BILLING_CHECKOUT=0`. The Pro-trial cohort and broader commercial readiness remain gated pending the separate no-charge live acceptance of the full billing workflow.
-- The First Leash is separately built and deployed at `learn.dogtrainersdirectory.com.au`; both sites return HTTP 200.
-- A secondary developer staging sandbox environment is established on 25 September 2026 under CDR-017. Google Cloud project `dogtrainersdirectory-dev` (Project Number: `625222421634`) is linked to billing account `0104B3-AB5AF0-8F0A01` under the `dogtrainersdirectory.com.au` organisation. Required serverless APIs (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`) are enabled. Cloud Run runs as the dedicated `dtd-api-dev-runtime` identity rather than the default Compute identity; the runtime has the verified Vertex AI User and Secret Manager accessor roles it currently needs. Eight runtime sandbox secrets are provisioned in Secret Manager. A separate MongoDB Atlas project and M0 Free cluster `dtd-sandbox` (AWS Sydney `ap-southeast-2`, engine 8.0.32) is active. As deployed on 18 October 2026, `dtd-api-dev` in `australia-southeast1` serves revision `dtd-api-dev-00048-z2q` at 100% traffic with database health available at `https://dtd-api-dev-625222421634.australia-southeast1.run.app`; companion frontend `dtd-web-dev-00020-mzc` is a developer-only surface at 100%, not a production replacement.
-
-## Dog-owner workflows
-
-- Directory browsing, filters, trainer profiles and direct protected enquiries are implemented.
-- Guided matching calculates trainer fit independently of paid status. A paid-tier preference can reorder only trainers within `0.05` (five percentage points) of the highest final fit.
-- Outcome follow-up, waitlist and notification paths exist, but recent operator evidence includes failed messages and stale loops; unattended operation is not yet accepted.
-- Legacy education routes redirect to the separate First Leash site. Desktop/mobile primary navigation, the homepage hero/card/footer, and the campaign's education action link directly to First Leash's static root. The unused `POST /api/first-leash` capture model and route have been removed from the main API; the live OpenAPI contract no longer advertises that route.
-
-## Trainer and billing workflows
-
-- `/submit`, profile status, claim, edit and billing routes exist. Claim verification remains dependent on configured delivery/provider state.
-- Implemented products are Free/Core A$0, Pro A$19/month or A$149/year, Suburb Sponsorship A$39/month, and Melbourne-Wide A$199/month. There is no A$99 Regional Sponsor product.
-- A real 30-day Stripe Pro trial is implemented for the live-anchor cohort. Stripe owns trial dates; repeat use is prevented; an idempotent day-23 warning workflow exists.
-- Suburb sponsorship capacity is two businesses per suburb, with a canonical default of four sponsored suburbs per business. Melbourne-Wide capacity is five.
-- Monthly refund eligibility is 14 days and annual Pro eligibility is 30 days. The monthly rule includes Melbourne-Wide. The API refund path is implemented and tested but disabled by its production gate; `/ops` has no refund control.
-
-## Geography and data
-
-- `backend/data/dtd_melbourne_suburbs.v1.json` contains the canonical 539-record Greater Melbourne delivery-locality catalogue and is validated by the seed path.
-- On 24 September 2026, the production `suburbs` collection was seeded from canonical SHA-256 `7c45008e4d25d68098d0006f8634ba6259cf1ca19b00cb8a38ef3503efe5d4e1`: the first run created 539 records with no updates or unmanaged records. Live `/api/config` then returned count 539, version `v1`, and source `database`. The second production run reported 539 unchanged, zero created and zero updated. Both production `canonical_suburb_catalogue_seeded` audit events are present.
-- The last audited trainer dataset contained a mixture of structured official-source profiles and older records with weak, aggregator, discovery-seed or placeholder provenance. Treat it as launch supply requiring cleanup, not as a uniformly verified corpus.
-
-## Acquisition and ingestion
-
-- Twenty authorised Greater Melbourne profiles were locally built from owner-approved official trainer websites plus ABR identity/status evidence.
-- First-party trainer submission is an active growth path alongside automated batch ingestion.
-- The automated acquisition pipeline is implemented as a serverless Dual-Engine architecture in repository code (`backend/services/ingestion_manager.py` for Engine 1 batch crawler/extractor; `backend/services/pipeline_guardian.py` for Engine 2 supervisory auditor) with an authenticated Cloud Scheduler endpoint (`/api/internal/jobs/trainer-ingest` requiring OIDC auth). The developer scheduler's current OIDC identity, audience, JSON body and dry-run delivery were control-plane verified on 5 October. A real acquisition run remains unaccepted until a namespaced, approved-source fixture and cleanup plan exist; production scheduler state remains a separate verification item. No live mutation route is exposed in `/ops`.
-- Match-ready capability projection enforces strict provenance boundaries (`CDR-021`, `CDR-022`, `DF-026`): only current permitted trainer declarations or validated official-source facts enter matching. The live matching route rebuilds and fail-closes this projection at query time rather than relying on the formerly proposed disabled feature flag. Marketing bios and commercial tiers are excluded from AI matching context. End-to-end coverage, freshness and parity acceptance remain open.
-- Gemini on Vertex AI structures already lawful content; statutory ABR active registration and reachability gate publication, never raw AI confidence (DF-014). Maps/Places and generic SERP scraping remain excluded from persistent acquisition. A separate, user-initiated, session-scoped urgent-support discovery exception is a documented hypothesis only: it is not implemented, does not persist provider data and cannot enter AI, eligibility or ranking without a current terms, attribution, privacy and sandbox review.
-
-## Operations and observability
-
-- The passcode-gated `/ops` application exposes overview, work queue, supply, messages, billing/reactivation, recent changes, system activity and sponsor inventory.
-- `/ops` now includes a protected, sanitised provider-control register. It records runtime configuration presence separately from provider verification, management recovery, safe rotation verification and independent alert-route evidence; it creates review cases rather than overstating any provider as autonomous. It does not expose credential values or make provider calls.
-- It reviews and changes case state, but it does not currently provide the full approve/reject/merge/delist/cancel/refund action set promised by old specifications.
-- The latest captured authenticated snapshot reported 81 cases, 16 failed messages, 21 open reactivation candidates and stale background loops. These figures are a dated snapshot and must be refreshed before use.
-- The unknown PostHog frontend dependency is removed from the deployed Firebase build; live HTML no longer contains its loader/key. First-party attribution remains in the API for SEO and growth reporting. Cloud Run revision `dtd-api-00029-7cx` was zero-traffic tested then promoted after the current remote CI run passed; Sentry startup logs confirmed initialisation in `production`. A provider-signed test event and independent alert-route verification remain unexercised. MongoDB Atlas Charts is not integrated.
-- Active documentation identifies Zoho Mail for domain mail administration, while active source uses Resend for application transactional email. Neither statement substitutes for provider-console routing or recovery verification; those controls remain subject to the provider-verification gaps recorded below.
-- Sentry is reconciled to organisation `dtd-i9` and project `dtd` (Python); the obsolete `barkbond-web` and `javascript-nextjs` projects were removed. The deployed API reads the DTD DSN from managed Secret Manager version 2, and the current startup path is verified. A provider-signed test event and independent alert-route verification remain unexercised, so autonomous alerting is not claimed.
-
-## SEO and delivery quality
-
-- Suburb routes exist, but production indexation governance is incomplete: there is no authoritative per-suburb listing count/content threshold/robots state/Search Console state pipeline.
-- Before the 23 September 2026 Firebase release, the public host served the SPA shell for `/api/*`, `/sitemap.xml` and `/robots.txt`, while the frontend intentionally called the Cloud Run API directly. The release now routes `/api/*` through Firebase to Cloud Run and serves the static SEO resources with their expected content types; reverify after future hosting or SEO changes.
-- First Leash now has Vitest tests and GitHub verification workflows; its old `PROJECT_STATE.md` statement that tests/CI are missing is stale and is corrected by this reconciliation.
-
-## Verification record
-
-- First Leash: TypeScript check and production Vite/PWA build passed; 18 unit tests passed, including print HTML escaping. Local browser checks at 320, 390, 768 and 1440px found no horizontal overflow or page errors. Physical-device print and audio acceptance remains separate.
-- Main DTD: 27 frontend tests passed, and its production frontend build passed after the cross-site navigation change.
-- Live custom domains served the exact freshly built frontend asset hashes on 19 September 2026 (`main.867ee572.js` for DTD; `index-CDN5-3dC.js` for First Leash after the print-escaping release). On 23 September 2026, the new DTD Firebase release was checked at both the Firebase hostname and `dogtrainersdirectory.com.au`: root HTML, plain-text `robots.txt`, XML `sitemap.xml`, and JSON `/api/health` all returned HTTP 200; the API response reported the database available. Repeatable Chrome and WebKit browser journeys at 390 and 1440px completed DTD navigation → First Leash life-stage and lesson → same-tab, query-free DTD root, without page errors. Both visitor-facing A4 poster PDFs returned HTTP 200 with PDF content type; acoustic play/stop controls, a simulated audio-policy failure/retry path, and isolated dossier print layout passed in both engines. Typed HTML-like dossier text remained text in the live print portal. These checks do not prove physical-device sound output, native print-dialogue appearance, or touch behaviour.
-- The main API's education-capture removal passed 266 local backend unit tests (excluding integration tests requiring a local API server). Cloud Run revision `dtd-api-00029-7cx` was smoke-tested at zero main traffic before promotion; its public health, database-backed config (539, `database`), trainer-read and Sentry-startup checks passed. The maintained isolated suite was rerun on 24 September with a live local API and disposable seeded database: 313 tests passed (with four FastAPI deprecation warnings); see DF-006.
-- Main DTD: 25 trial/refund tests passed; 87 public-mode/matching tests passed; 9 focused frontend billing/ops tests passed.
-- Staging sandbox: on 25 September 2026, Google Cloud project `dogtrainersdirectory-dev` was verified via authenticated `gcloud` with active billing account `0104B3-AB5AF0-8F0A01`. APIs `run`, `secretmanager`, `cloudbuild`, and `artifactregistry` enabled successfully. MongoDB Atlas M0 cluster `dtd-sandbox` in AWS Sydney (`ap-southeast-2`) was created and verified via local Python/pymongo ping. The later 5 October refresh replaces the original default-runtime deployment with `dtd-api-dev-runtime`; current health and Scheduler evidence are recorded in the Live Refresh, not this historical setup snapshot.
-- These checks establish the named contracts only. They do not replace end-to-end production acceptance, provider delivery proof or operator review of authenticated state.
+- Directory, matching, claim, protected enquiry, billing and operator routes exist in source. Their integrated acceptance is governed by the R8 matrix, not route existence or historical screenshots.
+- Developer scope is Cloud Run `dtd-api-dev` / `dtd-web-dev` in `dogtrainersdirectory-dev`, with Atlas `dtd_sandbox`. Production Firebase Hosting / Cloud Run remains separately gated. CDR-027 governs the hosting distinction.
+- Canonical geography uses `backend/data/dtd_melbourne_suburbs.v1.json`; configuration distinguishes database-backed reads from static fallback. Catalogue coverage does not establish trainer supply or indexable pages.
+- Application transactional email uses Resend; domain mailbox administration uses Zoho. Delivery, provider control-plane recovery and independent alerts require their own evidence.
+- First Leash owns its separate education deployment. Cross-site links remain static and query-free.
+- Pricing, trial, inventory and refund requirements live in the pricing specification; AI/matching, source, SEO and Ops rules live in their domain specifications. This record does not duplicate those contracts.
 
 ## Open findings discovered during implementation
 
-These entries are verified observations requiring follow-up, not approved product decisions or proof of a comprehensive code audit. Security details are deliberately sanitised because this repository is public.
+These entries require follow-up and are not product decisions or proof of a comprehensive code audit. Dated source/test evidence does not establish current runtime behavior. Resolved entries leave this open list; Git history retains their evidence. Security details are sanitised because this repository is public.
 
 ### DF-001 — Historical Cloud Run source artifact
 
@@ -344,21 +119,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** The operator can now view joined attribution, conversion, and revenue evidence from a single low-maintenance control surface. Search Console indexation remains external evidence; production revenue joins are not authoritative until signed-event persistence and downstream billing effects are verified.
 - **Next action:** complete the separately gated no-charge production billing acceptance after review of the deployment evidence.
 
-### DF-009 — Frontend dependency vulnerability backlog
-
-- **Observed/status:** 11 October 2026 — remediated and deployed to developer sandbox; CRA toolchain eliminated in favor of Vite + Vitest.
-- **Evidence:** Migrated the frontend build toolchain from legacy Create React App (`react-scripts` 5.0.1 and `craco`) to `vite` 8 and `vitest` 5. Pruned dead transitive and unused dependencies (`cra-template`, `react-scripts`, `@craco/craco`, `@babel/plugin-proposal-private-property-in-object`, `@mdx-js/*`, `remark-*`, `rehype-*`). `yarn audit --groups dependencies` confirms 0 vulnerabilities across 190 audited packages. Pinned `@testing-library/jest-dom` to `6.9.1` and added `--ignore-engines` to `frontend/Dockerfile` for Node 20 Docker build compatibility.
-- **Repair/evidence:** Production build compiles cleanly in 685ms (`yarn build`). Full test suite runs under Vitest (`CI=true yarn test --watch=false`), passing all 52 tests across all 10 test suites in 1.79s. Deployed to Google Cloud Run developer sandbox (`dtd-web-dev`) serving 100% of traffic, bundle verified against sandbox API.
-- **Next action:** Verify remote CI on GitHub once branch is pushed under owner authorization.
-
-### DF-010 — GitHub Actions runtime and runner-image deprecation
-
-- **Observed/status:** 22 October 2026 — **DONE** for the current workflow configuration.
-- **Evidence:** `.github/workflows/verify.yml` uses `actions/checkout@v7`, `actions/setup-node@v7` and `actions/setup-python@v7`, with explicit Node 22 and `ubuntu-latest`. GitHub Actions Verify passed on exact candidate head `76e8a0100046662e823805eff799f8a987691dad` in run `39606410255`, including backend and frontend jobs on the current hosted runner image.
-- **Impact/uncertainty:** current action/runtime configuration and GitHub runner execution are verified; future hosted runner changes can still affect later workflow runs.
-- **Why complete:** the current exact-head remote run passed; no additional repo change is needed for this finding.
-- **Next action:** repeat verification only if workflow runtime/action configuration changes or GitHub reports a new deprecation.
-
 ### DF-011 — Frontend configuration fallback and public route metadata gaps
 
 - **Observed/status:** 6 October 2026 — `PARTIAL`; deployed developer-sandbox browser evidence now exists.
@@ -366,14 +126,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact/uncertainty:** an API/configuration outage can expose a matching surface whose runtime state has not been confirmed, while the homepage location input and route-level search metadata are weaker than the intended local-discovery and SEO contracts. The audit did not establish whether Firebase/Cloud Run production currently exercises the failure path.
 - **Repair/evidence:** the current component fails closed on config error, uses associated labels and announced error/result regions, supplies the suburb datalist, and sets route-specific title/description/canonical metadata. `dtd-web-dev-00006-qqx` serves the bundle only to the sandbox API on both sandbox hostnames; 51 frontend tests/build and live questionnaire/profile browser inspection passed. A dedicated terminal-delivery UI test confirms the browser cannot claim an undeliverable enquiry was sent.
 - **Next action:** exercise a browser-submitted result-to-profile-to-enquiry state with disposable data, then independently verify every public route's rendered metadata before closure.
-
-### DF-012 — Cloud Run source-release build identity lacked least-privilege deployment access
-
-- **Observed/status:** 25 September 2026 — remediated and proven by a successful zero-traffic source build and release of `dtd-api-00054-pac`.
-- **Evidence:** a zero-traffic Cloud Run source deployment failed because the project Compute build identity lacked `storage.objects.get` for the scoped Cloud Run source bucket. The subsequent build metadata also reported that the identity lacked Cloud Logging write access; it had no scoped Artifact Registry policy on the source-deploy image repository. No production traffic changed during either failed attempt.
-- **Repair:** the build identity now has `roles/storage.objectViewer` on only `run-sources-gen-lang-client-0028123502-australia-southeast1`, `roles/artifactregistry.writer` on only `cloud-run-source-deploy` in `australia-southeast1`, and `roles/logging.logWriter` at project level for build logs. It has not received runtime-service, Secret Manager or broad project roles.
-- **Impact/uncertainty:** without these narrow operational permissions, source releases could fail; the successful image build, ready canary and 100% promotion prove the repair for this release path. This does not expand runtime access.
-- **Next action:** retain this record as release-identity evidence and re-check the scoped bindings if the source-build identity or deployment path changes.
 
 ### DF-014 — Reverification loop grants public state from AI confidence
 
@@ -385,7 +137,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-015 — Owner behavioural description is exposed in trainer-profile URLs
 
 - **Observed/status:** 5 October 2026 — local candidate `c7afb07` repairs the observed stale-token and arbitrary-direct-attribution paths; developer-sandbox verification remains open.
-- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** Home removes the session-scoped context token before a dispatched match request and stores only a newly returned token; direct `/intros` rejects client-supplied `match_id`; matched attribution is derived from the verified context token. Local negative tests pass. See `https://github.com/carlsuburbmates/dtd/blob/1a0b0ff0cdffaeb753dc6ae53e0ef09ae653f188/archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_C7AFB07_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** no raw behavioural description is observed in result/profile URLs in this local path. The exact deployed request, persisted record and browser session lifecycle have not been inspected in the developer sandbox.
 - **Why deferred:** this audit does not deploy, query live owner data or change production retention.
 - **Next action:** verify the full owner result-to-profile-to-enquiry journey and persisted redaction with disposable sandbox data before closure. Matching roadmap M2/M5/M9 own the remaining evidence.
@@ -393,7 +145,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-016 — Public trust language exceeds the evidenced trust model
 
 - **Observed/status:** 5 October 2026 — local remediation accepted in candidate `7dd99fa`; developer-sandbox rendering remains unverified.
-- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `7dd99fa` removes the shared About-route "Verified rollout" claim and adds a regression prohibition. The focused matching tests, frontend tests and production build pass locally. See `https://github.com/carlsuburbmates/dtd/blob/1a0b0ff0cdffaeb753dc6ae53e0ef09ae653f188/archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** visitors may reasonably infer independent professional, insurance or credential verification that DTD does not currently evidence. This is a public-trust/copy issue even while the separate commercial checkout path remains fail-closed.
 - **Why deferred:** this audit has not checked the rendered developer-sandbox routes for the accepted local commit.
 - **Next action:** verify the public-route copy during M9 developer-sandbox acceptance; close only with deployed-rendering evidence.
@@ -401,7 +153,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-017 — Failed owner follow-ups cannot retry
 
 - **Observed/status:** 5 October 2026 — repaired locally in candidate `8e03f6c`; developer-sandbox/provider verification remains open.
-- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** missing provider configuration is now recorded as retryable failure, matched introductions have a composite idempotency constraint, and retries acquire an expiring atomic lease before dispatch. Focused repair and integrated P6 tests pass. See `https://github.com/carlsuburbmates/dtd/blob/1a0b0ff0cdffaeb753dc6ae53e0ef09ae653f188/archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** the implementation is materially improved, but can still mislead owners/operators about non-delivery or create duplicate communication. No configured safe provider or sandbox record was inspected.
 - **Why deferred:** no safe-provider or sandbox record was inspected in this local audit.
 - **Next action:** complete safe-provider sandbox evidence for delivery and retry lifecycle. Matching roadmap M5/M8/M9 own the remaining work.
@@ -432,7 +184,7 @@ These entries are verified observations requiring follow-up, not approved produc
 
 ### DF-021 — Owner-match interface contract is implemented locally but not sandbox-accepted
 
-- **Observed/status:** 11 October 2026 — `DONE`; headless browser acceptance runner and visual verification suites verified locally and against live deployed developer sandbox.
+- **Observed/status:** 11 October component/browser evidence is retained at its original scope; corrected integrated acceptance remains **PARTIAL** under the 26 October R8 checkpoint. The previously broad DONE label does not certify the remaining owner-interface/provider matrix.
 - **Evidence:** `scripts/run_sandbox_browser_journey.py` provides an end-to-end Playwright acceptance runner exercising Homepage questionnaire submission → results card rendering with URL privacy and marketing phrase exclusion → candidate profile handoff → protected enquiry submission with consent and terminal status verification. On 11 October 2026, executed against deployed sandbox frontend (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`) and passed with `ok: true`, verifying `home_loaded`, `questionnaire_filled`, `results_rendered_privacy_verified`, and `empty_match_verified` against the seeded 20 Melbourne trainer dataset. Component tests in `Home.test.jsx` (10 passed) and visual suites pass.
 - **Residual gate:** production release promotion remains a separate owner gate.
 
@@ -447,7 +199,7 @@ These entries are verified observations requiring follow-up, not approved produc
 ### DF-024 — Urgent-support pathway exists locally but is not sandbox-accepted
 
 - **Observed/status:** 6 October 2026 — `PARTIAL`; sandbox triage routing is accepted, provider-data freshness remains open.
-- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
+- **Evidence:** `/match` has deterministic immediate-human-danger, urgent-animal-health, serious-behavioural and clarification states. An unmatched suburb now receives `no_local_coverage`, correction approval requires retained official-source evidence, `/ops` computes freshness on read, and the visual fixture is corrected and labelled mocked. See `https://github.com/carlsuburbmates/dtd/blob/1a0b0ff0cdffaeb753dc6ae53e0ef09ae653f188/archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md`.
 - **Impact/uncertainty:** local responses no longer imply local coverage when none is configured. This does not evidence a current or comprehensive provider directory, safe live contact information, or deployed behaviour.
 - **Why deferred:** the completed M9 urgent route did not query or contact real provider data, and it does not establish Melbourne-wide provider coverage or freshness.
 - **Next action:** verify authorised provider evidence/freshness/correction lifecycle before claiming any broader urgent-support coverage.
@@ -466,12 +218,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Why deferred:** matchability of the actual acquisition/claim corpus, capacity freshness and query-plan/load evidence were not established by a disposable fixture.
 - **Next action:** complete acquisition-to-declaration lifecycle and real-supply coverage checks; do not treat sandbox fixture acceptance as a public cutover approval.
 
-### DF-027 — Mandatory isolated integration suite is inconsistent with the v2 matching contract
-
-- **Observed/status:** 6 October 2026 — resolved and included in the developer-sandbox deploy preflight.
-- **Evidence:** `backend/scripts/run_isolated_integration_suite.py` now starts an isolated loopback MongoDB instance when one is not explicitly supplied and passes all 532 tests in the deploy preflight. The empty-pool path returns deterministic `no_confirmed_match`; fixtures use the v2 structured request; no-provider delivery fixtures explicitly assert `retryable_failure`; success tests use a successful dispatch mock. An additional P4/P6 test guard now clears a local `RESEND_API_KEY` so a developer secret cannot silently turn an offline no-provider assertion into simulated delivery.
-- **Residual control:** retain the complete isolated suite in every sandbox deployment and re-audit if a matching fixture or notification provider boundary changes.
-
 ### DF-028 — Matching retention timestamps were not enforceable by MongoDB TTL
 
 - **Observed/status:** 6 October 2026 — sandbox repair and migration evidence complete; production conversion remains unapproved.
@@ -480,24 +226,12 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Repair/evidence:** matching now writes timezone-aware BSON dates, context reads accept both legacy strings and dates during transition, indexes declare `expireAfterSeconds: 0`, and `scripts/backfill_matching_retention_dates.py` refuses non-sandbox databases and defaults to preview. Revision `dtd-api-dev-00016-z52` was deployed; preview and execute conversion found zero legacy strings; both collections expose their `expires_at_1` TTL index at `0`; and M9 forcibly expired a disposable context and received HTTP 410 before removing all its fixtures.
 - **Next action:** use a separately authorised, reviewed migration plan before any production conversion; retain the sandbox M9 expiry check in release acceptance.
 
-### DF-029 — Serverless autonomous loops have no scheduled engine-tick invocation
-
-- **Observed/status:** 21 October 2026 — **DONE** for developer scheduling provision; production promotion remains separately gated.
-- **Evidence:** Cloud Scheduler cron job `dtd-engine-tick-cron` is provisioned and enabled in project `dogtrainersdirectory-dev` (`australia-southeast1`) on cadence `*/10 * * * *` (every 10 minutes, Australia/Melbourne), targeting `/api/internal/jobs/engine-tick?profile=routine` under dedicated runtime identity `dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com` with OIDC ID Token authentication.
-- **Implementation & Sandbox Verification:**
-  1. `backend/server.py` implements `/api/internal/jobs/engine-tick` guarded by OIDC token validation.
-  2. The current deployed handler uses a 180-second lease. The reviewed R2 candidate extends it to 420 seconds to exceed the 300-second Cloud Run request timeout, and uses a unique owner token with fail-closed lease-store handling.
-  3. The enabled `profile=routine` job runs ranking, inferred-conversion promotion, sponsor inventory, health, durable obligation synchronization and scheduled AI analysis. It does not run nurture, reactivation-email or recovery loops.
-  4. Records `execution_owner: "cloud_scheduler"`, `last_run`, duration, and overall status in `system_state.engine_tick` telemetry doc, then safely releases the lease in a `finally` block.
-  5. The earlier report claimed a live invocation through `scripts/verify_sandbox_ops_phase2.py`. The current verifier checks Scheduler configuration read-only and blocks runtime acceptance because routine effects are not fixture-scoped. Do not invoke the job as an acceptance test.
-  - **Residual gate:** DF-029 scheduling provision is complete. DF-052 tracks fixture-scoped execution acceptance and AI cost bounds. Any production promotion remains a separate owner release gate.
-
 ### DF-030 — Claim session restoration and capability editing need deployed acceptance
 
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** Local renewal now binds current ownership/latest challenge and consumes once; UI rejects stale route responses, recovers expired sessions and preserves drafts. Backend independent review accepted; root independently reviewed the final frontend correction; deployed runtime recovery remains pending. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-031 — Held sandbox submissions lack current statutory identity evidence
 
@@ -513,33 +247,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Evidence:** `GET /oversight` was refactored to call `_get_read_only_phase_runtime_records()`, using `_read_launch_phase_state()` and `_read_phase_transition_decisions()`, eliminating calls to `_upsert_latest_phase_readiness_snapshot()` and `_ensure_phase_transition_baseline()`. Two regression unit tests (`test_df032_get_read_only_phase_runtime_records_performs_zero_writes` and `test_df032_oversight_endpoint_handler_performs_zero_writes`) assert zero database writes on any collection.
 - **Impact/uncertainty:** Local source now strictly adheres to a side-effect-free contract for `GET /api/oversight`. Prior production writes from GET requests during earlier audits remain unconfirmed until deployed Cloud Run revision parity and datastore inspection occur.
 - **Next action:** Deploy canary revision to developer sandbox/production canary, verify zero-write behavior on live runtime, and inspect historical timestamps on `phase_readiness_snapshots`.
-
-### DF-033 — Operations Console Phase 1 & Phase 2 implementation verified in sandbox
-
-- **Observed/status:** 16 October 2026 — `DONE` in developer sandbox; production promotion gates remain separately gated.
-- **Evidence:** Phase 1 final corrections and Phase 2 full implementation completed across `backend/server.py`, `backend/services/notifications.py`, and `frontend/src/pages/Ops.jsx`. Consolidated into `main` (`aa63d56`) and deployed to developer sandbox Cloud Run service `dtd-api-dev` (revision `dtd-api-dev-00034-kkv`, 100% traffic) via `scripts/deploy_sandbox.sh`.
-- **Live Sandbox Verification Evidence (Phase 1 & Phase 2):**
-  1. `/api/health` returned HTTP 200 with database available (`{"ok": true, "service": "dog-trainers-directory-match-engine", "database": "available"}`).
-  2. Live matching acceptance runner (`scripts/run_sandbox_matching_acceptance.sh`) passed against deployed sandbox with clean fixture disposal.
-  3. Authenticated `/api/oversight` inspection executed side-effect free (DF-032) with zero writes on live sandbox records.
-  4. Automated 7-Gate Phase 1 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase1.py`): All 7 gates **PASS**.
-  5. Automated 7-Gate Phase 2 Sandbox Acceptance Suite (`scripts/verify_sandbox_ops_phase2.py`) executed against live sandbox deployment `dtd-api-dev-00034-kkv`:
-     - *Gate 1 (Deployed Revision & Production Isolation):* **PASS** — Active revision `dtd-api-dev-00034-kkv` verified; database available; production environment independently verified untouched and healthy on `dtd-api-00058-ter`.
-     - *Gate 2 (Workstream A — Incident Correlation):* **PASS** — 3 retry attempts correctly grouped into exactly 1 correlated incident; terminal success cleared prior transient failures.
-     - *Gate 3 (Workstream B & E — Lifecycle & Recurrence):* **PASS** — High-severity dismissal without note >= 5 chars rejected (HTTP 400); valid review dismissed case; identical refresh produced no false recurrence; genuine failure reopened case with `(Recurred)` badge and `operational_state: "reopened"`.
-     - *Gate 4 (Workstream C — Alias Resolution & Idempotency):* **PASS** — Case review by constituent event ID resolved to primary case; repeat identical update created 0 duplicate audit records.
-     - *Gate 5a (Workstream D — Scheduler configuration, DF-029):* **PASS** when read-only inspection confirms the enabled `*/10` Melbourne schedule, `profile=routine`, expected Cloud Run target and dedicated OIDC identity. The verifier must not invoke the job.
-     - *Gate 5b (Side-effect-safe engine-tick acceptance):* **BLOCKED** — routine execution writes derived and Ops state and may call Vertex AI, and is not scoped to test fixtures. It does not run nurture, reactivation-email or recovery loops. Implement a fixture-scoped execution boundary and bounded AI cost controls before accepting scheduled execution.
-     - *Gate 6 (Read-Only Oversight Invariant, DF-032):* **PASS** — `GET /api/oversight` produced exactly zero database writes to snapshots, state, or audit log.
-     - *Gate 7 (Zero-Trace Fixture Disposal):* **PASS** — 100% synthetic test fixtures cleaned up from `dtd_sandbox` collections.
-- **Residual gate:** The historical 16 October report said Phase 3 was blocked pending owner authorization; that milestone snapshot is superseded by the later Phase 3–5 evidence below. Production promotion remains a separate owner gate.
-
-### DF-034 — Public homepage owner journey flashes before launch config resolves
-
-- **Observed/status:** 16 October 2026 — `DONE` in developer sandbox; production remains unchanged.
-- **Evidence:** commit `26c6fbe` deployed to Cloud Run `dtd-web-dev-00011-dwf` at 100% traffic. The served bundle contains the isolated API origin `https://dtd-api-dev-625222421634.australia-southeast1.run.app`. Chrome on the developer frontend service URL showed `Checking current options` while config loaded, then resolved to the guided matching form; no request was submitted. A deferred-config regression test and failure-state tests cover loading and config error behavior. On 16 October, the 390px and 768px emulated viewports had no document-level horizontal overflow on `/`, `/trainers`, `/submit`, `/pricing`, and `/contact?plan=pro` (`scrollWidth` equalled `innerWidth` on all ten route/viewport checks). The mobile accessibility tree exposed the homepage matching controls, directory filters, and labeled trainer-application controls.
-- **Impact/uncertainty:** the live normal-config path no longer renders a waitlist before config resolves. Responsive layout passed at the tested mobile and tablet widths. Keyboard-only Tab navigation on `/submit` reached the labeled business name, suburb, region, website and ABN fields after the skip link and navigation without submitting the form. Screen-reader operation remains untested.
-- **Next action:** retain the existing tests for loading and config failure; include screen-reader checks in the wider accessibility acceptance pass.
 
 ### DF-035 — Trainer radius catchment was selectable without a supported radius definition
 
@@ -565,20 +272,6 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Next action:** reconcile live provider and hosting settings with these code paths; determine which retention/deletion and privacy-request/support controls are evidenced by implementation and operational records; record only unresolved owner-process decisions, then prepare the fact-backed policy draft and exact trial/Terms delta for qualified legal review before public publication.
 
 
-### DF-039 — Pricing actions must preserve the trainer's selected plan
-
-- **Observed/status:** 16 October 2026 — `DONE` in the developer sandbox; production remains unchanged.
-- **Evidence:** revision `dtd-web-dev-00011-dwf` serves 100% of developer traffic. On 16 October, Chrome verified all four pricing actions carry distinct `plan` values to `/contact`, and the Pro action displays “Pro Trainer” and builds a plan-specific email subject. The four current prices use `A$`. The page states that checkout is not active and that no purchase or charge is created until authorised checkout is enabled. The 390px route checks had no horizontal overflow. `npm --prefix frontend test` passed all 57 tests and the production build succeeded.
-- **Impact/uncertainty:** visitors can express interest in the selected plan without losing intent or mistaking the inquiry for checkout. The email link was not invoked, no message or purchase was submitted, and legal wording remains under DF-036.
-- **Next action:** retain the plan parameter and disabled-checkout disclosure; include plan-specific navigation in the separately gated billing acceptance.
-
-### DF-040 — Directory specialty filters need explicit single-choice behavior
-
-- **Observed/status:** 16 October 2026 — `DONE` as a single-choice filter in the developer sandbox; production remains unchanged.
-- **Evidence:** revision `dtd-web-dev-00011-dwf` serves 100% of developer traffic. The filter is labeled “Specialty filter — choose one,” exposes a named filter group and `aria-pressed` buttons, sets exactly one specialty in the URL at a time, and restores the unfiltered state through “All specialties.” The live browser verified Reactivity → Puppy training → All transitions at 390px.
-- **Impact/uncertainty:** the observed single-choice behavior is now communicated and accessible in the tested browser; multi-select was not specified as a product requirement.
-- **Next action:** retain single-choice wording, group labeling and pressed state; change to multi-select only if the product contract is explicitly revised.
-
 ### DF-041 — Trainer success-path testing lacks a disposable sandbox route and safe OTP sink
 
 - **Observed/status:** 23 October 2026 — **PARTIAL**, R5; successful public onboarding remains NOT_VERIFIED.
@@ -591,27 +284,21 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** Exact initial-20/evidence URLs and redirect holds are locally corrected and independently reviewed. Unsupported association approvals are disabled. No new source rights or live acquisition request occurred. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-045 — Robots policy needs corrected runtime acceptance
 
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** Local handling now rejects HTML, unusable plaintext, policy retrieval errors and redirects while preserving valid empty/comment rules. Independent review and targeted no-target-fetch tests passed. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-047 — Support workflow needs corrected runtime acceptance
 
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** Local selection/version guards, truthful failed/duplicate dispatch states, pagination and protected category actions are implemented. Backend and final frontend corrections independently reviewed; deployed sink/data/audit evidence remains pending. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
-
-### DF-048 — Contact success state claims a receipt email regardless of delivery result
-
-- **Observed/status:** 23 October 2026 — **DONE FOR SANDBOX REMEDIATION** (commit `5953b20`, deployed on `dtd-web-dev-00024-nlj`).
-- **Evidence:** `frontend/src/pages/Contact.jsx` displays truthful delivery confirmation based on `receipt_delivered` API response. Bundle `/assets/index-DTQYOF7F.js` serves 100% of developer traffic.
-- **Next action:** Real user enquiry delivery observation in R10.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-050 — Resend webhook retry can acknowledge an incomplete notification update
 
@@ -626,14 +313,14 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** The durable protection correction is retained; expanded acquisition and claim suites pass locally. Current-owner snapshot, latest challenge and atomic renewal tests cover ownership change/replay races without provider calls. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-052 — AI attempt budget needs corrected runtime and provider-recovery acceptance
 
 - **Observed/status:** 24 October 2026 — **PARTIAL**; local correction evidence exists, current corrected runtime remains NOT_VERIFIED.
 - **Evidence/uncertainty:** Local Mongo atomic daily ledger replaces process-local locking; failed/storage-interrupted attempts retain slots and missing storage fails closed. Independent root review and real local Mongo cross-worker test passed: legacy use2, limit5, 40requests →3mock provider calls. This bounds attempts, not monetary spend. See [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) for exact source/review boundaries.
 - **Impact:** the deployed candidate cannot inherit acceptance from these local checks.
-- **Why deferred / next action:** reconcile the separate Antigravity work and final independent review, then promote only the accepted exact SHA and complete scoped sandbox workflow/provider proof with owned-fixture cleanup. Preserve earlier accepted stages and separate production/source/credential gates.
+- **Why deferred / next action:** use the integrated independently reviewed source from PR #20, reconcile its exact runtime identity, then complete scoped sandbox workflow/provider proof with owned-fixture cleanup under the existing promotion gate. Preserve earlier accepted stages and separate production/source/credential gates.
 
 ### DF-054 — Public company and product copy is absent from the static site response
 
@@ -649,3 +336,21 @@ These entries are verified observations requiring follow-up, not approved produc
 - **Impact:** a future agent could treat stale connector output as current DTD evidence or invoke a workflow against an unintended datastore. The successful cached read does not certify live integration continuity. This is separate from the completed developer credential containment.
 - **Why deferred:** changing the connector's execution root without reconciling its pipeline, schema, provider scope and source authority could redirect writes incorrectly. This access/Git completion check performed no sourcing, publication, connector reconfiguration or provider mutation.
 - **Next action:** reconcile the connector with the current acquisition contract and explicit target before enabling any live refresh or write. Use canonical repository and supported developer-provider reads for current evidence meanwhile; retain ingestion PAUSED and the existing promotion/source gates.
+
+## Maintenance outside the current release gate
+
+### TD-001 — Motor migration before support deadline
+
+- **Observed/status:** 22 October 2026 — OPEN; planned before 14 May 2027 under the dated [Motor lifecycle source](https://motor.readthedocs.io/en/latest/changelog.html).
+- **Evidence/uncertainty:** R3 accepted Motor 3.7.1 / PyMongo 4.18.3 compatibility patch; the source then described critical-fixes-only support. Refresh the upstream lifecycle before scheduling migration; this is carried-forward evidence, not a new dependency audit.
+- **Impact:** deferred driver migration may leave the application without supported fixes.
+- **Why deferred:** migration was outside the accepted R3 security patch and is not implicitly a new release blocker.
+- **Next action:** plan and independently verify migration to PyMongo Async before the support deadline, preserving existing persistence and async lifecycle behavior.
+
+### TD-002 — Stage-scoped scanner metadata and workflow permissions
+
+- **Observed/status:** 22 October 2026 — OPEN; scanner metadata triaged at the R3 handover.
+- **Evidence/uncertainty:** ten CodeQL observations: #10 and #7–#9 acquisition/POC execution relevance at R4; #5/#6 sensitive logging under DF-001; #3 notification hashing and #12/#16 disclosure at R7. Alert #11 concerns explicit minimal workflow permissions. Repository token defaults were read-only and PR approval permission disabled at that check. Passing CodeQL CI is not proof these alerts are resolved; no ten confirmed runtime defects or new R3 regressions are asserted.
+- **Impact:** unresolved execution relevance, sensitive-data handling and permission clarity may hide material issues.
+- **Why deferred:** this needs stage-specific source/security verification rather than repeating accepted dependency remediation.
+- **Next action:** re-read current scanner metadata, establish actual affected execution paths, record proven findings under their existing stages, and add explicit minimal workflow permissions during relevant maintenance.

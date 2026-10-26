@@ -1,6 +1,6 @@
 # DTD Automated ABN & Entity Verification Pipeline (Standalone POC)
 
-This isolated proof-of-concept tests and verifies the complete **Australian Business Number (ABN) Verification & Entity Lifecycle Pipeline** without modifying any core DTD application code.
+This is an isolated experimental ABN/entity-lifecycle demonstration. Its mock results, trust badges and scoring examples are not main DTD product policy, matching-fit inputs or proof of live provider verification. ABR establishes statutory identity/status only, under the [acquisition contract](../docs/specs/ACQUISITION_AND_INGESTION.md). The default demo uses mocked responses.
 
 ---
 
@@ -33,15 +33,13 @@ python3 abn-automation-poc/test_pipeline_e2e.py
 python3 abn-automation-poc/run_demo.py
 ```
 
-### Option C: Run with Live ABR Web Services GUID
-```bash
-python3 abn-automation-poc/run_demo.py --guid YOUR_ABR_GUID
-```
-*(Directly queries live Australian Government ABR servers via `https://abr.business.gov.au/json/AbnDetails.aspx` and caches results to `cache/abr_cache.json`).*
+### Live-provider boundary
+
+Live ABR calls require the existing task authority and managed identifier handling. The client supports `ABR_GUID` / `ABR_GUID_KEY`; inject a managed value into the process only at execution time. Do not pass it in CLI arguments, save it in local environment files or record it in evidence. Live mode may persist a local cache; review its scope and retention before use. No live execution is authorised by this README.
 
 ---
 
-## 3. Verified Pipelines
+## 3. Demonstrated Pipeline Stages
 
 1. **Stage 1 (Checksum)**: 11-digit format validation and ATO Modulus 89 checksum ($(\sum d_i 	imes w_i) \pmod{89} == 0$).
 2. **Stage 2 (ABR Lookup)**: Extracts legal entity name, trading business names, active status, state/postcode, and GST registration status.

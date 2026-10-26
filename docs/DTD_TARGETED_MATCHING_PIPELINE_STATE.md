@@ -1,14 +1,14 @@
 # DTD Targeted Matching Pipeline State
 
 **Purpose:** the concrete target state for DTD's owner-to-trainer matching pipeline.
-**Status:** owner-directed target; implementation, scenario evaluation and sandbox acceptance remain open.
+**Status:** owner-directed target; M0 local contract/fixtures are accepted, while remaining source/runtime evaluation and integrated sandbox acceptance retain their recorded M-package status.
 **Authority:** consolidates CDR-018 through CDR-024. It does not claim that the current public matching path already meets this state.
 
 ## Target outcome
 
 DTD gives a Greater Melbourne dog owner a safe, understandable and useful path to an appropriate trainer without manual operator matching. The result is a reasoned introduction, not a diagnosis, guarantee, clinical assessment or paid lead placement.
 
-The system is AI-assisted where ordinary language and contextual fit matter, and deterministic wherever legitimacy, safety, privacy, fairness, commercial boundaries, delivery and auditability matter. Decision Contract v2 will select and test the owner-visible response when evidence is weak, input is ambiguous, supply is thin or AI is degraded. A solo owner operates exceptions and systemic quality signals through `/ops`, rather than manually deciding routine matches.
+The system is AI-assisted where ordinary language and contextual fit matter, and deterministic wherever legitimacy, safety, privacy, fairness, commercial boundaries, delivery and auditability matter. Decision Contract v2 defines the owner-visible response; scenario evaluation must verify it when evidence is weak, input is ambiguous, supply is thin or AI is degraded. A solo owner operates exceptions and systemic quality signals through `/ops`, rather than manually deciding routine matches.
 
 ## What this target is not
 
@@ -99,10 +99,10 @@ The deterministic fallback uses the same input projection, decision states, resu
 Only eligible, suitable candidates proceed to presentation. Raw diagnostic fit remains paid-neutral:
 
 ```text
-fit = (match_score × 0.70) + (outcome_score × 0.30) - policy_penalty
+final_fit = match_score - policy_penalty
 ```
 
-Outcome evidence may influence fit only after its collection, attribution, sample sufficiency, freshness, anti-gaming and appeal rules are specified and validated. Before then, it cannot create a hidden advantage.
+Initial v2 outcome contribution is zero. Outcome evidence may influence fit only after its collection, attribution, sample sufficiency, freshness, anti-gaming and appeal rules are specified and validated. Before then, it cannot create a hidden advantage.
 
 Select up to three candidates when the Decision Contract selects a recommendation response. The same contract defines the response when fewer than three eligible/suitable candidates exist or none has the required capability evidence. Start with the declared local service area. Expand only under the documented thin-supply condition, disclose the expanded scope and never represent broader results as local.
 
@@ -150,7 +150,7 @@ This target is achieved only when all of the following are evidenced in the deve
 
 ## Delivery sequence
 
-1. Finalise the versioned Owner-to-Trainer Matching Decision Contract v2, including field taxonomy, consent/retention, evidence grades, policy penalties, outcome rules and exact API/screen states.
+1. Preserve the accepted local M0 Decision Contract v2 and fixture baseline, including field taxonomy, consent/retention, evidence grades, policy penalties and exact API/screen states. Authorised policy changes require a versioned contract and new scoped review.
 2. Build the trainer declaration and match-ready capability projection across acquisition, onboarding/claim and correction/suppression flows.
 3. Create scenario fixtures and a Gemini-versus-fallback evaluation harness; resolve policy drift before public workflow work.
 4. Deliver one complete ordinary-matching vertical slice in sandbox.
@@ -159,6 +159,6 @@ This target is achieved only when all of the following are evidenced in the deve
 
 ## Completion-roadmap readiness
 
-This target is ready to become a gated completion roadmap. The product boundary, decision layers, acquisition/onboarding dependency, data boundaries, acceptance evidence and delivery order are now defined well enough to plan accountable work packages without inventing owner choices.
+This target has a gated completion roadmap and an accepted local M0 baseline. The product boundary, decision layers, acquisition/onboarding dependency, data boundaries, acceptance evidence and delivery order are now defined well enough to plan accountable work packages without inventing owner choices.
 
-The roadmap must begin with Decision Contract v2 and scenario fixtures rather than a frontend, model or cloud build. `DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md` is the execution checklist and independent-verification basis for this target. The known implementation gaps are recorded in `DTD_CURRENT_STATE.md` as DF-017 through DF-026, with the matching-specific architecture gaps concentrated in DF-018, DF-019 and DF-021 through DF-026. Those findings establish the work; they do not make the pipeline complete or safe to release. Production, provider activation, retention-policy, billing and other separate approval gates remain unchanged.
+Continue the existing M0–M10 roadmap from accepted evidence rather than restarting its contract or fixtures for a frontend, model or cloud build. `DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md` is the execution checklist and independent-verification basis for this target. The known implementation gaps are recorded in `DTD_CURRENT_STATE.md` as DF-017 through DF-026, with the matching-specific architecture gaps concentrated in DF-018, DF-019 and DF-021 through DF-026. Those findings establish the work; they do not make the pipeline complete or safe to release. Production, provider activation, retention-policy, billing and other separate approval gates remain unchanged.

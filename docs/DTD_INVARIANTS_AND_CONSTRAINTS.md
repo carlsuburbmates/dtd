@@ -44,4 +44,4 @@ These rules apply in every phase. A proposed feature that conflicts with one req
 
 20. Current, targeted and visionised states remain separate.
 21. The decision register explains why; specifications define contracts; current state records evidence. README summarises but never creates authority.
-22. Superseded product and process documents leave the active tree only after useful content is absorbed, then move to dated archives. Secrets registries must not be treated as product specifications.
+22. Superseded product and process documents leave the active tree only after useful content is absorbed, then move to dated archives outside the working tree with verified source commit, hashes and restoration records. Git history also preserves the originals. Secrets registries must not be treated as product specifications.

@@ -4,7 +4,7 @@
 **Starting artifact:** `dtd_remediation_release_checkpoint1_reconciled_matrix.md` (Antigravity's corrected Checkpoint 1 evidence; supplied in conversation; not asserted to be committed to GitHub)
 **Frozen accepted remediation code:** `1ac4138e4d82991501139298cc624be732661119` on `fix/ops-security-integrity-d83c7f4`
 **Existing implementation authority:** `AGENTS.md`, `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`, `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md`, approved specifications and applicable decision contracts.
-**Existing execution sources:** `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md`, `docs/DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md`, `docs/MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md`, `docs/specs/SANDBOX_VERIFICATION_MATRIX.md`, `docs/DTD_CURRENT_STATE.md`.
+**Existing execution sources:** `docs/DTD_ROADMAP_EXECUTION_REGISTER.md`, `docs/DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md`, `docs/MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md`, `docs/specs/SANDBOX_VERIFICATION_MATRIX.md`, `docs/DTD_CURRENT_STATE.md`.
 **Status:** The owner has approved the business North Star below. This roadmap coordinates existing approved work and proposes new evidence-based *business validation stages*; it does not by itself authorise production deployment, live payments, new data sources, credentials, changes to locked policy, or irreversible actions.
 
 ## 1. North Star and definitions of finished
@@ -40,7 +40,7 @@ The North Star has **four independently assessed achievements**, not one binary 
 
 Antigravity reported clean frozen ancestry, GitHub Actions `Verify` success at run `39240506209`, Python compile pass, `PRELAUNCH_RELEASE_GATE=PASS`, 619 isolated integration tests passing, and 122 targeted Ops/claims tests passing. These are **reported execution evidence accepted for Checkpoint 1**, not a claim that this author has rerun them. The privacy erase implementation remains scoped, sequential and non-transactional; verified real erasure authority and completeness may not be inferred from synthetic tests.
 
-**Starting state:** Checkpoint 1 DONE. On 21 October, developer API `dtd-api-dev-00054-rvl` runs image `sha256:23f75593957e64c305dc6ac7364a0e53192a120c6ff018192595a0d1f2c27df3` from reviewed commit `fdd2c454`; web identity revision remains promoted. Current-release synthetic signed webhook delivery/replay, claim success and negative cases, privacy denial, suppression, delisting, fraud, support intake/concurrency/closure and protected Ops have runtime outcomes and cleanup evidence. R1 meets its written exit contract as **DONE WITH NAMED BLOCKED FOLLOW-UPS**. DF-051 and remaining positive trainer/privacy/publication cases are assigned to R5, with an acquisition-update regression check carried into R4 before activation; support failure/fallback and scoped obligations to R7; provider-originated Resend delivery to R7. The later R3 recovery record supersedes the former rollback follow-up with its rehearsed `00055-kbm` disposition and explicit limits. A conditional rollback was rehearsed and the service restored to `00054-rvl`. Ingestion remains PAUSED under the separate R4 DF-044/045 gate. See [R1_SANDBOX_RELEASE_EVIDENCE.md](R1_SANDBOX_RELEASE_EVIDENCE.md).
+**Checkpoint continuity:** R1 is DONE WITH NAMED BLOCKED FOLLOW-UPS and R2/R3 are accepted at their recorded scope. Current stage disposition and next action live in the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md); [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) preserves accepted SR/CF scenarios and remaining checks. Historical traffic targets are not current recovery instructions. The 25 October credential containment governs developer recovery; scheduled ingestion remains PAUSED under its R4 activation gate.
 
 ## 4. Roadmap at a glance
 
@@ -49,7 +49,7 @@ Antigravity reported clean frozen ancestry, GitHub Actions `Verify` success at r
 This document defines the **destination, stage outcomes and dependencies**. Use the linked records for the changing execution details:
 
 - [DTD_ROADMAP_EXECUTION_REGISTER.md](DTD_ROADMAP_EXECUTION_REGISTER.md) — current stage status, next authorised action and review checkpoint.
-- [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) and [DTD_CODEX_GAP_REGISTER.md](DTD_CODEX_GAP_REGISTER.md) — current implementation evidence and open findings.
+- [DTD_CURRENT_STATE.md](DTD_CURRENT_STATE.md) — current implementation evidence and open DF/TD findings.
 - The stage contracts in §5 — what must be demonstrated to complete each R stage.
 - [DTD_CONFLICT_AND_DECISION_REGISTER.md](DTD_CONFLICT_AND_DECISION_REGISTER.md), approved specifications and `AGENTS.md` — binding decisions and controls.
 
@@ -69,8 +69,8 @@ The groupings below are navigation aids only. They add no gates, change no depen
 | Stage | Name | Current evidence state (see live execution register) | End-of-stage deliverable / required state | Dependency |
 |---|---|---|---|---|
 | **R0** | Remediation Checkpoint 1 | **DONE — accepted code** | Immutable accepted SHA + reconciled SR/CF matrix + reported preflight/CI evidence | Established |
-| **R1** | Controlled remediation sandbox release | **DONE WITH NAMED BLOCKED FOLLOW-UPS** | Scenario outcomes and cleanup are accepted in `R1_SANDBOX_RELEASE_EVIDENCE.md`; remaining follow-ups retain R4/R5/R7 assignments; the R3 recovery checkpoint is recorded in `R3_RELEASE_FOUNDATION.md`. Scheduled ingestion remains PAUSED under the R4 activation gate. | R0 |
-| **R2** | GitHub, docs and remediation cleanup | **DONE** | PR #12 and safety follow-up #15 are merged; reconciliation, exact sandbox identity and remaining findings are in `R2_RELEASE_RECONCILIATION.md`. Later R3 integration has its own exact-delta review and safe-deployment checks. | R1 disposition and separate governance review |
+| **R1** | Controlled remediation sandbox release | **DONE WITH NAMED BLOCKED FOLLOW-UPS** | Scenario outcomes and cleanup are accepted in `R8_END_TO_END_SANDBOX_ACCEPTANCE.md`; remaining follow-ups retain R4/R5/R7 assignments; the R3 recovery checkpoint is recorded in `specs/OPS_AND_OBSERVABILITY.md`. Scheduled ingestion remains PAUSED under the R4 activation gate. | R0 |
+| **R2** | GitHub, docs and remediation cleanup | **DONE** | PR #12 and safety follow-up #15 are merged; reconciliation, exact sandbox identity and remaining findings are in `DTD_ROADMAP_EXECUTION_REGISTER.md`. Later R3 integration has its own exact-delta review and safe-deployment checks. | R1 disposition and separate governance review |
 | **R3** | Platform/release foundation | **DONE — developer checkpoint** | Accepted PR #17/#18 integrate DF-046 and dependency corrections; main `48f68f4` CI/graph passed and zero Dependabot alerts remain. Cloud Run identity, bounded recovery and retired Vercel connection are verified; CDR-027 supersedes DF-053. Provider follow-ups retain R4/R7/R9 ownership, with credential/scanner uncertainty explicitly tracked. | R2 |
 | **R4** | Trustworthy trainer supply | **PARTIAL** | Authorised-source intake/rerun, match-ready declaration/projection, freshness, correction, suppression and indexes verified end to end; verify DF-051 acquisition dedup behavior before scheduler activation | R3, existing M0 |
 | **R5** | Owner and trainer-facing journeys | **PARTIAL** | Browser-tested mobile/desktop entry → questionnaire/result/profile → protected enquiry; trainer claim/edit/correction journey; accessibility and truthfulness | R3, R4 where supply needed |
@@ -100,7 +100,7 @@ The present release goal is the integrated production service after the final sa
 
 ## 5. Stage-by-stage execution and exit contracts
 
-**21 October R1 acceptance status:** signed synthetic Resend delivery/replay, claim success, privacy-denial, suppression/republication and delisting have current developer evidence. Provider-originated Resend delivery, positive held-trainer approval, claim challenge exceptions, positive privacy resolution, fraud, support concurrency/failure/closure, and durable-obligation positive resolution remain `NOT_VERIFIED` for current runtime acceptance. Developer Ops authentication is verified after passcode replacement; source retirement is included in draft PR #13. This does not reopen accepted code findings or Ops phases. DF-044/045 block only scheduled-ingestion reactivation pending source and robots safety controls.
+**Accepted evidence:** retain scoped R0–R3 acceptance from the execution register. R4–R8 corrected runtime proof remains partial. Use the [R8 named scenario matrix](R8_END_TO_END_SANDBOX_ACCEPTANCE.md#named-srcf-follow-ups-retained-for-r8) for the accepted SR/CF subcases and exact remaining checks; do not restart completed code remediation or infer provider delivery from a synthetic event.
 
 ### R0 — Remediation Checkpoint 1: preserve the accepted baseline
 
@@ -112,13 +112,13 @@ The present release goal is the integrated production service after the final sa
 
 **Required sandbox scenarios:** signed/unsigned/replayed Resend webhook and idempotency; held trainer approval, suppression, duplicate/canonical builders; legitimate sandbox OTP claim, invalid/expired/conflict/exceptional review; support intake/reply failure/dedup/concurrency/closure; unverified privacy scrub 403 without mutation; fraud release and delisting; durable obligations, positive terminal resolution, read-only oversight zero writes; `/ops` auth/audit and basic UI compatibility. Use only uniquely namespaced synthetic data and provider-safe sinks. Do not assert a simulated person accepted real terms; do not execute destructive real-data privacy actions.
 
-**Deliverables:** `R1_SANDBOX_RELEASE_EVIDENCE.md` (deployed revision, immutable image/source SHA, before/after traffic, runtime config redacted, rollback target, scenario-by-scenario request/DB/audit/email evidence, residual limitations), `R1_FIXTURE_CLEANUP.md` with verified absence and restored temporary settings. **Exit:** all applicable agreed Stage 2 runtime gates PASS, or specific named BLOCKED items remain without a false completion claim.
+**Deliverables:** record exact revision/image/source, before/after traffic, sanitised configuration, safe recovery disposition, scenario-level UI/API/data/audit/provider evidence, fixture absence and restored temporary settings in the existing R8 acceptance record. Historical accepted R1 packets remain in Git; do not create replacement R1 files. **Exit:** all applicable agreed Stage 2 runtime gates PASS, or specific named BLOCKED items remain without a false completion claim.
 
 ### R2 — Consolidate GitHub, documents, and remediation artifacts
 
-**Execution:** Recheck main HEAD/ancestry, verify no intervening commits are lost, use repository-governed merge/fast-forward after review and sandbox gates, ensure CI green on resulting `main`; do not force-push. Correct the two route labels in the handoff. Update existing authority docs rather than generating redundant documents: `docs/DTD_CURRENT_STATE.md` (dated exact SHA/revision/CI/sandbox evidence, remaining DF findings), `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md` (latest baseline and next active work), `docs/README.md` only if navigation/summary drift, and targeted Ops/sandbox specs only for actual contract changes. Preserve closed history in Git, remove only safe disposable local scratch artifacts and synthetic sandbox fixtures. Keep real records, unique branches and security audit trails.
+**Execution:** Recheck main HEAD/ancestry, verify no intervening commits are lost, use repository-governed merge/fast-forward after review and sandbox gates, ensure CI green on resulting `main`; do not force-push. Correct the two route labels in the handoff. Update existing authority docs rather than generating redundant documents: `docs/DTD_CURRENT_STATE.md` (dated exact SHA/revision/CI/sandbox evidence, remaining DF findings), `docs/DTD_ROADMAP_EXECUTION_REGISTER.md` (latest baseline and next active work), `docs/README.md` only if navigation/summary drift, and targeted Ops/sandbox specs only for actual contract changes. Preserve closed history in Git, remove only safe disposable local scratch artifacts and synthetic sandbox fixtures. Keep real records, unique branches and security audit trails.
 
-**Deliverables:** `R2_RELEASE_RECONCILIATION.md` containing (a) release-state table: source SHA, main SHA, runtime revision, CI result, rollback; (b) SR/CF dispositions: code vs sandbox acceptance; (c) scenario evidence; (d) cleanup/retention manifest. **Exit:** one truthful `main` baseline, live sandbox alignment, no contradictory active SR/CF claims; remediation workstream marked CLOSED with exact scope. *This is a workstream closure, not DTD product completion.*
+**Deliverables:** the execution register records accepted source/main SHA and scoped checkpoint; current state owns latest runtime/recovery and open findings; R8 owns inherited scenario outcomes and cleanup scope. Historical full packets remain recoverable from Git and the external archive. **Exit:** one truthful `main` baseline, live sandbox alignment, no contradictory active SR/CF claims; remediation workstream marked CLOSED with exact scope. *This is a workstream closure, not DTD product completion.*
 
 ### R3 — Reconcile remaining platform/release-safety blockers (existing Phase 0–1)
 
@@ -188,7 +188,7 @@ The present release goal is the integrated production service after the final sa
 
 ### R13 — Optional evidence-triggered expansion
 
-**Status:** not a launch requirement. Based on `docs/DTD_VISIONISED_TARGET_STATE.md`, candidate expansions (new geography, licensed feeds, plan types, partner/First Leash distribution, richer analytics/AI, additional products) require measured demand, rights, financial and maintenance capacity, owner decision and updated contracts. **Deliverable:** opportunity/evidence proposal and approval record. **Exit:** only approved experiments are implemented; otherwise preserve stable Greater Melbourne service and do not reopen completed work.
+**Status:** not a launch requirement. Based on `docs/DTD_COMMERCIAL_SCALING_AND_FUNDING_STRATEGY.md`, candidate expansions (new geography, licensed feeds, plan types, partner/First Leash distribution, richer analytics/AI, additional products) require measured demand, rights, financial and maintenance capacity, owner decision and updated contracts. **Deliverable:** opportunity/evidence proposal and approval record. **Exit:** only approved experiments are implemented; otherwise preserve stable Greater Melbourne service and do not reopen completed work.
 
 ## 6. Dependency map and parallelism
 

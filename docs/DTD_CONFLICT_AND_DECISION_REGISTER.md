@@ -153,7 +153,7 @@
 - **Evidence:** Active GCP project `dogtrainersdirectory-dev` (Project Number: `625222421634`), billing account `0104B3-AB5AF0-8F0A01` linked; core serverless APIs enabled (`run.googleapis.com`, `secretmanager.googleapis.com`, `cloudbuild.googleapis.com`, `artifactregistry.googleapis.com`); Secret Manager containing 8 isolated sandbox secrets; live pymongo connection test to `dtd-sandbox` cluster v8.0.32 passing in session.
 - **Rationale:** Protects live directory data, Stripe live billing, and public domain uptime from developer and AI experimentation errors; preserves zero-cost serverless baseline ($0 idle cost); upholds solo-operator safety.
 - **Supersedes:** The single-project live-only cloud architecture and any assumption that testing occurs directly on production Cloud Run or live MongoDB.
-- **Affected:** `DTD_CURRENT_STATE.md`, `specs/OPS_AND_OBSERVABILITY.md`, `DTD_TARGETED_POST_LAUNCH_STATE.md`, `README.md`.
+- **Affected:** `DTD_CURRENT_STATE.md`, `specs/OPS_AND_OBSERVABILITY.md`, `DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md`, `README.md`.
 
 ## CDR-018 — Owner-to-trainer matching system model
 

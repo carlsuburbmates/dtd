@@ -1,6 +1,6 @@
 ---
 name: dtd-proactive-owner-assistance
-description: Lead non-trivial DTD product, workflow, audit and governance work proactively: establish current truth, complete safe in-scope work, and escalate only material owner decisions. Use when a request spans uncertain state, connected workflows or competing evidence; do not use for a simple focused answer.
+description: "Lead non-trivial DTD product, workflow, audit and governance work proactively: establish current truth, complete safe in-scope work, and escalate only material owner decisions. Use when a request spans uncertain state, connected workflows or competing evidence; do not use for a simple focused answer."
 ---
 
 # DTD Proactive Owner Assistance

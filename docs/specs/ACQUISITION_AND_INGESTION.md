@@ -28,9 +28,9 @@ owner-approved official URL
 → /ops evidence
 ```
 
-Twenty authorised Greater Melbourne profiles have local reproducible manifests and scripts. This does not convert older records into equally evidenced profiles.
+The historical launch sample comprised twenty authorised Greater Melbourne profiles with local reproducible manifests and scripts. This is not a current live inventory count and does not convert older records into equally evidenced profiles.
 
-### Post-launch autonomous acquisition (Dual-Engine Pipeline)
+### Acquisition implementation and target contract (Dual-Engine Pipeline)
 
 ```text
 Discovery source (explicit / queue / seed)
@@ -52,11 +52,10 @@ Discovery source (explicit / queue / seed)
 #### Execution and Trigger Boundaries
 
 1. **Cloud Scheduler Specification (Serverless Cron):**
-   - Specification targets Cloud Scheduler job `dtd-trainer-ingest-cron` daily at 2:00 AM AEST.
-   - Authenticated via OIDC Service Account (`dtd-scheduler-invoker@dtd-api-dev.iam.gserviceaccount.com`).
+   - Job `dtd-trainer-ingest-cron` uses its separately verified schedule/timezone and dedicated least-privilege OIDC identity; do not infer a service-account address from the Cloud Run service name.
    - Targets `POST /api/internal/jobs/trainer-ingest` with token verification via `_require_cloud_scheduler_oidc`.
-   - Note: Repository code implements and unit-tests the endpoint; live Cloud Scheduler configuration in Google Cloud remains unverified without authenticated control-plane evidence.
-   - Operations Console (`/ops`) remains evidence-led and read-only; no live mutation route is exposed.
+   - Developer ingestion remains PAUSED pending DF-044/045 source/robots and scoped runtime acceptance. Configuration evidence, engine-tick scheduling and acquisition execution are distinct; see [current state](../DTD_CURRENT_STATE.md) and the [execution register](../DTD_ROADMAP_EXECUTION_REGISTER.md). Read provider state before an operational change.
+   - `/ops` evidence reads are side-effect free. Only explicitly approved, protected and audited bounded actions may mutate state; an enabled engine-tick profile does not authorise ingestion.
 
 ## Processing contract
 

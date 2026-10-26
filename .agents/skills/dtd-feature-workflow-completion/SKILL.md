@@ -1,6 +1,6 @@
 ---
 name: dtd-feature-workflow-completion
-description: Implement or validate DTD features as complete workflows instead of isolated routes. Use when a task affects dog owners, trainers, lifecycle routes, automations, notifications, billing or reactivation flows, or `/ops` visibility, and the work must stay aligned with the repo's canonical workflow, screen-state, and operator-evidence requirements.
+description: "Implement or validate DTD features as complete workflows instead of isolated routes. Use when a task affects dog owners, trainers, lifecycle routes, automations, notifications, billing or reactivation flows, or `/ops` visibility, and the work must stay aligned with the repo's canonical workflow, screen-state, and operator-evidence requirements."
 ---
 
 # DTD Feature Workflow Completion
@@ -18,11 +18,11 @@ Read these in order before editing workflow-affecting features:
 3. `docs/README.md` (active documentation map)
 4. `docs/DTD_CURRENT_STATE.md` and `docs/DTD_INVARIANTS_AND_CONSTRAINTS.md`
 5. `docs/DTD_END_TO_END_PRODUCT_AND_BUSINESS_ROADMAP.md` (R stage and accepted checkpoints)
-6. `docs/DTD_FULL_PROJECT_COMPLETION_PLAN.md` and the applicable DF ledger / matching M-package acceptance criteria
-7. `docs/DTD_TARGETED_POST_LAUNCH_STATE.md` for delivery targets, then the relevant active topic file under `docs/specs/`
+6. `docs/DTD_ROADMAP_EXECUTION_REGISTER.md` and the applicable DF/TD findings / matching M-package acceptance criteria
+7. The relevant active topic file under `docs/specs/` for delivery requirements
 8. `docs/DTD_CONFLICT_AND_DECISION_REGISTER.md` if a prior decision is disputed
 
-`archive/` is historical, outside the active documentation tree. Do not read or search it during ordinary work, even if a stale reference points there. Only inspect it on explicit user request for archival research.
+Historical documentation is preserved outside the checkout and in Git history. Load it only for explicitly requested archival research, never as current execution authority.
 
 ## When To Use
 
@@ -47,7 +47,7 @@ For those cases, use a more specific workflow or skill.
 
 ## Stage and authentication routing
 
-- Start by naming **R0–R13 stage**, applicable existing DF/M identifiers and evidence already accepted. Do not reinvent completion gates. R0 source remediation accepted at SHA `1ac4138`; R1 runtime verification and R2 reconciliation are the next distinct tasks.
+- Start by naming **R0–R13 stage**, applicable existing DF/M identifiers and evidence already accepted. Do not reinvent completion gates. R0 source remediation is accepted at SHA `1ac4138`; scoped R1–R3 checkpoints are accepted. Resolve the next package from the execution register; corrected R4–R8 runtime acceptance remains separate.
 - **R1–R2:** only verify the agreed remediation workflows in the actual sandbox, record the deployed revision and clean up; no blanket redo of Ops Phases 1–5A. **R3–R8:** deliver existing platform/acquisition/owner/matching/Ops gaps with M/DF contracts. **R10–R12:** measure consented marketplace and business outcomes; do not invent numerical targets before observing the baseline.
 - Use authenticated local/remote tools where available to inspect the real GitHub, CI and provider state. For any required missing login, ask for the specific trusted local sign-in/MFA step and resume; do not request credentials in chat. Promote to remote/dev sandbox only after independent acceptance for the exact changed SHA under `AGENTS.md` §6A.
 - Do not treat the strategic North Star as permission to alter locked commercial, safety, privacy, provenance or production boundaries. Approval of a stage objective is not approval of live billing or production changes.

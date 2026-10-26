@@ -1,6 +1,6 @@
 # Capability Brief Template
 
-Use this at task start.
+Optional format for a proportionate task preflight when it improves clarity.
 
 ## Relevant capabilities
 - capability:

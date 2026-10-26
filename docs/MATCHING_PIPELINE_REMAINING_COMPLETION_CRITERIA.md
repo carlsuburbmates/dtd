@@ -4,9 +4,7 @@
 
 **Authority order:** `AGENTS.md` → invariants → CDR-018 through CDR-024 → [Decision Contract v2](specs/OWNER_TO_TRAINER_MATCHING_DECISION_CONTRACT_V2.md) → active matching specifications → [completion roadmap](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) → current-state findings. The Decision Contract controls the initial fit/presentation rules where an older planning document describes a later, outcome-enabled model.
 
-**Historical local-audit candidate (5 October 2026):** `7dd99fa832b1d78d2bd05e722b814e755d4df45b`, following cumulative local implementation `a167478592136bd4e0385f2c6dee3d0377c76222`; P1 reference baseline `5161a2bfc14514b3525f313ae361c4c580b8f847`. `7dd99fa` was accepted locally for MP-005R; the 5 October review did not establish sandbox acceptance and then awaited DF-027's isolated release-preflight correction. This historical condition does not reopen the later completed DF-027. See the [latest independent audit](../archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_7DD99FA_INDEPENDENT_AUDIT_2026-10-05.md), the [prior audit](../archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_1CDD88D_INDEPENDENT_AUDIT_2026-10-05.md), the [repair audit](../archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_8E03F6C_INDEPENDENT_AUDIT_2026-10-05.md), and the original [P2-P6 audit](../archive/2026-10-24-superseded-handoffs-and-audits/MATCHING_PIPELINE_P2_P6_INDEPENDENT_AUDIT_2026-10-04.md). This document does not change product policy or authorise deployment, provider activation, billing, authentication, data mutation, or production release.
-
-**Current execution pointer (24 October):** use [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md) and the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md) for the later isolated audit checkpoint and still-pending runtime acceptance. The historical candidate above is retained as dated evidence; this cleanup changes no M0–M10 requirements or checkboxes.
+**Current execution pointer (26 October):** use [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md), [current state](DTD_CURRENT_STATE.md) and the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md) for accepted source and remaining runtime proof. The historical 5 October candidate `7dd99fa832b1d78d2bd05e722b814e755d4df45b` remains accepted only at its dated scope; original audits are preserved in Git. This consolidation changes no M0–M10 exit requirement or checklist state.
 
 ## How a package becomes `DONE`
 
@@ -23,7 +21,7 @@ For every package, the evidence handoff must include:
 7. sanitised fixture data and persisted-record samples; and
 8. residual risks and the exact roadmap/finding IDs claimed closed.
 
-Codex then reviews the actual diff and whole affected paths, re-runs proportionate checks and records every item as `DONE`, `PARTIAL`, `OPEN`, `REGRESSED`, `NOT_VERIFIED`, or `SUPERSEDED`. Any material `PARTIAL`, `OPEN`, `REGRESSED` or `NOT_VERIFIED` result returns the package to implementation; it cannot advance to sandbox.
+Codex then reviews the actual diff and whole affected paths, re-runs proportionate checks and records every item as `DONE`, `PARTIAL`, `OPEN`, `REGRESSED`, `NOT_VERIFIED`, or `SUPERSEDED`. A proven material implementation/code requirement that is `PARTIAL`, `OPEN`, `REGRESSED` or `NOT_VERIFIED` returns only that failing requirement to implementation. After independent acceptance of the exact code SHA, Codex may perform governed remote sync and sandbox verification under AGENTS.md §6A. Outstanding runtime/provider evidence stays PARTIAL/NOT_VERIFIED until exercised; it does not by itself reopen accepted code or authorise production.
 
 ## Cross-cutting non-negotiable controls
 

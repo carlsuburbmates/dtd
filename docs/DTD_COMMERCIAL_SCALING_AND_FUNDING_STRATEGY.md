@@ -74,3 +74,15 @@ The chat's A$30–60 monthly cost, 90–95% gross margin, under-two-hours weekly
 For traceability, 25 Pro monthly subscriptions plus 20 suburb sponsorship subscriptions arithmetically equal A$1,255 monthly gross subscription revenue; 75 A$39 sponsorship subscriptions equal A$2,925. These are scenarios, not attained revenue, net profit, forecasts or approved stage-exit thresholds. The historical A$250k–500k round / A$2.5m–3.5m valuation illustration is not an assessed financing outcome. Replace or retire assumptions using R10/R12 observations.
 
 **Next authorised package:** continue the corrected R8 runtime acceptance through the existing source-review/promotion gate and assigned R4–R7 gaps. Use the execution register for exact current evidence. Do not duplicate the other session's completed source work, reopen accepted stages, reactivate ingestion, restore exposed credentials or enable commerce because a dated chat says “complete”. Google application follow-up remains separate; no new email, investor contact or production change is authorised by this reconciliation.
+
+## 6. Optional R13 concepts retained for later decisions
+
+These are unapproved possibilities, not launch requirements or implementation instructions:
+
+- Demand-tiered pricing, annual/quarterly sponsorship options and trainer team products only after measured demand, support burden and a separately approved pricing change.
+- Licensed-feed refresh, anomaly detection and exception-triggered recommendations only with source rights, suppression, cost and recovery controls.
+- Optional trainer resources or verification-related services must not sell professional accreditation or alter paid-neutral fit. Free owner browsing, matching and contact remain locked.
+- User-controlled encrypted First Leash exports or deeper opt-in handoffs require a new privacy/integration decision; current linking stays static and query-free.
+- Co-branded education links, mobile or partner distribution and wider geography require evidence of value and sustainable maintenance before owner approval.
+
+The old half-of-539-pages / 60-day marketing example is not an approved threshold. Set future triggers from observed evidence. Extend the existing `/ops` surface rather than creating a parallel operator platform.

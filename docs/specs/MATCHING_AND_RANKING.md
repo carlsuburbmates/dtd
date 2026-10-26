@@ -8,7 +8,7 @@ Return useful trainers based on owner needs and evidenced service suitability wh
 
 ## AI-assisted matching operating model
 
-DTD matching is AI-assisted. AI is a substantive fit-reasoning component, not a decorative copy layer: it may interpret an owner's ordinary-language description, identify structured behavioural, service and logistical signals, and select and explain candidates from the eligible pool. Decision Contract v2 must select and test the response to ambiguity, weak evidence, low supply and AI degradation; clarification and no-suitable-match are options, not preselected outcomes.
+DTD matching is AI-assisted. AI is a substantive fit-reasoning component, not a decorative copy layer: it may interpret an owner's ordinary-language description, identify structured behavioural, service and logistical signals, and select and explain candidates from the eligible pool. Decision Contract v2 defines the responses to ambiguity, weak evidence, low supply and AI degradation; preserve and verify those states.
 
 Deterministic rules remain authoritative for consent, data handling, candidate eligibility, suppression, publication, geography, safety policy, commercial fairness, delivery, persistence and operator evidence. AI cannot override those rules, access excluded candidates, use paid status as a fit signal, manufacture trainer facts or guarantee an outcome. The approved decision contract, rather than a blanket planning rule, determines the owner-visible response when matching evidence is insufficient.
 
@@ -47,7 +47,7 @@ A trainer can therefore be published in the directory yet be partially or wholly
 
 ### Strategic execution order
 
-1. **Decision contract first.** Resolve the owner inputs, trainer facts, eligibility gates, AI decision states, weak-evidence response options, fit signals, presentation policy, data handling and expected scenario outcomes as one versioned contract. This is the first refinement task.
+1. **Decision contract first.** Resolve the owner inputs, trainer facts, eligibility gates, AI decision states, weak-evidence response options, fit signals, presentation policy, data handling and expected scenario outcomes as one versioned contract. The local M0 contract/fixture baseline is accepted; refine it only for an authorised contract change.
 2. **Evaluation second.** Turn the contract into reusable realistic scenarios with expected eligibility, fit and presentation outcomes. Use them to prove Gemini and deterministic fallback behaviour before a public workflow rewrite.
 3. **Architecture third.** Bind the proved contract to the smallest maintainable implementation. The current Google-native hosting and AI path is a starting point, not a requirement to migrate every operational dependency. Any Google-only data/platform migration requires a separate evidence-backed architecture decision.
 4. **Vertical delivery fourth.** Implement and verify one complete questionnaire → decision → results → trainer → enquiry → follow-up → `/ops` slice in the sandbox. Do not add RAG, vector search, agent orchestration or new data platforms unless scenario evidence shows that the defined contract requires them.
@@ -80,13 +80,13 @@ This workstream is complete only when the full decision contract is documented a
 
 ## Diagnostic fit
 
-Current deterministic fit is:
+Decision Contract v2 defines the initial matching policy:
 
 ```text
-fit = (match_score × 0.70) + (outcome_score × 0.30) - policy_penalty
+final_fit = match_score - policy_penalty
 ```
 
-Paid tier, subscription state and billing fields do not enter this score. The AI matching prompt must likewise omit those fields.
+Outcome-score contribution is zero until collection, attribution, sample sufficiency, freshness and anti-gaming rules have a separately accepted policy version. The older 70/30 outcome model is not the initial v2 policy. Paid tier, subscription state and billing fields do not enter this score. The AI matching prompt must likewise omit those fields.
 
 ## Comparable-fit tiebreak
 
@@ -107,7 +107,7 @@ General directory browsing is a visibility surface rather than a diagnostic reco
 
 - Suppressed, delisted, unpublished, policy-ineligible or geographically ineligible trainers do not enter ranking.
 - Missing evidence defaults conservatively; AI output does not override deterministic gates.
-- Fallback radius/catchment expansion must remain visible to the user and must not invent local presence.
+- Declared service-area/catchment expansion must remain visible to the user and must not invent local presence. Distance/radius matching remains prohibited until a separately verified coordinate source and geo policy are approved.
 
 ## Acceptance tests
 
