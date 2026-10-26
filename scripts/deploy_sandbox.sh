@@ -106,6 +106,53 @@ if not any(
 PY
 }
 
+validate_ingestion_scheduler_paused() {
+  local project_id="$1"
+  local region="$2"
+  local job_state
+  if ! job_state="$(gcloud scheduler jobs describe dtd-trainer-ingest-cron --project "${project_id}" --location "${region}" --format="value(state)" 2>&1)"; then
+    echo "Could not verify Cloud Scheduler ingestion job state: ${job_state}" >&2
+    return 64
+  fi
+  if [ "${job_state}" != "PAUSED" ]; then
+    echo "Sandbox deployment blocked: dtd-trainer-ingest-cron state is '${job_state}', expected 'PAUSED'" >&2
+    return 64
+  fi
+}
+
+resolve_candidate_url() {
+  local service_name="$1"
+  local project_id="$2"
+  local region="$3"
+  local tag="${4:-candidate}"
+  local service_json
+  service_json="$(gcloud run services describe "${service_name}" --project "${project_id}" --region "${region}" --format=json)"
+  SERVICE_JSON="${service_json}" TAG="${tag}" python3 - <<'PY'
+import json
+import os
+import sys
+
+data = json.loads(os.environ["SERVICE_JSON"])
+target_tag = os.environ["TAG"]
+traffic = data.get("status", {}).get("traffic", [])
+candidate_url = ""
+for item in traffic:
+    if item.get("tag") == target_tag and item.get("url"):
+        candidate_url = item["url"]
+        break
+
+if not candidate_url:
+    url = data.get("status", {}).get("url", "")
+    if url.startswith("https://"):
+        candidate_url = url.replace("https://", f"https://{target_tag}---")
+
+if not candidate_url:
+    sys.exit("Could not resolve candidate revision URL")
+
+print(candidate_url)
+PY
+}
+
 main() {
 if [ "$#" -ne 0 ]; then
   echo "Usage: bash scripts/deploy_sandbox.sh" >&2
@@ -118,43 +165,59 @@ DEPLOY_SOURCE_SHA="$(resolve_deploy_source_sha "${REPO_ROOT}")"
 REVISION_SUFFIX="r8-${DEPLOY_SOURCE_SHA:0:8}"
 echo "Sandbox source revision: ${DEPLOY_SOURCE_SHA} (${REVISION_SUFFIX})"
 
-# 1. Run the mandatory local preflight suite.
-echo "🔍 [1/3] Running preflight code compilation and tests..."
+# 1. Run the mandatory local preflight suite and scheduler verification.
+echo "🔍 [1/4] Running preflight code compilation, scheduler verification, and tests..."
 validate_preflight_interpreter
+validate_ingestion_scheduler_paused "${PROJECT_ID}" "${REGION}"
 python3 -m py_compile backend/server.py backend/worker.py backend/services/*.py
 node scripts/check_prelaunch_release_gate.js
 if [ -x "${PREFLIGHT_PYTHON}" ]; then
   "${PREFLIGHT_PYTHON}" backend/scripts/run_isolated_integration_suite.py
 fi
-echo "✅ Preflight tests passed!"
+echo "✅ Preflight tests and scheduler verification passed!"
 
-# 2. Deploy to Google Cloud Run
-echo "🚀 [2/3] Deploying ${SERVICE_NAME} to Google Cloud Run in project ${PROJECT_ID} (${REGION})..."
+# 2. Deploy to Google Cloud Run as a no-traffic candidate with tag
+echo "🚀 [2/4] Deploying ${SERVICE_NAME} candidate to Google Cloud Run in project ${PROJECT_ID} (${REGION})..."
 gcloud run deploy "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
   --region "${REGION}" \
   --revision-suffix "${REVISION_SUFFIX}" \
   --source backend \
   --allow-unauthenticated \
+  --no-traffic \
+  --tag "candidate" \
   --service-account "${SERVICE_ACCOUNT}" \
-  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,AUTONOMY_LOOP_OWNER=none,ENABLE_TRAINER_BILLING_CHECKOUT=0,ENABLE_OPS_STRIPE_REFUNDS=0,OPS_SELF_HEALING_ENABLED=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500,VERTEXAI_PROJECT=${PROJECT_ID},VERTEXAI_LOCATION=${REGION},GEMINI_MODEL=gemini-3.5-flash,CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT=${SERVICE_ACCOUNT},CLOUD_SCHEDULER_OIDC_AUDIENCE=${SERVICE_URL} \
-  --set-secrets MONGO_URL=dtd-mongo-url:latest,ADMIN_PASS=dtd-admin-pass:latest,TRAINER_ACTION_TOKEN_SECRET=dtd-trainer-action-token-secret:latest,STRIPE_SECRET_KEY=dtd-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=dtd-stripe-webhook-secret:latest,RESEND_API_KEY=dtd-resend-api-key:latest,RESEND_WEBHOOK_SECRET=dtd-resend-webhook-secret:latest,ABR_GUID=dtd-abr-guid:latest,SENTRY_DSN=dtd-sentry-dsn:latest \
+  --set-env-vars DB_NAME=dtd_sandbox,SENTRY_ENVIRONMENT=staging,DISABLE_AUTONOMY=1,ENABLE_STARTUP_SEEDS=0,AUTONOMY_LOOP_OWNER=none,ENABLE_TRAINER_BILLING_CHECKOUT=0,ENABLE_OPS_STRIPE_REFUNDS=0,STRIPE_KEY_UPDATED=2,STRIPE_LIVE_ANCHOR_AT="2026-10-24T00:00:00Z",OPS_SELF_HEALING_ENABLED=0,ACTIVE_REGION="Greater Melbourne",ACTIVE_REGIONS="Greater Melbourne",PUBLIC_LAUNCH_PHASE=live_matching,PUBLIC_MATCHING_ENABLED=1,PUBLIC_MONETIZATION_COPY_MODE=flat_subscription,PUBLIC_HIDE_LEGACY_INTRO_FEE_COPY=1,PUBLIC_SHOW_FOUNDING_PROFILE_COPY=0,RESEND_FROM="no-reply@dogtrainersdirectory.com.au",RESEND_REPLY_TO="info@dogtrainersdirectory.com.au",CORS_ORIGINS="*",PRO_TRIAL_DAYS=30,PRO_TRIAL_EXPIRY_WARNING_DAY=23,SPONSOR_MAX_SUBURBS_PER_TRAINER=4,SEO_MIN_PUBLISHED_TRAINERS=3,SEO_MIN_CONTENT_WORDS=500,VERTEXAI_PROJECT=${PROJECT_ID},VERTEXAI_LOCATION=${REGION},GEMINI_MODEL=gemini-3.5-flash,CLOUD_SCHEDULER_OIDC_SERVICE_ACCOUNT=${SERVICE_ACCOUNT},CLOUD_SCHEDULER_OIDC_AUDIENCE=${SERVICE_URL} \
+  --set-secrets MONGO_URL=dtd-mongo-url:latest,ADMIN_PASS=dtd-admin-pass:4,TRAINER_ACTION_TOKEN_SECRET=dtd-trainer-action-token-secret:2,STRIPE_SECRET_KEY=dtd-stripe-secret-key:latest,STRIPE_WEBHOOK_SECRET=dtd-stripe-webhook-secret:latest,RESEND_API_KEY=dtd-resend-api-key:latest,RESEND_WEBHOOK_SECRET=dtd-resend-webhook-secret:latest,ABR_GUID=dtd-abr-guid:latest,SENTRY_DSN=dtd-sentry-dsn:latest \
   --cpu 1 \
   --memory 1Gi \
   --timeout 300 \
   --min-instances 0 \
   --max-instances 2
 
-# 3. Post-deployment verification
-echo "📡 [3/3] Verifying deployed endpoint..."
+# 3. Candidate verification before traffic promotion
+echo "🔍 [3/4] Validating candidate revision health before traffic promotion..."
+CANDIDATE_URL=$(resolve_candidate_url "${SERVICE_NAME}" "${PROJECT_ID}" "${REGION}" "candidate")
+echo "Candidate URL: ${CANDIDATE_URL}"
+CANDIDATE_HEALTH=$(curl --fail --silent --show-error --location --max-time 15 "${CANDIDATE_URL}/api/health")
+validate_health_response "${CANDIDATE_HEALTH}"
+echo "✅ Candidate revision passed health check and database availability before traffic promotion."
+
+# 4. Traffic promotion and deployed service verification
+echo "📡 [4/4] Promoting traffic to validated candidate revision..."
+LATEST_CREATED_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestCreatedRevisionName)")
+if [ -z "${LATEST_CREATED_REVISION}" ]; then
+  echo "Sandbox Cloud Run service returned no latest created revision name" >&2
+  exit 1
+fi
+
 gcloud run services update-traffic "${SERVICE_NAME}" \
   --project "${PROJECT_ID}" \
   --region "${REGION}" \
-  --to-latest
+  --to-revisions "${LATEST_CREATED_REVISION}=100"
 
 SERVICE_STATE=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="json(status.latestCreatedRevisionName,status.latestReadyRevisionName,status.traffic)")
 validate_deployed_traffic_response "${SERVICE_STATE}"
-LATEST_CREATED_REVISION=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.latestCreatedRevisionName)")
 
 DEPLOYED_SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
 if [ -z "${DEPLOYED_SERVICE_URL}" ]; then

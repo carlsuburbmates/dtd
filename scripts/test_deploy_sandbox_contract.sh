@@ -147,6 +147,21 @@ for setting in ENABLE_TRAINER_BILLING_CHECKOUT=0 ENABLE_OPS_STRIPE_REFUNDS=0 OPS
   fi
 done
 
+for setting in \
+  'ADMIN_PASS=dtd-admin-pass:4' \
+  'TRAINER_ACTION_TOKEN_SECRET=dtd-trainer-action-token-secret:2' \
+  'STRIPE_KEY_UPDATED=2' \
+  'STRIPE_LIVE_ANCHOR_AT="2026-10-24T00:00:00Z"' \
+  '--no-traffic' \
+  '--tag "candidate"' \
+  'validate_ingestion_scheduler_paused'; do
+  if ! grep -Fq -- "${setting}" "${repo_root}/scripts/deploy_sandbox.sh"; then
+    echo "Sandbox deployment must explicitly enforce ${setting}" >&2
+    exit 1
+  fi
+done
+
+
 for web_contract in '--to-latest' 'latestCreatedRevisionName' 'latestReadyRevisionName' 'EXPECTED_BUNDLE'; do
   if ! grep -Fq -- "${web_contract}" "${repo_root}/scripts/deploy_sandbox_frontend.sh"; then
     echo "Sandbox frontend deployment must verify ${web_contract}" >&2
