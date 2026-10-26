@@ -104,6 +104,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Impact/uncertainty:** CI proves tested code and deployment-source hygiene, and the sandbox proves runtime health; neither proves the integrated owner/trainer workflow or closes GitHub default-branch alerts before reviewed merge. R8 retains that business acceptance.
 - **Repair status:** the maintained isolated suite uses a UUID-named loopback database and synthetic data, disables external providers and removes its database afterwards. The 22 October candidate passed exact-head CI and was deployed through the accepted sandbox release path.
 - **Next action:** preserve exact source/image/build identity in the R3 release record, then complete the cross-system business acceptance matrix under R8; do not treat CI as a substitute.
+- **Carried-forward sandbox catalogue gap (20 October evidence; R4/R6):** the protected read found zero active v1 database rows while `/api/config` returned all 539 canonical localities from `static_catalogue_fallback`. Database-backed seed/parity remains **NOT_VERIFIED**. This is not a catalogue outage or a reason to reopen accepted R1. The fallback supplies geography but does not prove persisted parity or trainer capacity. This documentation-only cleanup made no database read or seed change; refresh the read-only catalogue state before affected migration/acceptance and retain the existing data/action gates.
 
 ### DF-007 — DNS delegation and legacy Vercel ownership
 
