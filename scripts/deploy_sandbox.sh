@@ -20,45 +20,96 @@ CANDIDATE_TAG="candidate"
 
 # Lifecycle state tracking for safe trap cleanup and bounded recovery
 PRIOR_SERVING_REVISION=""
+PRIOR_SERVING_SAFE=0
 EXPECTED_REVISION=""
 TAG_CREATED=0
 TRAFFIC_PROMOTED=0
 SUCCESSFUL_COMPLETION=0
+TAG_CLEANUP_FAILED=0
 
 cleanup_and_recover() {
   local exit_code=$?
   trap - EXIT
 
+  # 1. Post-promotion failure recovery: roll back traffic to prior safe serving revision
+  if [ "${TRAFFIC_PROMOTED}" -eq 1 ] && [ "${SUCCESSFUL_COMPLETION}" -ne 1 ]; then
+    if [ -n "${PRIOR_SERVING_REVISION}" ] && [ "${PRIOR_SERVING_SAFE}" -eq 1 ]; then
+      local current_traffic_json
+      current_traffic_json="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format=json 2>/dev/null || true)"
+      local current_serving_now
+      current_serving_now=$(CURRENT_JSON="${current_traffic_json}" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.loads(os.environ["CURRENT_JSON"])
+    routes = data.get("status", {}).get("traffic", [])
+    for r in routes:
+        if int(r.get("percent") or 0) == 100 and r.get("revisionName"):
+            print(r["revisionName"])
+            sys.exit(0)
+    print("")
+except Exception:
+    print("")
+PY
+      )
+      if [ -n "${current_serving_now}" ] && [ "${current_serving_now}" != "${EXPECTED_REVISION}" ]; then
+        echo "🚨 Intervening traffic change detected during recovery: current serving revision is '${current_serving_now}', not candidate '${EXPECTED_REVISION}'." >&2
+        echo "Skipping automatic rollback to preserve concurrent operator's traffic. Guarded recovery required: current=${current_serving_now}, candidate=${EXPECTED_REVISION}, prior=${PRIOR_SERVING_REVISION}." >&2
+      else
+        echo "🚨 Post-promotion health verification failed! Rolling back traffic to prior safe serving revision ${PRIOR_SERVING_REVISION}..." >&2
+        if ! gcloud run services update-traffic "${SERVICE_NAME}" \
+          --project "${PROJECT_ID}" \
+          --region "${REGION}" \
+          --to-revisions "${PRIOR_SERVING_REVISION}=100"; then
+          echo "Warning: Traffic rollback command failed" >&2
+        fi
+      fi
+    else
+      echo "🚨 Post-promotion failure occurred, but prior serving revision '${PRIOR_SERVING_REVISION}' is not verified safe (or no prior revision recorded)." >&2
+      echo "Guarded recovery disposition: candidate revision '${EXPECTED_REVISION}' remains at 100% traffic until operator action. Unsafe rollback was prevented." >&2
+    fi
+  fi
+
+  # 2. Clean up owned temporary candidate tag on both success and failure
+  if [ "${TAG_CREATED}" -eq 1 ]; then
+    local svc_tag_json
+    svc_tag_json="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format=json 2>/dev/null || true)"
+    local tag_owner
+    tag_owner=$(SVC_JSON="${svc_tag_json}" TAG="${CANDIDATE_TAG}" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.loads(os.environ["SVC_JSON"])
+    routes = data.get("status", {}).get("traffic", [])
+    for r in routes:
+        if r.get("tag") == os.environ["TAG"]:
+            print(r.get("revisionName") or "")
+            sys.exit(0)
+    print("")
+except Exception:
+    print("")
+PY
+    )
+    if [ -n "${tag_owner}" ]; then
+      if [ -n "${EXPECTED_REVISION}" ] && [ "${tag_owner}" != "${EXPECTED_REVISION}" ]; then
+        echo "Tag '${CANDIDATE_TAG}' is now mapped to revision '${tag_owner}', not candidate '${EXPECTED_REVISION}'. Skipping removal to preserve foreign tag." >&2
+      else
+        echo "🧹 Removing owned temporary candidate tag '${CANDIDATE_TAG}'..."
+        if ! gcloud run services update-traffic "${SERVICE_NAME}" \
+          --project "${PROJECT_ID}" \
+          --region "${REGION}" \
+          --remove-tags "${CANDIDATE_TAG}"; then
+          echo "ERROR: Failed to remove temporary candidate tag '${CANDIDATE_TAG}'" >&2
+          TAG_CLEANUP_FAILED=1
+        fi
+      fi
+    fi
+  fi
+
   if [ "${SUCCESSFUL_COMPLETION}" -eq 1 ]; then
-    # On success: clean up the owned temporary candidate tag
-    if [ "${TAG_CREATED}" -eq 1 ]; then
-      echo "🧹 Cleaning up temporary candidate tag '${CANDIDATE_TAG}' after successful promotion..."
-      gcloud run services update-traffic "${SERVICE_NAME}" \
-        --project "${PROJECT_ID}" \
-        --region "${REGION}" \
-        --remove-tags "${CANDIDATE_TAG}" >/dev/null 2>&1 || true
+    if [ "${TAG_CLEANUP_FAILED}" -eq 1 ]; then
+      echo "Deployment succeeded but candidate tag cleanup failed." >&2
+      exit 1
     fi
     exit 0
-  fi
-
-  echo "⚠️ Deployment helper exited with failure (status ${exit_code}); running recovery..." >&2
-
-  # Post-promotion failure recovery: roll back traffic to prior safe serving revision
-  if [ "${TRAFFIC_PROMOTED}" -eq 1 ] && [ -n "${PRIOR_SERVING_REVISION}" ]; then
-    echo "🚨 Post-promotion health verification failed! Rolling back traffic to prior safe serving revision ${PRIOR_SERVING_REVISION}..." >&2
-    gcloud run services update-traffic "${SERVICE_NAME}" \
-      --project "${PROJECT_ID}" \
-      --region "${REGION}" \
-      --to-revisions "${PRIOR_SERVING_REVISION}=100" >/dev/null 2>&1 || echo "Warning: Traffic rollback failed" >&2
-  fi
-
-  # Clean up owned temporary tag on failure
-  if [ "${TAG_CREATED}" -eq 1 ]; then
-    echo "🧹 Removing owned temporary candidate tag '${CANDIDATE_TAG}' after failure..." >&2
-    gcloud run services update-traffic "${SERVICE_NAME}" \
-      --project "${PROJECT_ID}" \
-      --region "${REGION}" \
-      --remove-tags "${CANDIDATE_TAG}" >/dev/null 2>&1 || true
   fi
 
   exit "${exit_code}"
@@ -99,80 +150,118 @@ resolve_deploy_source_sha() {
     echo "Sandbox deployment requires a Git checkout with a committed source revision" >&2
     return 64
   fi
-  if ! git -C "${repo_root}" diff --quiet HEAD -- backend; then
-    echo "Sandbox deployment requires a clean committed backend source tree" >&2
+
+  if ! upload_files="$(gcloud meta list-files-for-upload backend 2>&1)"; then
+    echo "Could not inspect Cloud Run upload candidate list for backend: ${upload_files}" >&2
     return 64
   fi
-  if ! upload_files="$(gcloud meta list-files-for-upload "${repo_root}/backend")"; then
-    echo "Could not determine the Cloud Run backend source upload set" >&2
-    return 64
-  fi
+
   if [ -z "${upload_files}" ]; then
-    echo "Cloud Run backend source upload set is empty" >&2
+    echo "Cloud Run backend upload candidate list is empty" >&2
     return 64
   fi
-  validate_uploaded_backend_files "${repo_root}" "${upload_files}" || return $?
+
+  if ! git -C "${repo_root}" diff --quiet -- backend; then
+    echo "Sandbox deployment blocked: uncommitted changes detected under backend/" >&2
+    return 64
+  fi
+
+  untracked_upload_files=()
+  while IFS= read -r file; do
+    [ -z "${file}" ] && continue
+    if git -C "${repo_root}" check-ignore -q -- "backend/${file}"; then
+      echo "Sandbox deployment blocked: upload includes ignored backend path 'backend/${file}'" >&2
+      return 64
+    fi
+    if ! git -C "${repo_root}" ls-files --error-unmatch -- "backend/${file}" >/dev/null 2>&1; then
+      untracked_upload_files+=("backend/${file}")
+    fi
+  done <<< "${upload_files}"
+
+  if [ "${#untracked_upload_files[@]}" -gt 0 ]; then
+    echo "Sandbox deployment blocked: untracked files would be uploaded from backend/:" >&2
+    printf ' - %s\n' "${untracked_upload_files[@]}" >&2
+    return 64
+  fi
+
+  tracked_backend_files="$(git -C "${repo_root}" ls-files backend)"
+  while IFS= read -r file; do
+    [ -z "${file}" ] && continue
+    if ! grep -Fxq "${file#backend/}" <<< "${upload_files}"; then
+      echo "Sandbox deployment blocked: tracked file '${file}' is omitted from upload candidates" >&2
+      return 64
+    fi
+  done <<< "${tracked_backend_files}"
+
   git -C "${repo_root}" rev-parse HEAD
 }
 
-validate_uploaded_backend_files() {
-  local repo_root="$1"
-  local upload_files="$2"
-  local tracked_backend_files
-  local untracked_upload_files
-  tracked_backend_files="$(git -C "${repo_root}" ls-files -- backend | sed 's#^backend/##' | sort)"
-  untracked_upload_files="$(comm -23 <(printf '%s\n' "${upload_files}" | sort) <(printf '%s\n' "${tracked_backend_files}" | sort))"
-  if [ -n "${untracked_upload_files}" ]; then
-    echo "Sandbox source upload contains files that are not tracked by Git:" >&2
-    printf '%s\n' "${untracked_upload_files}" >&2
-    return 64
+validate_health_response() {
+  local response="$1"
+  local ok
+  local database
+
+  if ! ok="$(python3 -c 'import json, sys; data = json.loads(sys.argv[1]); print(data.get("ok"))' "${response}" 2>/dev/null)"; then
+    echo "Invalid JSON response from health endpoint: ${response}" >&2
+    return 1
+  fi
+
+  database="$(python3 -c 'import json, sys; data = json.loads(sys.argv[1]); print(data.get("database"))' "${response}" 2>/dev/null || true)"
+
+  if [ "${ok}" != "True" ] || [ "${database}" != "available" ]; then
+    echo "Sandbox service failed health check: ${response}" >&2
+    return 1
   fi
 }
 
-validate_health_response() {
-  HEALTH_RESPONSE="$1" python3 - <<'PY'
-import json
-import os
-
-try:
-    health = json.loads(os.environ["HEALTH_RESPONSE"])
-except (KeyError, json.JSONDecodeError) as error:
-    raise SystemExit(f"Sandbox health response was not valid JSON: {error}")
-
-if health.get("ok") is not True or health.get("database") != "available":
-    raise SystemExit("Sandbox health response did not confirm an available database")
-PY
-}
-
 validate_deployed_traffic_response() {
-  SERVICE_STATE="$1" EXPECTED_REV="${2:-}" python3 - <<'PY'
-import json
-import os
-import sys
+  local response="$1"
+  local expected_revision="${2:-}"
+
+  RESPONSE_JSON="${response}" EXPECTED_REV="${expected_revision}" python3 - <<'PY'
+import json, os, sys
 
 try:
-    response = json.loads(os.environ["SERVICE_STATE"])
-except (KeyError, json.JSONDecodeError) as error:
-    sys.exit(f"Sandbox service state was not valid JSON: {error}")
+    data = json.loads(os.environ["RESPONSE_JSON"])
+except Exception as e:
+    sys.exit(f"Invalid JSON response from Cloud Run service describe: {e}")
 
-state = response.get("status", response)
-traffic = state.get("traffic") or []
+status = data.get("status", {})
+latest_created = status.get("latestCreatedRevisionName")
+latest_ready = status.get("latestReadyRevisionName")
+traffic = status.get("traffic", [])
+
+if not latest_created or not latest_ready:
+    sys.exit("Cloud Run service status is missing latest created or ready revision names")
+
+if latest_created != latest_ready:
+    sys.exit(
+        f"Cloud Run service latest created revision '{latest_created}' does not match latest ready revision '{latest_ready}'"
+    )
+
 expected_rev = os.environ.get("EXPECTED_REV")
-
 if expected_rev:
-    matched = [r for r in traffic if r.get("revisionName") == expected_rev and int(r.get("percent") or 0) == 100]
-    if not matched:
-        sys.exit(f"Expected candidate revision '{expected_rev}' is not receiving 100% of traffic. Actual traffic: {traffic}")
-else:
-    latest_created = state.get("latestCreatedRevisionName") or ""
-    latest_ready = state.get("latestReadyRevisionName") or ""
-    if not latest_created or latest_ready != latest_created:
-        sys.exit("Latest sandbox revision is not ready")
-    if not any(
-        route.get("revisionName") == latest_created and int(route.get("percent") or 0) == 100
-        for route in traffic
-    ):
-        sys.exit("Latest sandbox revision is not receiving 100 percent of traffic")
+    if latest_created != expected_rev:
+        sys.exit(f"Deployed revision mismatch: got '{latest_created}', expected '{expected_rev}'")
+
+one_hundred_percent_revision = None
+for route in traffic:
+    if int(route.get("percent") or 0) == 100:
+        one_hundred_percent_revision = route.get("revisionName")
+        break
+
+if not one_hundred_percent_revision:
+    sys.exit("Cloud Run service does not route 100% traffic to any revision")
+
+if one_hundred_percent_revision != latest_ready:
+    sys.exit(
+        f"Cloud Run 100% traffic route targets '{one_hundred_percent_revision}', expected latest ready revision '{latest_ready}'"
+    )
+
+if expected_rev and one_hundred_percent_revision != expected_rev:
+    sys.exit(
+        f"Cloud Run 100% traffic route targets '{one_hundred_percent_revision}', expected exact candidate '{expected_rev}'"
+    )
 PY
 }
 
@@ -185,16 +274,12 @@ capture_and_merge_configuration() {
 
   local baseline_json
   if ! baseline_json="$(gcloud run services describe "${service_name}" --project "${project_id}" --region "${region}" --format=json 2>&1)"; then
-    echo "Could not capture baseline service configuration for ${service_name}: ${baseline_json}" >&2
+    echo "Could not inspect service ${service_name} for baseline configuration: ${baseline_json}" >&2
     return 64
   fi
 
-  BASELINE_JSON="${baseline_json}" \
-  PROJECT_ID="${project_id}" \
-  REGION="${region}" \
-  SERVICE_ACCOUNT="${service_account}" \
-  SERVICE_URL="${service_url}" \
-  python3 - <<'PY'
+  local base_result
+  if ! base_result=$(BASELINE_JSON="${baseline_json}" PROJECT_ID="${project_id}" REGION="${region}" SERVICE_ACCOUNT="${service_account}" SERVICE_URL="${service_url}" python3 - <<'PY'
 import json, os, sys
 
 try:
@@ -202,54 +287,36 @@ try:
 except Exception as e:
     sys.exit(f"Failed to parse baseline JSON: {e}")
 
-# 1. Resolve prior serving revision (at 100% traffic)
+if not isinstance(baseline, dict) or not baseline:
+    sys.exit("Baseline service metadata is empty or invalid")
+
+# 1. Resolve prior serving revision (must be single 100% route)
 status = baseline.get("status", {})
 traffic = status.get("traffic", [])
 prior_serving = None
-for route in traffic:
+non_zero_routes = [r for r in traffic if int(r.get("percent") or 0) > 0]
+
+for route in non_zero_routes:
     if int(route.get("percent") or 0) == 100 and route.get("revisionName"):
         prior_serving = route["revisionName"]
         break
 
-if not prior_serving:
-    prior_serving = status.get("latestReadyRevisionName") or status.get("latestCreatedRevisionName")
+if not prior_serving or len(non_zero_routes) > 1:
+    sys.exit("Unsupported traffic baseline: traffic is split across multiple revisions or no 100% serving revision found. Developer sandbox deployment requires a single 100% serving baseline.")
 
-# Check audit case dir state.json if present
-audit_dir = os.environ.get("AUDIT_CASE_DIR")
-audit_state = {}
-if audit_dir:
-    state_file = os.path.join(audit_dir, "state.json")
-    if os.path.exists(state_file):
-        try:
-            with open(state_file) as f:
-                audit_state = json.load(f)
-                if not prior_serving and audit_state.get("serving"):
-                    prior_serving = audit_state["serving"]
-        except Exception:
-            pass
-
-if not prior_serving:
-    sys.exit("Could not identify safe prior serving revision from baseline")
-
-# 2. Extract existing env and secrets
+# 2. Extract existing env and secrets from service template
 existing_env = {}
 existing_secrets = {}
 
-if isinstance(baseline.get("existing_env"), dict):
-    existing_env.update(baseline["existing_env"])
-if isinstance(baseline.get("existing_secrets"), dict):
-    existing_secrets.update(baseline["existing_secrets"])
-
-if isinstance(audit_state.get("existing_env"), dict):
-    existing_env.update(audit_state["existing_env"])
-if isinstance(audit_state.get("existing_secrets"), dict):
-    existing_secrets.update(audit_state["existing_secrets"])
-
 template = baseline.get("spec", {}).get("template", {})
 containers = template.get("spec", {}).get("containers", [])
-if containers:
-    env_data = containers[0].get("env", [])
-    if isinstance(env_data, list):
+if containers and isinstance(containers, list):
+    c0 = containers[0]
+    env_data = c0.get("env", [])
+    if isinstance(env_data, dict):
+        for k, v in env_data.items():
+            existing_env[k] = str(v)
+    elif isinstance(env_data, list):
         for item in env_data:
             if not isinstance(item, dict):
                 continue
@@ -264,9 +331,6 @@ if containers:
                 sec_key = ref.get("key", "latest")
                 if sec_name:
                     existing_secrets[name] = f"{sec_name}:{sec_key}"
-    elif isinstance(env_data, dict):
-        for k, v in env_data.items():
-            existing_env[k] = str(v)
 
 # 3. Reviewed delta for developer sandbox
 project_id = os.environ["PROJECT_ID"]
@@ -337,7 +401,14 @@ merged_secrets.update(existing_secrets)
 merged_secrets["ADMIN_PASS"] = "dtd-admin-pass:4"
 merged_secrets["TRAINER_ACTION_TOKEN_SECRET"] = "dtd-trainer-action-token-secret:2"
 
-env_str = ",".join(f"{k}={v}" for k, v in sorted(merged_env.items()))
+# Safe serialization: use gcloud ^DELIM^ escaping if any value contains a comma
+has_comma = any("," in k or "," in v for k, v in merged_env.items())
+if has_comma:
+    delim = ";;" if not any(";;" in k or ";;" in v for k, v in merged_env.items()) else "@@"
+    env_str = f"^{delim}^{delim.join(f'{k}={v}' for k, v in sorted(merged_env.items()))}"
+else:
+    env_str = ",".join(f"{k}={v}" for k, v in sorted(merged_env.items()))
+
 sec_str = ",".join(f"{k}={v}" for k, v in sorted(merged_secrets.items()))
 
 result = {
@@ -348,6 +419,79 @@ result = {
     "merged_secrets": merged_secrets,
 }
 print(json.dumps(result))
+PY
+); then
+    echo "${base_result}" >&2
+    return 64
+  fi
+
+  # Now verify if prior_serving is safe by inspecting its immutable revision
+  local prior_rev
+  prior_rev=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["prior_serving"])' "${base_result}")
+
+  local prior_safe=0
+  local prior_rev_json
+  if prior_rev_json="$(gcloud run revisions describe "${prior_rev}" --project "${project_id}" --region "${region}" --format=json 2>/dev/null)"; then
+    prior_safe=$(PRIOR_JSON="${prior_rev_json}" EXPECTED_SA="${service_account}" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.loads(os.environ["PRIOR_JSON"])
+    if not isinstance(data, dict) or not data:
+        sys.exit(1)
+    spec = data.get("spec", {})
+    actual_sa = spec.get("serviceAccountName")
+    containers = spec.get("containers", [])
+    if not actual_sa and containers:
+        actual_sa = containers[0].get("serviceAccountName")
+    if actual_sa != os.environ["EXPECTED_SA"]:
+        sys.exit(1)
+
+    actual_env = {}
+    actual_secrets = {}
+    if isinstance(spec.get("env"), dict):
+        actual_env.update(spec["env"])
+    if isinstance(spec.get("secrets"), dict):
+        actual_secrets.update(spec["secrets"])
+    if containers:
+        c0 = containers[0]
+        env_data = c0.get("env", [])
+        if isinstance(env_data, dict):
+            actual_env.update(env_data)
+        elif isinstance(env_data, list):
+            for item in env_data:
+                if isinstance(item, dict):
+                    name = item.get("name")
+                    if "value" in item and name:
+                        actual_env[name] = str(item["value"])
+                    elif "valueFrom" in item and name:
+                        ref = item["valueFrom"].get("secretKeyRef", {})
+                        sec_name = ref.get("name")
+                        sec_key = ref.get("key", "latest")
+                        if sec_name:
+                            actual_secrets[name] = f"{sec_name}:{sec_key}"
+
+    if actual_env.get("DB_NAME") != "dtd_sandbox":
+        sys.exit(1)
+    for flag in ["ENABLE_TRAINER_BILLING_CHECKOUT", "ENABLE_OPS_STRIPE_REFUNDS", "OPS_SELF_HEALING_ENABLED"]:
+        if actual_env.get(flag) != "0":
+            sys.exit(1)
+    if actual_secrets.get("ADMIN_PASS") != "dtd-admin-pass:4":
+        sys.exit(1)
+    if actual_secrets.get("TRAINER_ACTION_TOKEN_SECRET") != "dtd-trainer-action-token-secret:2":
+        sys.exit(1)
+    print("1")
+except Exception:
+    print("0")
+PY
+    )
+  fi
+
+  # Augment base_result with prior_serving_safe
+  BASE_RESULT="${base_result}" PRIOR_SAFE="${prior_safe:-0}" python3 - <<'PY'
+import json, os
+d = json.loads(os.environ["BASE_RESULT"])
+d["prior_serving_safe"] = int(os.environ.get("PRIOR_SAFE", "0") == "1")
+print(json.dumps(d))
 PY
 }
 
@@ -364,7 +508,8 @@ resolve_and_verify_candidate_url() {
     return 64
   fi
 
-  SERVICE_JSON="${service_json}" EXPECTED_REVISION="${expected_revision}" TARGET_TAG="${tag}" python3 - <<'PY'
+  local candidate_url
+  if ! candidate_url=$(SERVICE_JSON="${service_json}" EXPECTED_REVISION="${expected_revision}" TARGET_TAG="${tag}" python3 - <<'PY'
 import json, os, sys
 
 try:
@@ -400,6 +545,11 @@ if not url:
 
 print(url)
 PY
+); then
+    echo "${candidate_url}" >&2
+    return 64
+  fi
+  echo "${candidate_url}"
 }
 
 verify_candidate_invariants() {
@@ -408,47 +558,76 @@ verify_candidate_invariants() {
   local region="$3"
   local expected_revision="$4"
 
-  local service_json
-  if ! service_json="$(gcloud run services describe "${service_name}" --project "${project_id}" --region "${region}" --format=json 2>&1)"; then
-    echo "Could not inspect service metadata for candidate verification: ${service_json}" >&2
+  # Query exact immutable revision metadata
+  local rev_json
+  if ! rev_json="$(gcloud run revisions describe "${expected_revision}" --project "${project_id}" --region "${region}" --format=json 2>&1)"; then
+    echo "Could not inspect immutable candidate revision ${expected_revision}: ${rev_json}" >&2
     return 64
   fi
 
-  SERVICE_JSON="${service_json}" EXPECTED_REVISION="${expected_revision}" EXPECTED_SERVICE_ACCOUNT="${SERVICE_ACCOUNT}" python3 - <<'PY'
+  local verify_result
+  if ! verify_result=$(REVISION_JSON="${rev_json}" EXPECTED_REVISION="${expected_revision}" EXPECTED_SERVICE_ACCOUNT="${SERVICE_ACCOUNT}" python3 - <<'PY'
 import json, os, sys
 
 try:
-    data = json.loads(os.environ["SERVICE_JSON"])
+    data = json.loads(os.environ["REVISION_JSON"])
 except Exception as e:
-    sys.exit(f"Failed to parse service JSON: {e}")
+    sys.exit(f"Failed to parse candidate revision JSON: {e}")
+
+if not isinstance(data, dict) or not data:
+    sys.exit("Candidate revision metadata is empty or not a dictionary")
 
 expected_rev = os.environ["EXPECTED_REVISION"]
 expected_sa = os.environ["EXPECTED_SERVICE_ACCOUNT"]
 
-# Check audit case dir state.json if present
-audit_dir = os.environ.get("AUDIT_CASE_DIR")
-audit_state = {}
-if audit_dir:
-    state_file = os.path.join(audit_dir, "state.json")
-    if os.path.exists(state_file):
-        try:
-            with open(state_file) as f:
-                audit_state = json.load(f)
-        except Exception:
-            pass
+# 1. Readiness check: must be explicitly Ready (or ready boolean in synthetic spec)
+status = data.get("status", {})
+conditions = status.get("conditions", [])
+ready = None
+for c in conditions:
+    if c.get("type") == "Ready":
+        ready = (c.get("status") == "True")
+        break
 
-spec = data.get("spec", {}).get("template", {}).get("spec", {})
-actual_sa = spec.get("serviceAccountName") or audit_state.get("candidate_identity")
-if actual_sa and actual_sa != expected_sa:
+spec = data.get("spec", {})
+if not isinstance(spec, dict) or not spec:
+    sys.exit("Candidate revision spec is missing or empty")
+
+if ready is None and "ready" in spec:
+    ready = bool(spec["ready"])
+
+if ready is not True:
+    sys.exit(f"Candidate revision '{expected_rev}' is not in ready state")
+
+# 2. Service account check
+actual_sa = spec.get("serviceAccountName")
+containers = spec.get("containers", [])
+if not actual_sa and containers and isinstance(containers, list):
+    actual_sa = containers[0].get("serviceAccountName")
+
+if not actual_sa or actual_sa != expected_sa:
     sys.exit(f"Candidate serviceAccountName mismatch: got '{actual_sa}', expected '{expected_sa}'")
 
-# Extract candidate env and secrets
-actual_env = dict(audit_state.get("candidate_env", {}))
-actual_secrets = dict(audit_state.get("candidate_secrets", {}))
+# 3. Image check
+actual_image = spec.get("image")
+if not actual_image and containers and isinstance(containers, list):
+    actual_image = containers[0].get("image")
 
-containers = spec.get("containers", [])
-if containers:
-    env_data = containers[0].get("env", [])
+if not actual_image:
+    sys.exit(f"Candidate revision '{expected_rev}' has no container image defined")
+
+# 4. Extract environment variables and secrets
+actual_env = {}
+actual_secrets = {}
+
+if isinstance(spec.get("env"), dict):
+    actual_env.update(spec["env"])
+if isinstance(spec.get("secrets"), dict):
+    actual_secrets.update(spec["secrets"])
+
+if containers and isinstance(containers, list):
+    c0 = containers[0]
+    env_data = c0.get("env", [])
     if isinstance(env_data, dict):
         actual_env.update(env_data)
     elif isinstance(env_data, list):
@@ -467,22 +646,32 @@ if containers:
                 if sec_name:
                     actual_secrets[name] = f"{sec_name}:{sec_key}"
 
-# Enforce mandatory candidate invariants
-if actual_env:
-    if actual_env.get("DB_NAME") != "dtd_sandbox":
-        sys.exit(f"Candidate DB_NAME invariant failure: got '{actual_env.get('DB_NAME')}', expected 'dtd_sandbox'")
-    for flag in ["ENABLE_TRAINER_BILLING_CHECKOUT", "ENABLE_OPS_STRIPE_REFUNDS", "OPS_SELF_HEALING_ENABLED"]:
-        if actual_env.get(flag) != "0":
-            sys.exit(f"Candidate safety flag failure: {flag} is '{actual_env.get(flag)}', expected '0'")
+if not actual_env:
+    sys.exit(f"Candidate revision '{expected_rev}' has no environment variables defined")
 
-if actual_secrets:
-    if actual_secrets.get("ADMIN_PASS") != "dtd-admin-pass:4":
-        sys.exit(f"Candidate ADMIN_PASS invariant failure: got '{actual_secrets.get('ADMIN_PASS')}', expected 'dtd-admin-pass:4'")
-    if actual_secrets.get("TRAINER_ACTION_TOKEN_SECRET") != "dtd-trainer-action-token-secret:2":
-        sys.exit(f"Candidate TRAINER_ACTION_TOKEN_SECRET invariant failure: got '{actual_secrets.get('TRAINER_ACTION_TOKEN_SECRET')}', expected 'dtd-trainer-action-token-secret:2'")
+if actual_env.get("DB_NAME") != "dtd_sandbox":
+    sys.exit(f"Candidate DB_NAME invariant failure: got '{actual_env.get('DB_NAME')}', expected 'dtd_sandbox'")
+
+for flag in ["ENABLE_TRAINER_BILLING_CHECKOUT", "ENABLE_OPS_STRIPE_REFUNDS", "OPS_SELF_HEALING_ENABLED"]:
+    if actual_env.get(flag) != "0":
+        sys.exit(f"Candidate safety flag failure: {flag} is '{actual_env.get(flag)}', expected '0'")
+
+if not actual_secrets:
+    sys.exit(f"Candidate revision '{expected_rev}' has no secret bindings defined")
+
+if actual_secrets.get("ADMIN_PASS") != "dtd-admin-pass:4":
+    sys.exit(f"Candidate ADMIN_PASS invariant failure: got '{actual_secrets.get('ADMIN_PASS')}', expected 'dtd-admin-pass:4'")
+
+if actual_secrets.get("TRAINER_ACTION_TOKEN_SECRET") != "dtd-trainer-action-token-secret:2":
+    sys.exit(f"Candidate TRAINER_ACTION_TOKEN_SECRET invariant failure: got '{actual_secrets.get('TRAINER_ACTION_TOKEN_SECRET')}', expected 'dtd-trainer-action-token-secret:2'")
 
 print("CANDIDATE_INVARIANTS_VERIFIED")
 PY
+); then
+    echo "${verify_result}" >&2
+    return 64
+  fi
+  echo "${verify_result}"
 }
 
 main() {
@@ -513,9 +702,10 @@ main() {
   echo "🔍 [2/5] Capturing baseline configuration and merging reviewed sandbox delta..."
   CONFIG_RESULT="$(capture_and_merge_configuration "${SERVICE_NAME}" "${PROJECT_ID}" "${REGION}" "${SERVICE_ACCOUNT}" "${SERVICE_URL}")"
   PRIOR_SERVING_REVISION="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["prior_serving"])' "${CONFIG_RESULT}")"
+  PRIOR_SERVING_SAFE="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1]).get("prior_serving_safe", 0))' "${CONFIG_RESULT}")"
   DEPLOY_SET_ENV="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["set_env_vars"])' "${CONFIG_RESULT}")"
   DEPLOY_SET_SECRETS="$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["set_secrets"])' "${CONFIG_RESULT}")"
-  echo "Prior safe serving revision: ${PRIOR_SERVING_REVISION}"
+  echo "Prior serving revision: ${PRIOR_SERVING_REVISION} (verified safe for recovery: ${PRIOR_SERVING_SAFE})"
 
   # 3. Deploy to Google Cloud Run as no-traffic candidate with tag
   echo "🚀 [3/5] Deploying candidate ${EXPECTED_REVISION} to Google Cloud Run (no traffic, tag: ${CANDIDATE_TAG})..."
@@ -551,14 +741,70 @@ main() {
 
   # 5. Traffic promotion strictly to exact validated candidate revision
   echo "📡 [5/5] Promoting traffic strictly to exact candidate ${EXPECTED_REVISION}..."
-  gcloud run services update-traffic "${SERVICE_NAME}" \
+
+  # Concurrency check: Verify current serving traffic has not changed since baseline
+  local current_traffic_json
+  current_traffic_json="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format=json 2>&1)"
+  local current_serving
+  current_serving=$(CURRENT_JSON="${current_traffic_json}" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.loads(os.environ["CURRENT_JSON"])
+    routes = data.get("status", {}).get("traffic", [])
+    for r in routes:
+        if int(r.get("percent") or 0) == 100 and r.get("revisionName"):
+            print(r["revisionName"])
+            sys.exit(0)
+    print("")
+except Exception:
+    print("")
+PY
+  )
+
+  if [ -n "${current_serving}" ] && [ "${current_serving}" != "${PRIOR_SERVING_REVISION}" ]; then
+    echo "🚨 Concurrency conflict: current serving revision is '${current_serving}', but baseline was '${PRIOR_SERVING_REVISION}'." >&2
+    echo "Aborting promotion to prevent overwriting another operator's traffic." >&2
+    exit 1
+  fi
+
+  set +e
+  local update_output
+  update_output="$(gcloud run services update-traffic "${SERVICE_NAME}" \
     --project "${PROJECT_ID}" \
     --region "${REGION}" \
-    --to-revisions "${EXPECTED_REVISION}=100"
-  TRAFFIC_PROMOTED=1
+    --to-revisions "${EXPECTED_REVISION}=100" 2>&1)"
+  local update_status=$?
+  set -e
 
-  SERVICE_STATE=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format=json)
-  validate_deployed_traffic_response "${SERVICE_STATE}" "${EXPECTED_REVISION}"
+  # Reconcile actual routing state regardless of command returncode
+  local observed_state
+  observed_state="$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format=json 2>/dev/null || true)"
+  local actual_promoted
+  actual_promoted=$(OBSERVED_JSON="${observed_state}" EXPECTED_REV="${EXPECTED_REVISION}" python3 - <<'PY'
+import json, os, sys
+try:
+    data = json.loads(os.environ["OBSERVED_JSON"])
+    routes = data.get("status", {}).get("traffic", [])
+    for r in routes:
+        if r.get("revisionName") == os.environ["EXPECTED_REV"] and int(r.get("percent") or 0) == 100:
+            print("1")
+            sys.exit(0)
+    print("0")
+except Exception:
+    print("0")
+PY
+  )
+
+  if [ "${actual_promoted}" = "1" ]; then
+    TRAFFIC_PROMOTED=1
+  fi
+
+  if [ "${update_status}" -ne 0 ]; then
+    echo "Traffic promotion command failed with status ${update_status}: ${update_output}" >&2
+    exit "${update_status}"
+  fi
+
+  validate_deployed_traffic_response "${observed_state}" "${EXPECTED_REVISION}"
 
   DEPLOYED_SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" --project "${PROJECT_ID}" --region "${REGION}" --format="value(status.url)")
   if [ -z "${DEPLOYED_SERVICE_URL}" ]; then

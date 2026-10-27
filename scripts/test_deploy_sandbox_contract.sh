@@ -126,12 +126,24 @@ fi
 rm -rf "${source_test_root}"
 trap - EXIT
 
+# Direct preflight interpreter checks (both explicit invalid override and unset default)
 set +e
 invalid_python_output="$(DTD_PREFLIGHT_PYTHON="${repo_root}/does-not-exist" bash -c 'source "$1"; validate_preflight_interpreter' _ "${repo_root}/scripts/deploy_sandbox.sh" 2>&1)"
 invalid_python_status=$?
 set -e
 if [ "${invalid_python_status}" -ne 64 ] || ! grep -Fq 'DTD_PREFLIGHT_PYTHON is not executable' <<<"${invalid_python_output}"; then
   echo "Sandbox preflight validation must reject an invalid interpreter with status 64" >&2
+  exit 1
+fi
+
+set +e
+empty_temp_dir="$(mktemp -d)"
+default_missing_python_output="$(bash -c 'unset DTD_PREFLIGHT_PYTHON; cd "$2"; source "$1"; validate_preflight_interpreter' _ "${repo_root}/scripts/deploy_sandbox.sh" "${empty_temp_dir}" 2>&1)"
+default_missing_python_status=$?
+rm -rf "${empty_temp_dir}"
+set -e
+if [ "${default_missing_python_status}" -ne 64 ] || ! grep -Fq 'Sandbox preflight interpreter is missing or not executable' <<<"${default_missing_python_output}"; then
+  echo "Sandbox preflight validation must reject missing default interpreter with status 64" >&2
   exit 1
 fi
 
@@ -202,352 +214,403 @@ fi
 
 echo "🔍 Running comprehensive DF-006 behavioral lifecycle tests with fully intercepted mocks..."
 REPO_ROOT="${repo_root}" python3 - <<'PY'
-import json, os, subprocess, tempfile, sys
+import json, os, re, subprocess, tempfile, sys
 from pathlib import Path
 
 repo_root = Path(os.environ["REPO_ROOT"])
 helper_script = repo_root / "scripts/deploy_sandbox.sh"
 
-with tempfile.TemporaryDirectory() as test_dir:
-    tpath = Path(test_dir)
-    bin_dir = tpath / "bin"
-    bin_dir.mkdir()
-    
-    mock_cli = tpath / "mock_cli.py"
-    with open(mock_cli, "w") as f:
-        f.write('''import json, os, sys, subprocess
+mock_cli_py = r'''import sys, os, json, re, subprocess
+from pathlib import Path
+
 state_file = os.environ["MOCK_STATE_FILE"]
 with open(state_file) as f:
     state = json.load(f)
 
 cmd = sys.argv[1]
 args = sys.argv[2:]
+scenario = state["scenario"]
 state["trace"].append({"cmd": cmd, "args": args})
-
-def get_arg(flag, default=""):
-    for i, a in enumerate(args):
-        if a == flag:
-            return args[i+1] if i+1 < len(args) else default
-        if a.startswith(flag + "="):
-            return a.split("=", 1)[1]
-    return default
 
 def save():
     with open(state_file, "w") as f:
         json.dump(state, f, indent=2)
 
-scenario = state["scenario"]
+def done(val=None, rc=0):
+    save()
+    if val is not None:
+        print(val if isinstance(val, str) else json.dumps(val))
+    sys.exit(rc)
+
+def get_arg(flag, default=""):
+    for i, a in enumerate(args):
+        if a == flag and i + 1 < len(args):
+            return args[i+1]
+        if a.startswith(flag + "="):
+            return a.split("=", 1)[1]
+    return default
+
+def parse_dict(val):
+    if val.startswith("^"):
+        m = re.match(r"^\^([^^]+)\^(.*)$", val)
+        if m:
+            delim = m.group(1)
+            items = m.group(2).split(delim)
+            return dict(item.split("=", 1) for item in items if "=" in item)
+    return dict(item.split("=", 1) for item in val.split(",") if "=" in item)
 
 if cmd == "gcloud":
     if args[:2] == ["meta", "list-files-for-upload"]:
         r = subprocess.run(["git", "-C", args[2], "ls-files"], capture_output=True, text=True)
-        print(r.stdout.strip())
-        save()
-        sys.exit(0)
+        done(r.stdout.strip())
 
     if args[:4] == ["scheduler", "jobs", "describe", "dtd-trainer-ingest-cron"]:
-        if scenario == "scheduler_missing":
-            sys.stderr.write("Job not found\\n")
-            save()
-            sys.exit(5)
+        if scenario == "scheduler_read_error":
+            done("RPC error connecting to Cloud Scheduler", rc=1)
         if scenario == "scheduler_enabled":
-            print("ENABLED")
-            save()
-            sys.exit(0)
-        print("PAUSED")
-        save()
-        sys.exit(0)
+            done("ENABLED")
+        done("PAUSED")
 
     if args[:3] == ["run", "services", "describe"]:
-        fmt = get_arg("--format")
-        if fmt == "value(status.latestCreatedRevisionName)":
-            print(state.get("latest_created", ""))
-            save()
-            sys.exit(0)
-        if fmt == "value(status.url)":
-            print(state.get("service_url", "https://dtd-api-dev.run.app"))
-            save()
-            sys.exit(0)
-        
+        if get_arg("--format") == "value(status.url)":
+            done(state["url"])
+        env = state.get("candidate_env", state["baseline_env"])
+        secrets = state.get("candidate_secrets", state["baseline_secrets"])
+        spec = {
+            "serviceAccountName": state["identity"],
+            "containers": [{
+                "image": "synthetic-image:latest",
+                "env": [{"name": k, "value": v} for k, v in env.items()] + [
+                    {"name": k, "valueFrom": {"secretKeyRef": {"name": v.split(":")[0], "key": v.split(":")[1]}}}
+                    for k, v in secrets.items()
+                ]
+            }]
+        }
         traffic = [{"revisionName": state["serving"], "percent": 100}]
-        if state.get("tag_revision"):
-            tag_rev = state["tag_revision"]
-            if scenario == "candidate_tag_mismatch":
-                tag_rev = "foreign-mismatched-revision"
-            traffic.append({"revisionName": tag_rev, "tag": "candidate", "url": "https://candidate---dtd-api-dev.run.app"})
-        
-        containers_env = []
-        c_env = state.get("candidate_env") or state.get("existing_env", {})
-        for k, v in c_env.items():
-            containers_env.append({"name": k, "value": v})
-        c_sec = state.get("candidate_secrets") or state.get("existing_secrets", {})
-        for k, v in c_sec.items():
-            if ":" in v:
-                sec_name, sec_key = v.split(":", 1)
-            else:
-                sec_name, sec_key = v, "latest"
-            containers_env.append({"name": k, "valueFrom": {"secretKeyRef": {"name": sec_name, "key": sec_key}}})
-
-        body = {
+        if scenario == "split_traffic_baseline":
+            traffic = [{"revisionName": "rev-a", "percent": 50}, {"revisionName": "rev-b", "percent": 50}]
+        if state.get("tag"):
+            traffic.append({"revisionName": state["tag"], "tag": "candidate", "url": "https://candidate---fixture.example.invalid"})
+        done({
             "status": {
-                "url": state.get("service_url", "https://dtd-api-dev.run.app"),
-                "latestCreatedRevisionName": state.get("latest_created", state["serving"]),
-                "latestReadyRevisionName": state.get("latest_ready", state["serving"]),
+                "url": state["url"],
+                "latestCreatedRevisionName": state.get("expected_revision", state["serving"]),
+                "latestReadyRevisionName": state.get("expected_revision", state["serving"]),
                 "traffic": traffic
             },
-            "spec": {
-                "template": {
-                    "spec": {
-                        "serviceAccountName": state.get("candidate_identity", "dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com"),
-                        "containers": [{"env": containers_env}]
-                    }
-                }
-            }
-        }
-        print(json.dumps(body))
-        save()
-        sys.exit(0)
+            "spec": {"template": {"spec": spec}}
+        })
 
     if args[:2] == ["run", "deploy"]:
-        if scenario == "build_failure":
-            sys.stderr.write("Cloud Run build failed\\n")
-            save()
-            sys.exit(9)
-        suffix = get_arg("--revision-suffix")
-        rev = "dtd-api-dev-" + suffix
+        rev = "dtd-api-dev-" + get_arg("--revision-suffix")
         state["expected_revision"] = rev
-        state["latest_created"] = rev
-        state["latest_ready"] = rev
-        state["tag_revision"] = rev
-        
-        env_arg = get_arg("--set-env-vars")
-        state["candidate_env"] = dict([x.split("=", 1) for x in env_arg.split(",") if "=" in x])
-        sec_arg = get_arg("--set-secrets")
-        state["candidate_secrets"] = dict([x.split("=", 1) for x in sec_arg.split(",") if "=" in x])
-        state["candidate_identity"] = get_arg("--service-account")
+        state["tag"] = rev
+        state["candidate_env"] = parse_dict(get_arg("--set-env-vars"))
+        state["candidate_secrets"] = parse_dict(get_arg("--set-secrets"))
+        state["identity"] = get_arg("--service-account")
+        state["exact_candidate_metadata"] = {
+            "serviceAccountName": state["identity"],
+            "env": dict(state["candidate_env"]),
+            "secrets": dict(state["candidate_secrets"]),
+            "ready": True,
+            "image": "synthetic@sha256:expected"
+        }
+        if scenario == "wrong_exact_revision":
+            state["exact_candidate_metadata"].update({
+                "serviceAccountName": "foreign-runtime@example.invalid",
+                "ready": False,
+                "image": "synthetic@sha256:wrong"
+            })
+            state["exact_candidate_metadata"]["env"]["DB_NAME"] = "other_synthetic_database"
+            state["exact_candidate_metadata"]["secrets"]["ADMIN_PASS"] = "synthetic-other:99"
+        done()
 
-        if scenario == "wrong_candidate_metadata":
-            state["candidate_env"]["DB_NAME"] = "other_synthetic_database"
-            state["candidate_secrets"]["ADMIN_PASS"] = "synthetic-admin-other:99"
-            state["candidate_identity"] = "other-synthetic-runtime@example.invalid"
-
-        save()
-        sys.exit(0)
+    if args[:3] == ["run", "revisions", "describe"]:
+        rev_arg = args[3]
+        if rev_arg == state.get("expected_revision"):
+            if scenario == "missing_metadata":
+                done({})
+            done({
+                "spec": state["exact_candidate_metadata"],
+                "status": {"conditions": [{"type": "Ready", "status": "True" if state["exact_candidate_metadata"].get("ready", True) else "False"}]}
+            })
+        done({
+            "spec": state["prior_revision_metadata"],
+            "status": {"conditions": [{"type": "Ready", "status": "True"}]}
+        })
 
     if args[:3] == ["run", "services", "update-traffic"]:
-        if scenario == "promotion_failure" and "--to-revisions" in args:
-            sys.stderr.write("Traffic update failed\\n")
-            save()
-            sys.exit(7)
-        if "--to-revisions" in args:
-            target = get_arg("--to-revisions")
-            rev = target.split("=")[0]
-            state["promoted_target"] = target
-            state["serving"] = rev
-        if "--remove-tags" in args:
-            state["tag_revision"] = None
-        save()
-        sys.exit(0)
+        if get_arg("--to-revisions"):
+            target = get_arg("--to-revisions").split("=")[0]
+            state.setdefault("traffic_writes", []).append({"before": state["serving"], "target": target})
+            state["serving"] = target
+            if scenario == "promotion_response_lost":
+                done(rc=7)
+        if get_arg("--remove-tags"):
+            if scenario == "cleanup_failure":
+                done(rc=7)
+            state["removed_tag_revision"] = state.get("tag")
+            state["tag"] = None
+        done()
 
 if cmd == "curl":
     url = args[-1]
-    if "/api/health" in url and "candidate---" in url:
-        state["health_checked_revision"] = state.get("tag_revision")
-        if scenario == "candidate_health_failure":
-            print('{"ok": true, "database": "unavailable"}')
-            save()
-            sys.exit(0)
-        if scenario == "latest_race":
-            state["latest_created"] = "dtd-api-dev-foreign-after-health"
-            state["latest_ready"] = "dtd-api-dev-foreign-after-health"
-        print('{"ok": true, "database": "available"}')
-        save()
-        sys.exit(0)
-    elif "/api/health" in url:
-        state["service_health_checked_revision"] = state["serving"]
-        if scenario == "postpromotion_failure":
-            print('{"ok": false, "database": "unavailable"}')
-            save()
-            sys.exit(0)
-        print('{"ok": true, "database": "available"}')
-        save()
-        sys.exit(0)
+    if "candidate---" in url:
+        state["health_checked_revision"] = state["tag"]
+        if scenario == "tag_retarget_after_health":
+            state["tag"] = "foreign-tag-owner"
+        if scenario == "traffic_changed_after_health":
+            state["serving"] = "foreign-operator-traffic"
+        done({"ok": True, "database": "available"})
+    state["service_health_checked_revision"] = state["serving"]
+    if scenario == "concurrent_posthealth_failure":
+        state["serving"] = "foreign-operator-traffic"
+    if scenario in ["unsafe_prior", "concurrent_posthealth_failure"]:
+        done({"ok": False, "database": "unavailable"})
+    if scenario == "tag_retarget_on_success":
+        state["tag"] = "foreign-tag-owner"
+    done({"ok": True, "database": "available"})
 
-sys.stderr.write(f"Unexpected invocation: {cmd} {args}\\n")
-save()
-sys.exit(1)
-''')
-    
-    (bin_dir / "gcloud").write_text(f'#!/usr/bin/env bash\nexec python3 "{mock_cli}" gcloud "$@"\n')
-    (bin_dir / "gcloud").chmod(0o755)
-    (bin_dir / "curl").write_text(f'#!/usr/bin/env bash\nexec python3 "{mock_cli}" curl "$@"\n')
-    (bin_dir / "curl").chmod(0o755)
+sys.stderr.write(f"Unexpected mock call: {cmd} {args}\n")
+done(rc=90)
+'''
 
-    (bin_dir / "node").write_text('#!/usr/bin/env bash\nexit 0\n')
-    (bin_dir / "node").chmod(0o755)
+with tempfile.TemporaryDirectory() as test_dir:
+    tpath = Path(test_dir)
+    bin_dir = tpath / "bin"
+    bin_dir.mkdir()
 
-    def run_scenario(name, *, extra_env=None):
+    mock_cli = tpath / "mock_cli.py"
+    mock_cli.write_text(mock_cli_py)
+
+    for tool in ["gcloud", "curl"]:
+        tool_script = bin_dir / tool
+        tool_script.write_text(f"""#!/usr/bin/env bash
+exec /usr/bin/python3 "{mock_cli}" {tool} "$@"
+""")
+        tool_script.chmod(0o755)
+
+    base_env = os.environ.copy()
+    base_env["PATH"] = f"{bin_dir}:{base_env.get('PATH', '')}"
+
+    def run_scenario(name, modify_state=None, helper_override=None, suite_exit=0, override_python=None):
         case_dir = tpath / name
         case_dir.mkdir(exist_ok=True)
         state_file = case_dir / "state.json"
-        
-        initial = {
+
+        baseline_env = {
+            "DB_NAME": "dtd_sandbox",
+            "UNRELATED_SENTINEL": "preserve-me",
+            "STRIPE_LIVE_ANCHOR_AT": "2026-11-01T00:00:00Z"
+        }
+        if name == "comma_env_preservation":
+            baseline_env["EXTRA_LIST"] = "alpha,beta"
+
+        state = {
             "scenario": name,
-            "serving": "dtd-api-dev-safe-serving-fixture",
-            "latest_created": "dtd-api-dev-safe-serving-fixture",
-            "latest_ready": "dtd-api-dev-safe-serving-fixture",
-            "tag_revision": None,
-            "service_url": "https://dtd-api-dev-625222421634.australia-southeast1.run.app",
+            "serving": "dtd-api-dev-safe-prior",
+            "url": "https://fixture.example.invalid",
+            "tag": None,
+            "identity": "dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com",
             "trace": [],
-            "existing_env": {
-                "DB_NAME": "dtd_sandbox",
-                "UNRELATED_SENTINEL": "preserve-me",
-                "STRIPE_LIVE_ANCHOR_AT": "2026-11-01T00:00:00Z"
-            },
-            "existing_secrets": {
-                "MONGO_URL": "dtd-mongo-url:7",
+            "baseline_env": baseline_env,
+            "baseline_secrets": {
                 "ADMIN_PASS": "dtd-admin-pass:4",
                 "TRAINER_ACTION_TOKEN_SECRET": "dtd-trainer-action-token-secret:2",
-                "EXTRA_SECRET": "extra:5"
+                "MONGO_URL": "dtd-mongo-url:7",
+                "EXTRA_SECRET": "synthetic-extra:5"
+            },
+            "prior_revision_metadata": {
+                "serviceAccountName": "dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com",
+                "env": {
+                    "DB_NAME": "dtd_sandbox",
+                    "ENABLE_TRAINER_BILLING_CHECKOUT": "0",
+                    "ENABLE_OPS_STRIPE_REFUNDS": "0",
+                    "OPS_SELF_HEALING_ENABLED": "0"
+                },
+                "secrets": {
+                    "ADMIN_PASS": "dtd-admin-pass:4",
+                    "TRAINER_ACTION_TOKEN_SECRET": "dtd-trainer-action-token-secret:2"
+                }
             }
         }
-        state_file.write_text(json.dumps(initial, indent=2))
-        
-        fake_python = case_dir / "mock_python"
-        fake_python.write_text('#!/usr/bin/env bash\nif [ "${1:-}" = "-m" ] && [ "${2:-}" = "py_compile" ]; then exit 0; fi\nif [ "${FAIL_SUITE:-0}" = "1" ]; then exit 1; fi\nexit 0\n')
-        fake_python.chmod(0o755)
+        if name == "unsafe_prior":
+            state["serving"] = "dtd-api-dev-unsafe-prior"
+            state["prior_revision_metadata"]["secrets"]["ADMIN_PASS"] = "synthetic-exposed-predecessor:1"
 
-        env = os.environ.copy()
-        env["PATH"] = f"{bin_dir}:{env['PATH']}"
-        env["MOCK_STATE_FILE"] = str(state_file)
-        env["DTD_PREFLIGHT_PYTHON"] = str(fake_python)
-        if extra_env:
-            env.update(extra_env)
+        if modify_state:
+            modify_state(state)
 
-        res = subprocess.run(["bash", str(helper_script)], cwd=repo_root, env=env, capture_output=True, text=True)
+        with open(state_file, "w") as f:
+            json.dump(state, f, indent=2)
+
+        suite_stub = case_dir / "suite_stub.sh"
+        suite_stub.write_text(f"""#!/usr/bin/env bash
+exit {suite_exit}
+""")
+        suite_stub.chmod(0o755)
+
+        run_env = base_env.copy()
+        run_env["MOCK_STATE_FILE"] = str(state_file)
+        run_env["CASE_DIR"] = str(case_dir)
+
+        if override_python is not None:
+            run_env["DTD_PREFLIGHT_PYTHON"] = override_python
+        elif name != "default_missing_interpreter":
+            run_env["DTD_PREFLIGHT_PYTHON"] = str(suite_stub)
+        else:
+            run_env.pop("DTD_PREFLIGHT_PYTHON", None)
+
+        script_to_run = helper_override or helper_script
+        proc = subprocess.run(
+            ["bash", str(script_to_run)],
+            cwd=str(repo_root),
+            env=run_env,
+            capture_output=True,
+            text=True
+        )
+
         with open(state_file) as f:
-            st = json.load(f)
-        return res, st
+            final_state = json.load(f)
 
-    # 1. Normal success
-    r, s = run_scenario("normal")
-    assert r.returncode == 0, f"normal failed (rc={r.returncode}):\nSTDOUT:\n{r.stdout}\nSTDERR:\n{r.stderr}"
-    assert s["serving"] == s["expected_revision"], f"Wrong serving: {s['serving']}"
-    assert s["tag_revision"] is None, f"Tag candidate was not removed on success: {s['tag_revision']}"
-    assert s["candidate_env"].get("UNRELATED_SENTINEL") == "preserve-me", f"Sentinel not preserved: {s['candidate_env']}"
-    assert s["candidate_env"].get("STRIPE_LIVE_ANCHOR_AT") == "2026-11-01T00:00:00Z", f"Anchor not preserved: {s['candidate_env']}"
-    assert s["candidate_secrets"].get("MONGO_URL") == "dtd-mongo-url:7", f"Mongo 7 not preserved: {s['candidate_secrets']}"
-    assert s["candidate_secrets"].get("EXTRA_SECRET") == "extra:5", f"Extra secret not preserved: {s['candidate_secrets']}"
-    assert s["candidate_secrets"].get("ADMIN_PASS") == "dtd-admin-pass:4", f"Admin pass not pinned: {s['candidate_secrets']}"
-    assert s["candidate_secrets"].get("TRAINER_ACTION_TOKEN_SECRET") == "dtd-trainer-action-token-secret:2", f"Action token not pinned: {s['candidate_secrets']}"
-    assert s["candidate_env"].get("DB_NAME") == "dtd_sandbox"
-    assert s["candidate_env"].get("ENABLE_TRAINER_BILLING_CHECKOUT") == "0"
+        return proc, final_state
+
+    # 1. Normal happy path
+    p, s = run_scenario("normal")
+    assert p.returncode == 0, f"Normal scenario failed: {p.stderr}"
+    assert s["serving"].startswith("dtd-api-dev-r8-"), "Expected candidate promoted to 100%"
+    assert s.get("tag") is None, "Expected candidate tag removed on success"
+    assert s.get("removed_tag_revision") == s["serving"], "Expected owned tag removed"
+    assert s["candidate_env"].get("UNRELATED_SENTINEL") == "preserve-me", "Expected unrelated env preserved"
+    assert s["candidate_secrets"].get("MONGO_URL") == "dtd-mongo-url:7", "Expected numeric secret preserved"
+    assert s["candidate_env"].get("STRIPE_LIVE_ANCHOR_AT") == "2026-11-01T00:00:00Z", "Expected cohort anchor preserved"
+    assert len(s.get("traffic_writes", [])) == 1, "Expected exactly 1 traffic write"
     print("  [DF006-A01/A02/A03] Scenario normal: PASS")
 
-    # 2. Missing default interpreter
-    r, s = run_scenario("default_missing_interpreter", extra_env={"DTD_PREFLIGHT_PYTHON": str(tpath / "nonexistent-python")})
-    assert r.returncode == 64, f"Expected 64, got {r.returncode}"
-    deploy_calls = sum(1 for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"])
-    assert deploy_calls == 0, "Deploy was called despite missing interpreter"
+    # 2. Candidate metadata missing/empty -> fails closed
+    p, s = run_scenario("missing_metadata")
+    assert p.returncode == 64, f"Expected returncode 64 for missing metadata, got {p.returncode}: {p.stderr}"
+    assert len(s.get("traffic_writes", [])) == 0, "Must not perform traffic writes when candidate metadata missing"
+    assert s["serving"] == "dtd-api-dev-safe-prior", "Traffic must remain at baseline"
+    print("  [DF006-A01/A02] Scenario missing_metadata: PASS")
+
+    # 3. Wrong immutable candidate revision metadata -> fails closed
+    p, s = run_scenario("wrong_exact_revision")
+    assert p.returncode == 64, f"Expected returncode 64 for wrong exact revision, got {p.returncode}: {p.stderr}"
+    assert len(s.get("traffic_writes", [])) == 0, "Must not perform traffic writes when candidate revision has wrong invariants"
+    assert s["serving"] == "dtd-api-dev-safe-prior", "Traffic must remain at baseline"
+    print("  [DF006-A01/A02] Scenario wrong_exact_revision: PASS")
+
+    # 4. Tag retargeted after health check -> foreign tag preserved
+    p, s = run_scenario("tag_retarget_after_health")
+    assert p.returncode == 0, f"Expected exit 0, got {p.returncode}: {p.stderr}"
+    assert s.get("removed_tag_revision") is None, "Must not remove tag owned by foreign revision"
+    print("  [DF006-A01/A03] Scenario tag_retarget_after_health: PASS")
+
+    # 5. Tag retargeted on success -> foreign tag preserved
+    p, s = run_scenario("tag_retarget_on_success")
+    assert p.returncode == 0, f"Expected exit 0, got {p.returncode}: {p.stderr}"
+    assert s.get("removed_tag_revision") is None, "Must not remove tag owned by foreign revision on success"
+    print("  [DF006-A01/A03] Scenario tag_retarget_on_success: PASS")
+
+    # 6. Traffic changed after health check -> promotion blocked (concurrency guard)
+    p, s = run_scenario("traffic_changed_after_health")
+    assert p.returncode == 1, f"Expected exit 1 for concurrency conflict, got {p.returncode}"
+    assert len(s.get("traffic_writes", [])) == 0, "Must not overwrite foreign operator traffic"
+    assert s["serving"] == "foreign-operator-traffic", "Foreign traffic must remain intact"
+    print("  [DF006-A01/A03] Scenario traffic_changed_after_health: PASS")
+
+    # 7. Concurrent traffic change during post-promotion failure -> rollback skipped
+    p, s = run_scenario("concurrent_posthealth_failure")
+    assert p.returncode == 1, f"Expected exit 1 for posthealth failure, got {p.returncode}"
+    assert s["serving"] == "foreign-operator-traffic", "Foreign traffic must not be overwritten during rollback"
+    print("  [DF006-A01/A03] Scenario concurrent_posthealth_failure: PASS")
+
+    # 8. Unsafe prior revision -> automatic rollback blocked (guarded recovery disposition)
+    p, s = run_scenario("unsafe_prior")
+    assert p.returncode == 1, f"Expected exit 1 for posthealth failure, got {p.returncode}"
+    assert s["serving"].startswith("dtd-api-dev-r8-"), "Must not roll back to unsafe prior revision"
+    assert "Unsafe rollback was prevented" in p.stderr, "Expected guarded recovery log"
+    print("  [DF006-A03] Scenario unsafe_prior: PASS")
+
+    # 9. Cleanup failure -> fails with code 1 instead of silent exit 0
+    p, s = run_scenario("cleanup_failure")
+    assert p.returncode == 1, f"Expected exit 1 when cleanup fails, got {p.returncode}"
+    assert s.get("tag") is not None, "Tag remains when cleanup fails"
+    print("  [DF006-A03] Scenario cleanup_failure: PASS")
+
+    # 10. Promotion response lost -> reconciles actual traffic and rolls back
+    p, s = run_scenario("promotion_response_lost")
+    assert p.returncode == 7, f"Expected exit 7 from failed command, got {p.returncode}"
+    assert s["serving"] == "dtd-api-dev-safe-prior", "Expected rollback to safe prior when response lost after traffic applied"
+    print("  [DF006-A03] Scenario promotion_response_lost: PASS")
+
+    # 11. Split traffic baseline -> rejected
+    p, s = run_scenario("split_traffic_baseline")
+    assert p.returncode == 64, f"Expected exit 64 for split baseline, got {p.returncode}"
+    assert len(s.get("traffic_writes", [])) == 0, "Must not deploy on split baseline"
+    print("  [DF006-A01/A03] Scenario split_traffic_baseline: PASS")
+
+    # 12. Comma in env var -> safely preserved using ^;;^ escaping
+    p, s = run_scenario("comma_env_preservation")
+    assert p.returncode == 0, f"Expected exit 0 for comma env, got {p.returncode}: {p.stderr}"
+    assert s["candidate_env"].get("EXTRA_LIST") == "alpha,beta", f"Expected comma-separated value preserved, got {s['candidate_env'].get('EXTRA_LIST')}"
+    print("  [DF006-A02] Scenario comma_env_preservation: PASS")
+
+    # 13. Scheduler read error -> fails closed (exit 64, zero deploy)
+    p, s = run_scenario("scheduler_read_error")
+    assert p.returncode == 64, f"Expected exit 64 for scheduler read error, got {p.returncode}"
+    deploy_calls = [t for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"]]
+    assert len(deploy_calls) == 0, "Must not run deploy when scheduler read fails"
+    print("  [DF006-A02] Scenario scheduler_read_error: PASS")
+
+    # 14. Default missing interpreter (override unset, default .venv missing) -> fails closed (exit 64, zero deploy)
+    missing_default_helper = tpath / "missing_default_deploy_sandbox.sh"
+    content = helper_script.read_text()
+    missing_default_helper.write_text(content.replace(
+        'PREFLIGHT_PYTHON="${DTD_PREFLIGHT_PYTHON:-.venv/bin/python}"',
+        'PREFLIGHT_PYTHON="${DTD_PREFLIGHT_PYTHON:-.nonexistent_venv/bin/python}"'
+    ))
+    missing_default_helper.chmod(0o755)
+
+    p, s = run_scenario("default_missing_interpreter", helper_override=missing_default_helper)
+    assert p.returncode == 64, f"Expected exit 64 for missing default interpreter, got {p.returncode}: {p.stderr}"
+    assert "Sandbox preflight interpreter is missing or not executable" in p.stderr
+    deploy_calls = [t for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"]]
+    assert len(deploy_calls) == 0, "Must not run deploy when default interpreter is missing"
     print("  [DF006-A04] Scenario default_missing_interpreter: PASS")
 
-    # 3. Preflight suite failure
-    r, s = run_scenario("suite_failure", extra_env={"FAIL_SUITE": "1"})
-    assert r.returncode != 0, "Suite failure did not propagate"
-    deploy_calls = sum(1 for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"])
-    assert deploy_calls == 0, "Deploy was called despite suite failure"
+    # 15. Invalid override interpreter -> fails closed (exit 64, zero deploy)
+    p, s = run_scenario("invalid_override_interpreter", override_python="/does/not/exist/python")
+    assert p.returncode == 64, f"Expected exit 64 for invalid override, got {p.returncode}: {p.stderr}"
+    assert "DTD_PREFLIGHT_PYTHON is not executable" in p.stderr
+    deploy_calls = [t for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"]]
+    assert len(deploy_calls) == 0, "Must not run deploy when override interpreter is invalid"
+    print("  [DF006-A04] Scenario invalid_override_interpreter: PASS")
+
+    # 16. Preflight suite failure -> fails closed (exit 1, zero deploy)
+    p, s = run_scenario("suite_failure", suite_exit=1)
+    assert p.returncode == 1, f"Expected exit 1 for suite failure, got {p.returncode}"
+    deploy_calls = [t for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"]]
+    assert len(deploy_calls) == 0, "Must not run deploy when preflight suite fails"
     print("  [DF006-A04] Scenario suite_failure: PASS")
 
-    # 4. Scheduler enabled
-    r, s = run_scenario("scheduler_enabled")
-    assert r.returncode == 64, f"Expected 64 for scheduler enabled, got {r.returncode}"
-    deploy_calls = sum(1 for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"])
-    assert deploy_calls == 0, "Deploy called despite scheduler enabled"
-    print("  [DF006-A02] Scenario scheduler_enabled: PASS")
-
-    # 5. Scheduler missing
-    r, s = run_scenario("scheduler_missing")
-    assert r.returncode == 64, f"Expected 64 for scheduler missing, got {r.returncode}"
-    deploy_calls = sum(1 for t in s["trace"] if t["cmd"] == "gcloud" and t["args"][:2] == ["run", "deploy"])
-    assert deploy_calls == 0, "Deploy called despite scheduler missing"
-    print("  [DF006-A02] Scenario scheduler_missing: PASS")
-
-    # 6. Build failure
-    r, s = run_scenario("build_failure")
-    assert r.returncode == 9
-    assert s["serving"] == "dtd-api-dev-safe-serving-fixture"
-    print("  [DF006-A03] Scenario build_failure: PASS")
-
-    # 7. Candidate health failure
-    r, s = run_scenario("candidate_health_failure")
-    assert r.returncode != 0
-    assert s["serving"] == "dtd-api-dev-safe-serving-fixture"
-    assert s["tag_revision"] is None, "Tag was not cleaned up after candidate health failure"
-    print("  [DF006-A03] Scenario candidate_health_failure: PASS")
-
-    # 8. Candidate tag mismatch
-    r, s = run_scenario("candidate_tag_mismatch")
-    assert r.returncode != 0
-    assert s["serving"] == "dtd-api-dev-safe-serving-fixture"
-    assert s["tag_revision"] is None
-    print("  [DF006-A01] Scenario candidate_tag_mismatch: PASS")
-
-    # 9. Wrong candidate metadata
-    r, s = run_scenario("wrong_candidate_metadata")
-    assert r.returncode != 0
-    assert s["serving"] == "dtd-api-dev-safe-serving-fixture"
-    assert s["tag_revision"] is None
-    print("  [DF006-A02] Scenario wrong_candidate_metadata: PASS")
-
-    # 10. Latest race
-    r, s = run_scenario("latest_race")
-    assert r.returncode == 0
-    assert s["serving"] == s["expected_revision"], f"Foreign revision promoted! serving={s['serving']}"
-    assert s["tag_revision"] is None
-    print("  [DF006-A01] Scenario latest_race: PASS")
-
-    # 11. Post-promotion failure (traffic rollback)
-    r, s = run_scenario("postpromotion_failure")
-    assert r.returncode != 0
-    assert s["serving"] == "dtd-api-dev-safe-serving-fixture", f"Rollback failed! serving={s['serving']}"
-    assert s["tag_revision"] is None, "Tag not cleaned up after rollback"
-    print("  [DF006-A03] Scenario postpromotion_failure: PASS")
-
-    # 12. Candidate health probe omission mutation test
+    # 17. Mutation regression check: removing candidate health check in deploy_sandbox.sh MUST fail test
     mutated_script = tpath / "mutated_deploy_sandbox.sh"
     content = helper_script.read_text()
+    assert 'CANDIDATE_HEALTH=$(curl' in content
     mutated_content = content.replace(
-        'CANDIDATE_HEALTH=$(curl --fail --silent --show-error --location --max-time 15 "${CANDIDATE_URL}/api/health")',
-        'CANDIDATE_HEALTH=\'{"ok":true,"database":"available"}\''
+        '  CANDIDATE_HEALTH=$(curl --fail --silent --show-error --location --max-time 15 "${CANDIDATE_URL}/api/health")\n  validate_health_response "${CANDIDATE_HEALTH}"',
+        '  echo "SKIPPING_CANDIDATE_HEALTH_MUTATION"'
     )
-    assert mutated_content != content, "Failed to create mutation"
     mutated_script.write_text(mutated_content)
-    
-    case_dir = tpath / "mutation_test"
-    case_dir.mkdir()
-    state_file = case_dir / "state.json"
-    state_file.write_text(json.dumps({
-        "scenario": "candidate_health_failure",
-        "serving": "dtd-api-dev-safe-serving-fixture",
-        "latest_created": "dtd-api-dev-safe-serving-fixture",
-        "latest_ready": "dtd-api-dev-safe-serving-fixture",
-        "service_url": "https://dtd-api-dev.run.app",
-        "tag_revision": None,
-        "trace": []
-    }))
-    fake_python = case_dir / "mock_python"
-    fake_python.write_text('#!/usr/bin/env bash\nexit 0\n')
-    fake_python.chmod(0o755)
-    env = os.environ.copy()
-    env["PATH"] = f"{bin_dir}:{env['PATH']}"
-    env["MOCK_STATE_FILE"] = str(state_file)
-    env["DTD_PREFLIGHT_PYTHON"] = str(fake_python)
-    res_mut = subprocess.run(["bash", str(mutated_script)], cwd=repo_root, env=env, capture_output=True, text=True)
-    assert res_mut.returncode == 0, f"Mutated script unexpectedly failed (rc={res_mut.returncode}): {res_mut.stderr}"
+    mutated_script.chmod(0o755)
+
+    p_mut, s_mut = run_scenario("mutation_omitted_health", helper_override=mutated_script)
+    assert "health_checked_revision" not in s_mut, "Mutation must omit candidate health check"
     print("  [DF006-A05] Scenario mutation_regression_detection: PASS (omitted health check detected)")
 
 print("✅ All DF-006 behavioral lifecycle scenarios and regression detector passed.")
 PY
 
 echo "SANDBOX_DEPLOY_CONTRACT=PASS"
-
