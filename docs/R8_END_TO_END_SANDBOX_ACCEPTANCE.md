@@ -1,12 +1,30 @@
 # R8 Integrated Developer-Sandbox Product Acceptance Evidence
 
-> **26 October reconciliation:** PR #20 integrated reviewed source `79b8165` as `4e54968`; the old isolated/remote-branch instructions in this dated packet are historical. The separately approved 25 October developer credential containment reused the previous image, so corrected R4–R8 runtime acceptance remains PARTIAL. Use `DTD_CURRENT_STATE.md` and `DTD_ROADMAP_EXECUTION_REGISTER.md` for current source/runtime, safe credentials and the remaining exact-SHA acceptance package; do not repeat merged implementation. CDR-028 and the revised commercial strategy integrate the two Antigravity sessions without granting new production or billing authority. The observations and test evidence below retain their original date and scope.
+> **Historical 26 October reconciliation (superseded for backend runtime by the 28 October checkpoint below):** PR #20 integrated reviewed source `79b8165` as `4e54968`; the old isolated/remote-branch instructions in this dated packet are historical. The separately approved 25 October developer credential containment reused the previous image, so corrected R4–R8 runtime acceptance remains PARTIAL. Use `DTD_CURRENT_STATE.md` and `DTD_ROADMAP_EXECUTION_REGISTER.md` for current source/runtime, safe credentials and the remaining exact-SHA acceptance package; do not repeat merged implementation. CDR-028 and the revised commercial strategy integrate the two Antigravity sessions without granting new production or billing authority. The observations and test evidence below retain their original date and scope.
 
 **Evidence date:** 24 October 2026 (Australia/Melbourne).
 
 **Disposition: PARTIAL — integrated runtime acceptance remains open.**
 
 The prior implementation-authored `ACCEPTED` statement is superseded. Source provenance is established for the earlier deployment, but independent review found additional workflow defects. Local corrections and passing tests do not establish their deployment or full R8 acceptance.
+
+## 28 October backend source and release-helper checkpoint
+
+**Disposition:** backend source/runtime alignment and the bounded release-helper/matching checks below are verified. **R8 remains PARTIAL.** Earlier observations retain their date/scope. This checkpoint supersedes the 25 October backend image only; replacement credentials, zero safety flags and paused ingestion remain required.
+
+| Evidence | Verified result |
+|---|---|
+| Source and code acceptance | `171a1d73fec4729b656d978ee12ce741c66c0384`; independent cumulative review accepted A01–A05 at local tooling scope; 52 behavioral cases, source/parser/preflight checks passed. |
+| CI / deployment preflight | Verify run `40545815322` and CodeQL `40545815139` passed on that exact source. The actual deployment preflight passed 710 backend tests. |
+| Runtime | `dogtrainersdirectory-dev` / `australia-southeast1` / `dtd-api-dev`; `dtd-api-dev-r8-171a1d73-4e0775f361` serves 100%; digest `sha256:6b5ab458e56cc51ccb7be5fd9da8dc9cea959c0412f2378a54177c804f79d1f5`. |
+| Source provenance | Successful Cloud Build `ce9619b2-ce8d-42d7-9df1-9110c1a212f1`; all 46 uploaded source files matched the accepted backend byte-for-byte, with no extra/missing uploads. Build result and immutable revision resolve to the same image digest. |
+| Configuration and cleanup | All prior 30 environment values and 9 secret references preserved. Dedicated runtime identity, `dtd_sandbox`, admin/action pins 4/2, checkout/refunds/self-healing 0, trainer-ingest PAUSED. Candidate health/configuration preceded promotion; fresh reads confirmed health/database available, exact 100% routing and no temporary tag. |
+| Bounded API matching | One disposable match-ready trainer returned through `/api/match`; matching event persisted without raw description in that event; exact match visible in protected matching Ops. Owned trainer/event/context removed and public fixture absence verified. No enquiry, recipient delivery or billing was exercised. Anonymous matching Ops read returned 401. |
+| Recovery / management limits | Existing account CLI/browser renewal and fresh control-plane reads succeeded. Prior containment revision retains compatible pins/flags and remains available. Ordinary failure cases have local mock evidence; no live rollback or provider-failure injection occurred. Device-independent management recovery remains an existing DF-001 limitation. |
+
+Backend source files are unchanged by the documentation reconciliation that records this checkpoint; the deployed source SHA above is retained explicitly. Detailed audit/test results and sanitised release evidence remain outside active repository documentation. No credential replacement, production promotion, billing activation or ingestion activation occurred.
+
+**Next package:** complete only the still-open named DF-030/047/051/052 and SR/CF runtime/provider scenarios below, including required browser lifecycle/fallback evidence, before the owner audit. The matching runner is not the browser questionnaire → enquiry → delivery journey, and this checkpoint does not close R8.
 
 ## Exact source and environment boundaries
 
