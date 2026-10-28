@@ -4,7 +4,7 @@ set -euo pipefail
 # Fetch sandbox-only secrets into this child process. Nothing prints a secret.
 PROJECT_ID="dogtrainersdirectory-dev"
 export MONGO_URL="$(gcloud secrets versions access latest --project="${PROJECT_ID}" --secret=dtd-mongo-url)"
-export ADMIN_PASS="$(gcloud secrets versions access latest --project="${PROJECT_ID}" --secret=dtd-admin-pass)"
+export ADMIN_PASS="$(gcloud secrets versions access 4 --project="${PROJECT_ID}" --secret=dtd-admin-pass)"
 export DTD_SANDBOX_PROJECT_ID="${PROJECT_ID}"
 trap 'unset MONGO_URL ADMIN_PASS DTD_SANDBOX_PROJECT_ID' EXIT
 

@@ -31,28 +31,28 @@ Backend source files are unchanged by the documentation reconciliation that reco
 **Disposition: PARTIAL — bounded API and contact/Ops-list subcases observed; full lifecycle, delivered OTP receipt, browser recovery, and selected case UI remain open.** R8 remains PARTIAL for its entire named matrix (SR-01–06, DF-052).
 
 - **Execution command:** `bash scripts/run_sandbox_trainer_and_support.sh` (`scripts/verify_sandbox_trainer_and_support.py`)
-- **Run ID:** `4462bde68906` (timestamp: `2026-10-28T12:17:23Z`)
-- **Runtime environment:** `dogtrainersdirectory-dev` (625222421634), API revision `dtd-api-dev-r8-171a1d73-4e0775f361` (100% traffic), Web revision `dtd-web-dev-00026-rvv` (100% traffic), MongoDB Atlas `dtd_sandbox`. (Observed sandbox metadata: dedicated runtime identity, admin/action pins 4/2, checkout/refunds/self-healing 0, `dtd-trainer-ingest-cron` PAUSED).
+- **Run ID:** `4462bde68906` (timestamp: `2026-10-28T12:17:23Z`; bound strictly to deployed candidate image built from reviewed source snapshot `171a1d7`, not commit `388253c`)
+- **Runtime environment:** `dogtrainersdirectory-dev` (625222421634), API revision `dtd-api-dev-r8-171a1d73-4e0775f361` (100% traffic; built from source snapshot `171a1d7`), Web revision `dtd-web-dev-00026-rvv` (100% traffic), MongoDB Atlas `dtd_sandbox`. (Observed sandbox metadata: dedicated runtime identity, admin/action pins 4/2, checkout/refunds/self-healing 0, `dtd-trainer-ingest-cron` PAUSED).
 - **Observed subcases & evidence:**
   1. **Trainer Claim & Session Renewal (DF-030 / DF-051 / SR-03 / CF-03):**
      - Public profile retrieval returns HTTP 200 (`claim_status: unclaimed`).
      - Negative guards: Mismatched email rejected with HTTP 403; SMS provider fail-closed with HTTP 503.
-     - Claim initiated: Challenge ID generated, Resend test-sink message ID `01a18271-b65f-7bc2-b381-01f05d665894` dispatched, database audit log `trainer_claim_started` recorded.
+     - Claim initiated: Challenge ID generated, Resend test-sink message ID `01a18271-b65f-7bc2-b381-01f05d665894` returned by API. (Database audit log querying was not executed in this run).
      - Invalid OTP rejected with HTTP 400 and attempt counter incremented.
-     - In-memory HMAC derivation of OTP from challenge digest tested in runner (note: privileged OTP derivation does not constitute delivered trainer proof; trainer email receipt, delivered challenge verification, and browser recovery remain unverified); HMAC session token issued, audit log `trainer_claim_verified` recorded.
+     - In-memory HMAC derivation of OTP from challenge digest tested in runner (note: privileged OTP derivation does not constitute delivered trainer proof; trainer email receipt, delivered challenge verification, and browser recovery remain unverified); HMAC session token issued by API. (Database audit log querying was not executed in this run).
      - Challenge replay guard: Re-submitting consumed challenge rejected with HTTP 409.
      - Protected prefill: Anonymous and forged tokens return HTTP 401; valid session token returns HTTP 200.
-     - Session renewal (DF-030/DF-051): `intent: "session_recovery"` returns HTTP 200 with `is_renewal: true`, renewed OTP verified via in-memory derivation, fresh session token issued, audit log `trainer_session_renewed` recorded.
+     - Session renewal (DF-030/DF-051): `intent: "session_recovery"` returns HTTP 200 with `is_renewal: true`, renewed OTP verified via in-memory derivation, fresh session token issued. (Database audit log querying was not executed in this run).
      - Capability confirmation: Missing confirmation statement returns HTTP 422.
      - Catchment selection (DF-035): Specific nominated suburbs confirmed with `match_ready: true`; Melbourne-wide catchment update confirmed with updated projection.
      - Public storefront reflects claimed status and confirmed capabilities.
   2. **First-Party Support & Oversight Lifecycle (DF-047 / SR-04 / CF-04):**
      - Customer intake via `POST /support/contact`: HTTP 200, `case_id: sup_20261028_b13ebb01`, Resend test-sink notification, persisted in `support_threads` (`severity: high`, `status: open`, `category: complaint`).
-     - Oversight protection: Anonymous returns 401; authenticated with `ADMIN_PASS` returns 200 with full thread detail.
+     - Oversight protection: Anonymous returns 401 on `/api/oversight` and `/api/oversight/support/threads`; authenticated with `ADMIN_PASS` returns 200 with thread detail. (Auth enforcement is strictly attributed to these tested endpoints).
      - Operator reply guard: Cannot close ticket via reply endpoint (HTTP 400).
      - Operator reply: Dispatched via Resend test sink, thread transitioned to `status: awaiting_customer_reply`.
-     - Duplicate reply prevention: Identical reply returns `duplicate: true`, no duplicate email dispatched.
-     - Guarded closure: Notes < 10 chars rejected (HTTP 400/422); substantive resolution notes verified and closed (`status: resolved`), audit log `support_thread_closed` recorded.
+     - Duplicate reply prevention: Identical reply returns API response `duplicate: true`. (Provider-level email suppression was not verified via Resend mailbox/logs).
+     - Guarded closure: Notes < 10 chars rejected (HTTP 400/422); substantive resolution notes accepted with API `status: resolved`. (Audit log collection was not queried in this run).
   3. **Live Headless Browser UI Verification (Playwright Chromium 1440x900):**
      - `/contact` form filled and submitted: verified "Message Received" confirmation screen with case reference `sup_20261028_d5cb5cf9`, saved screenshot `sandbox_contact_page_submitted.png`.
      - `/ops` Support Cases view: authenticated session, sidebar navigation to `[data-testid='ops-nav-support_threads']`, loaded `[data-testid='ops-support-view']` showing case list (screenshot `sandbox_support_cases_ops.png`; note: detail pane was not selected or exercised; trainer browser recovery was not exercised).

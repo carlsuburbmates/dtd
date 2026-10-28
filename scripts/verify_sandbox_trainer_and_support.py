@@ -143,80 +143,389 @@ def _require_sandbox(mongo_url: str, admin_pass: str) -> None:
     _validate_sandbox_mongo_url(mongo_url)
 
 
-def capture_sandbox_runtime_metadata() -> Dict[str, Any]:
-    print("[1/5] Capturing Sandbox Runtime Metadata...")
-    meta: Dict[str, Any] = {
-        "project": SANDBOX_PROJECT,
-        "database": SANDBOX_DB,
+def enforce_sandbox_preflight(
+    project_id: str = SANDBOX_PROJECT,
+    runner: Any = None,
+) -> Dict[str, Any]:
+    print("[1/5] Enforcing Sandbox Preflight & Verifying Runtime Scope...")
+
+    def _run_cmd(cmd: List[str]) -> Any:
+        if runner is not None:
+            try:
+                return runner(cmd, text=True, stderr=subprocess.PIPE)
+            except TypeError:
+                return runner(cmd)
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.PIPE)
+
+    # 1. API Service describe
+    try:
+        api_raw = _run_cmd([
+            "gcloud", "run", "services", "describe", "dtd-api-dev",
+            f"--project={project_id}",
+            "--region=australia-southeast1",
+            "--format=json",
+        ])
+        api_data = json.loads(api_raw) if isinstance(api_raw, str) else api_raw
+    except Exception as e:
+        raise AcceptanceFailure(f"Failed to read Cloud Run service dtd-api-dev: {e}")
+
+    status = api_data.get("status", {})
+    traffic = status.get("traffic", [])
+    serving_rev = status.get("latestReadyRevisionName", "")
+    if not serving_rev:
+        raise AcceptanceFailure("Preflight check failed: dtd-api-dev has no latestReadyRevisionName.")
+
+    pct_serving = sum(t.get("percent", 0) for t in traffic if t.get("revisionName") == serving_rev)
+    if pct_serving != 100:
+        raise AcceptanceFailure(
+            f"Preflight check failed: dtd-api-dev does not direct 100% traffic to latest ready revision {serving_rev} (found {pct_serving}%)."
+        )
+
+    template_spec = api_data.get("spec", {}).get("template", {}).get("spec", {})
+    sa = template_spec.get("serviceAccountName", "")
+    if "dtd-api-dev-runtime@dogtrainersdirectory-dev.iam.gserviceaccount.com" not in sa:
+        raise AcceptanceFailure(f"Preflight check failed: unexpected API service account: {sa}")
+
+    containers = template_spec.get("containers", [{}])
+    env_list = containers[0].get("env", []) if containers else []
+    env_map = {e.get("name"): e.get("value") for e in env_list if "value" in e}
+    env_secret_map = {
+        e.get("name"): e.get("valueFrom", {}).get("secretKeyRef", {}).get("name")
+        for e in env_list if "valueFrom" in e
+    }
+
+    volumes = template_spec.get("volumes", [])
+    vol_secrets = {v.get("name"): v.get("secret", {}).get("secretName") for v in volumes if "secret" in v}
+
+    if env_map.get("DB_NAME") != "dtd_sandbox":
+        raise AcceptanceFailure(
+            f"Preflight check failed: dtd-api-dev targets unexpected database {env_map.get('DB_NAME')!r}, expected 'dtd_sandbox'."
+        )
+    if env_map.get("ENABLE_TRAINER_BILLING_CHECKOUT") != "0":
+        raise AcceptanceFailure(
+            f"Preflight check failed: Safety flag ENABLED in sandbox: ENABLE_TRAINER_BILLING_CHECKOUT={env_map.get('ENABLE_TRAINER_BILLING_CHECKOUT')!r}"
+        )
+    if env_map.get("ENABLE_OPS_STRIPE_REFUNDS") != "0":
+        raise AcceptanceFailure(
+            f"Preflight check failed: Safety flag ENABLED in sandbox: ENABLE_OPS_STRIPE_REFUNDS={env_map.get('ENABLE_OPS_STRIPE_REFUNDS')!r}"
+        )
+    if env_map.get("OPS_SELF_HEALING_ENABLED") != "0":
+        raise AcceptanceFailure(
+            f"Preflight check failed: Safety flag ENABLED in sandbox: OPS_SELF_HEALING_ENABLED={env_map.get('OPS_SELF_HEALING_ENABLED')!r}"
+        )
+
+    has_mongo_secret = (
+        env_secret_map.get("MONGO_URL") == "dtd-mongo-url"
+        or vol_secrets.get("secret-mongo-url") == "dtd-mongo-url"
+    )
+    has_admin_secret = (
+        env_secret_map.get("ADMIN_PASS") == "dtd-admin-pass"
+        or vol_secrets.get("secret-admin-pass") == "dtd-admin-pass"
+    )
+    if not has_mongo_secret:
+        raise AcceptanceFailure("Preflight check failed: MONGO_URL does not reference dtd-mongo-url.")
+    if not has_admin_secret:
+        raise AcceptanceFailure("Preflight check failed: ADMIN_PASS does not reference dtd-admin-pass.")
+
+    # 2. Web Service describe
+    try:
+        web_raw = _run_cmd([
+            "gcloud", "run", "services", "describe", "dtd-web-dev",
+            f"--project={project_id}",
+            "--region=australia-southeast1",
+            "--format=json",
+        ])
+        web_data = json.loads(web_raw) if isinstance(web_raw, str) else web_raw
+    except Exception as e:
+        raise AcceptanceFailure(f"Failed to read Cloud Run service dtd-web-dev: {e}")
+
+    web_status = web_data.get("status", {})
+    web_traffic = web_status.get("traffic", [])
+    web_rev = web_status.get("latestReadyRevisionName", "")
+    if not web_rev:
+        raise AcceptanceFailure("Preflight check failed: dtd-web-dev has no latestReadyRevisionName.")
+    web_pct = sum(t.get("percent", 0) for t in web_traffic if t.get("revisionName") == web_rev)
+    if web_pct != 100:
+        raise AcceptanceFailure(
+            f"Preflight check failed: dtd-web-dev traffic not 100% on serving revision {web_rev} (found {web_pct}%)."
+        )
+
+    # 3. Cloud Scheduler state
+    try:
+        cron_raw = _run_cmd([
+            "gcloud", "scheduler", "jobs", "describe", "dtd-trainer-ingest-cron",
+            f"--project={project_id}",
+            "--location=australia-southeast1",
+            "--format=value(state)",
+        ])
+        if isinstance(cron_raw, dict):
+            cron_state = str(cron_raw.get("state", "")).strip()
+        else:
+            cron_state = str(cron_raw).strip()
+    except Exception as e:
+        raise AcceptanceFailure(f"Failed to read Cloud Scheduler job dtd-trainer-ingest-cron: {e}")
+
+    if cron_state != "PAUSED":
+        raise AcceptanceFailure(f"Preflight check failed: Cloud Scheduler job dtd-trainer-ingest-cron is {cron_state}.")
+
+    return {
+        "project": project_id,
+        "database": env_map.get("DB_NAME"),
+        "api_revision": serving_rev,
+        "web_revision": web_rev,
+        "ingest_cron_state": cron_state,
+        "service_account": sa,
+        "safe_env": {
+            "DB_NAME": env_map.get("DB_NAME"),
+            "ENABLE_TRAINER_BILLING_CHECKOUT": env_map.get("ENABLE_TRAINER_BILLING_CHECKOUT"),
+            "ENABLE_OPS_STRIPE_REFUNDS": env_map.get("ENABLE_OPS_STRIPE_REFUNDS"),
+            "OPS_SELF_HEALING_ENABLED": env_map.get("OPS_SELF_HEALING_ENABLED"),
+        },
+        "managed_secret_references": {
+            "MONGO_URL": env_secret_map.get("MONGO_URL"),
+            "ADMIN_PASS": env_secret_map.get("ADMIN_PASS"),
+        },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def execute_deterministic_teardown(
+    db: Any,
+    trainer_id: str,
+    tracked_case_ids: Set[str],
+    run_emails: List[str],
+    admin_pass: str,
+    api_url: str = API_URL,
+    http_request_fn: Any = None,
+) -> Dict[str, Any]:
+    print("\n[5/5] Executing Deterministic Teardown & Cleanup...")
+    request_fn = http_request_fn or _http_request
+    del_counts: Dict[str, Any] = {
+        "trainers": 0,
+        "claim_events": 0,
+        "trainer_notifications": 0,
+        "trainer_audit": 0,
+        "trainer_obligations": 0,
+        "support_threads": {},
+        "support_notifications": {},
+        "support_audit": {},
+        "ops_obligations": {},
+    }
+    cleanup_errors: List[str] = []
+
+    # 1. Discover any database support threads created under this run's unique emails or trainer_id
     try:
-        api_rev = subprocess.check_output(
-            [
-                "gcloud", "run", "services", "describe", "dtd-api-dev",
-                f"--project={SANDBOX_PROJECT}",
-                "--region=australia-southeast1",
-                "--format=value(status.latestReadyRevisionName)",
-            ],
-            text=True,
-            stderr=subprocess.PIPE,
-        ).strip()
-        meta["api_revision"] = api_rev
-        print(f"      Sandbox API revision: {api_rev}")
+        support_coll = getattr(db, "support_threads", None)
+        if support_coll is not None:
+            query = {
+                "$or": [
+                    {"sender_email": {"$in": run_emails}},
+                    {"trainer_id": trainer_id},
+                ]
+            }
+            discovered = support_coll.find(query, {"case_id": 1})
+            for doc in discovered:
+                cid = doc.get("case_id")
+                if cid:
+                    tracked_case_ids.add(cid)
     except Exception as e:
-        meta["api_revision_lookup_error"] = str(e)
+        cleanup_errors.append(f"discovery error: {e}")
+
+    # 2. Delete synthetic trainer fixtures and dependent records (always attempted, even if ack failed)
+    try:
+        del_counts["trainers"] = db.trainers.delete_many({"id": trainer_id}).deleted_count
+    except Exception as e:
+        cleanup_errors.append(f"trainers delete: {e}")
+    try:
+        del_counts["claim_events"] = db.claim_events.delete_many({"trainer_id": trainer_id}).deleted_count
+    except Exception as e:
+        cleanup_errors.append(f"claim_events delete: {e}")
+    try:
+        del_counts["trainer_notifications"] = db.notification_events.delete_many({"target_id": trainer_id}).deleted_count
+    except Exception as e:
+        cleanup_errors.append(f"trainer_notifications delete: {e}")
+    try:
+        del_counts["trainer_audit"] = db.audit_log.delete_many({"target": trainer_id}).deleted_count
+    except Exception as e:
+        cleanup_errors.append(f"trainer_audit delete: {e}")
+    try:
+        del_counts["trainer_obligations"] = db.ops_obligations.delete_many(
+            {"$or": [{"entity_id": trainer_id}, {"obligation_id": f"trainer:{trainer_id}"}]}
+        ).deleted_count
+    except Exception as e:
+        cleanup_errors.append(f"trainer_obligations delete: {e}")
+
+    # 3. Delete tracked support threads independently with full case ID keys and actual schema
+    for cid in sorted(tracked_case_ids):
+        try:
+            del_counts["support_threads"][cid] = db.support_threads.delete_many({"case_id": cid}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"support_thread {cid} delete: {e}")
+        try:
+            del_counts["support_notifications"][cid] = db.notification_events.delete_many({"target_id": cid}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"support_notif {cid} delete: {e}")
+        try:
+            del_counts["support_audit"][cid] = db.audit_log.delete_many({"target": cid}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"support_audit {cid} delete: {e}")
+        try:
+            del_counts["ops_obligations"][cid] = db.ops_obligations.delete_many(
+                {
+                    "$or": [
+                        {"entity_id": cid},
+                        {"obligation_id": cid},
+                        {"obligation_id": f"support:{cid}"},
+                        {"obligation_id": f"support_{cid}"},
+                    ]
+                }
+            ).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"ops_obligations {cid} delete: {e}")
+
+    # 4. Direct datastore leftovers count
+    leftovers: Dict[str, Any] = {}
+    try:
+        leftovers["trainers"] = db.trainers.count_documents({"id": trainer_id})
+    except Exception as e:
+        cleanup_errors.append(f"trainers count error: {e}")
+        leftovers["trainers"] = -1
 
     try:
-        web_rev = subprocess.check_output(
-            [
-                "gcloud", "run", "services", "describe", "dtd-web-dev",
-                f"--project={SANDBOX_PROJECT}",
-                "--region=australia-southeast1",
-                "--format=value(status.latestReadyRevisionName)",
-            ],
-            text=True,
-            stderr=subprocess.PIPE,
-        ).strip()
-        meta["web_revision"] = web_rev
-        print(f"      Sandbox Web revision: {web_rev}")
+        leftovers["claim_events"] = db.claim_events.count_documents({"trainer_id": trainer_id})
     except Exception as e:
-        meta["web_revision_lookup_error"] = str(e)
+        cleanup_errors.append(f"claim_events count error: {e}")
+        leftovers["claim_events"] = -1
 
     try:
-        cron_state = subprocess.check_output(
-            [
-                "gcloud", "scheduler", "jobs", "describe", "dtd-trainer-ingest-cron",
-                f"--project={SANDBOX_PROJECT}",
-                "--location=australia-southeast1",
-                "--format=value(state)",
-            ],
-            text=True,
-            stderr=subprocess.PIPE,
-        ).strip()
-        meta["ingest_cron_state"] = cron_state
-        print(f"      Cloud Scheduler job dtd-trainer-ingest-cron state: {cron_state}")
+        leftovers["trainer_notifications"] = db.notification_events.count_documents({"target_id": trainer_id})
     except Exception as e:
-        meta["ingest_cron_lookup_error"] = str(e)
+        cleanup_errors.append(f"trainer_notifications count error: {e}")
+        leftovers["trainer_notifications"] = -1
 
-    return meta
+    try:
+        leftovers["trainer_audit"] = db.audit_log.count_documents({"target": trainer_id})
+    except Exception as e:
+        cleanup_errors.append(f"trainer_audit count error: {e}")
+        leftovers["trainer_audit"] = -1
+
+    try:
+        leftovers["trainer_obligations"] = db.ops_obligations.count_documents(
+            {"$or": [{"entity_id": trainer_id}, {"obligation_id": f"trainer:{trainer_id}"}]}
+        )
+    except Exception as e:
+        cleanup_errors.append(f"trainer_obligations count error: {e}")
+        leftovers["trainer_obligations"] = -1
+
+    for cid in sorted(tracked_case_ids):
+        try:
+            leftovers[f"thread_{cid}"] = db.support_threads.count_documents({"case_id": cid})
+        except Exception as e:
+            cleanup_errors.append(f"thread {cid} count error: {e}")
+            leftovers[f"thread_{cid}"] = -1
+
+        try:
+            leftovers[f"notif_{cid}"] = db.notification_events.count_documents({"target_id": cid})
+        except Exception as e:
+            cleanup_errors.append(f"notif {cid} count error: {e}")
+            leftovers[f"notif_{cid}"] = -1
+
+        try:
+            leftovers[f"audit_{cid}"] = db.audit_log.count_documents({"target": cid})
+        except Exception as e:
+            cleanup_errors.append(f"audit {cid} count error: {e}")
+            leftovers[f"audit_{cid}"] = -1
+
+        try:
+            leftovers[f"obligations_{cid}"] = db.ops_obligations.count_documents(
+                {
+                    "$or": [
+                        {"entity_id": cid},
+                        {"obligation_id": cid},
+                        {"obligation_id": f"support:{cid}"},
+                        {"obligation_id": f"support_{cid}"},
+                    ]
+                }
+            )
+        except Exception as e:
+            cleanup_errors.append(f"obligations {cid} count error: {e}")
+            leftovers[f"obligations_{cid}"] = -1
+
+    # 5. Public 404 absence checks
+    endpoint_404s: Dict[str, bool] = {}
+    try:
+        status, _ = request_fn(f"{api_url}/api/trainers/{trainer_id}")
+        endpoint_404s[f"trainer_{trainer_id}"] = (status == 404)
+    except Exception as e:
+        cleanup_errors.append(f"trainer 404 check: {e}")
+        endpoint_404s[f"trainer_{trainer_id}"] = False
+
+    for cid in sorted(tracked_case_ids):
+        try:
+            status, _ = request_fn(
+                f"{api_url}/api/oversight/support/threads/{cid}",
+                headers={"X-Admin-Pass": admin_pass},
+            )
+            endpoint_404s[f"thread_{cid}"] = (status == 404)
+        except Exception as e:
+            cleanup_errors.append(f"thread {cid} 404 check: {e}")
+            endpoint_404s[f"thread_{cid}"] = False
+
+    all_leftovers_zero = (
+        len(leftovers) > 0 and all(count == 0 for count in leftovers.values())
+    )
+    all_endpoints_404 = (
+        len(endpoint_404s) > 0 and all(res is True for res in endpoint_404s.values())
+    )
+    is_clean = all_leftovers_zero and all_endpoints_404 and len(cleanup_errors) == 0
+
+    report = {
+        "status": "CLEAN" if is_clean else "FAILED",
+        "deleted": del_counts,
+        "leftovers": leftovers,
+        "endpoint_404s": endpoint_404s,
+        "cleanup_errors": cleanup_errors,
+        "all_leftovers_zero": all_leftovers_zero,
+        "all_endpoints_404": all_endpoints_404,
+        "tracked_case_ids": sorted(tracked_case_ids),
+    }
+    print(f"      Cleanup status: {report['status']}. Leftovers: {leftovers}. Errors: {cleanup_errors}")
+    return report
 
 
 async def run_acceptance(
     mongo_url: str,
     admin_pass: str,
-    otp: str = "",
     artifact_dir: Optional[Path] = None,
+    preflight_runner: Any = None,
+    headless: bool = True,
 ) -> Dict[str, Any]:
     _require_sandbox(mongo_url, admin_pass)
-    metadata = capture_sandbox_runtime_metadata()
+    metadata = enforce_sandbox_preflight(SANDBOX_PROJECT, runner=preflight_runner)
 
     target_artifact_dir = artifact_dir or DEFAULT_ARTIFACT_DIR
     target_artifact_dir.mkdir(parents=True, exist_ok=True)
 
     run_id = uuid.uuid4().hex[:12]
     trainer_id = f"sandbox-trainer-{run_id}"
-    complaint_email = f"sandbox-support-{run_id}-api@delivered.resend.dev"
-    browser_email = f"sandbox-support-{run_id}-browser@delivered.resend.dev"
+    complaint_email = f"delivered+sandbox-support-{run_id}-api@resend.dev"
+    browser_email = f"delivered+sandbox-support-{run_id}-browser@resend.dev"
+
+    # Durable run manifest written before any mutations
+    manifest = {
+        "run_id": run_id,
+        "trainer_id": trainer_id,
+        "complaint_email": complaint_email,
+        "browser_email": browser_email,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "project": SANDBOX_PROJECT,
+        "database": SANDBOX_DB,
+    }
+    manifest_path = target_artifact_dir / f"run_manifest_{run_id}.json"
+    try:
+        manifest_path.write_text(json.dumps(manifest, indent=2))
+    except Exception as e:
+        print(f"      [!] Warning: failed to write run manifest to disk: {e}")
 
     tracked_case_ids: Set[str] = set()
     test_exception: Optional[Exception] = None
@@ -338,66 +647,14 @@ async def run_acceptance(
         evidence["stages"]["trainer_claim_guards"] = "PASSED"
 
         # 3b. Delivered Challenge Verification
-        if otp:
-            print("      - Testing OTP verification using supplied operator challenge code...")
-            status, verify_resp = _http_request(
-                f"{API_URL}/api/trainers/{trainer_id}/claim/verify",
-                method="POST",
-                payload={"otp": otp, "claim_event_id": claim_event_id},
-            )
-            assert status == 200, f"Expected 200 for valid verify, got {status} {verify_resp}"
-            assert verify_resp.get("claim_status") == "claimed"
-            session_token = verify_resp.get("session", {}).get("token")
-            assert session_token, "Missing claim session token"
-            print("      - Claim verified: Trainer claimed, HMAC session token issued.")
-            evidence["stages"]["trainer_claim_verification"] = "PASSED"
-
-            # Replay guard: re-verifying same challenge fails -> 409
-            status, _ = _http_request(
-                f"{API_URL}/api/trainers/{trainer_id}/claim/verify",
-                method="POST",
-                payload={"otp": otp, "claim_event_id": claim_event_id},
-            )
-            assert status == 409, f"Expected 409 on replayed verify, got {status}"
-            print("      - Guard: Replay challenge rejection -> 409 OK")
-
-            # Capabilities prefill auth
-            status, prefill_resp = _http_request(
-                f"{API_URL}/api/trainers/{trainer_id}/capabilities/prefill",
-                headers={"X-Trainer-Claim-Session": session_token},
-            )
-            assert status == 200, f"Expected 200 for authenticated prefill, got {status}"
-            print("      - Session token authentication verified on /capabilities/prefill -> 200 OK")
-            evidence["stages"]["trainer_capabilities_prefill"] = "PASSED"
-
-            # Catchment confirmation
-            status, confirm_resp = _http_request(
-                f"{API_URL}/api/trainers/{trainer_id}/capabilities/confirm",
-                method="POST",
-                headers={"X-Trainer-Claim-Session": session_token},
-                payload={
-                    "specialties": ["puppy_training"],
-                    "service_formats": ["in_home"],
-                    "life_stages": ["puppy"],
-                    "training_philosophy": "positive_reinforcement_force_free",
-                    "serviced_suburbs": ["Richmond"],
-                    "catchment_type": "specific_suburbs",
-                    "delivery_constraints": {"in_home_available": True, "travel_distance_km": 15.0},
-                    "confirmation_statement": True,
-                },
-            )
-            assert status == 200, f"Expected 200 for capability confirmation, got {status}"
-            assert confirm_resp.get("match_ready") is True
-            print("      - Specific suburbs catchment & capabilities confirmed: match_ready=True")
-            evidence["stages"]["trainer_catchment_confirmation"] = "PASSED"
-        else:
-            evidence["stages"]["trainer_claim_verification"] = (
-                "NOT_VERIFIED (operator OTP or provider mailbox receipt required; privileged secret derivation removed per audit)"
-            )
-            evidence["stages"]["trainer_capabilities_prefill"] = "SKIPPED (requires verified session)"
-            evidence["stages"]["trainer_session_renewal"] = "SKIPPED (requires verified session)"
-            evidence["stages"]["trainer_catchment_confirmation"] = "SKIPPED (requires verified session)"
-            print("      - Notice: OTP verification skipped (requires operator OTP entry; privileged derivation prohibited).")
+        # Note: Privileged secret derivation prohibited per audit; delivered OTP verification requires external mailbox access.
+        evidence["stages"]["trainer_claim_verification"] = (
+            "NOT_VERIFIED (operator OTP or provider mailbox receipt required; privileged secret derivation removed per audit)"
+        )
+        evidence["stages"]["trainer_capabilities_prefill"] = "SKIPPED (requires verified session)"
+        evidence["stages"]["trainer_session_renewal"] = "SKIPPED (requires verified session)"
+        evidence["stages"]["trainer_catchment_confirmation"] = "SKIPPED (requires verified session)"
+        print("      - Notice: Trainer claim verification marked NOT_VERIFIED (external provider mailbox receipt required; privileged derivation prohibited).")
 
         # =====================================================================
         # PART B: Customer Support Lifecycle Verification
@@ -535,7 +792,7 @@ async def run_acceptance(
             from playwright.async_api import async_playwright
 
             async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
+                browser = await p.chromium.launch(headless=headless)
                 context = await browser.new_context(
                     viewport={"width": 1440, "height": 900},
                     user_agent="DTD-Acceptance-Playwright/1.0",
@@ -569,12 +826,20 @@ async def run_acceptance(
                 # 2. Ops Support Cases View
                 print("      - Browser: Loading /ops with session credentials...")
                 await page.goto(f"{WEB_URL}/ops", wait_until="networkidle", timeout=30000)
-                await page.evaluate(f"""
-                    sessionStorage.setItem("dtd-admin-pass", JSON.stringify({{
-                        value: "{admin_pass}",
+
+                # Verify page origin matches expected WEB_URL before injecting credentials
+                parsed_expected = urlparse(WEB_URL)
+                current_url = page.url
+                parsed_current = urlparse(current_url)
+                if parsed_current.scheme != parsed_expected.scheme or parsed_current.netloc != parsed_expected.netloc:
+                    raise AcceptanceFailure(f"Page navigated to unexpected origin: {current_url}")
+
+                await page.evaluate("""(passVal) => {
+                    sessionStorage.setItem("dtd-admin-pass", JSON.stringify({
+                        value: passVal,
                         expiresAt: Date.now() + 3600000
-                    }}));
-                """)
+                    }));
+                }""", admin_pass)
                 await page.reload(wait_until="networkidle")
 
                 # Click "Support Cases"
@@ -610,117 +875,42 @@ async def run_acceptance(
         # PART D: Deterministic Teardown & Absence Verifications
         # =====================================================================
         print("\n[5/5] Executing Deterministic Teardown & Cleanup...")
-        del_counts: Dict[str, Any] = {
-            "trainers": 0,
-            "claim_events": 0,
-            "trainer_notifications": 0,
-            "trainer_audit": 0,
-            "support_threads": {},
-            "support_notifications": {},
-            "support_audit": {},
-            "ops_obligations": {},
-        }
-        cleanup_errors: List[str] = []
-
-        # 1. Discover any database support threads created under this run's unique emails:
+        cleanup_report = execute_deterministic_teardown(
+            db=db,
+            trainer_id=trainer_id,
+            tracked_case_ids=tracked_case_ids,
+            run_emails=[complaint_email, browser_email],
+            admin_pass=admin_pass,
+            api_url=API_URL,
+            http_request_fn=_http_request,
+        )
         try:
-            discovered = db.support_threads.find(
-                {"email": {"$in": [complaint_email, browser_email]}},
-                {"case_id": 1},
-            )
-            for doc in discovered:
-                if doc.get("case_id"):
-                    tracked_case_ids.add(doc["case_id"])
-        except Exception as e:
-            cleanup_errors.append(f"discovery error: {e}")
+            client.close()
+        except Exception:
+            pass
 
-        # 2. Delete synthetic trainer fixtures and dependent records
-        if inserted_trainer:
-            try:
-                del_counts["trainers"] = db.trainers.delete_many({"id": trainer_id, "test_fixture": True}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"trainers delete: {e}")
-            try:
-                del_counts["claim_events"] = db.claim_events.delete_many({"trainer_id": trainer_id}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"claim_events delete: {e}")
-            try:
-                del_counts["trainer_notifications"] = db.notification_events.delete_many({"target_id": trainer_id}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"trainer_notifications delete: {e}")
-            try:
-                del_counts["trainer_audit"] = db.audit_log.delete_many({"target": trainer_id}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"trainer_audit delete: {e}")
+        evidence["cleanup"] = cleanup_report
 
-        # 3. Delete tracked support threads independently with full case ID keys
-        for cid in sorted(tracked_case_ids):
-            try:
-                del_counts["support_threads"][cid] = db.support_threads.delete_many({"case_id": cid}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"support_thread {cid} delete: {e}")
-            try:
-                del_counts["support_notifications"][cid] = db.notification_events.delete_many({"target_id": cid}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"support_notif {cid} delete: {e}")
-            try:
-                del_counts["support_audit"][cid] = db.audit_log.delete_many({"target": cid}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"support_audit {cid} delete: {e}")
-            try:
-                del_counts["ops_obligations"][cid] = db.ops_obligations.delete_many({"case_id": cid}).deleted_count
-            except Exception as e:
-                cleanup_errors.append(f"ops_obligations {cid} delete: {e}")
-
-        # 4. Direct datastore leftovers count
-        leftovers: Dict[str, int] = {}
-        try:
-            leftovers["trainers"] = db.trainers.count_documents({"id": trainer_id})
-            leftovers["claim_events"] = db.claim_events.count_documents({"trainer_id": trainer_id})
-            leftovers["trainer_notifications"] = db.notification_events.count_documents({"target_id": trainer_id})
-            leftovers["trainer_audit"] = db.audit_log.count_documents({"target": trainer_id})
-            for cid in sorted(tracked_case_ids):
-                leftovers[f"thread_{cid}"] = db.support_threads.count_documents({"case_id": cid})
-                leftovers[f"notif_{cid}"] = db.notification_events.count_documents({"target_id": cid})
-                leftovers[f"audit_{cid}"] = db.audit_log.count_documents({"target": cid})
-                leftovers[f"obligations_{cid}"] = db.ops_obligations.count_documents({"case_id": cid})
-        except Exception as e:
-            cleanup_errors.append(f"leftovers count error: {e}")
-
-        # 5. Public 404 absence checks
-        endpoint_404s: Dict[str, bool] = {}
-        try:
-            status, _ = _http_request(f"{API_URL}/api/trainers/{trainer_id}")
-            endpoint_404s[f"trainer_{trainer_id}"] = (status == 404)
-        except Exception as e:
-            cleanup_errors.append(f"trainer 404 check: {e}")
-
-        for cid in sorted(tracked_case_ids):
-            try:
-                status, _ = _http_request(
-                    f"{API_URL}/api/oversight/support/threads/{cid}",
-                    headers={"X-Admin-Pass": admin_pass},
-                )
-                endpoint_404s[f"thread_{cid}"] = (status == 404)
-            except Exception as e:
-                cleanup_errors.append(f"thread {cid} 404 check: {e}")
-
-        client.close()
-
-        evidence["cleanup"] = {
-            "deleted": del_counts,
-            "leftovers": leftovers,
-            "endpoint_404s": endpoint_404s,
-            "cleanup_errors": cleanup_errors,
-            "all_leftovers_zero": all(count == 0 for count in leftovers.values()) if leftovers else True,
-            "tracked_case_ids": sorted(tracked_case_ids),
-        }
-        print(f"      Cleanup completed for tracked IDs {sorted(tracked_case_ids)}. Leftovers: {leftovers}. Errors: {cleanup_errors}")
+    if test_exception is not None and cleanup_report.get("status") == "FAILED":
+        evidence["status"] = "EXECUTION_AND_CLEANUP_FAILED"
+        evidence["error"] = (
+            f"Scenario failed: {test_exception}; Cleanup failed: "
+            f"{cleanup_report.get('cleanup_errors')}, leftovers: {cleanup_report.get('leftovers')}"
+        )
+        raise AcceptanceFailure(evidence["error"]) from test_exception
 
     if test_exception is not None:
         evidence["status"] = "EXECUTION_FAILED"
         evidence["error"] = str(test_exception)
         raise test_exception
+
+    if cleanup_report.get("status") == "FAILED":
+        evidence["status"] = "CLEANUP_FAILED"
+        evidence["error"] = (
+            f"Cleanup failed: {cleanup_report.get('cleanup_errors')}, "
+            f"leftovers: {cleanup_report.get('leftovers')}"
+        )
+        raise AcceptanceFailure(evidence["error"])
 
     evidence["status"] = "STAGE_CHECKS_COMPLETED"
     return evidence
@@ -729,7 +919,7 @@ async def run_acceptance(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", help="Execute acceptance against sandbox.")
-    parser.add_argument("--otp", type=str, default="", help="Optional 6-digit OTP for verified claim journey.")
+    parser.add_argument("--headless", action="store_true", default=True, help="Run browser checks in headless mode (default: True).")
     parser.add_argument("--artifact-dir", type=str, default="", help="Optional directory to save browser screenshots.")
     args = parser.parse_args()
 
@@ -753,8 +943,8 @@ def main() -> int:
         evidence = asyncio.run(run_acceptance(
             mongo_url=mongo_url,
             admin_pass=admin_pass,
-            otp=args.otp,
             artifact_dir=artifact_dir,
+            headless=args.headless,
         ))
         print("\n=== ACCEPTANCE EVIDENCE ===")
         print(json.dumps(evidence, indent=2))
