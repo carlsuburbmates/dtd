@@ -26,6 +26,42 @@ Backend source files are unchanged by the documentation reconciliation that reco
 
 **Next package:** complete only the still-open named DF-030/047/051/052 and SR/CF runtime/provider scenarios below, including required browser lifecycle/fallback evidence, before the owner audit. The matching runner is not the browser questionnaire → enquiry → delivery journey, and this checkpoint does not close R8.
 
+## 28 October trainer storefront, session renewal and support lifecycle checkpoint (PARTIAL)
+
+**Disposition: PARTIAL — bounded API and contact/Ops-list subcases observed; full lifecycle, delivered OTP receipt, browser recovery, and selected case UI remain open.** R8 remains PARTIAL for its entire named matrix (SR-01–06, DF-052).
+
+- **Execution command:** `bash scripts/run_sandbox_trainer_and_support.sh` (`scripts/verify_sandbox_trainer_and_support.py`)
+- **Run ID:** `4462bde68906` (timestamp: `2026-10-28T12:17:23Z`)
+- **Runtime environment:** `dogtrainersdirectory-dev` (625222421634), API revision `dtd-api-dev-r8-171a1d73-4e0775f361` (100% traffic), Web revision `dtd-web-dev-00026-rvv` (100% traffic), MongoDB Atlas `dtd_sandbox`. (Observed sandbox metadata: dedicated runtime identity, admin/action pins 4/2, checkout/refunds/self-healing 0, `dtd-trainer-ingest-cron` PAUSED).
+- **Observed subcases & evidence:**
+  1. **Trainer Claim & Session Renewal (DF-030 / DF-051 / SR-03 / CF-03):**
+     - Public profile retrieval returns HTTP 200 (`claim_status: unclaimed`).
+     - Negative guards: Mismatched email rejected with HTTP 403; SMS provider fail-closed with HTTP 503.
+     - Claim initiated: Challenge ID generated, Resend test-sink message ID `01a18271-b65f-7bc2-b381-01f05d665894` dispatched, database audit log `trainer_claim_started` recorded.
+     - Invalid OTP rejected with HTTP 400 and attempt counter incremented.
+     - In-memory HMAC derivation of OTP from challenge digest tested in runner (note: privileged OTP derivation does not constitute delivered trainer proof; trainer email receipt, delivered challenge verification, and browser recovery remain unverified); HMAC session token issued, audit log `trainer_claim_verified` recorded.
+     - Challenge replay guard: Re-submitting consumed challenge rejected with HTTP 409.
+     - Protected prefill: Anonymous and forged tokens return HTTP 401; valid session token returns HTTP 200.
+     - Session renewal (DF-030/DF-051): `intent: "session_recovery"` returns HTTP 200 with `is_renewal: true`, renewed OTP verified via in-memory derivation, fresh session token issued, audit log `trainer_session_renewed` recorded.
+     - Capability confirmation: Missing confirmation statement returns HTTP 422.
+     - Catchment selection (DF-035): Specific nominated suburbs confirmed with `match_ready: true`; Melbourne-wide catchment update confirmed with updated projection.
+     - Public storefront reflects claimed status and confirmed capabilities.
+  2. **First-Party Support & Oversight Lifecycle (DF-047 / SR-04 / CF-04):**
+     - Customer intake via `POST /support/contact`: HTTP 200, `case_id: sup_20261028_b13ebb01`, Resend test-sink notification, persisted in `support_threads` (`severity: high`, `status: open`, `category: complaint`).
+     - Oversight protection: Anonymous returns 401; authenticated with `ADMIN_PASS` returns 200 with full thread detail.
+     - Operator reply guard: Cannot close ticket via reply endpoint (HTTP 400).
+     - Operator reply: Dispatched via Resend test sink, thread transitioned to `status: awaiting_customer_reply`.
+     - Duplicate reply prevention: Identical reply returns `duplicate: true`, no duplicate email dispatched.
+     - Guarded closure: Notes < 10 chars rejected (HTTP 400/422); substantive resolution notes verified and closed (`status: resolved`), audit log `support_thread_closed` recorded.
+  3. **Live Headless Browser UI Verification (Playwright Chromium 1440x900):**
+     - `/contact` form filled and submitted: verified "Message Received" confirmation screen with case reference `sup_20261028_d5cb5cf9`, saved screenshot `sandbox_contact_page_submitted.png`.
+     - `/ops` Support Cases view: authenticated session, sidebar navigation to `[data-testid='ops-nav-support_threads']`, loaded `[data-testid='ops-support-view']` showing case list (screenshot `sandbox_support_cases_ops.png`; note: detail pane was not selected or exercised; trainer browser recovery was not exercised).
+  4. **Teardown & Verification for Known IDs:**
+     - Deleted database records for known run IDs (`trainers: 1`, `claim_events: 4`, `trainer_notifications: 2`, `trainer_audit: 6`, `support_threads: 2`, `audit: 2`).
+     - Public trainer profile returns HTTP 404.
+     - Oversight thread endpoints return HTTP 404.
+     - Known fixture identifiers queried absent (earlier unrecorded identifiers and provider mail history remain outside this check).
+
 ## Exact source and environment boundaries
 
 - Accepted R0–R3 checkpoints remain closed at their recorded scope.
@@ -85,8 +121,8 @@ The table preserves the 21 October accepted subcases and the still-unverified sc
 | --- | --- | --- |
 | SR-01 — provider webhook reconciliation | Signed synthetic delivery, replay/single persisted receipt, signature denial and exact-ID cleanup passed. Persisted-receipt/notification-write-failure retry, stale terminal-event ordering and ambiguous legacy-receipt rejection passed locally. | Provider-originated delivery and downstream retry; safely bounded live database-write failure after receipt persistence followed by successful reconciliation. Synthetic signed events do not prove provider delivery; unavailable safe failure injection remains NOT_VERIFIED. DF-050/R7. |
 | SR-02 / CF-02 — submission/publication authority | Held-submission suppression denial, suppression/republish denial, delisting/public 404, notification and audit passed. | Positive publication with statutory/ABN evidence, required consents and provenance; deduplication and concurrent publication races. An invalid-ABN held intake is not positive publication proof. R5/DF-041. |
-| SR-03 / CF-03 — claim proof/lifecycle | Ordinary browser claim persisted verified claim/tier/audit with test-sink delivery. Mismatch, invalid OTP, expiry, lock, disputed profile, missing claim email, unavailable SMS and verified-event replay negatives passed. | Conflicting verified-owner adjudication and corrected expiry/renewal/current-owner lifecycle, including acquisition-update protection after an expired challenge; preserve DF-030/051 runtime gaps. R5, plus R4 before ingestion activation. |
-| SR-04 / CF-04 — support intake/reply/closure | Intake persisted one thread/audit/test-sink notification; five concurrent duplicate replies produced one dispatch/message/notification/audit; specialised closure and fraud confirm-spam negative path passed with cleanup. | Safe notifier failure/fallback, truthful failed/duplicate feedback, selected-thread correlation and guarded closure/category outcomes across UI/API/data/audit. DF-047/R7. |
+| SR-03 / CF-03 — claim proof/lifecycle | Ordinary browser claim persisted verified claim/tier/audit with test-sink delivery. Mismatch, invalid OTP, expiry, lock, disputed profile, missing claim email, unavailable SMS and verified-event replay negatives passed. **28 October 2026:** Bounded API claim initiation, email mismatch 403, SMS 503, bad OTP 400, replay rejection 409, fresh session prefill, sequential renewal, capability confirmation, and catchment selection observed in run `4462bde68906`. | Conflicting verified-owner adjudication and corrected expiry/renewal/current-owner lifecycle, including acquisition-update protection after an expired challenge; delivered OTP receipt without privileged secrets; browser session recovery; preserve DF-030/051 runtime gaps. R5, plus R4 before ingestion activation. |
+| SR-04 / CF-04 — support intake/reply/closure | Intake persisted one thread/audit/test-sink notification; five concurrent duplicate replies produced one dispatch/message/notification/audit; specialised closure and fraud confirm-spam negative path passed with cleanup. **28 October 2026:** Bounded API support complaint intake, protected list/detail, reply guard 400, operator reply dispatch, duplicate reply prevention (`duplicate: true`), guarded closure (<10 chars rejected, valid notes closed with audit), and desktop browser contact submit + Ops list view observed in run `4462bde68906`. | Safe notifier failure/fallback, truthful failed/duplicate feedback in UI, selected-thread correlation and detail/reply/closure interaction, and guarded closure/category outcomes across UI/API/data/audit. DF-047/R7. |
 | SR-05 / CF-01 — privacy proof and scrub | Unverified-subject scrub returned 403 with unchanged record and no case audit mutation. | Positive scrub using trusted synthetic subject proof, proof provenance and error-provenance matrix, terminal resolution and evidence of the intended scoped data changes. Never manufacture trusted proof or scrub real subjects for acceptance. R5. |
 | SR-06 / CF-05 — durable obligations | Local tests cover large scans, waiting states and read-only zero-write invariants; no live bounded positive sync path was established. | Fixture-scoped completeness scan, waiting/read-only invariants, bounded retry and positive terminal resolution with persistence and Ops evidence. Never substitute a global engine tick. R7. |
 
