@@ -72,7 +72,7 @@ Any modification touching the following 7 core functional areas must satisfy its
 ### Domain 6: Operator Action Layer & `/ops` Control Plane
 *Targets: Admin endpoints, batch sync routines, manual warning triggers, health diagnostics.*
 
-- [x] **Authentication Enforcement:** Requests lacking valid `ADMIN_PASS` or authorization bearer token return HTTP 401/403. Verified on 28 October 2026 for `/api/oversight` and `/api/oversight/support/threads` (anonymous 401, authenticated 200). Broader admin endpoints remain unexercised by this runner.
+- [x] **Authentication Enforcement:** Requests lacking valid `ADMIN_PASS` or authorization bearer token return HTTP 401/403. Verified on 28 October 2026 for `/api/oversight/support/threads` (anonymous 401, authenticated 200). Root `/api/oversight` and broader admin endpoints remain unexercised by this runner.
 - [ ] **Idempotent Actions:** Operator buttons and actions accept idempotent request tokens to prevent double-execution on button double-clicks.
 - [ ] **Audit Trail:** Every mutating `/ops` action writes an audit entry containing action name, operator identifier, timestamp, and payload diff.
 - [ ] **Sanitized Reporting:** Diagnostic and health outputs disclose system state (`database: available`, queue counts) without exposing credentials, connection strings, OTPs or customer PII.
