@@ -24,6 +24,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -50,14 +51,73 @@ class AcceptanceFailure(Exception):
     pass
 
 
+def normalize_origin(url: str) -> str:
+    """Returns canonical scheme://hostname[:port] without trailing slash, path, or default ports."""
+    parsed = urlparse(url)
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower()
+    port = parsed.port
+    if not scheme or not host:
+        return ""
+    if (scheme == "https" and port == 443) or (scheme == "http" and port == 80):
+        port = None
+    if port is not None:
+        return f"{scheme}://{host}:{port}"
+    return f"{scheme}://{host}"
+
+
+def is_approved_exact_origin(url: str, approved_origins: Set[str]) -> bool:
+    """Verifies that url exactly matches one of the approved origins."""
+    origin = normalize_origin(url)
+    if not origin:
+        return False
+    return origin in approved_origins
+
+
+def verify_page_exact_origin(page_url: str, expected_origin: str, step_name: str) -> None:
+    """Asserts that page_url matches expected_origin exactly, rejecting downgrades or altered ports."""
+    current_origin = normalize_origin(page_url)
+    expected = normalize_origin(expected_origin)
+    if not current_origin or current_origin != expected:
+        raise AcceptanceFailure(
+            f"{step_name}: page navigated or redirected to unapproved origin {current_origin!r}, "
+            f"expected exact origin {expected!r} (full URL: {page_url})"
+        )
+
+
+async def evaluate_browser_route(route: Any, request: Any, approved_origins: Set[str]) -> None:
+    """Reusable Playwright route guard enforcing exact HTTPS origin matching and blocking downgrades/foreign mutations."""
+    req_url = request.url
+    dest_origin = normalize_origin(req_url)
+    method = request.method.upper()
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    is_mutating = method in ("POST", "PUT", "PATCH", "DELETE")
+    has_auth = "authorization" in headers or "x-admin-pass" in headers
+
+    # Mutating requests or requests carrying sensitive credentials must match an approved origin exactly
+    if is_mutating or has_auth:
+        if dest_origin not in approved_origins:
+            print(f"      [!] BLOCKED unapproved {method} request to {req_url} (origin: {dest_origin!r})")
+            await route.abort("blockedbyclient")
+            return
+
+    # Reject HTTP downgrade attempts to cloud services or unapproved destinations with auth/mutation
+    parsed = urlparse(req_url)
+    if parsed.scheme == "http" and dest_origin not in {"http://localhost", "http://127.0.0.1"}:
+        if is_mutating or has_auth or any(parsed.hostname and (parsed.hostname.endswith(".run.app") or parsed.hostname.endswith(".dev")) for _ in [1]):
+            print(f"      [!] BLOCKED insecure HTTP request to {req_url}")
+            await route.abort("blockedbyclient")
+            return
+
+    await route.continue_()
+
+
 class StrictRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Denies cross-origin HTTP redirects on protected/authenticated requests."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        old_parsed = urlparse(req.full_url)
-        new_parsed = urlparse(newurl)
-        old_origin = f"{old_parsed.scheme}://{old_parsed.netloc}"
-        new_origin = f"{new_parsed.scheme}://{new_parsed.netloc}"
+        old_origin = normalize_origin(req.full_url)
+        new_origin = normalize_origin(newurl)
         if old_origin != new_origin:
             raise HTTPError(
                 newurl,
@@ -76,15 +136,16 @@ def _http_request(
     headers: Dict[str, str] | None = None,
     timeout: int = 25,
 ) -> tuple[int, Dict[str, Any]]:
-    parsed = urlparse(url)
-    origin_host = parsed.netloc.split(":")[0].lower()
-    allowed_hosts = {
-        urlparse(API_URL).netloc.split(":")[0].lower(),
-        urlparse(WEB_URL).netloc.split(":")[0].lower(),
-        "localhost",
-        "127.0.0.1",
+    req_origin = normalize_origin(url)
+    allowed_origins = {
+        normalize_origin(API_URL),
+        normalize_origin(WEB_URL),
+        "http://localhost",
+        "http://127.0.0.1",
+        "https://localhost",
+        "https://127.0.0.1",
     }
-    if origin_host not in allowed_hosts:
+    if req_origin not in allowed_origins:
         raise AcceptanceFailure(f"Refusing HTTP request to unapproved destination: {url}")
 
     req_headers = {"Accept": "application/json"}
@@ -250,47 +311,65 @@ def enforce_sandbox_preflight(
             f"Preflight check failed: Safety flag ENABLED in sandbox: OPS_SELF_HEALING_ENABLED={env_map.get('OPS_SELF_HEALING_ENABLED')!r}"
         )
 
-    # Validate ADMIN_PASS reference and version
-    admin_ref_valid = False
-    admin_effective_version = ""
-    admin_sec_name = ""
-    if "ADMIN_PASS" in env_secrets:
-        admin_sec_name = env_secrets["ADMIN_PASS"]["name"]
-        admin_effective_version = env_secrets["ADMIN_PASS"]["key"]
-        if admin_sec_name == "dtd-admin-pass" and admin_effective_version == expected_admin_pass_version:
-            admin_ref_valid = True
-        elif admin_sec_name == "dtd-admin-pass":
-            raise AcceptanceFailure(
-                f"Preflight check failed: ADMIN_PASS references secret version {admin_effective_version!r}, expected {expected_admin_pass_version!r}."
-            )
-    elif "secret-admin-pass" in vol_secrets and vol_secrets["secret-admin-pass"]["secretName"] == "dtd-admin-pass":
-        admin_sec_name = "dtd-admin-pass"
-        admin_effective_version = expected_admin_pass_version
-        admin_ref_valid = True
+    # Validate volume declarations if present (ensure declared keys do not mismatch)
+    for v_name, v_info in vol_secrets.items():
+        s_name = v_info.get("secretName")
+        items = v_info.get("items", [])
+        if s_name == "dtd-admin-pass":
+            for itm in items:
+                key = itm.get("key")
+                if key and key != expected_admin_pass_version:
+                    raise AcceptanceFailure(
+                        f"Preflight check failed: volume {v_name} declares secret {s_name} with version {key!r}, expected {expected_admin_pass_version!r}."
+                    )
+        if s_name == "dtd-mongo-url":
+            for itm in items:
+                key = itm.get("key")
+                if key and key != expected_mongo_url_version:
+                    raise AcceptanceFailure(
+                        f"Preflight check failed: volume {v_name} declares secret {s_name} with version {key!r}, expected {expected_mongo_url_version!r}."
+                    )
 
-    if not admin_ref_valid:
-        raise AcceptanceFailure("Preflight check failed: ADMIN_PASS does not reference dtd-admin-pass.")
+    # Reject literal secret values shadowing secretKeyRef bindings
+    if env_map.get("ADMIN_PASS") is not None:
+        raise AcceptanceFailure(
+            "Preflight check failed: ADMIN_PASS specifies literal value in container env; must use secretKeyRef."
+        )
+    if env_map.get("MONGO_URL") is not None:
+        raise AcceptanceFailure(
+            "Preflight check failed: MONGO_URL specifies literal value in container env; must use secretKeyRef."
+        )
 
-    # Validate MONGO_URL reference and version
-    mongo_ref_valid = False
-    mongo_effective_version = ""
-    mongo_sec_name = ""
-    if "MONGO_URL" in env_secrets:
-        mongo_sec_name = env_secrets["MONGO_URL"]["name"]
-        mongo_effective_version = env_secrets["MONGO_URL"]["key"]
-        if mongo_sec_name == "dtd-mongo-url" and mongo_effective_version == expected_mongo_url_version:
-            mongo_ref_valid = True
-        elif mongo_sec_name == "dtd-mongo-url":
-            raise AcceptanceFailure(
-                f"Preflight check failed: MONGO_URL references secret version {mongo_effective_version!r}, expected {expected_mongo_url_version!r}."
-            )
-    elif "secret-mongo-url" in vol_secrets and vol_secrets["secret-mongo-url"]["secretName"] == "dtd-mongo-url":
-        mongo_sec_name = "dtd-mongo-url"
-        mongo_effective_version = expected_mongo_url_version
-        mongo_ref_valid = True
+    # Validate container environment secretKeyRef bindings (volume-only or missing secret bindings are unsupported)
+    if "ADMIN_PASS" not in env_secrets:
+        raise AcceptanceFailure(
+            "Preflight check failed: ADMIN_PASS is not bound via container secretKeyRef (volume-only or missing secret bindings are unsupported)."
+        )
+    admin_sec_name = env_secrets["ADMIN_PASS"]["name"]
+    admin_effective_version = env_secrets["ADMIN_PASS"]["key"]
+    if admin_sec_name != "dtd-admin-pass":
+        raise AcceptanceFailure(
+            f"Preflight check failed: ADMIN_PASS references secret {admin_sec_name!r}, expected 'dtd-admin-pass'."
+        )
+    if admin_effective_version != expected_admin_pass_version:
+        raise AcceptanceFailure(
+            f"Preflight check failed: ADMIN_PASS references secret version {admin_effective_version!r}, expected {expected_admin_pass_version!r}."
+        )
 
-    if not mongo_ref_valid:
-        raise AcceptanceFailure("Preflight check failed: MONGO_URL does not reference dtd-mongo-url.")
+    if "MONGO_URL" not in env_secrets:
+        raise AcceptanceFailure(
+            "Preflight check failed: MONGO_URL is not bound via container secretKeyRef (volume-only or missing secret bindings are unsupported)."
+        )
+    mongo_sec_name = env_secrets["MONGO_URL"]["name"]
+    mongo_effective_version = env_secrets["MONGO_URL"]["key"]
+    if mongo_sec_name != "dtd-mongo-url":
+        raise AcceptanceFailure(
+            f"Preflight check failed: MONGO_URL references secret {mongo_sec_name!r}, expected 'dtd-mongo-url'."
+        )
+    if mongo_effective_version != expected_mongo_url_version:
+        raise AcceptanceFailure(
+            f"Preflight check failed: MONGO_URL references secret version {mongo_effective_version!r}, expected {expected_mongo_url_version!r}."
+        )
 
     # 3. Web Service describe
     try:
@@ -367,8 +446,10 @@ def execute_deterministic_teardown(
     run_emails: List[str],
     admin_pass: str,
     api_url: str = API_URL,
-    http_request_fn: Any = None,
     run_id: str = "",
+    http_request_fn: Any = None,
+    durable_lineage: Optional[Dict[str, Any]] = None,
+    recovery_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     print("\n[5/5] Executing Deterministic Teardown & Cleanup...")
     request_fn = http_request_fn or _http_request
@@ -387,11 +468,57 @@ def execute_deterministic_teardown(
     }
     cleanup_errors: List[str] = []
 
-    # 1. Discover support threads created strictly by this run's synthetic emails
+    recovery_path = recovery_dir or Path(tempfile.gettempdir())
+    lineage_file = recovery_path / f"dtd_lineage_{run_id or 'default'}.json"
+
+    # Load existing lineage from disk if not supplied directly
+    loaded_lineage = None
+    if durable_lineage is not None:
+        loaded_lineage = dict(durable_lineage)
+    else:
+        try:
+            if lineage_file.exists():
+                loaded_lineage = json.loads(lineage_file.read_text())
+        except Exception as e:
+            cleanup_errors.append(f"failed to load existing lineage file {lineage_file}: {e}")
+
+    # 1. Validate trainer ownership
+    trainer_doc = None
+    try:
+        if hasattr(db, "trainers"):
+            if hasattr(db.trainers, "find_one"):
+                trainer_doc = db.trainers.find_one({"id": trainer_id})
+            elif hasattr(db.trainers, "find"):
+                docs = list(db.trainers.find({"id": trainer_id}))
+                trainer_doc = docs[0] if docs else None
+    except Exception as e:
+        cleanup_errors.append(f"trainer lookup error: {e}")
+
+    trainer_owned = False
+    if trainer_doc is not None:
+        is_fixture = bool(trainer_doc.get("test_fixture") is True)
+        doc_run_id = trainer_doc.get("test_run_id")
+        if is_fixture:
+            if doc_run_id and run_id:
+                trainer_owned = (doc_run_id == run_id)
+            else:
+                trainer_owned = True
+        else:
+            trainer_owned = False
+            print(f"      [!] Preserving unmarked colliding trainer {trainer_id}")
+    else:
+        # Parent row absent. Only owned if durable prior proof binds this trainer to run
+        if loaded_lineage and loaded_lineage.get("trainer_owned") is True:
+            lineage_trainer_id = loaded_lineage.get("trainer_id")
+            lineage_run_id = loaded_lineage.get("run_id")
+            if (not lineage_trainer_id or lineage_trainer_id == trainer_id) and (not lineage_run_id or not run_id or lineage_run_id == run_id):
+                trainer_owned = True
+
+    # 2. Discover support threads created strictly by this run's synthetic emails
     # (Do NOT discover by trainer_id alone, to avoid adopting unrelated customer enquiries)
     try:
         support_coll = getattr(db, "support_threads", None)
-        if support_coll is not None:
+        if support_coll is not None and hasattr(support_coll, "find"):
             discovered = support_coll.find({"sender_email": {"$in": run_emails}}, {"case_id": 1})
             for doc in discovered:
                 cid = doc.get("case_id")
@@ -400,10 +527,16 @@ def execute_deterministic_teardown(
     except Exception as e:
         cleanup_errors.append(f"discovery error: {e}")
 
-    # 2. Validate ownership of all tracked case IDs against database records
+    # 3. Validate ownership of all tracked case IDs against database records or durable lineage
     # (Response case IDs or DOM IDs must not delete unowned/foreign records)
     validated_owned_case_ids: Set[str] = set()
     unowned_preserved_cases: List[str] = []
+    unverified_missing_cases: List[str] = []
+
+    if loaded_lineage and "owned_case_ids" in loaded_lineage:
+        for cid in loaded_lineage["owned_case_ids"]:
+            validated_owned_case_ids.add(cid)
+
     for cid in sorted(tracked_case_ids):
         try:
             thread_doc = None
@@ -412,12 +545,25 @@ def execute_deterministic_teardown(
             elif hasattr(db, "support_threads") and hasattr(db.support_threads, "find"):
                 docs = list(db.support_threads.find({"case_id": cid}))
                 thread_doc = docs[0] if docs else None
+
             if thread_doc is None:
-                # Thread not found in DB (e.g. unpersisted or already gone); keep in deletion set for safe idempotency
-                validated_owned_case_ids.add(cid)
+                if cid in validated_owned_case_ids:
+                    # Verified from durable prior proof
+                    pass
+                else:
+                    unowned_preserved_cases.append(cid)
+                    unverified_missing_cases.append(cid)
+                    print(f"      [!] Preserving unverified missing support case {cid} (no DB record and no durable prior proof)")
             else:
                 sender = thread_doc.get("sender_email")
+                doc_run_id = thread_doc.get("test_run_id")
+                is_owned = False
                 if sender in run_emails:
+                    is_owned = True
+                elif doc_run_id and run_id and doc_run_id == run_id:
+                    is_owned = True
+
+                if is_owned:
                     validated_owned_case_ids.add(cid)
                 else:
                     unowned_preserved_cases.append(cid)
@@ -425,64 +571,121 @@ def execute_deterministic_teardown(
         except Exception as e:
             cleanup_errors.append(f"case ownership check {cid}: {e}")
 
-    # 3. Gather lineage IDs before deleting source rows
-    owned_claim_event_ids: List[str] = []
-    try:
-        if hasattr(db, "claim_events") and hasattr(db.claim_events, "find"):
-            for ce in db.claim_events.find({"trainer_id": trainer_id}):
-                ce_id = ce.get("id") or str(ce.get("_id", ""))
-                if ce_id:
-                    owned_claim_event_ids.append(ce_id)
-    except Exception as e:
-        cleanup_errors.append(f"claim event lineage gather: {e}")
+    # 4. Gather lineage IDs before deleting source rows
+    owned_claim_event_ids_set: Set[str] = set()
+    if loaded_lineage and "owned_claim_event_ids" in loaded_lineage:
+        for ce_id in loaded_lineage["owned_claim_event_ids"]:
+            owned_claim_event_ids_set.add(ce_id)
 
-    target_ids = [trainer_id] + list(validated_owned_case_ids)
-    owned_dispatch_ids: List[str] = []
-    try:
-        if hasattr(db, "notification_events") and hasattr(db.notification_events, "find"):
-            for notif in db.notification_events.find({"target_id": {"$in": target_ids}}):
-                disp_id = notif.get("dispatch_id")
-                if disp_id:
-                    owned_dispatch_ids.append(disp_id)
-    except Exception as e:
-        cleanup_errors.append(f"notification dispatch lineage gather: {e}")
+    if trainer_owned:
+        try:
+            if hasattr(db, "claim_events") and hasattr(db.claim_events, "find"):
+                for ce in db.claim_events.find({"trainer_id": trainer_id}):
+                    ce_id = ce.get("id") or str(ce.get("_id", ""))
+                    if ce_id:
+                        owned_claim_event_ids_set.add(ce_id)
+        except Exception as e:
+            cleanup_errors.append(f"claim event lineage gather: {e}")
 
-    # 4. Delete synthetic trainer fixtures and dependent records with explicit test fixture requirement
-    # (Unmarked pre-existing trainers colliding on ID must never be deleted)
-    try:
-        trainer_del_filter: Dict[str, Any] = {"id": trainer_id, "test_fixture": True}
-        del_counts["trainers"] = db.trainers.delete_many(trainer_del_filter).deleted_count
-    except Exception as e:
-        cleanup_errors.append(f"trainers delete: {e}")
+    owned_claim_event_ids = sorted(owned_claim_event_ids_set)
+
+    owned_dispatch_ids_set: Set[str] = set()
+    if loaded_lineage and "owned_dispatch_ids" in loaded_lineage:
+        for disp_id in loaded_lineage["owned_dispatch_ids"]:
+            owned_dispatch_ids_set.add(disp_id)
+
+    target_ids = []
+    if trainer_owned:
+        target_ids.append(trainer_id)
+    target_ids.extend(sorted(validated_owned_case_ids))
+
+    if target_ids:
+        try:
+            if hasattr(db, "notification_events") and hasattr(db.notification_events, "find"):
+                for notif in db.notification_events.find({"target_id": {"$in": target_ids}}):
+                    disp_id = notif.get("dispatch_id")
+                    if disp_id:
+                        owned_dispatch_ids_set.add(disp_id)
+        except Exception as e:
+            cleanup_errors.append(f"notification dispatch lineage gather: {e}")
+
+    owned_dispatch_ids = sorted(owned_dispatch_ids_set)
+
+    # 5. Persist lineage BEFORE deleting source rows
+    current_lineage = {
+        "run_id": run_id,
+        "trainer_id": trainer_id,
+        "trainer_owned": trainer_owned,
+        "owned_case_ids": sorted(validated_owned_case_ids),
+        "owned_claim_event_ids": owned_claim_event_ids,
+        "owned_dispatch_ids": owned_dispatch_ids,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
     try:
-        del_counts["claim_events"] = db.claim_events.delete_many({"trainer_id": trainer_id}).deleted_count
+        lineage_file.parent.mkdir(parents=True, exist_ok=True)
+        lineage_file.write_text(json.dumps(current_lineage, indent=2) + "\n")
     except Exception as e:
-        cleanup_errors.append(f"claim_events delete: {e}")
+        cleanup_errors.append(f"lineage persistence failed before source deletion: {e}")
+        return {
+            "status": "FAILED",
+            "deleted": del_counts,
+            "leftovers": {},
+            "endpoint_404s": {},
+            "cleanup_errors": cleanup_errors,
+            "all_leftovers_zero": False,
+            "all_endpoints_404": False,
+            "tracked_case_ids": sorted(validated_owned_case_ids),
+            "unowned_preserved_cases": sorted(unowned_preserved_cases),
+            "unverified_missing_cases": sorted(unverified_missing_cases),
+            "owned_claim_event_ids": owned_claim_event_ids,
+            "owned_dispatch_ids": owned_dispatch_ids,
+            "durable_lineage": current_lineage,
+        }
 
-    try:
-        del_counts["trainer_notifications"] = db.notification_events.delete_many({"target_id": trainer_id}).deleted_count
-    except Exception as e:
-        cleanup_errors.append(f"trainer_notifications delete: {e}")
-
-    try:
-        del_counts["trainer_audit"] = db.audit_log.delete_many({"target": trainer_id}).deleted_count
-    except Exception as e:
-        cleanup_errors.append(f"trainer_audit delete: {e}")
-
-    try:
-        del_counts["trainer_obligations"] = db.ops_obligations.delete_many(
-            {
-                "$or": [
-                    {"entity_id": trainer_id},
-                    {"obligation_id": trainer_id},
-                    {"obligation_id": f"trainer:{trainer_id}"},
-                    {"obligation_id": f"obligation:trainer:{trainer_id}"},
+    # 6. Delete synthetic trainer fixtures and dependent records with explicit test fixture requirement
+    # (Unmarked pre-existing trainers colliding on ID must never have parent or dependencies deleted)
+    if trainer_owned:
+        try:
+            trainer_del_filter: Dict[str, Any] = {"id": trainer_id, "test_fixture": True}
+            if run_id:
+                trainer_del_filter["$or"] = [
+                    {"test_run_id": run_id},
+                    {"test_run_id": {"$exists": False}},
+                    {"test_run_id": None},
                 ]
-            }
-        ).deleted_count
-    except Exception as e:
-        cleanup_errors.append(f"trainer_obligations delete: {e}")
+            del_counts["trainers"] = db.trainers.delete_many(trainer_del_filter).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"trainers delete: {e}")
+
+        try:
+            del_counts["claim_events"] = db.claim_events.delete_many({"trainer_id": trainer_id}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"claim_events delete: {e}")
+
+        try:
+            del_counts["trainer_notifications"] = db.notification_events.delete_many({"target_id": trainer_id}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"trainer_notifications delete: {e}")
+
+        try:
+            del_counts["trainer_audit"] = db.audit_log.delete_many({"target": trainer_id}).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"trainer_audit delete: {e}")
+
+        try:
+            del_counts["trainer_obligations"] = db.ops_obligations.delete_many(
+                {
+                    "$or": [
+                        {"entity_id": trainer_id},
+                        {"obligation_id": trainer_id},
+                        {"obligation_id": f"trainer:{trainer_id}"},
+                        {"obligation_id": f"obligation:trainer:{trainer_id}"},
+                    ]
+                }
+            ).deleted_count
+        except Exception as e:
+            cleanup_errors.append(f"trainer_obligations delete: {e}")
 
     # Delete claim event obligations keyed by claim_event.id
     if owned_claim_event_ids:
@@ -492,14 +695,15 @@ def execute_deterministic_teardown(
                     {"entity_id": {"$in": owned_claim_event_ids}},
                     {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in owned_claim_event_ids] + [f"claim:{cid}" for cid in owned_claim_event_ids] + owned_claim_event_ids}},
                     {"metadata.claim_event_id": {"$in": owned_claim_event_ids}},
-                    {"metadata.trainer_id": trainer_id},
                 ]
             }
+            if trainer_owned:
+                ce_ob_query["$or"].append({"metadata.trainer_id": trainer_id})
             del_counts["claim_event_obligations"] = db.ops_obligations.delete_many(ce_ob_query).deleted_count
         except Exception as e:
             cleanup_errors.append(f"claim_event_obligations delete: {e}")
 
-    # 5. Delete validated support threads independently with full case ID keys and actual schema
+    # 7. Delete validated support threads independently with full case ID keys and actual schema
     for cid in sorted(validated_owned_case_ids):
         try:
             del_counts["support_threads"][cid] = db.support_threads.delete_many({"case_id": cid}).deleted_count
@@ -543,58 +747,60 @@ def execute_deterministic_teardown(
         except Exception as e:
             cleanup_errors.append(f"dispatch_obligations delete: {e}")
 
-    # 6. Direct datastore leftovers count
+    # 8. Direct datastore leftovers count
     leftovers: Dict[str, Any] = {}
-    try:
-        leftovers["trainers"] = db.trainers.count_documents({"id": trainer_id, "test_fixture": True})
-    except Exception as e:
-        cleanup_errors.append(f"trainers count error: {e}")
-        leftovers["trainers"] = -1
-
-    try:
-        leftovers["claim_events"] = db.claim_events.count_documents({"trainer_id": trainer_id})
-    except Exception as e:
-        cleanup_errors.append(f"claim_events count error: {e}")
-        leftovers["claim_events"] = -1
-
-    try:
-        leftovers["trainer_notifications"] = db.notification_events.count_documents({"target_id": trainer_id})
-    except Exception as e:
-        cleanup_errors.append(f"trainer_notifications count error: {e}")
-        leftovers["trainer_notifications"] = -1
-
-    try:
-        leftovers["trainer_audit"] = db.audit_log.count_documents({"target": trainer_id})
-    except Exception as e:
-        cleanup_errors.append(f"trainer_audit count error: {e}")
-        leftovers["trainer_audit"] = -1
-
-    try:
-        leftovers["trainer_obligations"] = db.ops_obligations.count_documents(
-            {
-                "$or": [
-                    {"entity_id": trainer_id},
-                    {"obligation_id": trainer_id},
-                    {"obligation_id": f"trainer:{trainer_id}"},
-                    {"obligation_id": f"obligation:trainer:{trainer_id}"},
-                ]
-            }
-        )
-    except Exception as e:
-        cleanup_errors.append(f"trainer_obligations count error: {e}")
-        leftovers["trainer_obligations"] = -1
-
-    if owned_claim_event_ids:
+    if trainer_owned:
         try:
-            leftovers["claim_event_obligations"] = db.ops_obligations.count_documents(
+            leftovers["trainers"] = db.trainers.count_documents({"id": trainer_id, "test_fixture": True})
+        except Exception as e:
+            cleanup_errors.append(f"trainers count error: {e}")
+            leftovers["trainers"] = -1
+
+        try:
+            leftovers["claim_events"] = db.claim_events.count_documents({"trainer_id": trainer_id})
+        except Exception as e:
+            cleanup_errors.append(f"claim_events count error: {e}")
+            leftovers["claim_events"] = -1
+
+        try:
+            leftovers["trainer_notifications"] = db.notification_events.count_documents({"target_id": trainer_id})
+        except Exception as e:
+            cleanup_errors.append(f"trainer_notifications count error: {e}")
+            leftovers["trainer_notifications"] = -1
+
+        try:
+            leftovers["trainer_audit"] = db.audit_log.count_documents({"target": trainer_id})
+        except Exception as e:
+            cleanup_errors.append(f"trainer_audit count error: {e}")
+            leftovers["trainer_audit"] = -1
+
+        try:
+            leftovers["trainer_obligations"] = db.ops_obligations.count_documents(
                 {
                     "$or": [
-                        {"entity_id": {"$in": owned_claim_event_ids}},
-                        {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in owned_claim_event_ids] + [f"claim:{cid}" for cid in owned_claim_event_ids] + owned_claim_event_ids}},
-                        {"metadata.claim_event_id": {"$in": owned_claim_event_ids}},
+                        {"entity_id": trainer_id},
+                        {"obligation_id": trainer_id},
+                        {"obligation_id": f"trainer:{trainer_id}"},
+                        {"obligation_id": f"obligation:trainer:{trainer_id}"},
                     ]
                 }
             )
+        except Exception as e:
+            cleanup_errors.append(f"trainer_obligations count error: {e}")
+            leftovers["trainer_obligations"] = -1
+
+    if owned_claim_event_ids:
+        try:
+            ce_query = {
+                "$or": [
+                    {"entity_id": {"$in": owned_claim_event_ids}},
+                    {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in owned_claim_event_ids] + [f"claim:{cid}" for cid in owned_claim_event_ids] + owned_claim_event_ids}},
+                    {"metadata.claim_event_id": {"$in": owned_claim_event_ids}},
+                ]
+            }
+            if trainer_owned:
+                ce_query["$or"].append({"metadata.trainer_id": trainer_id})
+            leftovers["claim_event_obligations"] = db.ops_obligations.count_documents(ce_query)
         except Exception as e:
             cleanup_errors.append(f"claim_event_obligations count error: {e}")
             leftovers["claim_event_obligations"] = -1
@@ -650,14 +856,15 @@ def execute_deterministic_teardown(
             cleanup_errors.append(f"dispatch_obligations count error: {e}")
             leftovers["dispatch_obligations"] = -1
 
-    # 7. Public 404 absence checks
+    # 9. Public 404 absence checks
     endpoint_404s: Dict[str, bool] = {}
-    try:
-        status, _ = request_fn(f"{api_url}/api/trainers/{trainer_id}")
-        endpoint_404s[f"trainer_{trainer_id}"] = (status == 404)
-    except Exception as e:
-        cleanup_errors.append(f"trainer 404 check: {e}")
-        endpoint_404s[f"trainer_{trainer_id}"] = False
+    if trainer_owned:
+        try:
+            status, _ = request_fn(f"{api_url}/api/trainers/{trainer_id}")
+            endpoint_404s[f"trainer_{trainer_id}"] = (status == 404)
+        except Exception as e:
+            cleanup_errors.append(f"trainer 404 check: {e}")
+            endpoint_404s[f"trainer_{trainer_id}"] = False
 
     for cid in sorted(validated_owned_case_ids):
         try:
@@ -670,12 +877,8 @@ def execute_deterministic_teardown(
             cleanup_errors.append(f"thread {cid} 404 check: {e}")
             endpoint_404s[f"thread_{cid}"] = False
 
-    all_leftovers_zero = (
-        len(leftovers) > 0 and all(count == 0 for count in leftovers.values())
-    )
-    all_endpoints_404 = (
-        len(endpoint_404s) > 0 and all(res is True for res in endpoint_404s.values())
-    )
+    all_leftovers_zero = all(count == 0 for count in leftovers.values())
+    all_endpoints_404 = all(res is True for res in endpoint_404s.values())
     is_clean = all_leftovers_zero and all_endpoints_404 and len(cleanup_errors) == 0
 
     report = {
@@ -688,6 +891,10 @@ def execute_deterministic_teardown(
         "all_endpoints_404": all_endpoints_404,
         "tracked_case_ids": sorted(validated_owned_case_ids),
         "unowned_preserved_cases": sorted(unowned_preserved_cases),
+        "unverified_missing_cases": sorted(unverified_missing_cases),
+        "owned_claim_event_ids": owned_claim_event_ids,
+        "owned_dispatch_ids": owned_dispatch_ids,
+        "durable_lineage": current_lineage,
     }
     print(f"      Cleanup status: {report['status']}. Leftovers: {leftovers}. Errors: {cleanup_errors}")
     return report
@@ -993,11 +1200,9 @@ async def run_acceptance(
         try:
             from playwright.async_api import async_playwright
 
-            approved_origins = {
-                urlparse(WEB_URL).netloc.split(":")[0].lower(),
-                urlparse(API_URL).netloc.split(":")[0].lower(),
-            }
-            approved_web_origin = urlparse(WEB_URL).netloc.split(":")[0].lower()
+            approved_web_origin = normalize_origin(WEB_URL)
+            approved_api_origin = normalize_origin(API_URL)
+            approved_origins = {approved_web_origin, approved_api_origin}
 
             async with async_playwright() as p:
                 browser = await p.chromium.launch(headless=headless)
@@ -1007,17 +1212,7 @@ async def run_acceptance(
                 )
 
                 async def browser_route_guard(route, request):
-                    dest_host = urlparse(request.url).netloc.split(":")[0].lower()
-                    method = request.method.upper()
-                    headers = {k.lower(): v for k, v in request.headers.items()}
-                    is_mutating = method in ("POST", "PUT", "PATCH", "DELETE")
-                    has_auth = "authorization" in headers or "x-admin-pass" in headers
-                    if is_mutating or has_auth:
-                        if dest_host not in approved_origins:
-                            print(f"      [!] BLOCKED unapproved {method} request to {request.url}")
-                            await route.abort("blockedbyclient")
-                            return
-                    await route.continue_()
+                    await evaluate_browser_route(route, request, approved_origins)
 
                 await context.route("**/*", browser_route_guard)
                 page = await context.new_page()
@@ -1027,27 +1222,21 @@ async def run_acceptance(
                 resp = await page.goto(f"{WEB_URL}/contact", wait_until="networkidle", timeout=30000)
                 assert resp and resp.status == 200, f"Contact page load failed: {resp.status if resp else 'no response'}"
 
-                current_host = urlparse(page.url).netloc.split(":")[0].lower()
-                if current_host != approved_web_origin:
-                    raise AcceptanceFailure(f"Contact page redirected to unapproved origin: {page.url}")
+                verify_page_exact_origin(page.url, approved_web_origin, "Contact page load")
 
                 await page.fill("input[name='name']", f"Playwright User {run_id[:4]}")
                 await page.fill("input[name='email']", browser_email)
                 await page.fill("input[name='subject']", f"Browser test enquiry {run_id[:4]}")
                 await page.fill("textarea[name='message']", "Testing contact page submit in live headless browser.")
 
-                current_host = urlparse(page.url).netloc.split(":")[0].lower()
-                if current_host != approved_web_origin:
-                    raise AcceptanceFailure(f"Contact page navigated away before submit: {page.url}")
+                verify_page_exact_origin(page.url, approved_web_origin, "Contact page submit pre-check")
 
                 await page.click("button[type='submit']")
 
                 # Wait for success confirmation
                 await page.wait_for_selector("text=Message Received", timeout=15000)
 
-                current_host = urlparse(page.url).netloc.split(":")[0].lower()
-                if current_host != approved_web_origin:
-                    raise AcceptanceFailure(f"Contact confirmation at unapproved origin: {page.url}")
+                verify_page_exact_origin(page.url, approved_web_origin, "Contact confirmation")
 
                 screenshot_contact = target_artifact_dir / "sandbox_contact_page_submitted.png"
                 await page.screenshot(path=str(screenshot_contact))
@@ -1065,9 +1254,7 @@ async def run_acceptance(
                 print("      - Browser: Loading /ops with session credentials...")
                 await page.goto(f"{WEB_URL}/ops", wait_until="networkidle", timeout=30000)
 
-                current_host = urlparse(page.url).netloc.split(":")[0].lower()
-                if current_host != approved_web_origin:
-                    raise AcceptanceFailure(f"Page navigated to unexpected origin: {page.url}")
+                verify_page_exact_origin(page.url, approved_web_origin, "Ops page load")
 
                 await page.evaluate("""(passVal) => {
                     sessionStorage.setItem("dtd-admin-pass", JSON.stringify({
@@ -1077,9 +1264,7 @@ async def run_acceptance(
                 }""", admin_pass)
                 await page.reload(wait_until="networkidle")
 
-                current_host = urlparse(page.url).netloc.split(":")[0].lower()
-                if current_host != approved_web_origin:
-                    raise AcceptanceFailure(f"Ops page reload navigated to unexpected origin: {page.url}")
+                verify_page_exact_origin(page.url, approved_web_origin, "Ops page reload")
 
                 # Click "Support Cases"
                 diag_toggle = page.locator("[data-testid='ops-diagnostics-header-toggle']")
@@ -1123,6 +1308,7 @@ async def run_acceptance(
             api_url=API_URL,
             http_request_fn=_http_request,
             run_id=run_id,
+            recovery_dir=target_artifact_dir,
         )
         try:
             client.close()
@@ -1131,43 +1317,65 @@ async def run_acceptance(
 
         evidence["cleanup"] = cleanup_report
 
+        # Resolve terminal status and error before saving final report
+        terminal_status = "STAGE_CHECKS_COMPLETED"
+        terminal_error = None
+        if test_exception is not None and cleanup_report.get("status") == "FAILED":
+            terminal_status = "EXECUTION_AND_CLEANUP_FAILED"
+            terminal_error = (
+                f"Scenario failed: {test_exception}; Cleanup failed: "
+                f"{cleanup_report.get('cleanup_errors')}, leftovers: {cleanup_report.get('leftovers')}"
+            )
+        elif test_exception is not None:
+            terminal_status = "EXECUTION_FAILED"
+            terminal_error = str(test_exception)
+        elif cleanup_report.get("status") == "FAILED":
+            terminal_status = "CLEANUP_FAILED"
+            terminal_error = (
+                f"Cleanup failed: {cleanup_report.get('cleanup_errors')}, "
+                f"leftovers: {cleanup_report.get('leftovers')}"
+            )
+
+        evidence["status"] = terminal_status
+        if terminal_error:
+            evidence["error"] = terminal_error
+
         # Persist sanitized final evidence report on both success and failure
         report_path = target_artifact_dir / f"run_report_{run_id}.json"
+        report_save_error = None
         try:
             final_report = {
                 "run_id": run_id,
                 "trainer_id": trainer_id,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "status": terminal_status,
+                "error": terminal_error,
                 "scenario_exception": str(test_exception) if test_exception else None,
                 "cleanup_report": cleanup_report,
                 "evidence": evidence,
             }
-            report_path.write_text(json.dumps(final_report, indent=2))
+            report_path.write_text(json.dumps(final_report, indent=2) + "\n")
             evidence["report_saved"] = str(report_path)
             print(f"      Final run report saved to: {report_path}")
         except Exception as e:
-            print(f"      [!] Warning: failed to save final run report to disk: {e}")
+            report_save_error = e
+            print(f"      [!] Error: failed to save final run report to disk: {e}", file=sys.stderr)
 
-    if test_exception is not None and cleanup_report.get("status") == "FAILED":
-        evidence["status"] = "EXECUTION_AND_CLEANUP_FAILED"
-        evidence["error"] = (
-            f"Scenario failed: {test_exception}; Cleanup failed: "
-            f"{cleanup_report.get('cleanup_errors')}, leftovers: {cleanup_report.get('leftovers')}"
-        )
-        raise AcceptanceFailure(evidence["error"]) from test_exception
+    # If saving required report failed, fail nonzero while preserving original scenario/cleanup error
+    if report_save_error is not None:
+        save_err_msg = f"Failed to persist required final run report to {report_path}: {report_save_error}"
+        if terminal_error:
+            save_err_msg = f"{save_err_msg} (prior error: {terminal_error})"
+        if test_exception is not None:
+            raise AcceptanceFailure(save_err_msg) from test_exception
+        raise AcceptanceFailure(save_err_msg) from report_save_error
 
-    if test_exception is not None:
-        evidence["status"] = "EXECUTION_FAILED"
-        evidence["error"] = str(test_exception)
+    if terminal_status == "EXECUTION_AND_CLEANUP_FAILED":
+        raise AcceptanceFailure(terminal_error) from test_exception
+    elif terminal_status == "EXECUTION_FAILED":
         raise test_exception
-
-    if cleanup_report.get("status") == "FAILED":
-        evidence["status"] = "CLEANUP_FAILED"
-        evidence["error"] = (
-            f"Cleanup failed: {cleanup_report.get('cleanup_errors')}, "
-            f"leftovers: {cleanup_report.get('leftovers')}"
-        )
-        raise AcceptanceFailure(evidence["error"])
+    elif terminal_status == "CLEANUP_FAILED":
+        raise AcceptanceFailure(terminal_error)
 
     evidence["status"] = "STAGE_CHECKS_COMPLETED"
     return evidence

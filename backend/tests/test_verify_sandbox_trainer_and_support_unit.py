@@ -884,7 +884,9 @@ def test_teardown_fails_on_datastore_delete_error():
 def test_teardown_fails_on_datastore_count_error():
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-count-fail"
-    db.collections["trainers"] = FaithfulFakeCollection("trainers", [], fail_count=True)
+    db.collections["trainers"] = FaithfulFakeCollection(
+        "trainers", [{"id": trainer_id, "test_fixture": True}], fail_count=True
+    )
 
     def mock_request(url, method="GET", headers=None, payload=None):
         return 404, {}
@@ -907,6 +909,7 @@ def test_teardown_fails_on_datastore_count_error():
 def test_teardown_fails_when_endpoint_returns_200():
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-200-leak"
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True})
 
     def mock_request(url, method="GET", headers=None, payload=None):
         # Trainer still returns 200 OK -> leak!
@@ -977,10 +980,16 @@ def test_run_acceptance_simultaneous_scenario_and_cleanup_failure_chains_origina
 
     monkeypatch.setattr(runner, "MongoClient", MockClient)
 
-    # 3. Mock HTTP request to fail during health/config check
+    # 3. Mock HTTP request to fail during claim initiation (after trainer fixture inserted)
     def mock_http(url, method="GET", headers=None, payload=None):
         if "/api/health" in url:
-            return 500, {"error": "Synthetic scenario crash"}
+            return 200, {"database": "available"}
+        if "/api/config" in url:
+            return 200, {"public_matching_enabled": True}
+        if "/api/trainers/" in url and "/claim" not in url:
+            return 200, {"id": "mock-profile", "claim_status": "unclaimed"}
+        if "/claim" in url:
+            raise runner.AcceptanceFailure("Synthetic scenario crash")
         return 404, {}
 
     monkeypatch.setattr(runner, "_http_request", mock_http)
@@ -1148,12 +1157,12 @@ def test_browser_credential_injection_uses_evaluate_argument_without_interpolati
 
     assert found_credential_eval, "Expected page.evaluate to accept admin_pass as a safe argument"
 
-    # 2. Ensure origin check is performed on WEB_URL
-    assert "urlparse(WEB_URL)" in source
+    # 2. Ensure exact origin check is performed on WEB_URL
+    assert "normalize_origin(WEB_URL)" in source
     assert "approved_web_origin" in source
 
 
-def test_browser_route_guard_blocks_unapproved_mutations_and_auth():
+def test_evaluate_browser_route_blocks_http_downgrade():
     async def _run():
         aborted = []
         continued = []
@@ -1171,47 +1180,560 @@ def test_browser_route_guard_blocks_unapproved_mutations_and_auth():
                 self.method = method
                 self.headers = headers or {}
 
-        approved_origins = {"dtd-web-dev-x2kdoaemtq-ts.a.run.app", "dtd-api-dev-x2kdoaemtq-ts.a.run.app"}
+        approved_origins = {runner.normalize_origin(runner.WEB_URL), runner.normalize_origin(runner.API_URL)}
 
-        async def route_guard(route, request):
-            dest_host = urlparse(request.url).netloc.split(":")[0].lower()
-            method = request.method.upper()
-            headers = {k.lower(): v for k, v in request.headers.items()}
-            is_mutating = method in ("POST", "PUT", "PATCH", "DELETE")
-            has_auth = "authorization" in headers or "x-admin-pass" in headers
-            if is_mutating or has_auth:
-                if dest_host not in approved_origins:
-                    await route.abort("blockedbyclient")
-                    return
-            await route.continue_()
+        # Plaintext HTTP downgrade on cloud API endpoint carrying auth
+        downgraded_url = runner.API_URL.replace("https:", "http:") + "/api/oversight"
+        req = MockRequest(downgraded_url, method="GET", headers={"X-Admin-Pass": "secret"})
+        await runner.evaluate_browser_route(MockRoute(), req, approved_origins)
 
-        # 1. Unapproved mutating POST -> aborted
-        await route_guard(MockRoute(), MockRequest("https://production.example.invalid/support/contact", method="POST"))
-        assert len(aborted) == 1 and aborted[-1] == "blockedbyclient"
-
-        # 2. Unapproved auth header -> aborted
-        await route_guard(MockRoute(), MockRequest("https://evil.example.com/api/stolen", method="GET", headers={"X-Admin-Pass": "secret"}))
-        assert len(aborted) == 2 and aborted[-1] == "blockedbyclient"
-
-        # 3. Third-party asset GET (fonts, scripts) -> continued
-        await route_guard(MockRoute(), MockRequest("https://fonts.googleapis.com/css?family=Inter", method="GET"))
-        assert len(continued) == 1
-
-        # 4. Approved API POST -> continued
-        await route_guard(MockRoute(), MockRequest("https://dtd-api-dev-x2kdoaemtq-ts.a.run.app/support/contact", method="POST"))
-        assert len(continued) == 2
+        assert aborted == ["blockedbyclient"]
+        assert len(continued) == 0
 
     asyncio.run(_run())
 
 
-def test_browser_origin_check_blocks_foreign_contact_submission():
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "verify_sandbox_trainer_and_support.py"
-    source = script_path.read_text(encoding="utf-8")
+def test_evaluate_browser_route_blocks_different_port():
+    async def _run():
+        aborted = []
+        continued = []
 
-    assert "approved_web_origin = urlparse(WEB_URL).netloc.split(\":\")[0].lower()" in source
-    assert "Contact page redirected to unapproved origin" in source
-    assert "Contact page navigated away before submit" in source
-    assert "Contact confirmation at unapproved origin" in source
-    assert "browser_route_guard" in source
-    assert 'context.route("**/*", browser_route_guard)' in source
-    assert 'route.abort("blockedbyclient")' in source
+        class MockRoute:
+            async def abort(self, errorCode="failed"):
+                aborted.append(errorCode)
+
+            async def continue_(self):
+                continued.append(True)
+
+        class MockRequest:
+            def __init__(self, url, method="GET", headers=None):
+                self.url = url
+                self.method = method
+                self.headers = headers or {}
+
+        approved_origins = {runner.normalize_origin(runner.WEB_URL), runner.normalize_origin(runner.API_URL)}
+
+        # Different port mutation on approved hostname
+        altered_port_url = runner.API_URL + ":8443/support/contact"
+        req = MockRequest(altered_port_url, method="POST")
+        await runner.evaluate_browser_route(MockRoute(), req, approved_origins)
+
+        assert aborted == ["blockedbyclient"]
+        assert len(continued) == 0
+
+    asyncio.run(_run())
+
+
+def test_evaluate_browser_route_blocks_foreign_mutation():
+    async def _run():
+        aborted = []
+        continued = []
+
+        class MockRoute:
+            async def abort(self, errorCode="failed"):
+                aborted.append(errorCode)
+
+            async def continue_(self):
+                continued.append(True)
+
+        class MockRequest:
+            def __init__(self, url, method="GET", headers=None):
+                self.url = url
+                self.method = method
+                self.headers = headers or {}
+
+        approved_origins = {runner.normalize_origin(runner.WEB_URL), runner.normalize_origin(runner.API_URL)}
+
+        # Foreign domain mutation
+        foreign_url = "https://evil.invalid/support/contact"
+        req = MockRequest(foreign_url, method="POST")
+        await runner.evaluate_browser_route(MockRoute(), req, approved_origins)
+
+        assert aborted == ["blockedbyclient"]
+        assert len(continued) == 0
+
+    asyncio.run(_run())
+
+
+def test_evaluate_browser_route_allows_approved_https():
+    async def _run():
+        aborted = []
+        continued = []
+
+        class MockRoute:
+            async def abort(self, errorCode="failed"):
+                aborted.append(errorCode)
+
+            async def continue_(self):
+                continued.append(True)
+
+        class MockRequest:
+            def __init__(self, url, method="GET", headers=None):
+                self.url = url
+                self.method = method
+                self.headers = headers or {}
+
+        approved_origins = {runner.normalize_origin(runner.WEB_URL), runner.normalize_origin(runner.API_URL)}
+
+        # Approved API POST
+        req = MockRequest(runner.API_URL + "/support/contact", method="POST")
+        await runner.evaluate_browser_route(MockRoute(), req, approved_origins)
+
+        assert len(aborted) == 0
+        assert continued == [True]
+
+    asyncio.run(_run())
+
+
+def test_evaluate_browser_route_allows_harmless_assets():
+    async def _run():
+        aborted = []
+        continued = []
+
+        class MockRoute:
+            async def abort(self, errorCode="failed"):
+                aborted.append(errorCode)
+
+            async def continue_(self):
+                continued.append(True)
+
+        class MockRequest:
+            def __init__(self, url, method="GET", headers=None):
+                self.url = url
+                self.method = method
+                self.headers = headers or {}
+
+        approved_origins = {runner.normalize_origin(runner.WEB_URL), runner.normalize_origin(runner.API_URL)}
+
+        # Third-party stylesheet / font
+        req = MockRequest("https://fonts.googleapis.com/css?family=Inter", method="GET")
+        await runner.evaluate_browser_route(MockRoute(), req, approved_origins)
+
+        assert len(aborted) == 0
+        assert continued == [True]
+
+    asyncio.run(_run())
+
+
+def test_verify_page_exact_origin_behavior():
+    approved_web = runner.normalize_origin(runner.WEB_URL)
+
+    # 1. Matching exact approved HTTPS origin succeeds
+    runner.verify_page_exact_origin(runner.WEB_URL + "/ops", approved_web, "Ops load")
+    runner.verify_page_exact_origin(runner.WEB_URL + ":443/contact", approved_web, "Contact load")
+
+    # 2. HTTP downgrade raises AcceptanceFailure
+    downgraded_url = runner.WEB_URL.replace("https:", "http:") + "/ops"
+    with pytest.raises(runner.AcceptanceFailure, match="page navigated or redirected to unapproved origin"):
+        runner.verify_page_exact_origin(downgraded_url, approved_web, "Ops load")
+
+    # 3. Altered port raises AcceptanceFailure
+    altered_port_url = runner.WEB_URL + ":8443/ops"
+    with pytest.raises(runner.AcceptanceFailure, match="page navigated or redirected to unapproved origin"):
+        runner.verify_page_exact_origin(altered_port_url, approved_web, "Ops load")
+
+    # 4. Foreign destination raises AcceptanceFailure
+    with pytest.raises(runner.AcceptanceFailure, match="page navigated or redirected to unapproved origin"):
+        runner.verify_page_exact_origin("https://attacker.invalid/ops", approved_web, "Ops load")
+
+
+# -----------------------------------------------------------------------------
+# 7. G1: Strict Parent Ownership Gating & Dependency Preservation Tests
+# -----------------------------------------------------------------------------
+
+def test_teardown_preserves_unmarked_trainer_collision_and_all_dependencies():
+    db = FaithfulFakeDatabase()
+    trainer_id = "sandbox-trainer-aaaaaaaaaaaa"
+    run_id = "aaaaaaaaaaaa"
+    email = "delivered+sandbox-support-aaaaaaaaaaaa-api@resend.dev"
+
+    # Pre-existing unmarked trainer collision with real-schema dependencies
+    db.trainers.rows.append({"id": trainer_id, "name": "pre-existing unowned trainer"})
+    db.claim_events.rows.append({"id": "foreign-claim", "trainer_id": trainer_id})
+    db.notification_events.rows.append({"id": "foreign-notif", "dispatch_id": "foreign-dispatch", "target_id": trainer_id})
+    db.audit_log.rows.append({"target": trainer_id, "action": "real_owner_event"})
+    db.ops_obligations.rows.extend([
+        {"entity_id": "foreign-claim", "obligation_id": "obligation:claim:foreign-claim"},
+        {"entity_id": "foreign-dispatch", "obligation_id": "obligation:message:foreign-dispatch"},
+    ])
+
+    report = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer_id,
+        tracked_case_ids=set(),
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=run_id,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    remaining = {k: len(c.rows) for k, c in db.collections.items() if c.rows}
+    assert remaining == {
+        "trainers": 1,
+        "claim_events": 1,
+        "notification_events": 1,
+        "audit_log": 1,
+        "ops_obligations": 2,
+    }
+    assert report["deleted"]["trainers"] == 0
+    assert report["deleted"]["claim_events"] == 0
+    assert report["deleted"]["trainer_notifications"] == 0
+    assert report["deleted"]["trainer_audit"] == 0
+    assert report["deleted"]["trainer_obligations"] == 0
+
+
+def test_teardown_preserves_another_runs_marked_fixture():
+    db = FaithfulFakeDatabase()
+    trainer_id = "sandbox-trainer-other"
+    other_run_id = "other-run-id-999"
+    current_run_id = "current-run-id-111"
+    email = "delivered+sandbox-support-current-api@resend.dev"
+
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True, "test_run_id": other_run_id})
+    db.claim_events.rows.append({"id": "other-claim", "trainer_id": trainer_id})
+    db.notification_events.rows.append({"id": "other-notif", "dispatch_id": "other-dispatch", "target_id": trainer_id})
+    db.audit_log.rows.append({"target": trainer_id, "action": "other_run_audit"})
+    db.ops_obligations.rows.append({"entity_id": trainer_id, "obligation_id": f"obligation:trainer:{trainer_id}"})
+
+    report = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer_id,
+        tracked_case_ids=set(),
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=current_run_id,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    remaining = {k: len(c.rows) for k, c in db.collections.items() if c.rows}
+    assert remaining == {
+        "trainers": 1,
+        "claim_events": 1,
+        "notification_events": 1,
+        "audit_log": 1,
+        "ops_obligations": 1,
+    }
+    assert report["deleted"]["trainers"] == 0
+
+
+def test_teardown_preserves_missing_parent_unowned_history():
+    db = FaithfulFakeDatabase()
+    cid = "sup_foreign_removed_parent"
+    email = "delivered+sandbox-support-api@resend.dev"
+
+    # Support thread doc is absent, but foreign history exists
+    db.audit_log.rows.append({"target": cid, "action": "retained_real_support_history"})
+    db.notification_events.rows.append({"target_id": cid, "dispatch_id": "retained-foreign-dispatch"})
+    db.ops_obligations.rows.append({"entity_id": cid, "obligation_id": "obligation:support:" + cid})
+
+    report = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id="sandbox-trainer-unrelated",
+        tracked_case_ids={cid},
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id="run-test",
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    assert len(db.audit_log.rows) == 1
+    assert len(db.notification_events.rows) == 1
+    assert len(db.ops_obligations.rows) == 1
+    assert cid in report["unowned_preserved_cases"]
+    assert cid in report["unverified_missing_cases"]
+    assert cid not in report["tracked_case_ids"]
+
+
+def test_teardown_owned_lost_ack_idempotent_cleanup():
+    db = FaithfulFakeDatabase()
+    trainer_id = "sandbox-trainer-lostack"
+    run_id = "lostack-run-123"
+    cid = "sup_lostack_case"
+    claim_id = "claim-lostack-1"
+    disp_id = "dispatch-lostack-1"
+    email = "delivered+lostack@resend.dev"
+
+    durable_lineage = {
+        "run_id": run_id,
+        "trainer_id": trainer_id,
+        "trainer_owned": True,
+        "owned_case_ids": [cid],
+        "owned_claim_event_ids": [claim_id],
+        "owned_dispatch_ids": [disp_id],
+    }
+
+    # Leftover obligations remain while sources are already gone
+    db.ops_obligations.rows.extend([
+        {"obligation_id": f"obligation:claim:{claim_id}", "entity_id": claim_id},
+        {"obligation_id": f"obligation:message:{disp_id}", "entity_id": disp_id},
+        {"obligation_id": f"obligation:support:{cid}", "entity_id": cid},
+    ])
+
+    report = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer_id,
+        tracked_case_ids={cid},
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=run_id,
+        durable_lineage=durable_lineage,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    assert report["status"] == "CLEAN"
+    assert len(db.ops_obligations.rows) == 0
+    assert report["leftovers"].get("claim_event_obligations", 0) == 0
+    assert report["leftovers"].get("dispatch_obligations", 0) == 0
+
+
+# -----------------------------------------------------------------------------
+# 8. G2: Reject Volume-Only and Literal Shadowing Secret Preflight Tests
+# -----------------------------------------------------------------------------
+
+def test_enforce_sandbox_preflight_rejects_unmounted_wrong_volume_versions():
+    def mock_runner(cmd):
+        if "revisions" in cmd or "dtd-api-dev" in cmd:
+            desc = _make_valid_service_desc("dtd-api-dev")
+            desc["spec"]["volumes"] = [
+                {"name": "secret-admin-pass", "secret": {"secretName": "dtd-admin-pass", "items": [{"key": "99", "path": "val"}]}},
+                {"name": "secret-mongo-url", "secret": {"secretName": "dtd-mongo-url", "items": [{"key": "42", "path": "val"}]}},
+            ]
+            desc["spec"]["template"]["spec"]["volumes"] = desc["spec"]["volumes"]
+            return desc
+        if "dtd-web-dev" in cmd:
+            return _make_valid_service_desc("dtd-web-dev")
+        if "dtd-trainer-ingest-cron" in cmd:
+            return _make_valid_scheduler_desc(state="PAUSED")
+        return {}
+
+    with pytest.raises(runner.AcceptanceFailure, match="declares secret dtd-admin-pass with version '99', expected '4'"):
+        runner.enforce_sandbox_preflight("dogtrainersdirectory-dev", runner=mock_runner)
+
+
+def test_enforce_sandbox_preflight_rejects_volume_only_bindings():
+    def mock_runner(cmd):
+        if "revisions" in cmd or "dtd-api-dev" in cmd:
+            desc = _make_valid_service_desc("dtd-api-dev")
+            container = desc["spec"]["containers"][0]
+            container["env"] = [e for e in container["env"] if e.get("name") != "ADMIN_PASS"]
+            desc["spec"]["template"]["spec"]["containers"][0]["env"] = container["env"]
+            return desc
+        if "dtd-web-dev" in cmd:
+            return _make_valid_service_desc("dtd-web-dev")
+        if "dtd-trainer-ingest-cron" in cmd:
+            return _make_valid_scheduler_desc(state="PAUSED")
+        return {}
+
+    with pytest.raises(runner.AcceptanceFailure, match="ADMIN_PASS is not bound via container secretKeyRef"):
+        runner.enforce_sandbox_preflight("dogtrainersdirectory-dev", runner=mock_runner)
+
+
+def test_enforce_sandbox_preflight_rejects_literal_settings_shadowing_secrets():
+    def mock_runner(cmd):
+        if "revisions" in cmd or "dtd-api-dev" in cmd:
+            desc = _make_valid_service_desc("dtd-api-dev")
+            container = desc["spec"]["containers"][0]
+            container["env"].append({"name": "ADMIN_PASS", "value": "literal-secret-forbidden"})
+            desc["spec"]["template"]["spec"]["containers"][0]["env"] = container["env"]
+            return desc
+        if "dtd-web-dev" in cmd:
+            return _make_valid_service_desc("dtd-web-dev")
+        if "dtd-trainer-ingest-cron" in cmd:
+            return _make_valid_scheduler_desc(state="PAUSED")
+        return {}
+
+    with pytest.raises(runner.AcceptanceFailure, match="ADMIN_PASS specifies literal value in container env"):
+        runner.enforce_sandbox_preflight("dogtrainersdirectory-dev", runner=mock_runner)
+
+
+# -----------------------------------------------------------------------------
+# 9. G3: Durable Lineage Persistence, Two-Pass Recovery & Report Status Tests
+# -----------------------------------------------------------------------------
+
+def test_teardown_two_pass_recovery_retains_lineage_and_cleans_obligations(tmp_path):
+    trainer = "sandbox-trainer-recovery-run"
+    run = "recovery-run-001"
+    email = "delivered+recovery-run-api@resend.dev"
+    claim = "owned-claim-id-777"
+    dispatch = "owned-dispatch-id-888"
+    case = "sup_owned_recovery"
+
+    db = FaithfulFakeDatabase()
+    db.trainers.rows.append({"id": trainer, "test_fixture": True, "test_run_id": run})
+    db.claim_events.rows.append({"id": claim, "trainer_id": trainer})
+    db.support_threads.rows.append({"case_id": case, "sender_email": email})
+    db.notification_events.rows.append({"id": "owned-notif", "dispatch_id": dispatch, "target_id": case})
+    db.ops_obligations.rows.extend([
+        {"obligation_id": f"obligation:claim:{claim}", "entity_id": claim, "category": "claim_lock", "metadata": {"trainer_id": trainer}},
+        {"obligation_id": f"obligation:message:{dispatch}", "entity_id": dispatch, "category": "notification_delivery", "metadata": {"target_id": case}},
+    ])
+
+    # Pass 1: Transient obligation delete failure
+    db.collections["ops_obligations"].fail_delete = True
+
+    first = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer,
+        tracked_case_ids={case},
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=run,
+        recovery_dir=tmp_path,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    assert first["status"] == "FAILED"
+    assert len(db.ops_obligations.rows) == 2
+    assert len(db.trainers.rows) == 0
+    assert len(db.claim_events.rows) == 0
+    assert len(db.support_threads.rows) == 0
+    assert len(db.notification_events.rows) == 0
+    assert claim in first["owned_claim_event_ids"]
+    assert dispatch in first["owned_dispatch_ids"]
+    lineage_file = tmp_path / f"dtd_lineage_{run}.json"
+    assert lineage_file.exists()
+
+    # Pass 2: Transient error resolved. Retry with NO source rows in DB.
+    db.collections["ops_obligations"].fail_delete = False
+
+    second = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer,
+        tracked_case_ids={case},
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=run,
+        recovery_dir=tmp_path,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    assert second["status"] == "CLEAN"
+    assert len(db.ops_obligations.rows) == 0
+    assert second["deleted"]["claim_event_obligations"] == 1
+    assert second["deleted"]["dispatch_obligations"] == 1
+
+
+def test_teardown_aborts_before_source_deletion_if_lineage_persistence_fails(tmp_path):
+    blocker_file = tmp_path / "as_file"
+    blocker_file.write_text("not_a_dir")
+    unwriteable_dir = blocker_file / "sub_dir"
+
+    trainer = "sandbox-trainer-persist-fail"
+    run = "persist-fail-run"
+    email = "delivered+persist-fail@resend.dev"
+
+    db = FaithfulFakeDatabase()
+    db.trainers.rows.append({"id": trainer, "test_fixture": True, "test_run_id": run})
+    db.claim_events.rows.append({"id": "claim-persist-fail", "trainer_id": trainer})
+
+    report = runner.execute_deterministic_teardown(
+        db=db,
+        trainer_id=trainer,
+        tracked_case_ids=set(),
+        run_emails=[email],
+        admin_pass="test-pass",
+        run_id=run,
+        recovery_dir=unwriteable_dir,
+        http_request_fn=lambda *a, **k: (404, {}),
+    )
+
+    assert report["status"] == "FAILED"
+    assert any("lineage persistence failed" in err for err in report["cleanup_errors"])
+    assert len(db.trainers.rows) == 1
+    assert len(db.claim_events.rows) == 1
+
+
+def test_run_acceptance_final_report_contains_terminal_status_and_error(monkeypatch, tmp_path):
+    monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", "dogtrainersdirectory-dev")
+
+    def mock_preflight(cmd):
+        if "dtd-api-dev" in cmd or "revisions" in cmd:
+            return _make_valid_service_desc("dtd-api-dev")
+        if "dtd-web-dev" in cmd:
+            return _make_valid_service_desc("dtd-web-dev")
+        if "dtd-trainer-ingest-cron" in cmd:
+            return _make_valid_scheduler_desc(state="PAUSED")
+        return {}
+
+    fake_db = FaithfulFakeDatabase()
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            self.admin = SimpleNamespace(command=lambda cmd: True)
+
+        def __getitem__(self, name):
+            return fake_db
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(runner, "MongoClient", MockClient)
+
+    def mock_http(url, method="GET", headers=None, payload=None):
+        if "/api/health" in url:
+            return 500, {"error": "Early synthetic health crash"}
+        return 404, {}
+
+    monkeypatch.setattr(runner, "_http_request", mock_http)
+
+    with pytest.raises(runner.AcceptanceFailure):
+        asyncio.run(runner.run_acceptance(
+            mongo_url="mongodb+srv://user:pass@dtd-sandbox.wtrfq.mongodb.net/dtd_sandbox",
+            admin_pass="test-pass",
+            preflight_runner=mock_preflight,
+            artifact_dir=tmp_path,
+        ))
+
+    report_files = list(tmp_path.glob("run_report_*.json"))
+    assert len(report_files) == 1
+    report = json.loads(report_files[0].read_text())
+
+    assert report["status"] == "EXECUTION_FAILED"
+    assert "Early synthetic health crash" in report["error"]
+    assert report["evidence"]["status"] == "EXECUTION_FAILED"
+    assert "Early synthetic health crash" in report["evidence"]["error"]
+
+
+def test_run_acceptance_fails_when_report_save_fails(monkeypatch, tmp_path):
+    monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", "dogtrainersdirectory-dev")
+
+    def mock_preflight(cmd):
+        if "dtd-api-dev" in cmd or "revisions" in cmd:
+            return _make_valid_service_desc("dtd-api-dev")
+        if "dtd-web-dev" in cmd:
+            return _make_valid_service_desc("dtd-web-dev")
+        if "dtd-trainer-ingest-cron" in cmd:
+            return _make_valid_scheduler_desc(state="PAUSED")
+        return {}
+
+    fake_db = FaithfulFakeDatabase()
+
+    class MockClient:
+        def __init__(self, *args, **kwargs):
+            self.admin = SimpleNamespace(command=lambda cmd: True)
+
+        def __getitem__(self, name):
+            return fake_db
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(runner, "MongoClient", MockClient)
+    monkeypatch.setattr(runner, "_http_request", lambda url, *a, **k: (200, {"database": "available", "public_matching_enabled": True}))
+
+    real_write_text = Path.write_text
+
+    def failing_write_text(self, *args, **kwargs):
+        if "run_report_" in self.name:
+            raise OSError("Simulated disk write failure on final report")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", failing_write_text)
+
+    with pytest.raises(runner.AcceptanceFailure, match="Failed to persist required final run report"):
+        asyncio.run(runner.run_acceptance(
+            mongo_url="mongodb+srv://user:pass@dtd-sandbox.wtrfq.mongodb.net/dtd_sandbox",
+            admin_pass="test-pass",
+            preflight_runner=mock_preflight,
+            artifact_dir=tmp_path,
+        ))
