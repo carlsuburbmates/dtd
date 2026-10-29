@@ -442,38 +442,59 @@ class FaithfulFakeCollection:
         rows: Optional[List[Dict[str, Any]]] = None,
         fail_delete: bool = False,
         fail_count: bool = False,
+        fail_find: bool = False,
+        fail_find_one: bool = False,
+        cursor_error_after: Optional[int] = None,
     ):
         self.name = name
         self.rows = [dict(r) for r in (rows or [])]
         self.fail_delete = fail_delete
         self.fail_count = fail_count
+        self.fail_find = fail_find
+        self.fail_find_one = fail_find_one
+        self.cursor_error_after = cursor_error_after
+        self.delete_queries = []
+
+    @staticmethod
+    def _lookup(doc: Dict[str, Any], key: str):
+        current: Any = doc
+        for part in key.split("."):
+            if not isinstance(current, dict) or part not in current:
+                return False, None
+            current = current[part]
+        return True, current
 
     def _matches(self, doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
-        if "$or" in query:
-            return any(self._matches(doc, subq) for subq in query["$or"])
-
-        for k, v in query.items():
-            if "." in k:
-                parts = k.split(".")
-                curr: Any = doc
-                for p in parts:
-                    if isinstance(curr, dict):
-                        curr = curr.get(p)
+        # Mongo combines ordinary fields and logical clauses with AND. Do not let
+        # a matching $or silently bypass fixture/run ownership predicates.
+        for key, value in query.items():
+            if key == "$or":
+                if not any(self._matches(doc, part) for part in value):
+                    return False
+                continue
+            if key == "$and":
+                if not all(self._matches(doc, part) for part in value):
+                    return False
+                continue
+            exists, actual = self._lookup(doc, key)
+            if isinstance(value, dict):
+                for operator, expected in value.items():
+                    if operator == "$in":
+                        matches = actual in expected
+                    elif operator == "$exists":
+                        matches = exists is expected
+                    elif operator == "$ne":
+                        matches = actual != expected
                     else:
-                        curr = None
-                doc_val = curr
-            else:
-                doc_val = doc.get(k)
-
-            if isinstance(v, dict) and "$in" in v:
-                if doc_val not in v["$in"]:
-                    return False
-            else:
-                if doc_val != v:
-                    return False
+                        raise AssertionError(f"Unsupported closed-fixture operator: {operator}")
+                    if not matches:
+                        return False
+            elif actual != value:
+                return False
         return True
 
     def delete_many(self, query: Dict[str, Any]):
+        self.delete_queries.append(query)
         if self.fail_delete:
             raise RuntimeError(f"Datastore delete failure on {self.name}")
         initial_len = len(self.rows)
@@ -486,7 +507,14 @@ class FaithfulFakeCollection:
         return sum(1 for r in self.rows if self._matches(r, query))
 
     def find(self, query: Dict[str, Any], projection: Optional[Dict[str, int]] = None):
+        if self.fail_find:
+            raise RuntimeError(f"Datastore read failure on {self.name}")
         matching = [r for r in self.rows if self._matches(r, query)]
+        if self.cursor_error_after is not None:
+            def interrupted_cursor():
+                yield from matching[:self.cursor_error_after]
+                raise RuntimeError(f"Datastore cursor failure on {self.name}")
+            return interrupted_cursor()
         if projection:
             projected = []
             for r in matching:
@@ -499,6 +527,8 @@ class FaithfulFakeCollection:
         return matching
 
     def find_one(self, query: Dict[str, Any], projection: Optional[Dict[str, int]] = None):
+        if self.fail_find_one:
+            raise RuntimeError(f"Datastore ownership read failure on {self.name}")
         results = self.find(query, projection)
         return results[0] if results else None
 
@@ -523,16 +553,16 @@ class FaithfulFakeDatabase:
         return self.get_collection(name)
 
 
-def test_teardown_cleans_trainer_on_insert_acknowledgement_loss():
+def test_teardown_cleans_trainer_on_insert_acknowledgement_loss(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-unacked-123"
 
     # Simulate trainer fixture inserted into DB, but acknowledgement timed out
-    db.trainers.rows.append({"id": trainer_id, "name": "Unacked Trainer", "test_fixture": True})
-    db.claim_events.rows.append({"trainer_id": trainer_id, "otp_digest": "hash"})
-    db.notification_events.rows.append({"target_id": trainer_id, "kind": "trainer_claim_otp"})
+    db.trainers.rows.append({"id": trainer_id, "name": "Unacked Trainer", "test_fixture": True, "test_run_id": "fixture-run"})
+    db.claim_events.rows.append({"id": "claim-unacked", "trainer_id": trainer_id, "otp_digest": "fixture-hash"})
+    db.notification_events.rows.append({"id": "notif-unacked", "dispatch_id": "dispatch-unacked", "target_id": trainer_id, "kind": "trainer_claim_otp"})
     db.audit_log.rows.append({"target": trainer_id, "action": "trainer_created"})
-    db.ops_obligations.rows.append({"entity_id": trainer_id, "obligation_id": f"trainer:{trainer_id}"})
+    db.ops_obligations.rows.append({"entity_id": "claim-unacked", "obligation_id": "obligation:claim:claim-unacked"})
 
     def mock_request(url, method="GET", headers=None, payload=None):
         return 404, {}
@@ -544,6 +574,8 @@ def test_teardown_cleans_trainer_on_insert_acknowledgement_loss():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -551,12 +583,12 @@ def test_teardown_cleans_trainer_on_insert_acknowledgement_loss():
     assert report["deleted"]["claim_events"] == 1
     assert report["deleted"]["trainer_notifications"] == 1
     assert report["deleted"]["trainer_audit"] == 1
-    assert report["deleted"]["trainer_obligations"] == 1
+    assert report["deleted"]["claim_event_obligations"] == 1
     assert report["leftovers"]["trainers"] == 0
     assert report["all_leftovers_zero"] is True
 
 
-def test_teardown_discovers_and_cleans_untracked_support_cases_via_sender_email():
+def test_teardown_discovers_and_cleans_untracked_support_cases_via_sender_email(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-test"
     run_email = "delivered+sandbox-support-api-case1@resend.dev"
@@ -569,7 +601,7 @@ def test_teardown_discovers_and_cleans_untracked_support_cases_via_sender_email(
         "category": "complaint",
         "subject": "Lost response test",
     })
-    db.notification_events.rows.append({"target_id": case_id, "kind": "support_intake_receipt"})
+    db.notification_events.rows.append({"id": "notif-intake", "dispatch_id": "dispatch-intake", "target_id": case_id, "kind": "support_received_receipt"})
     db.audit_log.rows.append({"target": case_id, "action": "support_thread_created"})
     db.ops_obligations.rows.append({
         "entity_id": case_id,
@@ -590,6 +622,8 @@ def test_teardown_discovers_and_cleans_untracked_support_cases_via_sender_email(
         run_emails=[run_email],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -602,7 +636,7 @@ def test_teardown_discovers_and_cleans_untracked_support_cases_via_sender_email(
     assert report["leftovers"][f"obligations_{case_id}"] == 0
 
 
-def test_teardown_cleans_obligations_with_real_schema():
+def test_teardown_cleans_obligations_with_real_schema(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-ob-test"
     case_id = "sup_20261029_schema_test"
@@ -622,6 +656,8 @@ def test_teardown_cleans_obligations_with_real_schema():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -629,13 +665,13 @@ def test_teardown_cleans_obligations_with_real_schema():
     assert report["leftovers"][f"obligations_{case_id}"] == 0
 
 
-def test_teardown_preserves_unrelated_rows():
+def test_teardown_preserves_unrelated_rows(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-to-delete"
     other_trainer = "trainer-unrelated-permanent"
     other_case = "sup_unrelated_permanent"
 
-    db.trainers.rows.append({"id": trainer_id, "name": "Ephemeral Trainer", "test_fixture": True})
+    db.trainers.rows.append({"id": trainer_id, "name": "Ephemeral Trainer", "test_fixture": True, "test_run_id": "fixture-run"})
     db.trainers.rows.append({"id": other_trainer, "name": "Permanent Trainer"})
 
     db.support_threads.rows.append({"case_id": other_case, "sender_email": "permanent@example.com"})
@@ -651,6 +687,8 @@ def test_teardown_preserves_unrelated_rows():
         run_emails=["delivered+ephemeral@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -659,7 +697,7 @@ def test_teardown_preserves_unrelated_rows():
     assert db.ops_obligations.count_documents({"entity_id": other_case}) == 1
 
 
-def test_teardown_preserves_foreign_support_threads_referencing_trainer():
+def test_teardown_preserves_foreign_support_threads_referencing_trainer(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-fixture-run"
     foreign_case = "sup_foreign_visitor"
@@ -694,6 +732,8 @@ def test_teardown_preserves_foreign_support_threads_referencing_trainer():
         run_emails=[synthetic_email],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -704,13 +744,13 @@ def test_teardown_preserves_foreign_support_threads_referencing_trainer():
     assert db.ops_obligations.count_documents({"entity_id": foreign_case}) == 1
 
 
-def test_teardown_preserves_unowned_case_id_in_tracked_list():
+def test_teardown_preserves_unowned_case_id_in_tracked_list(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-fixture-run"
     foreign_case = "sup_substituted_response"
     synthetic_email = "delivered+fixture-run-api@resend.dev"
 
-    db.trainers.rows.append({"id": trainer_id, "test_fixture": True})
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"})
     db.support_threads.rows.append({
         "case_id": foreign_case,
         "sender_email": "other@example.invalid",
@@ -727,15 +767,17 @@ def test_teardown_preserves_unowned_case_id_in_tracked_list():
         run_emails=[synthetic_email],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
-    assert report["status"] == "CLEAN"
+    assert report["status"] == "FAILED"
     assert db.support_threads.count_documents({"case_id": foreign_case}) == 1
     assert "unowned_preserved_cases" in report
     assert foreign_case in report["unowned_preserved_cases"]
 
 
-def test_teardown_preserves_unmarked_trainer_collision():
+def test_teardown_preserves_unmarked_trainer_collision(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-colliding"
 
@@ -751,19 +793,21 @@ def test_teardown_preserves_unmarked_trainer_collision():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["deleted"]["trainers"] == 0
     assert db.trainers.count_documents({"id": trainer_id}) == 1
 
 
-def test_teardown_cleans_claim_event_obligation_lineage():
+def test_teardown_cleans_claim_event_obligation_lineage(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-claim-test"
     claim_id = "claim-owned-event-123"
     unrelated_claim_id = "claim-permanent-456"
 
-    db.trainers.rows.append({"id": trainer_id, "test_fixture": True})
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"})
     db.claim_events.rows.append({"id": claim_id, "trainer_id": trainer_id})
     db.claim_events.rows.append({"id": unrelated_claim_id, "trainer_id": "other-trainer"})
 
@@ -790,6 +834,8 @@ def test_teardown_cleans_claim_event_obligation_lineage():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -802,7 +848,7 @@ def test_teardown_cleans_claim_event_obligation_lineage():
     assert db.ops_obligations.count_documents({"entity_id": unrelated_claim_id}) == 1
 
 
-def test_teardown_cleans_notification_dispatch_obligation_lineage():
+def test_teardown_cleans_notification_dispatch_obligation_lineage(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-notif-test"
     case_id = "sup_owned_case_789"
@@ -810,7 +856,7 @@ def test_teardown_cleans_notification_dispatch_obligation_lineage():
     dispatch_id = "dispatch-owned-event-456"
     unrelated_dispatch_id = "dispatch-unrelated-event-999"
 
-    db.trainers.rows.append({"id": trainer_id, "test_fixture": True})
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"})
     db.support_threads.rows.append({"case_id": case_id, "sender_email": run_email})
     db.notification_events.rows.append({
         "id": "notif-owned",
@@ -848,6 +894,8 @@ def test_teardown_cleans_notification_dispatch_obligation_lineage():
         run_emails=[run_email],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -859,10 +907,10 @@ def test_teardown_cleans_notification_dispatch_obligation_lineage():
     assert db.ops_obligations.count_documents({"entity_id": unrelated_dispatch_id}) == 1
 
 
-def test_teardown_fails_on_datastore_delete_error():
+def test_teardown_fails_on_datastore_delete_error(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-del-fail"
-    db.collections["trainers"] = FaithfulFakeCollection("trainers", [{"id": trainer_id, "test_fixture": True}], fail_delete=True)
+    db.collections["trainers"] = FaithfulFakeCollection("trainers", [{"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"}], fail_delete=True)
 
     def mock_request(url, method="GET", headers=None, payload=None):
         return 404, {}
@@ -874,6 +922,8 @@ def test_teardown_fails_on_datastore_delete_error():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "FAILED"
@@ -881,11 +931,11 @@ def test_teardown_fails_on_datastore_delete_error():
     assert report["all_leftovers_zero"] is False
 
 
-def test_teardown_fails_on_datastore_count_error():
+def test_teardown_fails_on_datastore_count_error(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-count-fail"
     db.collections["trainers"] = FaithfulFakeCollection(
-        "trainers", [{"id": trainer_id, "test_fixture": True}], fail_count=True
+        "trainers", [{"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"}], fail_count=True
     )
 
     def mock_request(url, method="GET", headers=None, payload=None):
@@ -898,18 +948,20 @@ def test_teardown_fails_on_datastore_count_error():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "FAILED"
     assert report["leftovers"]["trainers"] == -1
-    assert any("trainers count error" in err for err in report["cleanup_errors"])
+    assert any("trainers" in err.lower() and "count" in err.lower() for err in report["cleanup_errors"])
     assert report["all_leftovers_zero"] is False
 
 
-def test_teardown_fails_when_endpoint_returns_200():
+def test_teardown_fails_when_endpoint_returns_200(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-200-leak"
-    db.trainers.rows.append({"id": trainer_id, "test_fixture": True})
+    db.trainers.rows.append({"id": trainer_id, "test_fixture": True, "test_run_id": "fixture-run"})
 
     def mock_request(url, method="GET", headers=None, payload=None):
         # Trainer still returns 200 OK -> leak!
@@ -924,6 +976,8 @@ def test_teardown_fails_when_endpoint_returns_200():
         run_emails=["delivered+test@resend.dev"],
         admin_pass="test-pass",
         http_request_fn=mock_request,
+        run_id="fixture-run",
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "FAILED"
@@ -1341,7 +1395,7 @@ def test_verify_page_exact_origin_behavior():
 # 7. G1: Strict Parent Ownership Gating & Dependency Preservation Tests
 # -----------------------------------------------------------------------------
 
-def test_teardown_preserves_unmarked_trainer_collision_and_all_dependencies():
+def test_teardown_preserves_unmarked_trainer_collision_and_all_dependencies(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-aaaaaaaaaaaa"
     run_id = "aaaaaaaaaaaa"
@@ -1365,6 +1419,7 @@ def test_teardown_preserves_unmarked_trainer_collision_and_all_dependencies():
         admin_pass="test-pass",
         run_id=run_id,
         http_request_fn=lambda *a, **k: (404, {}),
+        recovery_dir=tmp_path,
     )
 
     remaining = {k: len(c.rows) for k, c in db.collections.items() if c.rows}
@@ -1382,7 +1437,7 @@ def test_teardown_preserves_unmarked_trainer_collision_and_all_dependencies():
     assert report["deleted"]["trainer_obligations"] == 0
 
 
-def test_teardown_preserves_another_runs_marked_fixture():
+def test_teardown_preserves_another_runs_marked_fixture(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-other"
     other_run_id = "other-run-id-999"
@@ -1403,6 +1458,7 @@ def test_teardown_preserves_another_runs_marked_fixture():
         admin_pass="test-pass",
         run_id=current_run_id,
         http_request_fn=lambda *a, **k: (404, {}),
+        recovery_dir=tmp_path,
     )
 
     remaining = {k: len(c.rows) for k, c in db.collections.items() if c.rows}
@@ -1416,7 +1472,7 @@ def test_teardown_preserves_another_runs_marked_fixture():
     assert report["deleted"]["trainers"] == 0
 
 
-def test_teardown_preserves_missing_parent_unowned_history():
+def test_teardown_preserves_missing_parent_unowned_history(tmp_path):
     db = FaithfulFakeDatabase()
     cid = "sup_foreign_removed_parent"
     email = "delivered+sandbox-support-api@resend.dev"
@@ -1434,6 +1490,7 @@ def test_teardown_preserves_missing_parent_unowned_history():
         admin_pass="test-pass",
         run_id="run-test",
         http_request_fn=lambda *a, **k: (404, {}),
+        recovery_dir=tmp_path,
     )
 
     assert len(db.audit_log.rows) == 1
@@ -1444,7 +1501,7 @@ def test_teardown_preserves_missing_parent_unowned_history():
     assert cid not in report["tracked_case_ids"]
 
 
-def test_teardown_owned_lost_ack_idempotent_cleanup():
+def test_teardown_owned_lost_ack_idempotent_cleanup(tmp_path):
     db = FaithfulFakeDatabase()
     trainer_id = "sandbox-trainer-lostack"
     run_id = "lostack-run-123"
@@ -1454,6 +1511,10 @@ def test_teardown_owned_lost_ack_idempotent_cleanup():
     email = "delivered+lostack@resend.dev"
 
     durable_lineage = {
+        "schema_version": 1,
+        "project": runner.SANDBOX_PROJECT,
+        "database": runner.SANDBOX_DB,
+        "run_emails": [email],
         "run_id": run_id,
         "trainer_id": trainer_id,
         "trainer_owned": True,
@@ -1478,6 +1539,7 @@ def test_teardown_owned_lost_ack_idempotent_cleanup():
         run_id=run_id,
         durable_lineage=durable_lineage,
         http_request_fn=lambda *a, **k: (404, {}),
+        recovery_dir=tmp_path,
     )
 
     assert report["status"] == "CLEAN"
@@ -1613,10 +1675,14 @@ def test_teardown_two_pass_recovery_retains_lineage_and_cleans_obligations(tmp_p
     assert second["deleted"]["dispatch_obligations"] == 1
 
 
-def test_teardown_aborts_before_source_deletion_if_lineage_persistence_fails(tmp_path):
-    blocker_file = tmp_path / "as_file"
-    blocker_file.write_text("not_a_dir")
-    unwriteable_dir = blocker_file / "sub_dir"
+def test_teardown_aborts_before_source_deletion_if_lineage_persistence_fails(tmp_path, monkeypatch):
+    write_attempts = []
+
+    def reject_lineage_write(path, payload):
+        write_attempts.append(path)
+        raise PermissionError("Synthetic lineage persistence failure")
+
+    monkeypatch.setattr(runner, "_write_atomic_json", reject_lineage_write)
 
     trainer = "sandbox-trainer-persist-fail"
     run = "persist-fail-run"
@@ -1633,12 +1699,13 @@ def test_teardown_aborts_before_source_deletion_if_lineage_persistence_fails(tmp
         run_emails=[email],
         admin_pass="test-pass",
         run_id=run,
-        recovery_dir=unwriteable_dir,
+        recovery_dir=tmp_path,
         http_request_fn=lambda *a, **k: (404, {}),
     )
 
     assert report["status"] == "FAILED"
-    assert any("lineage persistence failed" in err for err in report["cleanup_errors"])
+    assert write_attempts, "The failure must exercise persistence, not an earlier path-validation error"
+    assert any("lineage persistence failed" in err.lower() for err in report["cleanup_errors"])
     assert len(db.trainers.rows) == 1
     assert len(db.claim_events.rows) == 1
 
@@ -1737,3 +1804,196 @@ def test_run_acceptance_fails_when_report_save_fails(monkeypatch, tmp_path):
             preflight_runner=mock_preflight,
             artifact_dir=tmp_path,
         ))
+
+# -----------------------------------------------------------------------------
+# G1/G3 completion: independently scoped recovery, complete reads and retry safety
+# -----------------------------------------------------------------------------
+
+def _owned_cleanup_graph(run_id="strict-run"):
+    """Synthetic rows follow the authoritative application writers' identities."""
+    db = FaithfulFakeDatabase()
+    trainer = f"sandbox-trainer-{run_id}"
+    email = f"delivered+{run_id}-api@resend.dev"
+    case, claim, dispatch = "sup_strict_owned", "claim-strict-owned", "dispatch-strict-owned"
+    db.trainers.rows.append({"id": trainer, "test_fixture": True, "test_run_id": run_id})
+    db.support_threads.rows.append({"case_id": case, "sender_email": email, "trainer_id": trainer})
+    db.claim_events.rows.append({"id": claim, "trainer_id": trainer})
+    db.notification_events.rows.append({
+        "id": "notif-strict-owned", "dispatch_id": dispatch,
+        "target_kind": "support_thread", "target_id": case,
+    })
+    db.audit_log.rows.append({"id": "audit-strict-owned", "target": case})
+    db.ops_obligations.rows.extend([
+        {"obligation_id": f"obligation:support:{case}", "entity_id": case},
+        {"obligation_id": f"obligation:claim:{claim}", "entity_id": claim,
+         "category": "claim_lock", "metadata": {"trainer_id": trainer}},
+        {"obligation_id": f"obligation:message:{dispatch}", "entity_id": dispatch,
+         "category": "notification_delivery", "metadata": {"target_id": case}},
+    ])
+    args = {
+        "db": db, "trainer_id": trainer, "tracked_case_ids": {case},
+        "run_emails": [email], "run_id": run_id, "admin_pass": "synthetic-placeholder",
+        "http_request_fn": lambda *a, **k: (404, {}),
+    }
+    return db, args, (case, claim, dispatch)
+
+
+def _complete_lineage(args, identifiers):
+    case, claim, dispatch = identifiers
+    return {
+        "schema_version": 1, "project": runner.SANDBOX_PROJECT, "database": runner.SANDBOX_DB,
+        "run_id": args["run_id"], "trainer_id": args["trainer_id"],
+        "run_emails": list(args["run_emails"]), "trainer_owned": True,
+        "owned_case_ids": [case], "owned_claim_event_ids": [claim], "owned_dispatch_ids": [dispatch],
+    }
+
+
+def _rows_snapshot(db):
+    # JSON roundtrip prevents nested metadata aliases from concealing mutations.
+    return json.loads(json.dumps({name: collection.rows for name, collection in db.collections.items() if collection.rows}))
+
+
+def _assert_no_deletion(db, before):
+    assert _rows_snapshot(db) == before
+    assert not any(collection.delete_queries for collection in db.collections.values()), "No delete may follow unverified ownership or inventory"
+
+
+@pytest.mark.parametrize("missing", ["run_id", "recovery_dir"])
+def test_teardown_requires_explicit_recovery_scope_before_deleting(tmp_path, missing):
+    db, args, _ = _owned_cleanup_graph()
+    args["recovery_dir"] = tmp_path
+    args[missing] = "" if missing == "run_id" else None
+    before = _rows_snapshot(db)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("field,bad_value", [
+    ("schema_version", 2), ("project", "production-project"), ("database", "DTD"),
+    ("run_id", "another-run"), ("trainer_id", "another-trainer"),
+    ("run_emails", ["delivered+another-run@resend.dev"]), ("trainer_owned", "True"),
+    ("owned_case_ids", "not-a-list"), ("owned_claim_event_ids", [17]),
+    ("owned_dispatch_ids", {"not": "a-list"}),
+])
+@pytest.mark.parametrize("source", ["disk", "argument"])
+def test_teardown_rejects_mismatched_or_invalid_lineage_without_deletes(tmp_path, field, bad_value, source):
+    db, args, identifiers = _owned_cleanup_graph()
+    lineage = _complete_lineage(args, identifiers)
+    lineage[field] = bad_value
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    original = json.dumps(lineage, sort_keys=True)
+    path.write_text(original)
+    args["recovery_dir"] = tmp_path
+    if source == "argument":
+        args["durable_lineage"] = lineage
+    before = _rows_snapshot(db)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED", (field, source)
+    _assert_no_deletion(db, before)
+    assert path.read_text() == original, "Invalid recovery evidence must not be silently overwritten"
+
+
+def test_teardown_rejects_unreadable_lineage_without_overwriting_or_deleting(tmp_path):
+    db, args, _ = _owned_cleanup_graph()
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    path.write_text("{partial-json")
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert path.read_text() == "{partial-json"
+
+
+@pytest.mark.parametrize("parent", ["trainer", "case"])
+def test_teardown_current_foreign_owner_overrides_loaded_lineage_without_deleting(tmp_path, parent):
+    db, args, identifiers = _owned_cleanup_graph()
+    lineage = _complete_lineage(args, identifiers)
+    if parent == "trainer":
+        db.trainers.rows[0]["test_run_id"] = "other-run"
+    else:
+        db.support_threads.rows[0]["sender_email"] = "foreign-owner@example.invalid"
+        db.support_threads.rows[0]["test_run_id"] = "other-run"
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    original = json.dumps(lineage)
+    path.write_text(original)
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert path.read_text() == original
+
+
+def test_teardown_fixture_without_current_run_marker_preserves_whole_graph(tmp_path):
+    db, args, _ = _owned_cleanup_graph()
+    db.trainers.rows[0].pop("test_run_id")
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+
+
+@pytest.mark.parametrize("collection,operation", [
+    ("trainers", "fail_find_one"), ("support_threads", "fail_find_one"),
+    ("support_threads", "fail_find"), ("claim_events", "fail_find"),
+    ("notification_events", "fail_find"),
+])
+def test_teardown_required_read_failure_preserves_sources_and_recovery_for_retry(tmp_path, collection, operation):
+    db, args, identifiers = _owned_cleanup_graph()
+    lineage = _complete_lineage(args, identifiers)
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    original = json.dumps(lineage, sort_keys=True)
+    path.write_text(original)
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    setattr(db[collection], operation, True)
+    first = runner.execute_deterministic_teardown(**args)
+    assert first["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert path.read_text() == original, "Unknown inventory must not overwrite complete recovery evidence"
+
+    setattr(db[collection], operation, False)
+    second = runner.execute_deterministic_teardown(**args)
+    assert second["status"] == "CLEAN"
+    assert not _rows_snapshot(db), "Retry must remove all proven owned rows and obligations"
+
+
+@pytest.mark.parametrize("collection", ["claim_events", "notification_events"])
+def test_teardown_partial_cursor_failure_never_commits_incomplete_inventory(tmp_path, collection):
+    db, args, identifiers = _owned_cleanup_graph()
+    lineage = _complete_lineage(args, identifiers)
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    original = json.dumps(lineage, sort_keys=True)
+    path.write_text(original)
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    db[collection].cursor_error_after = 1
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert path.read_text() == original
+
+
+def test_teardown_atomic_lineage_replace_failure_preserves_old_proof_and_sources(tmp_path, monkeypatch):
+    db, args, identifiers = _owned_cleanup_graph()
+    path = tmp_path / f"dtd_lineage_{args['run_id']}.json"
+    original = json.dumps(_complete_lineage(args, identifiers), sort_keys=True)
+    path.write_text(original)
+    args["recovery_dir"] = tmp_path
+    before = _rows_snapshot(db)
+    replace = os.replace
+
+    def deny_target_replace(source, target):
+        if Path(target) == path:
+            raise OSError("Synthetic atomic lineage replacement failure")
+        return replace(source, target)
+
+    monkeypatch.setattr(os, "replace", deny_target_replace)
+    report = runner.execute_deterministic_teardown(**args)
+    assert report["status"] == "FAILED"
+    _assert_no_deletion(db, before)
+    assert path.read_text() == original

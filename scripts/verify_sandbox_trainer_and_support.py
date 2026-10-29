@@ -439,6 +439,27 @@ def enforce_sandbox_preflight(
     }
 
 
+def _write_atomic_json(path: Path, payload: Dict[str, Any]) -> None:
+    """Publish a complete recovery record durably before destructive work."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+            stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def execute_deterministic_teardown(
     db: Any,
     trainer_id: str,
@@ -451,452 +472,227 @@ def execute_deterministic_teardown(
     durable_lineage: Optional[Dict[str, Any]] = None,
     recovery_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    print("\n[5/5] Executing Deterministic Teardown & Cleanup...")
+    """Validate ownership, persist a complete inventory, then remove only that inventory.
+
+    Inventory/read failures perform zero deletes and never replace existing proof.
+    A retry uses the same explicit run context and durable identifiers, even after
+    its source rows have disappeared. Current contradictory records always win.
+    """
     request_fn = http_request_fn or _http_request
-    del_counts: Dict[str, Any] = {
-        "trainers": 0,
-        "claim_events": 0,
-        "trainer_notifications": 0,
-        "trainer_audit": 0,
-        "trainer_obligations": 0,
-        "claim_event_obligations": 0,
-        "dispatch_obligations": 0,
-        "support_threads": {},
-        "support_notifications": {},
-        "support_audit": {},
-        "ops_obligations": {},
+    errors: List[str] = []
+    preserved: Set[str] = set()
+    missing: Set[str] = set()
+    deleted: Dict[str, Any] = {
+        "trainers": 0, "claim_events": 0, "trainer_notifications": 0,
+        "trainer_audit": 0, "trainer_obligations": 0,
+        "claim_event_obligations": 0, "dispatch_obligations": 0,
+        "support_threads": {}, "support_notifications": {},
+        "support_audit": {}, "ops_obligations": {},
     }
-    cleanup_errors: List[str] = []
+    report: Dict[str, Any] = {
+        "status": "FAILED", "deleted": deleted, "leftovers": {},
+        "endpoint_404s": {}, "cleanup_errors": errors,
+        "all_leftovers_zero": False, "all_endpoints_404": False,
+        "tracked_case_ids": [], "unowned_preserved_cases": [],
+        "unverified_missing_cases": [], "owned_claim_event_ids": [],
+        "owned_dispatch_ids": [], "durable_lineage": None,
+    }
 
-    recovery_path = recovery_dir or Path(tempfile.gettempdir())
-    lineage_file = recovery_path / f"dtd_lineage_{run_id or 'default'}.json"
+    def failed(message: str) -> Dict[str, Any]:
+        errors.append(message)
+        report["unowned_preserved_cases"] = sorted(preserved)
+        report["unverified_missing_cases"] = sorted(missing)
+        return report
 
-    # Load existing lineage from disk if not supplied directly
-    loaded_lineage = None
-    if durable_lineage is not None:
-        loaded_lineage = dict(durable_lineage)
-    else:
-        try:
-            if lineage_file.exists():
-                loaded_lineage = json.loads(lineage_file.read_text())
-        except Exception as e:
-            cleanup_errors.append(f"failed to load existing lineage file {lineage_file}: {e}")
-
-    # 1. Validate trainer ownership
-    trainer_doc = None
+    if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", run_id):
+        return failed("An explicit valid run_id is required for cleanup.")
+    if recovery_dir is None or not isinstance(trainer_id, str) or not trainer_id:
+        return failed("Explicit recovery_dir and trainer_id are required for cleanup.")
+    if not run_emails or any(not isinstance(value, str) or not value for value in run_emails):
+        return failed("Explicit synthetic run_emails are required for cleanup.")
+    context = {
+        "schema_version": 1, "project": SANDBOX_PROJECT, "database": SANDBOX_DB,
+        "run_id": run_id, "trainer_id": trainer_id, "run_emails": sorted(set(run_emails)),
+    }
+    lineage_file = Path(recovery_dir) / f"dtd_lineage_{run_id}.json"
+    cases: Set[str] = set()
+    claims: Set[str] = set()
+    dispatches: Set[str] = set()
+    prior_trainer_owned = False
     try:
-        if hasattr(db, "trainers"):
-            if hasattr(db.trainers, "find_one"):
-                trainer_doc = db.trainers.find_one({"id": trainer_id})
-            elif hasattr(db.trainers, "find"):
-                docs = list(db.trainers.find({"id": trainer_id}))
-                trainer_doc = docs[0] if docs else None
-    except Exception as e:
-        cleanup_errors.append(f"trainer lookup error: {e}")
+        records = []
+        if lineage_file.exists():
+            records.append(json.loads(lineage_file.read_text(encoding="utf-8")))
+        if durable_lineage is not None:
+            records.append(durable_lineage)
+        for record in records:
+            if not isinstance(record, dict) or any(record.get(k) != v for k, v in context.items()):
+                raise AcceptanceFailure("Recovery proof does not match the exact run/trainer/sandbox context.")
+            if type(record.get("schema_version")) is not int or type(record.get("trainer_owned")) is not bool:
+                raise AcceptanceFailure("Invalid recovery schema or trainer ownership type.")
+            for key in ("owned_case_ids", "owned_claim_event_ids", "owned_dispatch_ids"):
+                values = record.get(key)
+                if not isinstance(values, list) or any(not isinstance(v, str) or not v for v in values):
+                    raise AcceptanceFailure(f"Invalid recovery identifier list: {key}.")
+            if record["owned_claim_event_ids"] and not record["trainer_owned"]:
+                raise AcceptanceFailure("Claim recovery proof requires validated trainer ownership.")
+            cases.update(record["owned_case_ids"])
+            claims.update(record["owned_claim_event_ids"])
+            dispatches.update(record["owned_dispatch_ids"])
+            prior_trainer_owned |= record["trainer_owned"]
+    except Exception as exc:
+        return failed(f"Recovery proof could not be validated: {exc}")
 
-    trainer_owned = False
-    if trainer_doc is not None:
-        is_fixture = bool(trainer_doc.get("test_fixture") is True)
-        doc_run_id = trainer_doc.get("test_run_id")
-        if is_fixture:
-            if doc_run_id and run_id:
-                trainer_owned = (doc_run_id == run_id)
-            else:
-                trainer_owned = True
+    # Required reads complete before any persistence/deletion. Cursor errors are
+    # failures too; eagerly materialise each cursor rather than saving half a scan.
+    try:
+        parent = db.trainers.find_one({"id": trainer_id})
+        if parent is not None:
+            if parent.get("test_fixture") is not True or parent.get("test_run_id") != run_id:
+                return failed("Trainer ownership is unknown or contradicts this run; all records preserved.")
+            trainer_owned = True
         else:
-            trainer_owned = False
-            print(f"      [!] Preserving unmarked colliding trainer {trainer_id}")
-    else:
-        # Parent row absent. Only owned if durable prior proof binds this trainer to run
-        if loaded_lineage and loaded_lineage.get("trainer_owned") is True:
-            lineage_trainer_id = loaded_lineage.get("trainer_id")
-            lineage_run_id = loaded_lineage.get("run_id")
-            if (not lineage_trainer_id or lineage_trainer_id == trainer_id) and (not lineage_run_id or not run_id or lineage_run_id == run_id):
-                trainer_owned = True
+            trainer_owned = prior_trainer_owned
 
-    # 2. Discover support threads created strictly by this run's synthetic emails
-    # (Do NOT discover by trainer_id alone, to avoid adopting unrelated customer enquiries)
-    try:
-        support_coll = getattr(db, "support_threads", None)
-        if support_coll is not None and hasattr(support_coll, "find"):
-            discovered = support_coll.find({"sender_email": {"$in": run_emails}}, {"case_id": 1})
-            for doc in discovered:
-                cid = doc.get("case_id")
-                if cid:
-                    tracked_case_ids.add(cid)
-    except Exception as e:
-        cleanup_errors.append(f"discovery error: {e}")
+        discovered = list(db.support_threads.find({"sender_email": {"$in": context["run_emails"]}}))
+        for row in discovered:
+            if not isinstance(row.get("case_id"), str) or not row["case_id"]:
+                raise AcceptanceFailure("Support inventory contains a row without a case ID.")
+        candidates = cases | set(tracked_case_ids) | {row["case_id"] for row in discovered}
+        for cid in sorted(candidates):
+            if not isinstance(cid, str) or not cid:
+                raise AcceptanceFailure("Invalid candidate support identifier.")
+            thread = db.support_threads.find_one({"case_id": cid})
+            if thread is None:
+                if cid not in cases:
+                    preserved.add(cid)
+                    missing.add(cid)
+                    return failed("Missing support parent has no validated prior ownership proof.")
+            elif (thread.get("sender_email") not in context["run_emails"] or
+                  thread.get("test_run_id") not in (None, "", run_id)):
+                preserved.add(cid)
+                cases.discard(cid)
+                return failed("Current support ownership contradicts this run; all records preserved.")
+            cases.add(cid)
 
-    # 3. Validate ownership of all tracked case IDs against database records or durable lineage
-    # (Response case IDs or DOM IDs must not delete unowned/foreign records)
-    validated_owned_case_ids: Set[str] = set()
-    unowned_preserved_cases: List[str] = []
-    unverified_missing_cases: List[str] = []
+        claim_rows = list(db.claim_events.find({"trainer_id": trainer_id}))
+        if not trainer_owned and claim_rows:
+            return failed("Orphan trainer claims lack validated ownership; all records preserved.")
+        if trainer_owned:
+            for row in claim_rows:
+                if not isinstance(row.get("id"), str) or not row["id"]:
+                    raise AcceptanceFailure("Claim inventory contains a row without an ID.")
+                claims.add(row["id"])
+        if claims:
+            for row in list(db.claim_events.find({"id": {"$in": sorted(claims)}})):
+                if row.get("trainer_id") != trainer_id:
+                    raise AcceptanceFailure("Current claim ownership contradicts recovery proof.")
 
-    if loaded_lineage and "owned_case_ids" in loaded_lineage:
-        for cid in loaded_lineage["owned_case_ids"]:
-            validated_owned_case_ids.add(cid)
+        targets = sorted(cases | ({trainer_id} if trainer_owned else set()))
+        notification_rows = list(db.notification_events.find({"target_id": {"$in": targets}})) if targets else []
+        if not trainer_owned:
+            if (db.notification_events.count_documents({"target_id": trainer_id}) or
+                db.audit_log.count_documents({"target": trainer_id}) or
+                db.ops_obligations.count_documents({"entity_id": trainer_id})):
+                return failed("Orphan trainer history lacks validated ownership; all records preserved.")
+        for row in notification_rows:
+            dispatch = row.get("dispatch_id") or row.get("id")
+            if not isinstance(dispatch, str) or not dispatch:
+                raise AcceptanceFailure("Notification inventory contains no recoverable identifier.")
+            dispatches.add(dispatch)
+        if dispatches:
+            existing = list(db.notification_events.find({"$or": [
+                {"dispatch_id": {"$in": sorted(dispatches)}}, {"id": {"$in": sorted(dispatches)}},
+            ]}))
+            if any(row.get("target_id") not in targets for row in existing):
+                raise AcceptanceFailure("Current notification ownership contradicts recovery proof.")
+    except Exception as exc:
+        return failed(f"Required ownership/lineage inventory failed; nothing deleted: {exc}")
 
-    for cid in sorted(tracked_case_ids):
-        try:
-            thread_doc = None
-            if hasattr(db, "support_threads") and hasattr(db.support_threads, "find_one"):
-                thread_doc = db.support_threads.find_one({"case_id": cid})
-            elif hasattr(db, "support_threads") and hasattr(db.support_threads, "find"):
-                docs = list(db.support_threads.find({"case_id": cid}))
-                thread_doc = docs[0] if docs else None
-
-            if thread_doc is None:
-                if cid in validated_owned_case_ids:
-                    # Verified from durable prior proof
-                    pass
-                else:
-                    unowned_preserved_cases.append(cid)
-                    unverified_missing_cases.append(cid)
-                    print(f"      [!] Preserving unverified missing support case {cid} (no DB record and no durable prior proof)")
-            else:
-                sender = thread_doc.get("sender_email")
-                doc_run_id = thread_doc.get("test_run_id")
-                is_owned = False
-                if sender in run_emails:
-                    is_owned = True
-                elif doc_run_id and run_id and doc_run_id == run_id:
-                    is_owned = True
-
-                if is_owned:
-                    validated_owned_case_ids.add(cid)
-                else:
-                    unowned_preserved_cases.append(cid)
-                    print(f"      [!] Preserving unowned foreign support thread {cid} (sender: {sender!r})")
-        except Exception as e:
-            cleanup_errors.append(f"case ownership check {cid}: {e}")
-
-    # 4. Gather lineage IDs before deleting source rows
-    owned_claim_event_ids_set: Set[str] = set()
-    if loaded_lineage and "owned_claim_event_ids" in loaded_lineage:
-        for ce_id in loaded_lineage["owned_claim_event_ids"]:
-            owned_claim_event_ids_set.add(ce_id)
-
-    if trainer_owned:
-        try:
-            if hasattr(db, "claim_events") and hasattr(db.claim_events, "find"):
-                for ce in db.claim_events.find({"trainer_id": trainer_id}):
-                    ce_id = ce.get("id") or str(ce.get("_id", ""))
-                    if ce_id:
-                        owned_claim_event_ids_set.add(ce_id)
-        except Exception as e:
-            cleanup_errors.append(f"claim event lineage gather: {e}")
-
-    owned_claim_event_ids = sorted(owned_claim_event_ids_set)
-
-    owned_dispatch_ids_set: Set[str] = set()
-    if loaded_lineage and "owned_dispatch_ids" in loaded_lineage:
-        for disp_id in loaded_lineage["owned_dispatch_ids"]:
-            owned_dispatch_ids_set.add(disp_id)
-
-    target_ids = []
-    if trainer_owned:
-        target_ids.append(trainer_id)
-    target_ids.extend(sorted(validated_owned_case_ids))
-
-    if target_ids:
-        try:
-            if hasattr(db, "notification_events") and hasattr(db.notification_events, "find"):
-                for notif in db.notification_events.find({"target_id": {"$in": target_ids}}):
-                    disp_id = notif.get("dispatch_id")
-                    if disp_id:
-                        owned_dispatch_ids_set.add(disp_id)
-        except Exception as e:
-            cleanup_errors.append(f"notification dispatch lineage gather: {e}")
-
-    owned_dispatch_ids = sorted(owned_dispatch_ids_set)
-
-    # 5. Persist lineage BEFORE deleting source rows
     current_lineage = {
-        "run_id": run_id,
-        "trainer_id": trainer_id,
-        "trainer_owned": trainer_owned,
-        "owned_case_ids": sorted(validated_owned_case_ids),
-        "owned_claim_event_ids": owned_claim_event_ids,
-        "owned_dispatch_ids": owned_dispatch_ids,
+        **context, "trainer_owned": trainer_owned, "owned_case_ids": sorted(cases),
+        "owned_claim_event_ids": sorted(claims), "owned_dispatch_ids": sorted(dispatches),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-
+    report.update({
+        "tracked_case_ids": sorted(cases), "owned_claim_event_ids": sorted(claims),
+        "owned_dispatch_ids": sorted(dispatches), "durable_lineage": current_lineage,
+    })
     try:
-        lineage_file.parent.mkdir(parents=True, exist_ok=True)
-        lineage_file.write_text(json.dumps(current_lineage, indent=2) + "\n")
-    except Exception as e:
-        cleanup_errors.append(f"lineage persistence failed before source deletion: {e}")
-        return {
-            "status": "FAILED",
-            "deleted": del_counts,
-            "leftovers": {},
-            "endpoint_404s": {},
-            "cleanup_errors": cleanup_errors,
-            "all_leftovers_zero": False,
-            "all_endpoints_404": False,
-            "tracked_case_ids": sorted(validated_owned_case_ids),
-            "unowned_preserved_cases": sorted(unowned_preserved_cases),
-            "unverified_missing_cases": sorted(unverified_missing_cases),
-            "owned_claim_event_ids": owned_claim_event_ids,
-            "owned_dispatch_ids": owned_dispatch_ids,
-            "durable_lineage": current_lineage,
-        }
+        _write_atomic_json(lineage_file, current_lineage)
+    except Exception as exc:
+        return failed(f"Lineage persistence failed before source deletion: {exc}")
 
-    # 6. Delete synthetic trainer fixtures and dependent records with explicit test fixture requirement
-    # (Unmarked pre-existing trainers colliding on ID must never have parent or dependencies deleted)
+    # Every destructive query derives from the validated, durable inventory.
+    # No speculative legacy aliases or metadata-wide trainer sweeps are needed.
+    operations = []
     if trainer_owned:
+        operations.extend([
+            ("trainers", db.trainers, {"id": trainer_id, "test_fixture": True, "test_run_id": run_id}, None),
+            ("claim_events", db.claim_events, {"trainer_id": trainer_id, "id": {"$in": sorted(claims)}}, None),
+            ("trainer_notifications", db.notification_events, {"target_id": trainer_id}, None),
+            ("trainer_audit", db.audit_log, {"target": trainer_id}, None),
+            ("trainer_obligations", db.ops_obligations, {"entity_id": trainer_id}, None),
+        ])
+    if claims:
+        operations.append(("claim_event_obligations", db.ops_obligations, {"$or": [
+            {"entity_id": {"$in": sorted(claims)}},
+            {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in sorted(claims)]}},
+        ]}, None))
+    for cid in sorted(cases):
+        operations.extend([
+            ("support_threads", db.support_threads, {"case_id": cid}, cid),
+            ("support_notifications", db.notification_events, {"target_id": cid}, cid),
+            ("support_audit", db.audit_log, {"target": cid}, cid),
+            ("ops_obligations", db.ops_obligations, {"$or": [
+                {"entity_id": cid}, {"obligation_id": f"obligation:support:{cid}"},
+            ]}, cid),
+        ])
+    if dispatches:
+        operations.append(("dispatch_obligations", db.ops_obligations, {"$or": [
+            {"entity_id": {"$in": sorted(dispatches)}},
+            {"obligation_id": {"$in": [f"obligation:message:{did}" for did in sorted(dispatches)]}},
+        ]}, None))
+    for key, collection, query, cid in operations:
         try:
-            trainer_del_filter: Dict[str, Any] = {"id": trainer_id, "test_fixture": True}
-            if run_id:
-                trainer_del_filter["$or"] = [
-                    {"test_run_id": run_id},
-                    {"test_run_id": {"$exists": False}},
-                    {"test_run_id": None},
-                ]
-            del_counts["trainers"] = db.trainers.delete_many(trainer_del_filter).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"trainers delete: {e}")
+            count = collection.delete_many(query).deleted_count
+            if cid is None:
+                deleted[key] = count
+            else:
+                deleted[key][cid] = count
+        except Exception as exc:
+            errors.append(f"{key} delete failed: {exc}")
 
+    leftovers = report["leftovers"]
+    for key, collection, query, cid in operations:
+        prefixes = {"support_threads": "thread", "support_notifications": "notif", "support_audit": "audit", "ops_obligations": "obligations"}
+        label = key if cid is None else f"{prefixes[key]}_{cid}"
         try:
-            del_counts["claim_events"] = db.claim_events.delete_many({"trainer_id": trainer_id}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"claim_events delete: {e}")
-
-        try:
-            del_counts["trainer_notifications"] = db.notification_events.delete_many({"target_id": trainer_id}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"trainer_notifications delete: {e}")
-
-        try:
-            del_counts["trainer_audit"] = db.audit_log.delete_many({"target": trainer_id}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"trainer_audit delete: {e}")
-
-        try:
-            del_counts["trainer_obligations"] = db.ops_obligations.delete_many(
-                {
-                    "$or": [
-                        {"entity_id": trainer_id},
-                        {"obligation_id": trainer_id},
-                        {"obligation_id": f"trainer:{trainer_id}"},
-                        {"obligation_id": f"obligation:trainer:{trainer_id}"},
-                    ]
-                }
-            ).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"trainer_obligations delete: {e}")
-
-    # Delete claim event obligations keyed by claim_event.id
-    if owned_claim_event_ids:
-        try:
-            ce_ob_query = {
-                "$or": [
-                    {"entity_id": {"$in": owned_claim_event_ids}},
-                    {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in owned_claim_event_ids] + [f"claim:{cid}" for cid in owned_claim_event_ids] + owned_claim_event_ids}},
-                    {"metadata.claim_event_id": {"$in": owned_claim_event_ids}},
-                ]
-            }
-            if trainer_owned:
-                ce_ob_query["$or"].append({"metadata.trainer_id": trainer_id})
-            del_counts["claim_event_obligations"] = db.ops_obligations.delete_many(ce_ob_query).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"claim_event_obligations delete: {e}")
-
-    # 7. Delete validated support threads independently with full case ID keys and actual schema
-    for cid in sorted(validated_owned_case_ids):
-        try:
-            del_counts["support_threads"][cid] = db.support_threads.delete_many({"case_id": cid}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"support_thread {cid} delete: {e}")
-        try:
-            del_counts["support_notifications"][cid] = db.notification_events.delete_many({"target_id": cid}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"support_notif {cid} delete: {e}")
-        try:
-            del_counts["support_audit"][cid] = db.audit_log.delete_many({"target": cid}).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"support_audit {cid} delete: {e}")
-        try:
-            del_counts["ops_obligations"][cid] = db.ops_obligations.delete_many(
-                {
-                    "$or": [
-                        {"entity_id": cid},
-                        {"obligation_id": cid},
-                        {"obligation_id": f"support:{cid}"},
-                        {"obligation_id": f"support_{cid}"},
-                        {"obligation_id": f"obligation:support:{cid}"},
-                        {"metadata.case_id": cid},
-                    ]
-                }
-            ).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"ops_obligations {cid} delete: {e}")
-
-    # Delete dispatch obligations keyed by dispatch_id
-    if owned_dispatch_ids:
-        try:
-            disp_ob_query = {
-                "$or": [
-                    {"entity_id": {"$in": owned_dispatch_ids}},
-                    {"obligation_id": {"$in": [f"obligation:message:{did}" for did in owned_dispatch_ids] + [f"message:{did}" for did in owned_dispatch_ids] + owned_dispatch_ids}},
-                    {"metadata.dispatch_id": {"$in": owned_dispatch_ids}},
-                ]
-            }
-            del_counts["dispatch_obligations"] = db.ops_obligations.delete_many(disp_ob_query).deleted_count
-        except Exception as e:
-            cleanup_errors.append(f"dispatch_obligations delete: {e}")
-
-    # 8. Direct datastore leftovers count
-    leftovers: Dict[str, Any] = {}
+            leftovers[label] = collection.count_documents(query)
+        except Exception as exc:
+            leftovers[label] = -1
+            errors.append(f"{label} count failed: {exc}")
+    # Also detect newly created source rows outside the saved claim-ID snapshot.
     if trainer_owned:
-        try:
-            leftovers["trainers"] = db.trainers.count_documents({"id": trainer_id, "test_fixture": True})
-        except Exception as e:
-            cleanup_errors.append(f"trainers count error: {e}")
-            leftovers["trainers"] = -1
-
         try:
             leftovers["claim_events"] = db.claim_events.count_documents({"trainer_id": trainer_id})
-        except Exception as e:
-            cleanup_errors.append(f"claim_events count error: {e}")
+        except Exception as exc:
             leftovers["claim_events"] = -1
-
+            errors.append(f"claim inventory count failed: {exc}")
+    endpoints = [
+        (f"trainer_{trainer_id}", f"{api_url}/api/trainers/{trainer_id}", {}),
+        *[(f"thread_{cid}", f"{api_url}/api/oversight/support/threads/{cid}", {"X-Admin-Pass": admin_pass}) for cid in sorted(cases)],
+    ]
+    for label, url, headers in endpoints:
         try:
-            leftovers["trainer_notifications"] = db.notification_events.count_documents({"target_id": trainer_id})
-        except Exception as e:
-            cleanup_errors.append(f"trainer_notifications count error: {e}")
-            leftovers["trainer_notifications"] = -1
-
-        try:
-            leftovers["trainer_audit"] = db.audit_log.count_documents({"target": trainer_id})
-        except Exception as e:
-            cleanup_errors.append(f"trainer_audit count error: {e}")
-            leftovers["trainer_audit"] = -1
-
-        try:
-            leftovers["trainer_obligations"] = db.ops_obligations.count_documents(
-                {
-                    "$or": [
-                        {"entity_id": trainer_id},
-                        {"obligation_id": trainer_id},
-                        {"obligation_id": f"trainer:{trainer_id}"},
-                        {"obligation_id": f"obligation:trainer:{trainer_id}"},
-                    ]
-                }
-            )
-        except Exception as e:
-            cleanup_errors.append(f"trainer_obligations count error: {e}")
-            leftovers["trainer_obligations"] = -1
-
-    if owned_claim_event_ids:
-        try:
-            ce_query = {
-                "$or": [
-                    {"entity_id": {"$in": owned_claim_event_ids}},
-                    {"obligation_id": {"$in": [f"obligation:claim:{cid}" for cid in owned_claim_event_ids] + [f"claim:{cid}" for cid in owned_claim_event_ids] + owned_claim_event_ids}},
-                    {"metadata.claim_event_id": {"$in": owned_claim_event_ids}},
-                ]
-            }
-            if trainer_owned:
-                ce_query["$or"].append({"metadata.trainer_id": trainer_id})
-            leftovers["claim_event_obligations"] = db.ops_obligations.count_documents(ce_query)
-        except Exception as e:
-            cleanup_errors.append(f"claim_event_obligations count error: {e}")
-            leftovers["claim_event_obligations"] = -1
-
-    for cid in sorted(validated_owned_case_ids):
-        try:
-            leftovers[f"thread_{cid}"] = db.support_threads.count_documents({"case_id": cid})
-        except Exception as e:
-            cleanup_errors.append(f"thread {cid} count error: {e}")
-            leftovers[f"thread_{cid}"] = -1
-
-        try:
-            leftovers[f"notif_{cid}"] = db.notification_events.count_documents({"target_id": cid})
-        except Exception as e:
-            cleanup_errors.append(f"notif {cid} count error: {e}")
-            leftovers[f"notif_{cid}"] = -1
-
-        try:
-            leftovers[f"audit_{cid}"] = db.audit_log.count_documents({"target": cid})
-        except Exception as e:
-            cleanup_errors.append(f"audit {cid} count error: {e}")
-            leftovers[f"audit_{cid}"] = -1
-
-        try:
-            leftovers[f"obligations_{cid}"] = db.ops_obligations.count_documents(
-                {
-                    "$or": [
-                        {"entity_id": cid},
-                        {"obligation_id": cid},
-                        {"obligation_id": f"support:{cid}"},
-                        {"obligation_id": f"support_{cid}"},
-                        {"obligation_id": f"obligation:support:{cid}"},
-                        {"metadata.case_id": cid},
-                    ]
-                }
-            )
-        except Exception as e:
-            cleanup_errors.append(f"obligations {cid} count error: {e}")
-            leftovers[f"obligations_{cid}"] = -1
-
-    if owned_dispatch_ids:
-        try:
-            leftovers["dispatch_obligations"] = db.ops_obligations.count_documents(
-                {
-                    "$or": [
-                        {"entity_id": {"$in": owned_dispatch_ids}},
-                        {"obligation_id": {"$in": [f"obligation:message:{did}" for did in owned_dispatch_ids] + [f"message:{did}" for did in owned_dispatch_ids] + owned_dispatch_ids}},
-                        {"metadata.dispatch_id": {"$in": owned_dispatch_ids}},
-                    ]
-                }
-            )
-        except Exception as e:
-            cleanup_errors.append(f"dispatch_obligations count error: {e}")
-            leftovers["dispatch_obligations"] = -1
-
-    # 9. Public 404 absence checks
-    endpoint_404s: Dict[str, bool] = {}
-    if trainer_owned:
-        try:
-            status, _ = request_fn(f"{api_url}/api/trainers/{trainer_id}")
-            endpoint_404s[f"trainer_{trainer_id}"] = (status == 404)
-        except Exception as e:
-            cleanup_errors.append(f"trainer 404 check: {e}")
-            endpoint_404s[f"trainer_{trainer_id}"] = False
-
-    for cid in sorted(validated_owned_case_ids):
-        try:
-            status, _ = request_fn(
-                f"{api_url}/api/oversight/support/threads/{cid}",
-                headers={"X-Admin-Pass": admin_pass},
-            )
-            endpoint_404s[f"thread_{cid}"] = (status == 404)
-        except Exception as e:
-            cleanup_errors.append(f"thread {cid} 404 check: {e}")
-            endpoint_404s[f"thread_{cid}"] = False
-
-    all_leftovers_zero = all(count == 0 for count in leftovers.values())
-    all_endpoints_404 = all(res is True for res in endpoint_404s.values())
-    is_clean = all_leftovers_zero and all_endpoints_404 and len(cleanup_errors) == 0
-
-    report = {
-        "status": "CLEAN" if is_clean else "FAILED",
-        "deleted": del_counts,
-        "leftovers": leftovers,
-        "endpoint_404s": endpoint_404s,
-        "cleanup_errors": cleanup_errors,
-        "all_leftovers_zero": all_leftovers_zero,
-        "all_endpoints_404": all_endpoints_404,
-        "tracked_case_ids": sorted(validated_owned_case_ids),
-        "unowned_preserved_cases": sorted(unowned_preserved_cases),
-        "unverified_missing_cases": sorted(unverified_missing_cases),
-        "owned_claim_event_ids": owned_claim_event_ids,
-        "owned_dispatch_ids": owned_dispatch_ids,
-        "durable_lineage": current_lineage,
-    }
-    print(f"      Cleanup status: {report['status']}. Leftovers: {leftovers}. Errors: {cleanup_errors}")
+            status, _ = request_fn(url, headers=headers)
+            report["endpoint_404s"][label] = status == 404
+        except Exception as exc:
+            report["endpoint_404s"][label] = False
+            errors.append(f"{label} absence check failed: {exc}")
+    report["all_leftovers_zero"] = all(count == 0 for count in leftovers.values())
+    report["all_endpoints_404"] = all(report["endpoint_404s"].values())
+    report["status"] = "CLEAN" if (not errors and report["all_leftovers_zero"] and report["all_endpoints_404"]) else "FAILED"
     return report
 
 
