@@ -737,16 +737,26 @@ def read_received_otp(expected: Dict[str, str], timeout: int = 180) -> str:
     try:
         termios.tcsetattr(fd, termios.TCSANOW, hidden)
         print("DTD_RECEIPT_REQUIRED " + json.dumps(expected), flush=True)
-        if not select.select([sys.stdin], [], [], timeout)[0]:
-            raise AcceptanceFailure("Mailbox receipt deadline elapsed.")
-        line = sys.stdin.readline(4097)
-        if not line or len(line) > 4096:
-            raise AcceptanceFailure("Mailbox receipt input was missing or too long.")
-        return _parse_received_otp(line, expected)
-    except (KeyboardInterrupt, EOFError, OSError):
+        deadline = time.monotonic() + timeout
+        received = bytearray()
+        while b"\n" not in received:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([fd], [], [], remaining)[0]:
+                raise AcceptanceFailure("Mailbox receipt deadline elapsed.")
+            chunk = os.read(fd, 4097 - len(received))
+            if not chunk:
+                raise AcceptanceFailure("Mailbox receipt input was missing.")
+            received.extend(chunk)
+            if len(received) > 4096:
+                raise AcceptanceFailure("Mailbox receipt input was too long.")
+        return _parse_received_otp(received.decode("utf-8"), expected)
+    except (KeyboardInterrupt, EOFError, OSError, UnicodeDecodeError):
         raise AcceptanceFailure("Mailbox receipt input was interrupted.") from None
     finally:
-        termios.tcsetattr(fd, termios.TCSANOW, previous)
+        try:
+            termios.tcflush(fd, termios.TCIFLUSH)
+        finally:
+            termios.tcsetattr(fd, termios.TCSANOW, previous)
 
 
 async def verify_received_trainer_browser(
@@ -798,8 +808,14 @@ async def verify_received_trainer_browser(
                         assert (await rejected.value).status == 400
                         assert db.claim_events.find_one({"id": claim_id}).get("attempts") == 1
                     await code_input.fill(code)
-                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as verified:
-                        await page.get_by_test_id("claim-verify").click()
+                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/capabilities/prefill" and r.request.method == "GET") as prefilled:
+                        async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as verified:
+                            await page.get_by_test_id("claim-verify").click()
+                    prefill_response = await prefilled.value
+                    assert prefill_response.status == 200
+                    assert (await prefill_response.json()).get("trainer_id") == trainer_id
+                    assert "x-trainer-claim-session" in prefill_response.request.headers
+                    assert "x-admin-pass" not in prefill_response.request.headers
                     response = await verified.value
                     session_result = await response.json()
                     assert response.status == 200
@@ -854,7 +870,13 @@ async def verify_received_trainer_browser(
                     await page.keyboard.press("Escape")
                     await page.reload(wait_until="networkidle")
                     await expect(page.get_by_test_id("trainer-owner-controls")).to_be_visible()
-                    await page.get_by_test_id("edit-capabilities-open").click()
+                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/capabilities/prefill" and r.request.method == "GET") as prefilled:
+                        await page.get_by_test_id("edit-capabilities-open").click()
+                    prefill_response = await prefilled.value
+                    assert prefill_response.status == 200
+                    assert (await prefill_response.json()).get("trainer_id") == trainer_id
+                    assert "x-trainer-claim-session" in prefill_response.request.headers
+                    assert "x-admin-pass" not in prefill_response.request.headers
                     await expect(page.get_by_test_id("claim-catchment-type")).to_have_value(expected_catchment)
                     await expect(page.get_by_test_id("claim-specialty-puppy_training")).to_be_checked()
                     await expect(page.get_by_test_id("claim-format-in_home")).to_be_checked()

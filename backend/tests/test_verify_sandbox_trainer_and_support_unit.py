@@ -236,6 +236,7 @@ def test_private_receipt_input_restores_echo_without_printing_submitted_data(out
     previous = [0, 0, 0, runner.termios.ECHO | 1, 0, 0, []]
     changes = []
     reads = []
+    flushed = []
     expected = _receipt_context()
     valid_line = json.dumps({**expected, "otp": "654321"}) + "\n"
 
@@ -245,11 +246,6 @@ def test_private_receipt_input_restores_echo_without_printing_submitted_data(out
 
         def fileno(self):
             return 42
-
-        def readline(self, size):
-            assert changes and not changes[-1][3] & runner.termios.ECHO
-            reads.append(size)
-            return {"success": valid_line, "eof": "", "malformed": "private-654321", "oversized": "x" * 4097}[outcome]
 
     stream = PrivateInput()
     monkeypatch.setattr(runner.sys, "stdin", stream)
@@ -261,11 +257,23 @@ def test_private_receipt_input_restores_echo_without_printing_submitted_data(out
 
     def select_input(inputs, outputs, errors, timeout):
         assert changes and not changes[-1][3] & runner.termios.ECHO
-        assert inputs == [stream] and outputs == errors == [] and timeout == 7
-        return ([], [], []) if outcome == "timeout" else ([stream], [], [])
+        assert inputs == [42] and outputs == errors == [] and 0 < timeout <= 7
+        return ([], [], []) if outcome == "timeout" else ([42], [], [])
+
+    def read_input(fd, size):
+        assert fd == 42 and changes and not changes[-1][3] & runner.termios.ECHO
+        reads.append(size)
+        return {"success": valid_line.encode(), "eof": b"", "malformed": b"private-654321\n", "oversized": b"x" * 4097}[outcome]
+
+    def flush_input(fd, queue):
+        assert fd == 42 and queue == runner.termios.TCIFLUSH
+        assert changes and not changes[-1][3] & runner.termios.ECHO
+        flushed.append(True)
 
     monkeypatch.setattr(runner.termios, "tcsetattr", set_attributes)
+    monkeypatch.setattr(runner.termios, "tcflush", flush_input)
     monkeypatch.setattr(runner.select, "select", select_input)
+    monkeypatch.setattr(runner.os, "read", read_input)
     if outcome == "success":
         assert runner.read_received_otp(expected, timeout=7) == "654321"
     else:
@@ -276,6 +284,7 @@ def test_private_receipt_input_restores_echo_without_printing_submitted_data(out
     assert len(changes) == 2
     assert changes[0][3] == previous[3] & ~runner.termios.ECHO
     assert changes[1] == previous
+    assert flushed == [True], "Private queued input must be flushed before restoring echo"
     assert previous[3] & runner.termios.ECHO, "Original terminal attributes must not be mutated"
     assert reads == ([] if outcome == "timeout" else [4097])
     captured = capsys.readouterr()
@@ -294,6 +303,101 @@ def test_private_receipt_input_rejects_non_tty_before_terminal_access(monkeypatc
         runner.read_received_otp(_receipt_context())
     captured = capsys.readouterr()
     assert captured.out == captured.err == ""
+
+
+@pytest.mark.parametrize("mode", ["canonical_partial_ctrl_d", "noncanonical_partial", "canonical_queued", "success"])
+def test_private_receipt_real_pty_deadline_restores_echo_and_flushes_queue(mode):
+    import pty
+    import select
+    import subprocess
+    import termios
+    import time
+
+    # A separate process makes a real blocking readline regression finite and
+    # leaves pytest's own terminal and stdin untouched. No provider is invoked.
+    program = r'''
+import copy, importlib.util, json, os, sys, termios, time
+spec = importlib.util.spec_from_file_location("receipt_runner", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+expected = {"run_id":"receipt-run","trainer_id":"sandbox-trainer-receipt-run","claim_event_id":"receipt-claim","phase":"initial"}
+started = time.monotonic()
+try:
+    result = module.read_received_otp(expected, timeout=0.25)
+    outcome = "accepted" if result == "654321" else "wrong"
+except module.AcceptanceFailure:
+    outcome = "rejected"
+elapsed = time.monotonic() - started
+restored = termios.tcgetattr(0)
+probe = copy.deepcopy(restored)
+probe[3] &= ~termios.ICANON
+probe[6][termios.VMIN] = 0
+probe[6][termios.VTIME] = 0
+try:
+    termios.tcsetattr(0, termios.TCSANOW, probe)
+    queue_empty = os.read(0, 4096) == b""
+finally:
+    termios.tcsetattr(0, termios.TCSANOW, restored)
+print("PTY_RESULT " + json.dumps({"outcome":outcome,"elapsed":elapsed,"echo_restored":bool(restored[3] & termios.ECHO),"queue_empty":queue_empty}), flush=True)
+'''
+    master, slave = pty.openpty()
+    attributes = termios.tcgetattr(slave)
+    attributes[3] |= termios.ECHO
+    if mode == "noncanonical_partial":
+        attributes[3] &= ~termios.ICANON
+        attributes[6][termios.VMIN] = 1
+        attributes[6][termios.VTIME] = 0
+    else:
+        attributes[3] |= termios.ICANON
+    termios.tcsetattr(slave, termios.TCSANOW, attributes)
+    source = Path(runner.__file__).resolve()
+    process = subprocess.Popen(
+        [sys.executable, "-c", program, str(source)],
+        stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    output = b""
+    try:
+        ready_deadline = time.monotonic() + 4
+        while b"DTD_RECEIPT_REQUIRED" not in output and time.monotonic() < ready_deadline:
+            if select.select([process.stdout], [], [], 0.1)[0]:
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    break
+                output += chunk
+        assert b"DTD_RECEIPT_REQUIRED" in output, "Private-input reader never became ready"
+        assert not termios.tcgetattr(slave)[3] & termios.ECHO
+        private_input = b"private-receipt-654321"
+        if mode == "canonical_partial_ctrl_d":
+            private_input += b"\x04queued-private-tail"
+        elif mode == "success":
+            private_input = json.dumps({**_receipt_context(), "otp": "654321"}).encode() + b"\n"
+        os.write(master, private_input)
+        try:
+            stdout, stderr = process.communicate(timeout=1.5)
+        except subprocess.TimeoutExpired:
+            pytest.fail("Private partial input blocked beyond the absolute receipt deadline")
+        output += stdout
+        assert process.returncode == 0, "Private-input child failed unexpectedly"
+        result_lines = [line for line in output.decode().splitlines() if line.startswith("PTY_RESULT ")]
+        assert len(result_lines) == 1
+        result = json.loads(result_lines[0].removeprefix("PTY_RESULT "))
+        assert result["outcome"] == ("accepted" if mode == "success" else "rejected")
+        assert result["elapsed"] < 1.25
+        assert result["echo_restored"] is True
+        assert result["queue_empty"] is True
+        assert termios.tcgetattr(slave)[3] & termios.ECHO
+        echoed = os.read(master, 65536) if select.select([master], [], [], 0)[0] else b""
+        assert b"654321" not in output + stderr + echoed
+        assert b"queued-private-tail" not in output + stderr + echoed
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=2)
+        for stream in (process.stdout, process.stderr):
+            stream.close()
+        os.close(master)
+        os.close(slave)
 
 
 def test_received_trainer_browser_failure_suppresses_private_driver_details(monkeypatch, tmp_path, capsys):
