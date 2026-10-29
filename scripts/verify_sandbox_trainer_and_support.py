@@ -5,8 +5,9 @@ Verifies live runtime behavior on Cloud Run (dogtrainersdirectory-dev):
 1. Preflight sandbox scope validation and non-secret metadata capture.
 2. Domain 3 / SR-03 / CF-03 / DF-030 / DF-051 / DF-035: Trainer claim initiation,
    email mismatch / SMS fail-closed guards, invalid OTP rejection.
-   (Receipt-dependent OTP verification requires operator input or provider mailbox receipt;
-   privileged secret derivation is prohibited per audit).
+   Optional --owner-receipt mode verifies normal browser claim/recovery/capability edits
+   using a verified owner inbox and private correlated code input. Default test-sink mode
+   does not claim mailbox receipt. Privileged secret derivation is prohibited.
 3. Domain 6 / SR-04 / CF-04 / DF-047: First-party support complaint intake, Resend test-sink
    confirmation delivery, protected /ops thread retrieval, operator reply & duplicate prevention,
    guarded closure (minimum notes length requirement verified via API).
@@ -23,9 +24,11 @@ import asyncio
 import json
 import os
 import re
+import select
 import subprocess
 import sys
 import tempfile
+import termios
 import time
 import urllib.error
 import urllib.request
@@ -93,7 +96,7 @@ async def evaluate_browser_route(route: Any, request: Any, approved_origins: Set
     method = request.method.upper()
     headers = {k.lower(): v for k, v in request.headers.items()}
     is_mutating = method in ("POST", "PUT", "PATCH", "DELETE")
-    has_auth = "authorization" in headers or "x-admin-pass" in headers
+    has_auth = any(name in headers for name in ("authorization", "x-admin-pass", "x-trainer-claim-session"))
 
     # Mutating requests or requests carrying sensitive credentials must match an approved origin exactly
     if is_mutating or has_auth:
@@ -697,13 +700,197 @@ def execute_deterministic_teardown(
     return report
 
 
+def _validate_receipt_configuration(receipt_email: Optional[str], receipt_reader: Any) -> None:
+    if receipt_email is None and receipt_reader is None:
+        return
+    if (not isinstance(receipt_email, str) or
+            not re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", receipt_email) or
+            receipt_email.lower().endswith("@resend.dev") or not callable(receipt_reader)):
+        raise AcceptanceFailure("Owner receipt mode requires a verified owner inbox and private receipt reader.")
+
+
+def _parse_received_otp(line: str, expected: Dict[str, str]) -> str:
+    def unique_object(pairs):
+        if len(pairs) != len({key for key, _ in pairs}):
+            raise ValueError
+        return dict(pairs)
+    try:
+        value = json.loads(line, object_pairs_hook=unique_object)
+        keys = {"run_id", "trainer_id", "claim_event_id", "phase"}
+        if (not isinstance(value, dict) or set(value) != keys | {"otp"} or
+                any(value.get(key) != expected.get(key) for key in keys) or
+                not isinstance(value.get("otp"), str) or not re.fullmatch(r"[0-9]{6}", value["otp"])):
+            raise ValueError
+        return value["otp"]
+    except Exception:
+        raise AcceptanceFailure("Received code input did not match the pending challenge.") from None
+
+
+def read_received_otp(expected: Dict[str, str], timeout: int = 180) -> str:
+    """Consume one correlated mailbox receipt through private, bounded terminal input."""
+    if not sys.stdin.isatty():
+        raise AcceptanceFailure("Owner receipt mode requires private terminal input.")
+    fd = sys.stdin.fileno()
+    previous = termios.tcgetattr(fd)
+    hidden = list(previous)
+    hidden[3] &= ~termios.ECHO
+    try:
+        termios.tcsetattr(fd, termios.TCSANOW, hidden)
+        print("DTD_RECEIPT_REQUIRED " + json.dumps(expected), flush=True)
+        if not select.select([sys.stdin], [], [], timeout)[0]:
+            raise AcceptanceFailure("Mailbox receipt deadline elapsed.")
+        line = sys.stdin.readline(4097)
+        if not line or len(line) > 4096:
+            raise AcceptanceFailure("Mailbox receipt input was missing or too long.")
+        return _parse_received_otp(line, expected)
+    except (KeyboardInterrupt, EOFError, OSError):
+        raise AcceptanceFailure("Mailbox receipt input was interrupted.") from None
+    finally:
+        termios.tcsetattr(fd, termios.TCSANOW, previous)
+
+
+async def verify_received_trainer_browser(
+    db: Any, trainer_id: str, run_id: str, recipient: str,
+    receipt_reader: Any, artifact_dir: Path, headless: bool,
+) -> Dict[str, str]:
+    """Use received email codes and the normal trainer UI; never mint credentials."""
+    from playwright.async_api import async_playwright, expect
+    step = "open trainer"
+    stages: Dict[str, str] = {}
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=headless)
+            try:
+                context = await browser.new_context(viewport={"width": 1440, "height": 1000})
+                approved = {normalize_origin(WEB_URL), normalize_origin(API_URL)}
+                async def guard(route, request):
+                    await evaluate_browser_route(route, request, approved)
+                await context.route("**/*", guard)
+                page = await context.new_page()
+                await page.goto(f"{WEB_URL}/trainers/{trainer_id}", wait_until="networkidle")
+                verify_page_exact_origin(page.url, WEB_URL, "Trainer listing")
+                await page.get_by_test_id("claim-profile-open").click()
+                first_token = None
+                for phase in ("initial", "recovery"):
+                    step = f"{phase} email challenge"
+                    await page.get_by_test_id("claim-email").fill(recipient)
+                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim" and r.request.method == "POST") as pending:
+                        await page.get_by_test_id("claim-start").click()
+                    response = await pending.value
+                    claim = await response.json()
+                    assert response.status == 200 and claim.get("delivery_status") == "sent"
+                    assert claim.get("status") == "pending_verification"
+                    assert claim.get("is_renewal") is (phase == "recovery")
+                    claim_id = claim.get("claim_event_id")
+                    stored = db.claim_events.find_one({"id": claim_id, "trainer_id": trainer_id})
+                    assert stored and stored.get("claimant_email") == recipient
+                    receipt_context = {"run_id": run_id, "trainer_id": trainer_id, "claim_event_id": claim_id, "phase": phase}
+                    code = await asyncio.to_thread(receipt_reader, receipt_context)
+                    if not isinstance(code, str) or not re.fullmatch(r"[0-9]{6}", code):
+                        raise AcceptanceFailure("Mailbox receipt returned an invalid code shape.")
+                    step = f"{phase} code verification"
+                    code_input = page.get_by_test_id("claim-otp")
+                    if phase == "initial":
+                        wrong_code = f"{(int(code) + 1) % 1000000:06d}"
+                        await code_input.fill(wrong_code)
+                        async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as rejected:
+                            await page.get_by_test_id("claim-verify").click()
+                        assert (await rejected.value).status == 400
+                        assert db.claim_events.find_one({"id": claim_id}).get("attempts") == 1
+                    await code_input.fill(code)
+                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as verified:
+                        await page.get_by_test_id("claim-verify").click()
+                    response = await verified.value
+                    session_result = await response.json()
+                    assert response.status == 200
+                    token = (session_result.get("session") or {}).get("token") or session_result.get("trainer_claim_session")
+                    assert isinstance(token, str) and token
+                    if phase == "initial":
+                        first_token = token
+                        stages["trainer_claim_verification"] = "PASSED (received mailbox code, normal browser verification)"
+                        stages["trainer_claim_guards"] = "PASSED (mismatch, unavailable SMS, genuinely different invalid code)"
+                    else:
+                        assert token != first_token and session_result.get("session_renewed") is True
+                        stages["trainer_session_renewal"] = "PASSED (received second code after browser session removal; not signed-token expiry)"
+                    replay_status, _ = _http_request(
+                        f"{API_URL}/api/trainers/{trainer_id}/claim/verify", method="POST",
+                        payload={"claim_event_id": claim_id, "otp": code},
+                    )
+                    assert replay_status == 409
+                    code = None
+                    session_result = None
+                    await expect(page.get_by_test_id("claim-catchment-type")).to_be_visible()
+                    step = f"{phase} capability confirmation"
+                    if phase == "initial":
+                        await page.get_by_test_id("claim-specialty-puppy_training").check()
+                        await page.get_by_test_id("claim-format-in_home").check()
+                        await page.get_by_test_id("claim-stage-puppy").check()
+                        await page.get_by_test_id("claim-philosophy").select_option("positive_reinforcement_force_free")
+                        await page.get_by_test_id("claim-catchment-type").select_option("specific_suburbs")
+                        await page.get_by_test_id("claim-serviced-suburbs").fill("Richmond, Fitzroy")
+                        await page.get_by_test_id("claim-delivery-in-home").check()
+                        await page.get_by_test_id("claim-confirm-submit").click()
+                        await expect(page.get_by_test_id("claim-confirm-error")).to_contain_text("affirm")
+                    else:
+                        await expect(page.get_by_test_id("claim-catchment-type")).to_have_value("specific_suburbs")
+                        await page.get_by_test_id("claim-catchment-type").select_option("melbourne_wide")
+                    await page.get_by_test_id("claim-confirm-statement").check()
+                    async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/capabilities/confirm") as confirmation:
+                        await page.get_by_test_id("claim-confirm-submit").click()
+                    confirmed = await confirmation.value
+                    assert confirmed.status == 200
+                    await expect(page.get_by_test_id("claim-success")).to_be_visible()
+                    saved = db.trainers.find_one({"id": trainer_id, "test_fixture": True, "test_run_id": run_id})
+                    expected_catchment = "specific_suburbs" if phase == "initial" else "melbourne_wide"
+                    assert saved and saved.get("catchment_type") == expected_catchment
+                    assert saved.get("tier") == "claimed"
+                    assert "puppy_training" in saved.get("specialties", [])
+                    assert "in_home" in saved.get("service_formats", [])
+                    assert "puppy" in saved.get("life_stages", [])
+                    assert saved.get("training_philosophy") == "positive_reinforcement_force_free"
+                    assert saved.get("capabilities_confirmed_at")
+                    if phase == "initial":
+                        assert {v.casefold() for v in saved.get("serviced_suburbs", [])} == {"richmond", "fitzroy"}
+                    await page.keyboard.press("Escape")
+                    await page.reload(wait_until="networkidle")
+                    await expect(page.get_by_test_id("trainer-owner-controls")).to_be_visible()
+                    await page.get_by_test_id("edit-capabilities-open").click()
+                    await expect(page.get_by_test_id("claim-catchment-type")).to_have_value(expected_catchment)
+                    await expect(page.get_by_test_id("claim-specialty-puppy_training")).to_be_checked()
+                    await expect(page.get_by_test_id("claim-format-in_home")).to_be_checked()
+                    await expect(page.get_by_test_id("claim-stage-puppy")).to_be_checked()
+                    await page.screenshot(path=str(artifact_dir / f"trainer_{phase}_capability_revisit.png"))
+                    stages["trainer_capabilities_prefill"] = "PASSED (protected editor prefill and persisted browser revisit)"
+                    stages["trainer_catchment_confirmation"] = "PASSED (specific suburbs then Melbourne-wide; explicit confirmation guard)"
+                    if phase == "initial":
+                        step = "claimed profile privacy and session removal"
+                        await page.keyboard.press("Escape")
+                        await page.evaluate("(id) => sessionStorage.removeItem('dtd-trainer-billing-auth:' + id)", trainer_id)
+                        await page.reload(wait_until="networkidle")
+                        await expect(page.get_by_test_id("trainer-owner-login-prompt")).to_be_visible()
+                        await expect(page.get_by_test_id("trainer-owner-controls")).to_have_count(0)
+                        await expect(page.get_by_test_id("trainer-billing-link")).to_have_count(0)
+                        await page.screenshot(path=str(artifact_dir / "trainer_claimed_public_privacy.png"))
+                        await page.get_by_test_id("edit-capabilities-open").click()
+                stages["trainer_claimed_profile_privacy"] = "PASSED (claimed profile without stored session hides owner and billing controls)"
+            finally:
+                await browser.close()
+        return stages
+    except Exception:
+        # Browser errors can echo fill values or session-bearing responses.
+        raise AcceptanceFailure(f"Received trainer browser check failed at {step}; private details suppressed.") from None
+
+
 async def run_acceptance(
     mongo_url: str,
     admin_pass: str,
     artifact_dir: Optional[Path] = None,
     preflight_runner: Any = None,
     headless: bool = True,
+    receipt_email: Optional[str] = None,
+    receipt_reader: Any = None,
 ) -> Dict[str, Any]:
+    _validate_receipt_configuration(receipt_email, receipt_reader)
     _require_sandbox(mongo_url, admin_pass)
     metadata = enforce_sandbox_preflight(SANDBOX_PROJECT, runner=preflight_runner)
 
@@ -770,7 +957,7 @@ async def run_acceptance(
         fixture_doc = {
             "id": trainer_id,
             "slug": trainer_id,
-            "name": f"Sandbox Test Canine Academy {run_id[:6]}",
+            "name": f"Sandbox Test Canine Academy {run_id}",
             "suburb": "Richmond",
             "region": "Greater Melbourne",
             "published": True,
@@ -778,8 +965,8 @@ async def run_acceptance(
             "verification_status": "unverified",
             "claim_status": "unclaimed",
             "tier": "free",
-            "email": TEST_RECIPIENT,
-            "billing_email": TEST_RECIPIENT,
+            "email": receipt_email or TEST_RECIPIENT,
+            "billing_email": receipt_email or TEST_RECIPIENT,
             "abn_verified": True,
             "test_fixture": True,
             "test_run_id": run_id,
@@ -793,6 +980,7 @@ async def run_acceptance(
         status, profile = _http_request(f"{API_URL}/api/trainers/{trainer_id}")
         assert status == 200, f"Expected 200 for public profile, got {status}"
         assert profile.get("claim_status") == "unclaimed"
+        assert not receipt_email or receipt_email not in json.dumps(profile), "Public profile exposed the private receipt inbox"
         print("      - Public profile retrieval: OK (claim_status: unclaimed)")
 
         # 2. Claim start guards
@@ -809,58 +997,64 @@ async def run_acceptance(
         status, _ = _http_request(
             f"{API_URL}/api/trainers/{trainer_id}/claim",
             method="POST",
-            payload={"email": TEST_RECIPIENT, "method": "sms"},
+            payload={"email": receipt_email or TEST_RECIPIENT, "method": "sms"},
         )
         assert status == 503, f"Expected 503 for SMS method, got {status}"
         print("      - Guard: SMS provider unavailable -> 503 OK")
 
-        # 2c. Valid claim start -> 200
-        status, claim_resp = _http_request(
-            f"{API_URL}/api/trainers/{trainer_id}/claim",
-            method="POST",
-            payload={"email": TEST_RECIPIENT, "method": "email"},
-        )
-        assert status == 200, f"Expected 200 for valid claim start, got {status} {claim_resp}"
-        claim_event_id = claim_resp.get("claim_event_id")
-        assert claim_event_id, "Missing claim_event_id"
-        assert claim_resp.get("status") == "pending_verification"
-        assert claim_resp.get("delivery_status") == "sent"
+        if receipt_email is None:
+            # 2c. Valid claim start -> 200
+            status, claim_resp = _http_request(
+                f"{API_URL}/api/trainers/{trainer_id}/claim",
+                method="POST",
+                payload={"email": TEST_RECIPIENT, "method": "email"},
+            )
+            assert status == 200, f"Expected 200 for valid claim start, got {status} {claim_resp}"
+            claim_event_id = claim_resp.get("claim_event_id")
+            assert claim_event_id, "Missing claim_event_id"
+            assert claim_resp.get("status") == "pending_verification"
+            assert claim_resp.get("delivery_status") == "sent"
 
-        # Check DB claim_event and notification_event
-        claim_event = db.claim_events.find_one({"id": claim_event_id})
-        assert claim_event is not None, "claim_event not persisted in DB"
-        assert claim_event.get("otp_digest"), "Missing otp_digest in DB event"
+            # Check DB claim_event and notification_event
+            claim_event = db.claim_events.find_one({"id": claim_event_id})
+            assert claim_event is not None, "claim_event not persisted in DB"
+            assert claim_event.get("otp_digest"), "Missing otp_digest in DB event"
 
-        notif_event = db.notification_events.find_one(
-            {"target_kind": "trainer_claim", "target_id": trainer_id, "kind": "trainer_claim_otp"}
-        )
-        assert notif_event is not None, "notification_event not found"
-        assert notif_event.get("provider_id"), "Missing provider_id from Resend test sink"
-        print(f"      - Claim initiated: Challenge ID {claim_event_id[:12]}..., Resend Message ID: {notif_event.get('provider_id')}")
+            notif_event = db.notification_events.find_one(
+                {"target_kind": "trainer_claim", "target_id": trainer_id, "kind": "trainer_claim_otp"}
+            )
+            assert notif_event is not None, "notification_event not found"
+            assert notif_event.get("provider_id"), "Missing provider_id from Resend test sink"
+            print(f"      - Claim initiated: Challenge ID {claim_event_id[:12]}..., Resend Message ID: {notif_event.get('provider_id')}")
 
-        # 3. OTP Verification Guards
-        # 3a. Invalid OTP -> 400
-        status, _ = _http_request(
-            f"{API_URL}/api/trainers/{trainer_id}/claim/verify",
-            method="POST",
-            payload={"otp": "000000", "claim_event_id": claim_event_id},
-        )
-        assert status == 400, f"Expected 400 for bad OTP, got {status}"
-        claim_event_after_fail = db.claim_events.find_one({"id": claim_event_id})
-        assert claim_event_after_fail.get("attempts") == 1, "Attempt counter not incremented"
-        print("      - Guard: Bad OTP incremented attempts -> 400 OK")
+            # 3. OTP Verification Guards
+            # 3a. Invalid OTP -> 400
+            status, _ = _http_request(
+                f"{API_URL}/api/trainers/{trainer_id}/claim/verify",
+                method="POST",
+                payload={"otp": "000000", "claim_event_id": claim_event_id},
+            )
+            assert status == 400, f"Expected 400 for bad OTP, got {status}"
+            claim_event_after_fail = db.claim_events.find_one({"id": claim_event_id})
+            assert claim_event_after_fail.get("attempts") == 1, "Attempt counter not incremented"
+            print("      - Guard: Bad OTP incremented attempts -> 400 OK")
 
-        evidence["stages"]["trainer_claim_guards"] = "PASSED"
+            evidence["stages"]["trainer_claim_guards"] = "PASSED"
 
-        # 3b. Delivered Challenge Verification
-        # Note: Privileged secret derivation prohibited per audit; delivered OTP verification requires external mailbox access.
-        evidence["stages"]["trainer_claim_verification"] = (
-            "NOT_VERIFIED (operator OTP or provider mailbox receipt required; privileged secret derivation removed per audit)"
-        )
-        evidence["stages"]["trainer_capabilities_prefill"] = "SKIPPED (requires verified session)"
-        evidence["stages"]["trainer_session_renewal"] = "SKIPPED (requires verified session)"
-        evidence["stages"]["trainer_catchment_confirmation"] = "SKIPPED (requires verified session)"
-        print("      - Notice: Trainer claim verification marked NOT_VERIFIED (external provider mailbox receipt required; privileged derivation prohibited).")
+            # 3b. Delivered Challenge Verification
+            # Note: Privileged secret derivation prohibited per audit; delivered OTP verification requires external mailbox access.
+            evidence["stages"]["trainer_claim_verification"] = (
+                "NOT_VERIFIED (operator OTP or provider mailbox receipt required; privileged secret derivation removed per audit)"
+            )
+            evidence["stages"]["trainer_capabilities_prefill"] = "SKIPPED (requires verified session)"
+            evidence["stages"]["trainer_session_renewal"] = "SKIPPED (requires verified session)"
+            evidence["stages"]["trainer_catchment_confirmation"] = "SKIPPED (requires verified session)"
+            print("      - Notice: Trainer claim verification marked NOT_VERIFIED (external provider mailbox receipt required; privileged derivation prohibited).")
+
+        else:
+            evidence["stages"].update(await verify_received_trainer_browser(
+                db, trainer_id, run_id, receipt_email, receipt_reader, target_artifact_dir, headless,
+            ))
 
         # =====================================================================
         # PART B: Customer Support Lifecycle Verification
@@ -1246,6 +1440,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--execute", action="store_true", help="Execute acceptance against sandbox.")
     parser.add_argument("--headless", action="store_true", default=True, help="Run browser checks in headless mode (default: True).")
+    parser.add_argument("--owner-receipt", action="store_true", help="Use an existing verified owner inbox via private terminal receipt input.")
     parser.add_argument("--artifact-dir", type=str, default="", help="Optional directory to save browser screenshots.")
     args = parser.parse_args()
 
@@ -1266,11 +1461,16 @@ def main() -> int:
     artifact_dir = Path(args.artifact_dir) if args.artifact_dir else None
 
     try:
+        receipt_email = os.environ.get("DTD_ACCEPTANCE_RECEIPT_EMAIL", "") if args.owner_receipt else None
+        if args.owner_receipt and not sys.stdin.isatty():
+            raise AcceptanceFailure("Owner receipt mode requires private terminal input before creating fixtures.")
         evidence = asyncio.run(run_acceptance(
             mongo_url=mongo_url,
             admin_pass=admin_pass,
             artifact_dir=artifact_dir,
             headless=args.headless,
+            receipt_email=receipt_email,
+            receipt_reader=read_received_otp if args.owner_receipt else None,
         ))
         print("\n=== ACCEPTANCE EVIDENCE ===")
         print(json.dumps(evidence, indent=2))

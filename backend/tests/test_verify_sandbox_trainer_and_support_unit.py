@@ -48,6 +48,7 @@ import asyncio
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -67,6 +68,337 @@ def _load_script_module():
 
 
 runner = _load_script_module()
+
+
+# -----------------------------------------------------------------------------
+# Normal received-OTP mode: input identity, redaction and early configuration
+# -----------------------------------------------------------------------------
+
+def _receipt_context():
+    return {
+        "run_id": "receipt-run",
+        "trainer_id": "sandbox-trainer-receipt-run",
+        "claim_event_id": "receipt-claim",
+        "phase": "initial",
+    }
+
+
+def test_received_otp_parser_accepts_exact_context_and_preserves_leading_zero(capsys):
+    expected = _receipt_context()
+    assert runner._parse_received_otp(json.dumps({**expected, "otp": "012345"}), expected) == "012345"
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+@pytest.mark.parametrize("field,value", [
+    ("run_id", "foreign-run"),
+    ("trainer_id", "foreign-trainer"),
+    ("claim_event_id", "foreign-claim"),
+    ("phase", "renewal"),
+    ("run_id", None),
+    ("trainer_id", 123),
+    ("claim_event_id", False),
+    ("phase", ["initial"]),
+    ("otp", 654321),
+    ("otp", None),
+    ("otp", True),
+    ("otp", ["654321"]),
+    ("otp", "65432"),
+    ("otp", "6543210"),
+    ("otp", " 654321"),
+    ("otp", "654321\n"),
+    ("otp", "６５４３２１"),
+    ("otp", "65a321"),
+])
+def test_received_otp_parser_rejects_wrong_identity_or_type_without_echo(field, value, capsys):
+    expected = _receipt_context()
+    payload = {**expected, "otp": "654321", field: value}
+    with pytest.raises(runner.AcceptanceFailure) as exc:
+        runner._parse_received_otp(json.dumps(payload), expected)
+    rendered = str(exc.value)
+    assert rendered
+    assert "654321" not in rendered
+    for submitted in ("foreign-run", "foreign-trainer", "foreign-claim", "６５４３２１"):
+        assert submitted not in rendered
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+@pytest.mark.parametrize("line", [
+    "not-json-654321",
+    "null",
+    "[]",
+    '"654321"',
+    '{"otp":"654321"}',
+    '{"run_id":"receipt-run","trainer_id":"sandbox-trainer-receipt-run",'
+    '"claim_event_id":"receipt-claim","phase":"initial","otp":"654321"} trailing-654321',
+    '{"run_id":"receipt-run","trainer_id":"sandbox-trainer-receipt-run",'
+    '"claim_event_id":"receipt-claim","phase":"initial","otp":"654321","otp":"012345"}',
+    '{"run_id":"foreign-run","run_id":"receipt-run","trainer_id":"sandbox-trainer-receipt-run",'
+    '"claim_event_id":"receipt-claim","phase":"initial","otp":"654321"}',
+])
+def test_received_otp_parser_rejects_malformed_or_ambiguous_json_without_echo(line, capsys):
+    with pytest.raises(runner.AcceptanceFailure) as exc:
+        runner._parse_received_otp(line, _receipt_context())
+    assert str(exc.value)
+    assert "654321" not in str(exc.value)
+    assert "012345" not in str(exc.value)
+    assert "foreign-run" not in str(exc.value)
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+@pytest.mark.parametrize("field", ["run_id", "trainer_id", "claim_event_id", "phase", "otp"])
+def test_received_otp_parser_requires_each_field(field):
+    payload = {**_receipt_context(), "otp": "654321"}
+    del payload[field]
+    with pytest.raises(runner.AcceptanceFailure) as exc:
+        runner._parse_received_otp(json.dumps(payload), _receipt_context())
+    assert "654321" not in str(exc.value)
+
+
+def test_received_otp_parser_rejects_unexpected_fields_without_echo():
+    payload = {**_receipt_context(), "otp": "654321", "extra": "private-submitted-marker"}
+    with pytest.raises(runner.AcceptanceFailure) as exc:
+        runner._parse_received_otp(json.dumps(payload), _receipt_context())
+    assert "654321" not in str(exc.value)
+    assert "private-submitted-marker" not in str(exc.value)
+
+
+def test_receipt_configuration_keeps_default_and_accepts_explicit_valid_reader():
+    calls = []
+    reader = lambda expected: calls.append(expected)
+    assert runner._validate_receipt_configuration(None, None) is None
+    assert runner._validate_receipt_configuration("fixture-owner@example.invalid", reader) is None
+    assert calls == [], "Configuration validation must not request a code"
+
+
+@pytest.mark.parametrize("email,reader", [
+    (None, lambda expected: "unused"),
+    ("fixture-owner@example.invalid", None),
+    ("fixture-owner@example.invalid", "not-callable"),
+    ("", lambda expected: "unused"),
+    ("missing-at-sign", lambda expected: "unused"),
+    ("@example.invalid", lambda expected: "unused"),
+    ("fixture-owner@", lambda expected: "unused"),
+    ("fixture-owner@@example.invalid", lambda expected: "unused"),
+    ("fixture owner@example.invalid", lambda expected: "unused"),
+    ("fixture-owner@example.invalid\nBcc:foreign@example.invalid", lambda expected: "unused"),
+    ("fixture-owner@example.invalid\r", lambda expected: "unused"),
+])
+def test_receipt_configuration_fails_before_preflight_or_fixture_effects(email, reader, monkeypatch, tmp_path):
+    monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", runner.SANDBOX_PROJECT)
+    effects = []
+
+    def forbidden(*args, **kwargs):
+        effects.append("unexpected external or fixture operation")
+        raise AssertionError("Receipt configuration must fail before this operation")
+
+    monkeypatch.setattr(runner, "enforce_sandbox_preflight", forbidden)
+    monkeypatch.setattr(runner, "MongoClient", forbidden)
+    monkeypatch.setattr(runner, "_http_request", forbidden)
+    with pytest.raises(runner.AcceptanceFailure):
+        asyncio.run(runner.run_acceptance(
+            mongo_url="mongodb://localhost:27017/dtd_sandbox",
+            admin_pass="synthetic-admin",
+            artifact_dir=tmp_path,
+            receipt_email=email,
+            receipt_reader=reader,
+        ))
+    assert effects == []
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("url,allowed", [
+    ("https://foreign.example.invalid/api/trainers/fixture/capabilities/prefill", False),
+    ("http://dtd-api-dev-625222421634.australia-southeast1.run.app/api/trainers/fixture/capabilities/prefill", False),
+    ("https://dtd-api-dev-625222421634.australia-southeast1.run.app:444/api/trainers/fixture/capabilities/prefill", False),
+    ("https://dtd-api-dev-625222421634.australia-southeast1.run.app/api/trainers/fixture/capabilities/prefill", True),
+])
+@pytest.mark.parametrize("header", ["X-Trainer-Claim-Session", "x-trainer-claim-session"])
+def test_browser_guard_protects_trainer_session_on_get(url, allowed, header):
+    actions = []
+
+    class Route:
+        async def abort(self, *args):
+            actions.append("blocked")
+
+        async def continue_(self):
+            actions.append("continued")
+
+    request = SimpleNamespace(url=url, method="GET", headers={header: "synthetic-session-only"})
+    asyncio.run(runner.evaluate_browser_route(Route(), request, {runner.normalize_origin(runner.API_URL)}))
+    assert actions == (["continued"] if allowed else ["blocked"])
+
+
+@pytest.mark.parametrize("outcome", ["success", "timeout", "eof", "malformed", "oversized"])
+def test_private_receipt_input_restores_echo_without_printing_submitted_data(outcome, monkeypatch, capsys):
+    previous = [0, 0, 0, runner.termios.ECHO | 1, 0, 0, []]
+    changes = []
+    reads = []
+    expected = _receipt_context()
+    valid_line = json.dumps({**expected, "otp": "654321"}) + "\n"
+
+    class PrivateInput:
+        def isatty(self):
+            return True
+
+        def fileno(self):
+            return 42
+
+        def readline(self, size):
+            assert changes and not changes[-1][3] & runner.termios.ECHO
+            reads.append(size)
+            return {"success": valid_line, "eof": "", "malformed": "private-654321", "oversized": "x" * 4097}[outcome]
+
+    stream = PrivateInput()
+    monkeypatch.setattr(runner.sys, "stdin", stream)
+    monkeypatch.setattr(runner.termios, "tcgetattr", lambda fd: previous)
+
+    def set_attributes(fd, mode, attributes):
+        assert fd == 42
+        changes.append(list(attributes))
+
+    def select_input(inputs, outputs, errors, timeout):
+        assert changes and not changes[-1][3] & runner.termios.ECHO
+        assert inputs == [stream] and outputs == errors == [] and timeout == 7
+        return ([], [], []) if outcome == "timeout" else ([stream], [], [])
+
+    monkeypatch.setattr(runner.termios, "tcsetattr", set_attributes)
+    monkeypatch.setattr(runner.select, "select", select_input)
+    if outcome == "success":
+        assert runner.read_received_otp(expected, timeout=7) == "654321"
+    else:
+        with pytest.raises(runner.AcceptanceFailure) as exc:
+            runner.read_received_otp(expected, timeout=7)
+        assert "654321" not in str(exc.value)
+        assert "private-654321" not in str(exc.value)
+    assert len(changes) == 2
+    assert changes[0][3] == previous[3] & ~runner.termios.ECHO
+    assert changes[1] == previous
+    assert previous[3] & runner.termios.ECHO, "Original terminal attributes must not be mutated"
+    assert reads == ([] if outcome == "timeout" else [4097])
+    captured = capsys.readouterr()
+    assert "654321" not in captured.out + captured.err
+    assert "private-654321" not in captured.out + captured.err
+
+
+def test_private_receipt_input_rejects_non_tty_before_terminal_access(monkeypatch, capsys):
+    monkeypatch.setattr(runner.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+
+    def forbidden(*args):
+        raise AssertionError("Non-TTY input must fail before reading terminal attributes")
+
+    monkeypatch.setattr(runner.termios, "tcgetattr", forbidden)
+    with pytest.raises(runner.AcceptanceFailure):
+        runner.read_received_otp(_receipt_context())
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+def test_received_trainer_browser_failure_suppresses_private_driver_details(monkeypatch, tmp_path, capsys):
+    private_marker = "private-receipt-driver-marker-654321"
+
+    async def fail_launch(**kwargs):
+        raise RuntimeError(private_marker)
+
+    class PlaywrightContext:
+        async def __aenter__(self):
+            return SimpleNamespace(chromium=SimpleNamespace(launch=fail_launch))
+
+        async def __aexit__(self, *args):
+            return False
+
+    monkeypatch.setitem(sys.modules, "playwright.async_api", SimpleNamespace(
+        async_playwright=PlaywrightContext,
+        expect=lambda locator: None,
+    ))
+    with pytest.raises(runner.AcceptanceFailure) as exc:
+        asyncio.run(runner.verify_received_trainer_browser(
+            db=None,
+            trainer_id="sandbox-trainer-receipt-run",
+            run_id="receipt-run",
+            recipient="fixture-owner@example.invalid",
+            receipt_reader=lambda expected: "654321",
+            artifact_dir=tmp_path,
+            headless=True,
+        ))
+    assert str(exc.value)
+    assert private_marker not in str(exc.value)
+    assert "654321" not in str(exc.value)
+    assert exc.value.__suppress_context__ is True
+    captured = capsys.readouterr()
+    assert private_marker not in captured.out + captured.err
+    assert "654321" not in captured.out + captured.err
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_support(monkeypatch, tmp_path):
+    monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", runner.SANDBOX_PROJECT)
+    owner_email = "fixture-owner@example.invalid"
+    db = FaithfulFakeDatabase()
+    foreign_case = {"case_id": "sup_preexisting_owner_case", "sender_email": owner_email, "status": "open"}
+    db.support_threads.rows.append(dict(foreign_case))
+
+    class Client:
+        admin = SimpleNamespace(command=lambda command: {"ok": 1})
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __getitem__(self, database):
+            assert database == runner.SANDBOX_DB
+            return db
+
+        def close(self):
+            pass
+
+    def http(url, method="GET", headers=None, payload=None):
+        if url.endswith("/api/health"):
+            return 200, {"database": "available"}
+        if url.endswith("/api/config"):
+            return 200, {"public_matching_enabled": True}
+        if url.endswith("/claim") and method == "POST":
+            return (503, {}) if payload["method"] == "sms" else (403, {})
+        if "/api/trainers/" in url and method == "GET":
+            trainer_id = url.rsplit("/", 1)[-1]
+            row = db.trainers.find_one({"id": trainer_id})
+            return (200, {"id": trainer_id, "claim_status": "unclaimed"}) if row else (404, {})
+        raise AssertionError("Unexpected HTTP operation in closed receipt-failure test")
+
+    browser_calls = []
+
+    async def failed_receipt_browser(database, trainer_id, run_id, recipient, reader, artifact_dir, headless):
+        browser_calls.append((trainer_id, run_id))
+        fixture = database.trainers.find_one({"id": trainer_id})
+        assert fixture["test_fixture"] is True and fixture["test_run_id"] == run_id
+        assert fixture["email"] == fixture["billing_email"] == owner_email
+        assert recipient == owner_email
+        raise runner.AcceptanceFailure("Synthetic receipt unavailable")
+
+    monkeypatch.setattr(runner, "MongoClient", Client)
+    monkeypatch.setattr(runner, "enforce_sandbox_preflight", lambda *args, **kwargs: {})
+    monkeypatch.setattr(runner, "_http_request", http)
+    monkeypatch.setattr(runner, "verify_received_trainer_browser", failed_receipt_browser)
+    with pytest.raises(runner.AcceptanceFailure, match="Synthetic receipt unavailable"):
+        asyncio.run(runner.run_acceptance(
+            mongo_url="mongodb://localhost:27017/dtd_sandbox",
+            admin_pass="synthetic-admin",
+            artifact_dir=tmp_path,
+            receipt_email=owner_email,
+            receipt_reader=lambda expected: "654321",
+        ))
+    assert len(browser_calls) == 1
+    assert db.trainers.rows == []
+    assert db.support_threads.rows == [foreign_case]
+    reports = list(tmp_path.glob("run_report_*.json"))
+    assert len(reports) == 1
+    report = json.loads(reports[0].read_text())
+    assert report["status"] == "EXECUTION_FAILED"
+    cleanup = report["cleanup_report"]
+    assert cleanup["status"] == "CLEAN"
+    assert cleanup["tracked_case_ids"] == []
+    assert owner_email not in cleanup["durable_lineage"]["run_emails"]
 
 
 # -----------------------------------------------------------------------------
