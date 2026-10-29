@@ -1,6 +1,6 @@
 # DTD Roadmap Execution Register
 
-**Updated:** 28 October 2026 — accepted backend source/runtime alignment and bounded matching/release-helper verification complete; remaining R4–R8 integrated acceptance stays PARTIAL.
+**Updated:** 29 October 2026 — trainer/support verification tooling independently accepted at `834a50a`; the 28 October backend source/runtime checkpoint is preserved. Remaining R4–R8 integrated acceptance stays PARTIAL.
 **Purpose:** navigation between approved R stages and existing source-of-truth documents; this is not a duplicate finding ledger or product contract.
 
 | Stage | State | Current gate / accepted evidence | Next authorized action | Review checkpoint |

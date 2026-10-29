@@ -1,6 +1,6 @@
 # DTD Current State
 
-**Evidence date:** 28 October 2026 for the bounded backend release below; other dated sections retain their stated scope
+**Evidence date:** 29 October 2026 for accepted trainer/support verification tooling; 28 October for the bounded backend release below. Other dated sections retain their stated scope.
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. The 28 October backend checkpoint below supersedes the prior image; the 25 October replacement credentials and safety constraints still govern developer recovery. Dated finding evidence retains its original scope; it is not a current traffic, credential or deployment instruction. Stage acceptance lives in the execution register.
 **Scope:** current source/runtime checkpoints and unresolved findings, carrying dated evidence from earlier audits. This record distinguishes bounded runtime/provider evidence from full product or production readiness. Full original snapshots are preserved outside the checkout and in Git history.
 
@@ -10,6 +10,12 @@
 - R0–R3 scoped acceptance is preserved in the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md). Corrected R4–R8 runtime acceptance remains PARTIAL in [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md).
 - The 28 October backend release preserves the 25 October replacement credentials and safety constraints. Older image references are historical; read current provider state before any operational action.
 - Historical snapshots and resolved findings are recoverable through the documentation map's historical-evidence pointer; they are not active instructions.
+
+## Trainer/support verification tooling — 29 October 2026
+
+- **DONE, local code:** exact commit `834a50aef613edafe3d6d8ac19256b050b847322` has independent acceptance for the bounded G1–G4 runner requirements. Strict run-bound ownership, complete fail-closed inventory, atomic durable recovery and source-free retry checks replace the remaining permissive cleanup paths; accepted secret/browser protections are preserved.
+- **Verification:** 86 focused tests, seven additional independent failure/retry checks and all 796 backend tests in the repository's isolated local API/Mongo harness passed. Seven new regressions also fail the previous implementation. No application runtime deployment or credential change is required by this correction.
+- **Boundary / next action:** the fresh bounded sandbox execution and owned-fixture absence remain NOT_VERIFIED until recorded in the [29 October R8 checkpoint](R8_END_TO_END_SANDBOX_ACCEPTANCE.md#29-october-trainersupport-verification-tooling-checkpoint). DF-030/035/047/051 and R8 retain their named PARTIAL lifecycle/provider limits; local tooling acceptance does not close them.
 
 ## Antigravity knowledge reconciliation — 26 October 2026
 

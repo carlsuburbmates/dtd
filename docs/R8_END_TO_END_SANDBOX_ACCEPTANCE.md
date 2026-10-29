@@ -8,6 +8,16 @@
 
 The prior implementation-authored `ACCEPTED` statement is superseded. Source provenance is established for the earlier deployment, but independent review found additional workflow defects. Local corrections and passing tests do not establish their deployment or full R8 acceptance.
 
+## 29 October trainer/support verification tooling checkpoint
+
+**Code disposition: DONE for the bounded G1–G4 tooling requirements. Live checkpoint: NOT_VERIFIED pending a fresh bounded sandbox execution. R8 remains PARTIAL.**
+
+- **Accepted source:** `834a50aef613edafe3d6d8ac19256b050b847322`; Codex completed the remaining G1/G3 corrections directly. An independent reviewer accepted this exact commit; the previously accepted G2/G4 secret-binding and browser-origin protections are preserved.
+- **Ownership/recovery:** cleanup requires an explicit, versioned run identity bound to the sandbox, trainer and synthetic addresses. Current contradictory records stop deletion. Every required ownership/inventory read must succeed; the complete lineage is atomically saved with file/directory persistence before destructive cleanup. Retries retain the exact owned claim/dispatch/case IDs after source deletion.
+- **Local verification:** 86 focused actual-function tests passed; seven counterexamples fail the previous implementation. Independent review passed the same 86 tests and seven additional failure/retry checks. The repository's disposable local API/Mongo integration harness passed all 796 backend tests, with external providers disabled. An earlier unconfigured broad pytest invocation was interrupted and is not acceptance evidence.
+- **Runtime boundary:** application source and deployed image are unchanged by this tooling correction. The accepted 28 October API source/revision below retains its scope; no new application deployment is required. Delivered OTP receipt, trainer browser recovery, selected support case UI, provider failures and the other named R8 scenarios do not inherit acceptance from these tests.
+- **Next action:** execute only the accepted unprivileged claim-guard, support API and contact/Ops-list sandbox package, verify its exact owned cleanup and current safety configuration, then retain all remaining matrix gaps explicitly.
+
 ## 28 October backend source and release-helper checkpoint
 
 **Disposition:** backend source/runtime alignment and the bounded release-helper/matching checks below are verified. **R8 remains PARTIAL.** Earlier observations retain their date/scope. This checkpoint supersedes the 25 October backend image only; replacement credentials, zero safety flags and paused ingestion remain required.
@@ -48,7 +58,7 @@ Backend source files are unchanged by the documentation reconciliation that reco
      - Public storefront reflects claimed status and confirmed capabilities.
   2. **First-Party Support & Oversight Lifecycle (DF-047 / SR-04 / CF-04):**
      - Customer intake via `POST /support/contact`: HTTP 200, `case_id: sup_20261028_b13ebb01`, Resend test-sink notification, persisted in `support_threads` (`severity: high`, `status: open`, `category: complaint`).
-     - Oversight protection: Anonymous returns 401 on `/api/oversight` and `/api/oversight/support/threads`; authenticated with `ADMIN_PASS` returns 200 with thread detail. (Auth enforcement is strictly attributed to these tested endpoints).
+     - Oversight protection: Anonymous returns 401 on `/api/oversight/support/threads`; authenticated with `ADMIN_PASS` returns 200 with thread detail. Root `/api/oversight` was not exercised by this runner.
      - Operator reply guard: Cannot close ticket via reply endpoint (HTTP 400).
      - Operator reply: Dispatched via Resend test sink, thread transitioned to `status: awaiting_customer_reply`.
      - Duplicate reply prevention: Identical reply returns API response `duplicate: true`. (Provider-level email suppression was not verified via Resend mailbox/logs).
