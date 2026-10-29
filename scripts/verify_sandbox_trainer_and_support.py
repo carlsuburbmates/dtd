@@ -10,7 +10,8 @@ Verifies live runtime behavior on Cloud Run (dogtrainersdirectory-dev):
 3. Domain 6 / SR-04 / CF-04 / DF-047: First-party support complaint intake, Resend test-sink
    confirmation delivery, protected /ops thread retrieval, operator reply & duplicate prevention,
    guarded closure (minimum notes length requirement verified via API).
-4. Headless Playwright browser UI validation on dtd-web-dev (contact form submit, /ops support cases view).
+4. Headless Playwright browser UI validation on dtd-web-dev (contact submit, owned support
+   case detail, reply/duplicate feedback, closure guards and persisted closed-case revisit).
 5. Deterministic fixture teardown and exact-ID absence verification.
 
 Safe for developer sandbox only. Secrets fetched in memory and never logged or printed.
@@ -994,7 +995,7 @@ async def run_acceptance(
         # =====================================================================
         print("\n[4/5] Executing Live Browser Headless Playwright Checks against dtd-web-dev...")
         try:
-            from playwright.async_api import async_playwright
+            from playwright.async_api import async_playwright, expect
 
             approved_web_origin = normalize_origin(WEB_URL)
             approved_api_origin = normalize_origin(API_URL)
@@ -1041,10 +1042,10 @@ async def run_acceptance(
                 # Capture browser generated case_id from DOM for teardown
                 content = await page.content()
                 m = re.search(r"sup_\d{8}_[a-zA-Z0-9]+", content)
-                if m:
-                    browser_case_id = m.group(0)
-                    tracked_case_ids.add(browser_case_id)
-                    print(f"        Browser-submitted case ID: {browser_case_id}")
+                assert m, "Contact confirmation has no case reference; refusing to select any Ops case"
+                browser_case_id = m.group(0)
+                tracked_case_ids.add(browser_case_id)
+                print(f"        Browser-submitted case ID: {browser_case_id}")
 
                 # 2. Ops Support Cases View
                 print("      - Browser: Loading /ops with session credentials...")
@@ -1079,8 +1080,72 @@ async def run_acceptance(
                 await page.screenshot(path=str(screenshot_ops))
                 print(f"      - Browser: Ops Support Cases view loaded. Screenshot saved: {screenshot_ops.name}")
 
+                # Select only the case created by this browser run, never a pre-existing row.
+                owned_row = page.get_by_test_id("ops-support-thread-row").filter(
+                    has=page.get_by_text(browser_case_id, exact=True)
+                )
+                await expect(owned_row).to_have_count(1)
+                await owned_row.click()
+                detail = page.get_by_test_id("ops-support-detail")
+                await expect(detail.get_by_text(browser_case_id, exact=True)).to_be_visible()
+                await expect(detail).to_contain_text("Status: open")
+                await expect(detail.get_by_text("Testing contact page submit in live headless browser.", exact=True)).to_be_visible()
+
+                browser_reply = f"Sandbox browser acceptance reply for run {run_id}."
+                reply_input = page.get_by_test_id("ops-support-reply-input")
+                reply_button = page.get_by_test_id("ops-support-reply-btn")
+                await expect(reply_button).to_be_disabled()
+                await reply_input.fill(browser_reply)
+                await reply_button.click()
+                await expect(detail.get_by_text("Reply dispatched to customer.", exact=True)).to_be_visible()
+                await expect(detail).to_contain_text("Status: awaiting_customer_reply")
+                await expect(reply_input).to_have_value("")
+                await reply_input.fill(browser_reply)
+                await reply_button.click()
+                await expect(detail.get_by_text(
+                    "This reply was already dispatched. No additional email was sent.", exact=True
+                )).to_be_visible()
+                thread_after_reply = db.support_threads.find_one({"case_id": browser_case_id})
+                assert thread_after_reply and thread_after_reply.get("status") == "awaiting_customer_reply"
+                matching_replies = [message for message in thread_after_reply.get("messages", [])
+                                    if message.get("sender") == "operator" and message.get("text") == browser_reply]
+                assert len(matching_replies) == 1, "Duplicate UI reply created an extra operator message"
+                assert matching_replies[0].get("delivery_status") == "accepted"
+                await page.screenshot(path=str(target_artifact_dir / "sandbox_support_selected_reply.png"))
+
+                close_notes = page.get_by_test_id("ops-support-close-notes")
+                close_confirm = page.get_by_test_id("ops-support-close-confirm")
+                close_button = page.get_by_test_id("ops-support-close-btn")
+                await close_notes.fill("Short")
+                await close_confirm.check()
+                await expect(close_button).to_be_disabled()
+                await close_confirm.uncheck()
+                resolution = f"Synthetic sandbox case {run_id}: browser reply and duplicate guard verified; no customer action required."
+                await close_notes.fill(resolution)
+                await expect(close_button).to_be_disabled()
+                await close_confirm.check()
+                await expect(close_button).to_be_enabled()
+                await close_button.click()
+                await expect(detail.get_by_text("Case status: resolved.", exact=True)).to_be_visible()
+                closed_thread = db.support_threads.find_one({"case_id": browser_case_id})
+                assert closed_thread and closed_thread.get("status") == "resolved"
+                assert closed_thread.get("resolution_notes") == resolution
+
+                # Navigate away and back so acceptance proves a fresh persisted read.
+                await page.get_by_test_id("ops-nav-overview").click()
+                await page.get_by_test_id("ops-nav-support_threads").click()
+                await expect(owned_row).to_have_count(1)
+                await owned_row.click()
+                await expect(detail.get_by_text(browser_case_id, exact=True)).to_be_visible()
+                await expect(detail.get_by_text("Case status: resolved.", exact=True)).to_be_visible()
+                await expect(detail).to_contain_text(resolution)
+                await expect(page.get_by_test_id("ops-support-reply-input")).to_have_count(0)
+                await page.screenshot(path=str(target_artifact_dir / "sandbox_support_selected_closed_revisit.png"))
+                evidence["stages"]["support_selected_browser_lifecycle"] = (
+                    "PASSED (owned detail, reply, duplicate feedback, closure guards, persisted closed-case revisit)"
+                )
                 await browser.close()
-            evidence["stages"]["browser_ui_verification"] = "PASSED (contact form + Ops cases list)"
+            evidence["stages"]["browser_ui_verification"] = "PASSED (contact form + selected Ops support lifecycle)"
         except Exception as browser_err:
             print(f"      - Browser checks encountered error: {browser_err}")
             evidence["stages"]["browser_ui_verification"] = f"FAILED ({browser_err})"
