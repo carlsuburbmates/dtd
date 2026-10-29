@@ -759,6 +759,16 @@ def read_received_otp(expected: Dict[str, str], timeout: int = 180) -> str:
             termios.tcsetattr(fd, termios.TCSANOW, previous)
 
 
+async def fill_otp_input(code_input: Any, code: str) -> None:
+    """Clear the OTP widget's selected slot before replacing all six digits."""
+    from playwright.async_api import expect
+    await code_input.press("ControlOrMeta+A")
+    await code_input.press("Backspace")
+    await expect(code_input).to_have_value("")
+    await code_input.fill(code)
+    await expect(code_input).to_have_value(code)
+
+
 async def verify_received_trainer_browser(
     db: Any, trainer_id: str, run_id: str, recipient: str,
     receipt_reader: Any, artifact_dir: Path, headless: bool,
@@ -802,15 +812,25 @@ async def verify_received_trainer_browser(
                     code_input = page.get_by_test_id("claim-otp")
                     if phase == "initial":
                         wrong_code = f"{(int(code) + 1) % 1000000:06d}"
-                        await code_input.fill(wrong_code)
+                        step = f"{phase} deliberately invalid-code input"
+                        await fill_otp_input(code_input, wrong_code)
                         async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as rejected:
                             await page.get_by_test_id("claim-verify").click()
-                        assert (await rejected.value).status == 400
+                        rejected_response = await rejected.value
+                        assert rejected_response.request.post_data_json == {"claim_event_id": claim_id, "otp": wrong_code}
+                        assert rejected_response.status == 400
                         assert db.claim_events.find_one({"id": claim_id}).get("attempts") == 1
-                    await code_input.fill(code)
+                    step = f"{phase} received-code input"
+                    await fill_otp_input(code_input, code)
                     async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/capabilities/prefill" and r.request.method == "GET") as prefilled:
                         async with page.expect_response(lambda r: r.url == f"{API_URL}/api/trainers/{trainer_id}/claim/verify") as verified:
                             await page.get_by_test_id("claim-verify").click()
+                        response = await verified.value
+                        step = f"{phase} outgoing received-code verification payload"
+                        assert response.request.post_data_json == {"claim_event_id": claim_id, "otp": code}
+                        step = f"{phase} received-code API response status {response.status}"
+                        assert response.status == 200
+                    step = f"{phase} protected prefill response"
                     prefill_response = await prefilled.value
                     assert prefill_response.status == 200
                     assert (await prefill_response.json()).get("trainer_id") == trainer_id
