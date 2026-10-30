@@ -437,6 +437,138 @@ def test_received_trainer_browser_failure_suppresses_private_driver_details(monk
     assert list(tmp_path.iterdir()) == []
 
 
+def test_actual_trainer_helper_keeps_catchment_partial_when_second_receipt_fails(monkeypatch, tmp_path):
+    # Canned browser I/O drives the actual helper's stage bookkeeping. These
+    # inert UI expectations do not certify visual or live-browser acceptance.
+    trainer_id, run_id = "sandbox-trainer-receipt-run", "receipt-run"
+    recipient = "fixture-owner@example.invalid"
+    db = FaithfulFakeDatabase()
+    db.claim_events.rows.extend([
+        {"id": "claim-initial", "trainer_id": trainer_id, "claimant_email": recipient, "attempts": 1},
+        {"id": "claim-recovery", "trainer_id": trainer_id, "claimant_email": recipient},
+    ])
+    db.trainers.rows.append({
+        "id": trainer_id, "test_fixture": True, "test_run_id": run_id,
+        "catchment_type": "specific_suburbs", "tier": "claimed",
+        "specialties": ["puppy_training"], "service_formats": ["in_home"],
+        "life_stages": ["puppy"], "training_philosophy": "positive_reinforcement_force_free",
+        "serviced_suburbs": ["Richmond", "Fitzroy"], "capabilities_confirmed_at": "synthetic-confirmed-time",
+    })
+
+    async def noop(*args, **kwargs):
+        pass
+
+    def response(path, method, status, body, payload=None, headers=None):
+        async def read_body():
+            return body
+        return SimpleNamespace(
+            url=f"{runner.API_URL}/api/trainers/{trainer_id}/{path}", status=status, json=read_body,
+            request=SimpleNamespace(method=method, post_data_json=payload, headers=headers or {}),
+        )
+
+    responses = [
+        response("claim", "POST", 200, {"delivery_status": "sent", "status": "pending_verification", "is_renewal": False, "claim_event_id": "claim-initial"}),
+        response("claim/verify", "POST", 400, {}, {"claim_event_id": "claim-initial", "otp": "012346"}),
+        response("claim/verify", "POST", 200, {"session": {"token": "synthetic-initial-session"}}, {"claim_event_id": "claim-initial", "otp": "012345"}),
+        response("capabilities/prefill", "GET", 200, {"trainer_id": trainer_id}, headers={"x-trainer-claim-session": "synthetic-initial-session"}),
+        response("capabilities/confirm", "POST", 200, {}),
+        response("capabilities/prefill", "GET", 200, {"trainer_id": trainer_id}, headers={"x-trainer-claim-session": "synthetic-initial-session"}),
+        response("claim", "POST", 200, {"delivery_status": "sent", "status": "pending_verification", "is_renewal": True, "claim_event_id": "claim-recovery"}),
+    ]
+
+    class PendingResponse:
+        def __init__(self, value):
+            self.response = value
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        @property
+        def value(self):
+            async def resolved():
+                return self.response
+            return resolved()
+
+    class Page:
+        keyboard = SimpleNamespace(press=noop)
+
+        async def goto(self, url, **kwargs):
+            self.url = url
+
+        get_by_test_id = lambda self, selector: SimpleNamespace(click=noop, fill=noop, press=noop, check=noop, select_option=noop)
+        reload = evaluate = screenshot = noop
+
+        def expect_response(self, predicate):
+            for index, item in enumerate(responses):
+                if predicate(item):
+                    return PendingResponse(responses.pop(index))
+            raise AssertionError("Unexpected browser response requested by actual helper")
+
+    page = Page()
+
+    async def new_page():
+        return page
+
+    context = SimpleNamespace(route=noop, new_page=new_page)
+
+    async def new_context(**kwargs):
+        return context
+
+    browser_closed = []
+
+    async def close_browser():
+        browser_closed.append(True)
+
+    async def launch(**kwargs):
+        return SimpleNamespace(new_context=new_context, close=close_browser)
+
+    class PlaywrightContext:
+        async def __aenter__(self):
+            return SimpleNamespace(chromium=SimpleNamespace(launch=launch))
+
+        async def __aexit__(self, *args):
+            return False
+
+    expectations = SimpleNamespace(to_have_value=noop, to_be_visible=noop, to_contain_text=noop, to_have_count=noop, to_be_checked=noop)
+    monkeypatch.setitem(sys.modules, "playwright.async_api", SimpleNamespace(
+        async_playwright=PlaywrightContext, expect=lambda locator: expectations,
+    ))
+
+    def replay_request(url, method, payload):
+        assert url == f"{runner.API_URL}/api/trainers/{trainer_id}/claim/verify"
+        assert method == "POST" and payload == {"claim_event_id": "claim-initial", "otp": "012345"}
+        return 409, {}
+
+    monkeypatch.setattr(runner, "_http_request", replay_request)
+    receipts = []
+
+    def receipt_reader(expected):
+        receipts.append(dict(expected))
+        if len(receipts) == 2:
+            raise runner.AcceptanceFailure("Synthetic second receipt unavailable")
+        return "012345"
+
+    stages = {}
+    with pytest.raises(runner.AcceptanceFailure, match="recovery email challenge"):
+        asyncio.run(runner.verify_received_trainer_browser(
+            db, trainer_id, run_id, recipient, receipt_reader, tmp_path, True, stages=stages,
+        ))
+    assert [item["phase"] for item in receipts] == ["initial", "recovery"]
+    assert all(item["run_id"] == run_id and item["trainer_id"] == trainer_id for item in receipts)
+    assert responses == [], "Failure must occur after the real helper enters the second receipt step"
+    assert stages["trainer_catchment_confirmation"].startswith("PARTIAL")
+    assert stages["trainer_initial_catchment_confirmation"].startswith("PASSED (specific_suburbs;")
+    assert stages["trainer_claim_verification"].startswith("PASSED")
+    assert stages["trainer_initial_protected_prefill"].startswith("PASSED")
+    assert stages["trainer_capabilities_prefill"].startswith("PASSED")
+    assert "trainer_session_renewal" not in stages
+    assert "trainer_recovery_catchment_confirmation" not in stages
+    assert browser_closed == [True]
+
+
 @pytest.mark.parametrize("receipt_verified", [False, True], ids=["before-receipt", "after-verified-receipt"])
 def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_support(monkeypatch, tmp_path, receipt_verified):
     monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", runner.SANDBOX_PROJECT)

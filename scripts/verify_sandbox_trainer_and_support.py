@@ -905,7 +905,9 @@ async def verify_received_trainer_browser(
                     await expect(page.get_by_test_id("claim-stage-puppy")).to_be_checked()
                     await page.screenshot(path=str(artifact_dir / f"trainer_{phase}_capability_revisit.png"))
                     stages["trainer_capabilities_prefill"] = "PASSED (protected editor prefill and persisted browser revisit)"
-                    stages["trainer_catchment_confirmation"] = "PASSED (specific suburbs then Melbourne-wide; explicit confirmation guard)"
+                    stages[f"trainer_{phase}_catchment_confirmation"] = f"PASSED ({expected_catchment}; persisted browser revisit)"
+                    if phase == "initial":
+                        stages["trainer_catchment_confirmation"] = "PARTIAL (specific suburbs confirmed; Melbourne-wide recovery check pending)"
                     if phase == "initial":
                         step = "claimed profile privacy and session removal"
                         await page.keyboard.press("Escape")
@@ -917,6 +919,7 @@ async def verify_received_trainer_browser(
                         await page.screenshot(path=str(artifact_dir / "trainer_claimed_public_privacy.png"))
                         stages["trainer_claimed_profile_privacy"] = "PASSED (claimed profile without stored session hides owner and billing controls)"
                         await page.get_by_test_id("edit-capabilities-open").click()
+                stages["trainer_catchment_confirmation"] = "PASSED (specific suburbs then Melbourne-wide; explicit confirmation guard)"
             finally:
                 await browser.close()
         return stages
