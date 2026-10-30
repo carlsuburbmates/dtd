@@ -772,11 +772,12 @@ async def fill_otp_input(code_input: Any, code: str) -> None:
 async def verify_received_trainer_browser(
     db: Any, trainer_id: str, run_id: str, recipient: str,
     receipt_reader: Any, artifact_dir: Path, headless: bool,
+    stages: Optional[Dict[str, str]] = None,
 ) -> Dict[str, str]:
     """Use received email codes and the normal trainer UI; never mint credentials."""
     from playwright.async_api import async_playwright, expect
     step = "open trainer"
-    stages: Dict[str, str] = {}
+    stages = stages if stages is not None else {}
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=headless)
@@ -836,6 +837,7 @@ async def verify_received_trainer_browser(
                     assert (await prefill_response.json()).get("trainer_id") == trainer_id
                     assert "x-trainer-claim-session" in prefill_response.request.headers
                     assert "x-admin-pass" not in prefill_response.request.headers
+                    stages[f"trainer_{phase}_protected_prefill"] = "PASSED (own trainer, session header, HTTP 200; no admin fallback)"
                     response = await verified.value
                     session_result = await response.json()
                     assert response.status == 200
@@ -913,8 +915,8 @@ async def verify_received_trainer_browser(
                         await expect(page.get_by_test_id("trainer-owner-controls")).to_have_count(0)
                         await expect(page.get_by_test_id("trainer-billing-link")).to_have_count(0)
                         await page.screenshot(path=str(artifact_dir / "trainer_claimed_public_privacy.png"))
+                        stages["trainer_claimed_profile_privacy"] = "PASSED (claimed profile without stored session hides owner and billing controls)"
                         await page.get_by_test_id("edit-capabilities-open").click()
-                stages["trainer_claimed_profile_privacy"] = "PASSED (claimed profile without stored session hides owner and billing controls)"
             finally:
                 await browser.close()
         return stages
@@ -1094,9 +1096,10 @@ async def run_acceptance(
             print("      - Notice: Trainer claim verification marked NOT_VERIFIED (external provider mailbox receipt required; privileged derivation prohibited).")
 
         else:
-            evidence["stages"].update(await verify_received_trainer_browser(
+            await verify_received_trainer_browser(
                 db, trainer_id, run_id, receipt_email, receipt_reader, target_artifact_dir, headless,
-            ))
+                stages=evidence["stages"],
+            )
 
         # =====================================================================
         # PART B: Customer Support Lifecycle Verification

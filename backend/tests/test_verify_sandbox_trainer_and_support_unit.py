@@ -437,7 +437,8 @@ def test_received_trainer_browser_failure_suppresses_private_driver_details(monk
     assert list(tmp_path.iterdir()) == []
 
 
-def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_support(monkeypatch, tmp_path):
+@pytest.mark.parametrize("receipt_verified", [False, True], ids=["before-receipt", "after-verified-receipt"])
+def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_support(monkeypatch, tmp_path, receipt_verified):
     monkeypatch.setenv("DTD_SANDBOX_PROJECT_ID", runner.SANDBOX_PROJECT)
     owner_email = "fixture-owner@example.invalid"
     db = FaithfulFakeDatabase()
@@ -472,19 +473,24 @@ def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_sup
 
     browser_calls = []
 
-    async def failed_receipt_browser(database, trainer_id, run_id, recipient, reader, artifact_dir, headless):
+    passed_receipt = "PASSED (received mailbox code, normal browser verification)"
+
+    async def failed_receipt_browser(database, trainer_id, run_id, recipient, reader, artifact_dir, headless, **kwargs):
         browser_calls.append((trainer_id, run_id))
         fixture = database.trainers.find_one({"id": trainer_id})
         assert fixture["test_fixture"] is True and fixture["test_run_id"] == run_id
         assert fixture["email"] == fixture["billing_email"] == owner_email
         assert recipient == owner_email
-        raise runner.AcceptanceFailure("Synthetic receipt unavailable")
+        if receipt_verified:
+            stage_evidence = kwargs.get("stages", {})
+            stage_evidence["trainer_claim_verification"] = passed_receipt
+        raise runner.AcceptanceFailure("Synthetic later browser failure")
 
     monkeypatch.setattr(runner, "MongoClient", Client)
     monkeypatch.setattr(runner, "enforce_sandbox_preflight", lambda *args, **kwargs: {})
     monkeypatch.setattr(runner, "_http_request", http)
     monkeypatch.setattr(runner, "verify_received_trainer_browser", failed_receipt_browser)
-    with pytest.raises(runner.AcceptanceFailure, match="Synthetic receipt unavailable"):
+    with pytest.raises(runner.AcceptanceFailure, match="Synthetic later browser failure"):
         asyncio.run(runner.run_acceptance(
             mongo_url="mongodb://localhost:27017/dtd_sandbox",
             admin_pass="synthetic-admin",
@@ -499,6 +505,13 @@ def test_receipt_failure_cleans_owned_fixture_without_discovering_owner_mail_sup
     assert len(reports) == 1
     report = json.loads(reports[0].read_text())
     assert report["status"] == "EXECUTION_FAILED"
+    stages = report["evidence"]["stages"]
+    if receipt_verified:
+        assert stages["trainer_claim_verification"] == passed_receipt
+    else:
+        assert "trainer_claim_verification" not in stages
+    assert "trainer_catchment_confirmation" not in stages
+    assert "trainer_session_renewal" not in stages
     cleanup = report["cleanup_report"]
     assert cleanup["status"] == "CLEAN"
     assert cleanup["tracked_case_ids"] == []

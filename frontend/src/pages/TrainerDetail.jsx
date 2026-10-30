@@ -837,7 +837,7 @@ export default function TrainerDetail() {
                 )}
             </main>
             <Dialog open={claimOpen} onOpenChange={closeClaim}>
-                <DialogContent className="border-[#E5DFD3] bg-[#FAFAF7] p-6 sm:rounded-2xl" data-testid="claim-dialog">
+                <DialogContent className="max-h-[90dvh] overflow-y-auto overscroll-contain border-[#E5DFD3] bg-[#FAFAF7] p-6 sm:rounded-2xl" data-testid="claim-dialog">
                     <DialogHeader>
                         <DialogTitle className="font-serif text-3xl text-[#1A3A32]">
                             {claimStep === "capabilities" ? "Confirm capabilities" : "Claim this profile"}
