@@ -18,10 +18,42 @@ import asyncio
 import json
 import os
 import re
+import socket
 import sys
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Reliable DNS resolution bypass for macOS Tailscale/VPN environments
+try:
+    import dns.resolver
+    _orig_getaddrinfo = socket.getaddrinfo
+    _custom_resolver = dns.resolver.Resolver(configure=False)
+    _custom_resolver.nameservers = ["8.8.8.8", "1.1.1.1"]
+    _custom_resolver.lifetime = 2.0
+
+    def _fast_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+        if not host or host in ("localhost", "127.0.0.1", "::1") or host.replace(".", "").isdigit():
+            return _orig_getaddrinfo(host, port, family, type, proto, flags)
+        try:
+            answers = _custom_resolver.resolve(host, "A")
+            ips = [r.to_text() for r in answers]
+            results = []
+            for ip in ips:
+                try:
+                    res = _orig_getaddrinfo(ip, port, family, type, proto, flags)
+                    results.extend(res)
+                except Exception:
+                    pass
+            if results:
+                return results
+        except Exception:
+            pass
+        return _orig_getaddrinfo(host, port, family, type, proto, flags)
+
+    socket.getaddrinfo = _fast_getaddrinfo
+except ImportError:
+    pass
 
 # Load env
 with open(Path(__file__).parent.parent / "backend/.env") as f:
@@ -35,8 +67,17 @@ from google import genai
 from motor.motor_asyncio import AsyncIOMotorClient
 
 gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-client_ai = genai.Client(api_key=gemini_api_key) if gemini_api_key else None
-model_name = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+vertex_project = os.environ.get("VERTEX_PROJECT", "dogtrainersdirectory-dev")
+vertex_location = os.environ.get("VERTEX_LOCATION", "australia-southeast1")
+model_name = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+
+# Default to Vertex AI (australia-southeast1) which uses Google Cloud billing credits directly
+if os.environ.get("USE_VERTEX_AI", "true").lower() in ("true", "1", "yes"):
+    client_ai = genai.Client(vertexai=True, project=vertex_project, location=vertex_location)
+elif gemini_api_key:
+    client_ai = genai.Client(api_key=gemini_api_key)
+else:
+    client_ai = None
 
 MONGO_URL = os.environ["MONGO_URL"]
 AU_PHONE_RE = re.compile(
@@ -68,13 +109,13 @@ Website content:
 
 
 async def fetch_website_text(url: str) -> str:
-    """Fetch website text content with DTD-Bot UA, respecting rate limit."""
+    """Fetch website text content with browser-compatible UA, respecting rate limit."""
     try:
         req = urllib.request.Request(
             url,
             headers={
-                "User-Agent": "DTD-Bot/1.0 (+https://dogtrainersdirectory.com.au/bot)",
-                "Accept": "text/html",
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 (DTD-Bot/1.0; +https://dogtrainersdirectory.com.au)",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -90,24 +131,33 @@ async def fetch_website_text(url: str) -> str:
 
 
 async def gemini_extract(website_text: str) -> dict:
-    """Call Gemini to extract business facts from website text."""
+    """Call Gemini to extract business facts from website text with rate limit retry."""
     if website_text.startswith("FETCH_ERROR"):
         return {"_error": website_text}
     if not client_ai:
-        return {"_error": "GEMINI_API_KEY not configured"}
-    try:
-        prompt = ENRICHMENT_PROMPT.format(content=website_text)
-        resp = client_ai.models.generate_content(
-            model=model_name,
-            contents=prompt,
-        )
-        raw = resp.text.strip()
-        # Strip markdown code fences if present
-        raw = re.sub(r"^```json\s*", "", raw)
-        raw = re.sub(r"```$", "", raw).strip()
-        return json.loads(raw)
-    except Exception as e:
-        return {"_error": str(e)}
+        return {"_error": "Gemini client not configured"}
+
+    prompt = ENRICHMENT_PROMPT.format(content=website_text)
+    for attempt in range(4):
+        try:
+            resp = client_ai.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            raw = resp.text.strip()
+            # Strip markdown code fences if present
+            raw = re.sub(r"^```json\s*", "", raw)
+            raw = re.sub(r"```$", "", raw).strip()
+            return json.loads(raw)
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                wait_sec = 12 * (attempt + 1)
+                print(f"  ⏳ [Vertex AI Quota 429] Waiting {wait_sec}s before retry ({attempt + 1}/3)...")
+                await asyncio.sleep(wait_sec)
+                continue
+            return {"_error": err_str}
+    return {"_error": "Exceeded retries due to quota"}
 
 
 async def main():
@@ -137,7 +187,14 @@ async def main():
         website = trainer["website"]
         print(f"[{i+1}/{len(targets)}] {name} ({tid[:12]}...) — {website}")
 
-        await asyncio.sleep(2)  # Rate limit: max 1 req / 2s per domain
+        # Invariant: Never extract facts from directory aggregators (bark, oneflare, localsearch)
+        if any(agg in website.lower() for agg in ["bark.com", "oneflare.com.au", "localsearch.com.au", "yellowpages.com.au", "truelocal.com.au"]):
+            print(f"  ⏭ Skipping aggregator directory URL: {website}")
+            results.append({"id": tid, "name": name, "status": "skipped_aggregator_domain", "website": website})
+            print()
+            continue
+
+        await asyncio.sleep(6)  # Paced rate limit for Vertex AI RPM quotas
         website_text = await fetch_website_text(website)
 
         if "FETCH_ERROR" in website_text:
