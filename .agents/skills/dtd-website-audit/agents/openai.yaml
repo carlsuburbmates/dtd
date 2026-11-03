@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTD Website Audit"
+  short_description: "Audit DTD journeys across four evidence dimensions"
+  default_prompt: "Use $dtd-website-audit to audit DTD across code/security, UX/conversion, visuals/accessibility and strategy/SEO/AEO, with normal browser journeys and existing WebMCP tools, one findings register and explicit evidence gaps."

@@ -31,6 +31,9 @@ blocked_skills = []
 # Gated production, live billing, auth/credential and destructive real-data actions stay gated.
 
 # Skill routing:
+# - Combined website audit across code/security, UX/conversion, visuals/accessibility
+#   and strategy/SEO/AEO -> dtd-website-audit; shared journeys, review-only application
+#   scope, existing WebMCP verification, one coverage matrix and findings register.
 # - Workflow across UI/API/data/automation/notifications/ops -> dtd-feature-workflow-completion.
 # - Public page copy/CTA/accessible mobile visual polish -> dtd-premium-look-audit.
 # - Cross-stage planning, owner exception triage, conflicting evidence -> dtd-proactive-owner-assistance.
