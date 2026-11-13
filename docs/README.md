@@ -25,6 +25,7 @@ Each document has a distinct role. Specifications define requirements; current s
 | [Current state](DTD_CURRENT_STATE.md) | Source/runtime evidence and unresolved DF/TD findings |
 | [Invariants](DTD_INVARIANTS_AND_CONSTRAINTS.md) | Cross-project rules that every change preserves |
 | [Decision register](DTD_CONFLICT_AND_DECISION_REGISTER.md) | Owner decisions, rationale and supersession |
+| [Naming conventions](DTD_NAMING_CONVENTIONS.md) | Canonical role-to-project-ID map, immutable identifiers and the accepted Option A decision |
 | [Targeted matching state](DTD_TARGETED_MATCHING_PIPELINE_STATE.md) | CDR-023 cross-workflow matching target |
 | [Matching completion roadmap](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) | M0–M10 work packages and dependencies |
 | [Matching remaining criteria](MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md) | Detailed M-package acceptance checklist |

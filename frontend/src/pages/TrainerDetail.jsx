@@ -265,7 +265,11 @@ export default function TrainerDetail() {
             toast.error("Add your name and email so the trainer can reach you.");
             return;
         }
-        if (!form.consent_contact_release || !form.consent_outcome_tracking) {
+        // DF-058: contact release is the mandatory consent. Outcome tracking is
+        // optional and anonymous per its own control copy, so it must not be a
+        // precondition for sending an enquiry. The declared value is transmitted
+        // and persisted verbatim, and only gates follow-up outreach.
+        if (!form.consent_contact_release) {
             toast.error("Consent is required before contact is revealed.");
             return;
         }
@@ -282,6 +286,7 @@ export default function TrainerDetail() {
                     user_phone: form.user_phone || "",
                     notes: form.description || "",
                     consent_contact_release: form.consent_contact_release,
+                    consent_outcome_tracking: form.consent_outcome_tracking,
                 }, {
                     headers: {
                         "X-Match-Context-Token": matchContextToken,
@@ -348,7 +353,8 @@ export default function TrainerDetail() {
     };
 
     const trackEngagement = (kind) => {
-        if (!introId) return;
+        // DF-058: never send engagement signals when outcome tracking was declined.
+        if (!introId || !form.consent_outcome_tracking) return;
         api.post("/engagements", { intro_id: introId, kind }).catch(() => {
             setTimeout(() => {
                 api.post("/engagements", { intro_id: introId, kind }).catch(() => {});

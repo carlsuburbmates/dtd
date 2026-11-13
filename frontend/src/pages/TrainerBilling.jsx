@@ -231,7 +231,7 @@ export default function TrainerBilling() {
     return (
         <div className="App min-h-screen">
             <PublicHeader />
-            <main className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
+            <main id="main-content" className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
                 <div className="small-caps">Trainer billing</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Billing setup</h1>
 
