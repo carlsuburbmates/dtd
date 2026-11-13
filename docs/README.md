@@ -40,6 +40,7 @@ Each document has a distinct role. Specifications define requirements; current s
 | [Ops](specs/OPS_AND_OBSERVABILITY.md) | Exception-led operation, bounded actions, provider registry and recovery requirements |
 | [Commercial strategy](DTD_COMMERCIAL_SCALING_AND_FUNDING_STRATEGY.md) | Business workflow integration, measured hypotheses and optional R13 concepts |
 | [Google program baseline](GOOGLE_FOR_STARTUPS_PROGRAM_BASELINE.md) | Dated official program reference and explicit eligibility uncertainty |
+| [Google Cloud local authentication](GOOGLE_CLOUD_LOCAL_AUTH.md) | Supported local CLI credential reuse, scoped recovery, and separate SDK ADC setup |
 
 ## Historical evidence and restoration
 

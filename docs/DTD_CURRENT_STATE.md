@@ -1,6 +1,6 @@
 # DTD Current State
 
-**Evidence date:** 31 October 2026 for received-email trainer/support acceptance, web release and dependency verification; 28 October for the preserved backend release. Other dated sections retain their stated scope.
+**Evidence date:** 7 November 2026 for the combined website audit and fresh sandbox/scanner checks; 31 October for inherited received-email trainer acceptance and 28 October for the preserved backend release. Other dated sections retain their stated scope.
 **Meaning:** verified descriptive state, not a declaration that the website has reached the owner's intended target. The 28 October backend checkpoint below supersedes the prior image; the 25 October replacement credentials and safety constraints still govern developer recovery. Dated finding evidence retains its original scope; it is not a current traffic, credential or deployment instruction. Stage acceptance lives in the execution register.
 **Scope:** current source/runtime checkpoints and unresolved findings, carrying dated evidence from earlier audits. This record distinguishes bounded runtime/provider evidence from full product or production readiness. Full original snapshots are preserved outside the checkout and in Git history.
 
@@ -10,6 +10,14 @@
 - R0–R3 scoped acceptance is preserved in the [execution register](DTD_ROADMAP_EXECUTION_REGISTER.md). Corrected R4–R8 runtime acceptance remains PARTIAL in [R8 evidence](R8_END_TO_END_SANDBOX_ACCEPTANCE.md).
 - The 28 October backend release preserves the 25 October replacement credentials and safety constraints. Older image references are historical; read current provider state before any operational action.
 - Historical snapshots and resolved findings are recoverable through the documentation map's historical-evidence pointer; they are not active instructions.
+
+## Combined website audit — 7 November 2026
+
+- **Disposition:** deployment acceptance remains **BLOCKED / R4–R8 PARTIAL**. Source `95105db` was assessed alongside fresh developer runtime reads. API `dtd-api-dev-r8-171a1d73-4e0775f361` and web `dtd-web-dev-r8-9ab5d433-376235` retain the prior image digests, dedicated identities, managed secret references 4/2, database `dtd_sandbox`, three safety flags `0`, 100% traffic and Scheduler PAUSED. No production or application deployment occurred.
+- **Verified scope:** 87 targeted backend tests plus four isolated behavioral reproductions; 153 runner tests; live contained matching/persistence/Ops and selected contact/support reply, duplicate, closure and revisit; sampled responsive/keyboard/metadata/font checks. Two material enquiry defects were reproduced on owned sandbox records. The collision used a deliberately seeded delivery state, not real email delivery. Independent exact-owned cleanup queries and fixture endpoint 404s passed for both lifecycle attempts and targeted probes; provider test-mail history/logs and incidental security state remain separate.
+- **New evidence / boundaries:** consent and idempotency defects are DF-058/059; accessibility defects DF-060–062. Current-owner session binding remains DF-030/051; authenticated-read side effects remain DF-032; metadata gaps remain DF-011; privacy remains DF-036; scanner evidence remains TD-002. Full ordinary UI-to-enquiry delivery, genuine trainer expiry/ownership races, specialized/provider-failure scenarios and owner walkthrough remain unverified at their named scopes. Existing 31 October normal claim/recovery/edit acceptance is preserved.
+- **Evidence custody:** private external audit run `dtd-web-cf9ddf9f49` contains the single coverage matrix, findings register, source hashes, live fixture manifests, independent absence checks and rendered evidence. Private Ops screenshots are excluded from this public record. No WebMCP integration is declared; sampled browser discovery found no tools. Missing analytics/Search Console evidence does not establish conversion or indexing failure.
+- **Next action:** correct the confirmed authorization/consent/idempotency issues and affected accessibility/SEO gaps, independently review the exact source, then verify the corrected developer runtime and remaining integrated acceptance. Do not promote this candidate to production.
 
 ## Trainer/support acceptance checkpoint — 31 October 2026
 
@@ -67,6 +75,8 @@ These entries require follow-up and are not product decisions or proof of a comp
 
 ### DF-001 — Historical Cloud Run source artifact
 
+- **2 November 2026 local management-authentication recheck:** the active account was `admin@dogtrainersdirectory.com.au`, project `dogtrainersdirectory-dev`, and gcloud used the normal persistent `~/.config/gcloud` directory. A scoped project read first failed with `Reauthentication failed` in the non-interactive shell. The official account login was opened in the visible local Terminal; a later scoped project read and `scripts/ensure_gcloud_auth.sh` both succeeded. This verifies current CLI access only; it does not establish an expiry/session policy or SDK ADC access. The new [local-auth procedure](GOOGLE_CLOUD_LOCAL_AUTH.md) documents reuse and scoped renewal.
+
 - **31 October completion freshness limit:** a later safe Cloud Run read again failed token refresh despite the correct persistent account/project/credential directory. Ordinary recovery reached a password prompt inaccessible to the owner in the tool-only terminal; a documented official-browser fallback is now awaiting owner-only password verification. The single browser flow remains open. Earlier verified release/workflow/cleanup snapshots retain their timestamps; no new runtime failure or session-policy cause is inferred. Source/CI/docs work continued independently.
 
 - **30 October management-authentication observation:** renewed persistent CLI access passed scoped provider reads and the bounded sandbox run. Sampled failures also occurred on ordinary Cloud Run reads (`ReauthFailError` / non-interactive prompting), so a billing-IAM-read trigger is not established. Terminal accessibility and survey settings are enabled; they do not renew credentials. Effective session duration remains NOT_VERIFIED: its API is disabled and the alternate Admin Console read requires separate owner password verification. Impact is recurring management overhead; this is not runtime credential expiry. Defer that policy read while authorised work can proceed; next action is a read-only effective-session-policy check through the official management surface when owner verification is available. No session/security policy was changed.
@@ -86,7 +96,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 
 ### DF-003 — Public header does not remain sticky on the live site
 
-- **Observed/status:** 20 September 2026 — open until the paired visual-cohesion candidate is released and checked live.
+- **Observed/status:** 20 September 2026 — open until the paired visual-cohesion candidate is released and checked on the live custom domains. 13 November 2026: the corrective behaviour is verified on the sandbox, where `overflow-x` computes to `clip` and the sticky header holds at `top: 8px` after a 1400px scroll on web `dtd-web-dev-00029-6z5`. Production header and cross-site handoff remain unchecked.
 - **Evidence:** the live directory header moved off-screen during page scroll despite its sticky styling. An `overflow-x: hidden` ancestor prevented the intended sticky behavior. The local frontend candidate replaces this with `overflow-x: clip` on the document ancestors and homepage container; Chrome checks at 320, 390, 768 and 1440px kept the header at the top with no horizontal overflow or page errors. The paired First Leash candidate applies the same correction.
 - **Impact/uncertainty:** the live visitor loses primary navigation while scrolling. Local checks do not prove the fix is live or that every browser engine behaves identically.
 - **Why deferred:** the 23 September Firebase release included the local visual-cohesion candidate, but the live checks in this session covered routing and content types, not scroll-position/browser visual acceptance.
@@ -143,6 +153,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Impact/uncertainty:** an API/configuration outage can expose a matching surface whose runtime state has not been confirmed, while the homepage location input and route-level search metadata are weaker than the intended local-discovery and SEO contracts. The audit did not establish whether Firebase/Cloud Run production currently exercises the failure path.
 - **Repair/evidence:** the current component fails closed on config error, uses associated labels and announced error/result regions, supplies the suburb datalist, and sets route-specific title/description/canonical metadata. `dtd-web-dev-00006-qqx` serves the bundle only to the sandbox API on both sandbox hostnames; 51 frontend tests/build and live questionnaire/profile browser inspection passed. A dedicated terminal-delivery UI test confirms the browser cannot claim an undeliverable enquiry was sent.
 - **Next action:** exercise a browser-submitted result-to-profile-to-enquiry state with disposable data, then independently verify every public route's rendered metadata before closure.
+- **7 November evidence:** current raw/live bundle and rendered checks confirm the semantic fallback is present and route canonicals exist. Remaining defects are dropped suburb API `meta_robots` decisions, duplicate hosts self-canonicalizing, and unknown paths returning HTTP 200 then navigating home. Rendered apex/www `/about` canonicals differ by host. Sandbox indexing exclusion is an unverified posture risk, not proof of indexing. Apply the existing SEO contract and verify raw/rendered outcomes; do not restore the obsolete unused CRA template as authority.
 
 ### DF-014 — Reverification loop grants public state from AI confidence
 
@@ -204,6 +215,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Observed/status:** 11 October component/browser evidence is retained at its original scope; corrected integrated acceptance remains **PARTIAL** under the 26 October R8 checkpoint. The previously broad DONE label does not certify the remaining owner-interface/provider matrix.
 - **Evidence:** `scripts/run_sandbox_browser_journey.py` provides an end-to-end Playwright acceptance runner exercising Homepage questionnaire submission → results card rendering with URL privacy and marketing phrase exclusion → candidate profile handoff → protected enquiry submission with consent and terminal status verification. On 11 October 2026, executed against deployed sandbox frontend (`https://dtd-web-dev-x2kdoaemtq-ts.a.run.app`) and passed with `ok: true`, verifying `home_loaded`, `questionnaire_filled`, `results_rendered_privacy_verified`, and `empty_match_verified` against the seeded 20 Melbourne trainer dataset. Component tests in `Home.test.jsx` (10 passed) and visual suites pass.
 - **Residual gate:** production release promotion remains a separate owner gate.
+- **7 November audit-tool finding:** the legacy browser journey helper has arbitrary target selection, chooses a returned trainer and can submit an enquiry without an owned fixture/test recipient or datastore teardown. It was not executed; no actual recipient contact is inferred. Quarantine or replace that entry point with the accepted bounded fixture lifecycle before future use. Current API matching success does not close the full human UI-to-delivery gap.
 
 ### DF-022 — Matching-consent evidence is persisted locally; retention and sandbox proof remain open
 
@@ -248,6 +260,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Observed/status:** 31 October 2026 — **PARTIAL**; normal received-email browser claim/recovery/edit and clean public privacy are verified. Authentic expiry/draft and concurrent current-owner lifecycle remain open.
 - **Evidence:** run `36232e52fbc6`, API source `171a1d7`, web source `9ab5d43`: two distinct received codes verified normally; own protected prefill had session header/no admin fallback; capability/catchment edits persisted on revisit; tier survived recovery; owner/billing controls disappeared after removing this trainer's stored session. Both viewport canary checks confirm usable dialog scrolling. Exact owned teardown and separate absence queries passed. Full source/runtime and receipt boundaries are in the [31 October R8 checkpoint](R8_END_TO_END_SANDBOX_ACCEPTANCE.md#31-october-received-email-trainer-and-selected-support-acceptance).
 - **Remaining / next action:** verify authentic signed-token expiry with unsaved draft retention, stale route rejection and current-owner/latest-challenge concurrent consumption using safe owned fixtures. Explicit stored-session removal is not authentic expiry proof. Production remains R9.
+- **7 November correction:** a network-disabled behavioral reproduction accepts a previously issued trainer session for protected prefill and capability mutation after modeled owner replacement. Seven affected backend functions and deployed `TrainerDetail.jsx` match the observed deployed source. This establishes a source authorization defect, not an attempted live ownership takeover. Bind protected actions to current ownership atomically while preserving legitimate same-owner renewal; then retest expiry, replacement and concurrent change. This does not reopen the accepted normal claim/recovery flow.
 
 ### DF-031 — Held sandbox submissions lack current statutory identity evidence
 
@@ -259,10 +272,11 @@ These entries require follow-up and are not product decisions or proof of a comp
 
 ### DF-032 — Oversight snapshot GET can write launch-phase records
 
-- **Observed/status:** 15 October 2026 — remediated in local source (`backend/server.py:2294-2315, 5909`); unit tests pass (`backend/tests/test_lifecycle_endpoints_unit.py`). Awaiting canary deployment and production database record verification.
+- **Observed/status:** 7 November 2026 — **OPEN for full-route read-only compliance**. The 15 October handler-level launch-phase fix remains present; successful-auth dependency deletion is reproduced locally and matches deployed source. Handler-only tests do not establish the complete request is write-free.
 - **Evidence:** `GET /oversight` was refactored to call `_get_read_only_phase_runtime_records()`, using `_read_launch_phase_state()` and `_read_phase_transition_decisions()`, eliminating calls to `_upsert_latest_phase_readiness_snapshot()` and `_ensure_phase_transition_baseline()`. Two regression unit tests (`test_df032_get_read_only_phase_runtime_records_performs_zero_writes` and `test_df032_oversight_endpoint_handler_performs_zero_writes`) assert zero database writes on any collection.
-- **Impact/uncertainty:** Local source now strictly adheres to a side-effect-free contract for `GET /api/oversight`. Prior production writes from GET requests during earlier audits remain unconfirmed until deployed Cloud Run revision parity and datastore inspection occur.
-- **Next action:** Deploy canary revision to developer sandbox/production canary, verify zero-write behavior on live runtime, and inspect historical timestamps on `phase_readiness_snapshots`.
+- **Impact/uncertainty:** The handler-level fix removes the identified launch-phase writes; full-route side-effect freedom was not established by those handler-only tests (see 7 November correction below). Prior production writes from GET requests during earlier audits remain unconfirmed until deployed Cloud Run revision parity and datastore inspection occur.
+- **Next action:** correct the authentication-dependency side effect, test the complete route and brute-force protections, independently review, then verify the corrected developer sandbox. Historical production-write uncertainty remains separate; production promotion requires its own gate.
+- **7 November correction:** the prior handler-level zero-write claim is too broad. A complete authenticated in-process request returns 200 while the authentication dependency calls `auth_attempts.delete_one`; the endpoint handler itself retains the previous read-only business-state fix. Affected backend source is identical to the observed sandbox source; no live broad security-state mutation probe was used. Move successful-auth reset into appropriate explicit action semantics and test the full route including dependencies while preserving brute-force protections. Do not change the locked contract merely to match this implementation.
 
 ### DF-035 — Trainer radius catchment was selectable without a supported radius definition
 
@@ -284,7 +298,7 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Impact/uncertainty:** visitors may not receive complete, fact-backed privacy and commercial information. The repo does not establish retention/deletion for waitlist, enquiry, submission, trainer or claim records, actual Sentry event contents, client-side analytics/cookie behavior, MongoDB Atlas region, provider subprocessors/retention or mailbox access/response handling. These findings are implementation observations, not a legal determination.
 - **Why deferred:** substantive privacy/legal policy changes require owner and qualified legal review; runtime data-flow, provider and deletion evidence must first be reconciled.
 - **Next action:** reconcile live provider and hosting settings with these code paths; determine which retention/deletion and privacy-request/support controls are evidenced by implementation and operational records; record only unresolved owner-process decisions, then prepare the fact-backed policy draft and exact trial/Terms delta for qualified legal review before public publication.
-
+- **7 November rendered update:** sandbox `/privacy` still contains the sparse waitlist/retention baseline. `/contact` is now a tracked case form with a verified selected support lifecycle, and `/pricing` explicitly describes gated checkout and the provider-backed trial. These supersede those specific older interface observations; complete privacy reconciliation and qualified review remain open. This is not a legal-compliance determination.
 
 ### DF-041 — Trainer success-path testing lacks a disposable sandbox route and safe OTP sink
 
@@ -349,6 +363,18 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Why deferred:** changing the connector's execution root without reconciling its pipeline, schema, provider scope and source authority could redirect writes incorrectly. This access/Git completion check performed no sourcing, publication, connector reconfiguration or provider mutation.
 - **Next action:** reconcile the connector with the current acquisition contract and explicit target before enabling any live refresh or write. Use canonical repository and supported developer-provider reads for current evidence meanwhile; retain ingestion PAUSED and the existing promotion/source gates.
 
+## Resolved findings — 13 November 2026
+
+Five findings were closed with verification evidence: API source `2b08afec` deployed as `dtd-api-dev-r8-2b08afec-74fbbe4a15`, web source `301da95` deployed as `dtd-web-dev-00029-6z5`. Full entries are preserved in Git history; each removal below is backed by a recorded retest.
+
+| ID | Closure evidence |
+| --- | --- |
+| DF-058 | Consent is carried, persisted verbatim and enforced downstream. Deployed OpenAPI defaults `consent_outcome_tracking` to false on `IntroIn` and `MatchFollowUpIn`; T+7 outreach filters and re-checks both consents; engagement collection and inferred conversion are suppressed when tracking is declined. Live owned-fixture retest: declined record returned `tracked=false` with zero engagement and zero conversion documents, consenting record recorded two engagements. Independent review found and the retest closed a remaining engagement bypass. |
+| DF-059 | Idempotency is bound to match context, trainer and normalised email. Live retest: a reused key for a different trainer returned 409 with no record leak, and a genuine replay returned the stored trainer and intro id. Both paths return before any dispatch, so no email was sent. Both regressions fail on a pristine baseline and pass with the fix. |
+| DF-060 | The three trainer-application capability controls resolve accessible names in the rendered sandbox DOM: "Training Philosophy", "Service Area Catchment" and "Additional Serviced Suburbs (comma separated)". Full assistive-technology conformance is not claimed. |
+| DF-061 | Every template that renders the public header now carries the skip target, and the target is focusable. Live retest: activating the shortcut scrolled to `main`, moved focus to `main`, and one Tab advanced to the first link inside it. `/privacy` contains no focusable content inside the landmark, which is correct for a prose page. |
+| DF-062 | The shared footer descriptor now measures 4.89:1 (`rgb(95,110,103)` on `rgb(247,244,238)`), above the 4.5:1 normal-text minimum, verified from computed styles on the rendered page. |
+
 ## Maintenance outside the current release gate
 
 ### TD-001 — Motor migration before support deadline
@@ -367,3 +393,4 @@ These entries require follow-up and are not product decisions or proof of a comp
 - **Impact:** unresolved execution relevance, sensitive-data handling and permission clarity may hide material issues.
 - **Why deferred:** this needs stage-specific source/security verification rather than repeating accepted dependency remediation.
 - **Next action:** re-read current scanner metadata, establish actual affected execution paths, record proven findings under their existing stages, and add explicit minimal workflow permissions during relevant maintenance.
+- **7 November provider refresh:** GitHub reports one open dependency alert, #264 (`GHSA-mrwp-f3q8-3g9p`, high), for `follow-redirects` 1.16.1 in `frontend/yarn.lock`; first patched 1.16.2. The lockfile confirms 1.16.1. Axios browser mappings exclude its Node HTTP adapter, so this scanner result does not prove visitor-browser exploitability; Node/build usage and deployed dependency exposure require assessment. Apply the compatible patch, frozen install/build and affected checks, then verify provider alert resolution. Earlier zero-alert or pending-alert snapshots are historical.
