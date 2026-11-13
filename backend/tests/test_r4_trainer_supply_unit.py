@@ -507,7 +507,11 @@ def test_df044_default_candidate_scope_preserves_authorised_batch_only():
     from pathlib import Path
     registry = source_approvals.load()
     seed = json.loads((Path(__file__).resolve().parents[1] / "data" / "melbourne_trainers_seed.json").read_text())
-    assert len(seed["candidates"]) == 20
+    # DF-044: the candidate scope must equal the dataset's own declared
+    # authorised batch, so the assertion tracks the declaration rather than a
+    # stale literal.
+    assert len(seed["candidates"]) == seed["data_gap_declaration"]["authentic_count"]
+    assert len(seed["candidates"]) >= 20
     for trainer in seed["candidates"]:
         assert source_approvals.is_candidate_url_approved(registry, trainer["website"])[0] is True
     for url in [

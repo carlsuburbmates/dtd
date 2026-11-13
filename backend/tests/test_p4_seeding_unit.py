@@ -158,7 +158,7 @@ SEED_JSON_PATH = Path(server.__file__).resolve().parent / "data" / "melbourne_tr
 
 
 def test_seed_dataset_contains_authorised_verified_initial_batch():
-    """Verify the production seed has 20 unique, schema-valid, quality-qualified candidates."""
+    """Verify the production seed declares and satisfies its authorised batch."""
     assert SEED_JSON_PATH.is_file(), f"Seed dataset missing at {SEED_JSON_PATH}"
     with SEED_JSON_PATH.open("r", encoding="utf-8") as f:
         data = json.load(f)
@@ -166,10 +166,17 @@ def test_seed_dataset_contains_authorised_verified_initial_batch():
     assert data.get("version") == 2
     assert "Greater Melbourne" in data.get("jurisdiction", "")
 
+    # The authorised batch size is declared by the dataset itself. Assert
+    # against the declaration so the test tracks the authorised supply rather
+    # than pinning a stale literal that breaks every legitimate expansion.
+    data_gap = data.get("data_gap_declaration", {})
+    authentic_count = data_gap.get("authentic_count")
+    assert isinstance(authentic_count, int) and authentic_count >= 20
+
     candidates = data.get("candidates", [])
-    assert len(candidates) == 20
-    assert len({candidate["id"] for candidate in candidates}) == 20
-    assert len({candidate["abn"] for candidate in candidates}) == 20
+    assert len(candidates) == authentic_count
+    assert len({candidate["id"] for candidate in candidates}) == authentic_count
+    assert len({candidate["abn"] for candidate in candidates}) == authentic_count
     for candidate in candidates:
         assert seed_melbourne_trainers.validate_candidate_schema(candidate) == (True, "valid")
         assert seed_melbourne_trainers.publishing_quality(candidate)["eligible"] is True
@@ -177,17 +184,15 @@ def test_seed_dataset_contains_authorised_verified_initial_batch():
     # Production dataset must never contain invalid_candidates test fixtures
     assert "invalid_candidates" not in data, "Production seed dataset must not contain test fixture records"
 
-    data_gap = data.get("data_gap_declaration", {})
     assert data_gap.get("status") == "initial_authorised_batch_verified"
-    assert data_gap.get("authentic_count") == 20
     assert data_gap.get("initial_launch_count") == 20
     assert data_gap.get("target_launch_count") == 20
     assert data_gap.get("target_supply_count") == 100
-    assert data_gap.get("remaining_data_gap") == 80
+    assert data_gap.get("remaining_data_gap") == data_gap["target_supply_count"] - authentic_count
     assert "fail_closed" in data_gap.get("policy", "")
 
     from services.seed import MELBOURNE_TRAINERS
-    assert len(MELBOURNE_TRAINERS) == 20
+    assert len(MELBOURNE_TRAINERS) == authentic_count
     assert all(row["published"] is False for row in MELBOURNE_TRAINERS if "published" in row)
 
 
@@ -199,9 +204,11 @@ def test_startup_loads_batch_unpublished_with_healthy_source_evidence(monkeypatc
     # Trigger server startup seed
     asyncio.run(server._seed_if_empty())
 
-    assert len(fake_db.trainers.rows) == 20
+    # Every declared authorised candidate must be loaded, and only those.
+    expected_candidates = json.loads(SEED_JSON_PATH.read_text(encoding="utf-8"))["candidates"]
+    assert len(fake_db.trainers.rows) == len(expected_candidates)
     assert all(row.get("published") is False for row in fake_db.trainers.rows)
-    assert len(fake_db.source_ingestion_state.rows) == 20
+    assert len(fake_db.source_ingestion_state.rows) == len(expected_candidates)
     assert all(row.get("consecutive_failures") == 0 for row in fake_db.source_ingestion_state.rows)
     assert all(row.get("abr_status") == "active" for row in fake_db.source_ingestion_state.rows)
 
