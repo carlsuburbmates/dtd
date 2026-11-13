@@ -269,7 +269,7 @@ export default function Home() {
         <div className="App public-page min-h-screen flex flex-col relative overflow-x-clip bg-[#FAFAF7]">
             <PublicHeader />
 
-            <main id="main-content" className="flex-1 pb-32">
+            <main id="main-content" tabIndex={-1} className="flex-1 pb-32">
                 {/* Section 1: Brand-Led Hero */}
                 <section className="relative min-h-[90vh] flex flex-col items-center justify-center overflow-hidden">
                     {/* Full-bleed background image with parallax */}

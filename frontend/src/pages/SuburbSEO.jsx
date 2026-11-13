@@ -64,7 +64,7 @@ export default function SuburbSEO() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <main id="main-content" className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
+            <main id="main-content" tabIndex={-1} className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-20">
                 <div className="small-caps flex items-center gap-2"><MapPin className="h-3 w-3" /> {page.suburb} · {page.category}</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-4">
                     {copy.title || `Dog training guidance in ${page.suburb}`}

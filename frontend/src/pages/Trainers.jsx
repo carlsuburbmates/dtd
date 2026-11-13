@@ -73,7 +73,7 @@ export default function Trainers() {
     return (
         <div className="App min-h-screen flex flex-col bg-[#FAFAF7]">
             <PublicHeader />
-            <main id="main-content" className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 md:px-10 pt-16 pb-24">
+            <main id="main-content" tabIndex={-1} className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 md:px-10 pt-16 pb-24">
                 <section className="max-w-4xl">
                     <div className="small-caps">Greater Melbourne directory</div>
                     <h1 className="editorial-h1 text-5xl sm:text-6xl lg:text-7xl text-[#1A3A32] mt-4">Find a dog trainer who fits</h1>

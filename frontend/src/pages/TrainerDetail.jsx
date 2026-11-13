@@ -610,7 +610,7 @@ export default function TrainerDetail() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-10 pb-20">
+            <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-10 pb-20">
                 <section className="rounded-[2rem] border border-[#E5DFD3] bg-white/70 p-6 sm:p-9 shadow-[0_28px_80px_-48px_rgba(26,58,50,0.5)]">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-5">

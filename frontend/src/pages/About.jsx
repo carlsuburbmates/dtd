@@ -7,7 +7,7 @@ export default function About() {
     return (
         <div className="App public-page min-h-screen">
             <PublicHeader />
-            <main id="main-content" className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-8">
+            <main id="main-content" tabIndex={-1} className="max-w-4xl mx-auto px-6 md:px-10 pt-14 pb-8">
                 <section className="hero-shell p-5 sm:p-7 md:p-8">
                     <div className="grid lg:grid-cols-[0.9fr_1.1fr] gap-6 items-start">
                         <div>
