@@ -89,7 +89,7 @@ export default function TrainerReactivate() {
     return (
         <div className="App min-h-screen">
             <PublicHeader />
-            <main className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
+            <main id="main-content" tabIndex={-1} className="max-w-3xl mx-auto px-6 md:px-10 pt-14 pb-16">
                 <div className="small-caps">Trainer listing</div>
                 <h1 className="editorial-h1 text-5xl sm:text-6xl text-[#1A3A32] mt-3">Get your listing ready again</h1>
 

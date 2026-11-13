@@ -8,7 +8,7 @@ export default function FirstLeashRedirect() {
     }, []);
 
     return (
-        <main id="main-content" className="min-h-[40vh] flex items-center justify-center px-6">
+        <main id="main-content" tabIndex={-1} className="min-h-[40vh] flex items-center justify-center px-6">
             <p className="text-[#4A615A]">
                 Taking you to The First Leash…{" "}
                 <a href={FIRST_LEASH_URL} className="underline">

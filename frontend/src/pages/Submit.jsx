@@ -180,7 +180,7 @@ export default function Submit() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <main className="flex-1 relative overflow-hidden bg-background pb-20">
+            <main id="main-content" tabIndex={-1} className="flex-1 relative overflow-hidden bg-background pb-20">
                 {/* Hero Section */}
                 <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-20 md:pt-32 pb-16 relative">
                     <div className="text-center max-w-4xl mx-auto">
@@ -412,10 +412,14 @@ export default function Submit() {
                             {/* Training Philosophy & Catchment */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-[#E5DFD3]">
                                 <div>
-                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    <label
+                                        htmlFor="submit-training-philosophy"
+                                        className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide"
+                                    >
                                         Training Philosophy
                                     </label>
                                     <select
+                                        id="submit-training-philosophy"
                                         value={form.training_philosophy}
                                         onChange={change("training_philosophy")}
                                         className="input-public text-xs"
@@ -428,10 +432,14 @@ export default function Submit() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide">
+                                    <label
+                                        htmlFor="submit-catchment-type"
+                                        className="block text-xs font-semibold text-[#1A3A32] mb-1.5 uppercase tracking-wide"
+                                    >
                                         Service Area Catchment
                                     </label>
                                     <select
+                                        id="submit-catchment-type"
                                         value={form.catchment_type}
                                         onChange={change("catchment_type")}
                                         className="input-public text-xs"
@@ -446,10 +454,14 @@ export default function Submit() {
 
                             {form.catchment_type === "specific_suburbs" && (
                                 <div className="mt-3">
-                                    <label className="block text-xs font-semibold text-[#1A3A32] mb-1">
+                                    <label
+                                        htmlFor="submit-serviced-suburbs"
+                                        className="block text-xs font-semibold text-[#1A3A32] mb-1"
+                                    >
                                         Additional Serviced Suburbs (comma separated)
                                     </label>
                                     <input
+                                        id="submit-serviced-suburbs"
                                         type="text"
                                         value={form.serviced_suburbs}
                                         onChange={change("serviced_suburbs")}

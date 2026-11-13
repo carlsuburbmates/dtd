@@ -4,11 +4,11 @@
   "jurisdiction": "Greater Melbourne, VIC, Australia",
   "data_gap_declaration": {
     "status": "initial_authorised_batch_verified",
-    "authentic_count": 20,
+    "authentic_count": 40,
     "initial_launch_count": 20,
     "target_launch_count": 20,
     "target_supply_count": 100,
-    "remaining_data_gap": 80,
+    "remaining_data_gap": 60,
     "policy": "official_business_website_plus_active_abr_fail_closed"
   },
   "candidates": [
@@ -26,11 +26,11 @@
       ],
       "source_url": "https://kintala.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "53780168767",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:55.564669+00:00",
+        "retrieved_at": "2026-10-31T11:21:39.000767+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "53780168767",
@@ -46,7 +46,7 @@
           "address_postcode": "3084",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:55.564669+00:00"
+          "retrieved_at": "2026-10-31T11:21:39.000767+00:00"
         }
       },
       "raw_evidence": {
@@ -90,11 +90,11 @@
       ],
       "source_url": "https://www.dogsandbonds.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "60618283894",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:55.784965+00:00",
+        "retrieved_at": "2026-10-31T11:21:40.038136+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "60618283894",
@@ -112,7 +112,7 @@
           "address_postcode": "3165",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:55.784965+00:00"
+          "retrieved_at": "2026-10-31T11:21:40.038136+00:00"
         }
       },
       "raw_evidence": {
@@ -121,7 +121,7 @@
           {
             "url": "https://www.dogsandbonds.com.au/",
             "http_status": 200,
-            "sha256": "4e9604139109b24200b1a43fb45f5e31e883bd3729b930e6c50390c43190bd48"
+            "sha256": "7ee92a11c21a74b2ddc5196d58d857e0a51b2c6fa63f4cab43892e5fe1ab1857"
           }
         ],
         "matched_name": "Dogs and Bonds",
@@ -158,11 +158,11 @@
       ],
       "source_url": "https://www.petpursuits.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "62048531761",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:56.012430+00:00",
+        "retrieved_at": "2026-10-31T11:21:41.095282+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "62048531761",
@@ -178,7 +178,7 @@
           "address_postcode": "3073",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:56.012430+00:00"
+          "retrieved_at": "2026-10-31T11:21:41.095282+00:00"
         }
       },
       "raw_evidence": {
@@ -187,7 +187,7 @@
           {
             "url": "https://www.petpursuits.com.au/",
             "http_status": 200,
-            "sha256": "4a4d9173db79cdec245cf89fa65327676f339215b69416a1907739388a05c446"
+            "sha256": "2fe535c4b00296f40bf902ed789495ec38cac9fa0a76068ba2e54972687fdfad"
           }
         ],
         "matched_name": "Pet Pursuits",
@@ -225,11 +225,11 @@
       ],
       "source_url": "https://focusondogtraining.com/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "98204003187",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:56.273673+00:00",
+        "retrieved_at": "2026-10-31T11:21:42.147992+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "98204003187",
@@ -245,7 +245,7 @@
           "address_postcode": "3019",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:56.273673+00:00"
+          "retrieved_at": "2026-10-31T11:21:42.147992+00:00"
         }
       },
       "raw_evidence": {
@@ -254,7 +254,7 @@
           {
             "url": "https://focusondogtraining.com/",
             "http_status": 200,
-            "sha256": "8a304097fb0ee0934fe380609c90db11f0ffcb23b7476a76a5450c926a6e3e9c"
+            "sha256": "f7cda9f2775154ae56f7035e235001284da7fd491f8146b6c7cf391849df543b"
           }
         ],
         "matched_name": "Focus On Dog Training",
@@ -293,11 +293,11 @@
       ],
       "source_url": "https://www.northsidedogtraining.com.au/services/puppypreschool",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "17304114374",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:56.532699+00:00",
+        "retrieved_at": "2026-10-31T11:21:43.201207+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "17304114374",
@@ -316,7 +316,7 @@
           "address_postcode": "3068",
           "gst_status": "2023-07-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:56.532699+00:00"
+          "retrieved_at": "2026-10-31T11:21:43.201207+00:00"
         }
       },
       "raw_evidence": {
@@ -325,7 +325,7 @@
           {
             "url": "https://www.northsidedogtraining.com.au/services/puppypreschool",
             "http_status": 200,
-            "sha256": "029f0dfb6691dc2643c49fcacbf3995969f86ff9bf25f19b5b848b2493b9b415"
+            "sha256": "810cbb15018d2b233378ff99fea6e4e835296f515e5ea0be2362cc890c810ca3"
           }
         ],
         "matched_name": "Northside Dog Training",
@@ -361,11 +361,11 @@
       ],
       "source_url": "https://pawsitivebonds.com.au/services",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "39464245382",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:56.767392+00:00",
+        "retrieved_at": "2026-10-31T11:21:44.301109+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "39464245382",
@@ -383,7 +383,7 @@
           "address_postcode": "3162",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:56.767392+00:00"
+          "retrieved_at": "2026-10-31T11:21:44.301109+00:00"
         }
       },
       "raw_evidence": {
@@ -392,12 +392,12 @@
           {
             "url": "https://pawsitivebonds.com.au/services",
             "http_status": 200,
-            "sha256": "68511725dadccaa5b1ac8a8d2c12a4a035e1171935ca29c281f7c54199caf265"
+            "sha256": "2188efb7906419a736af40729896f5bfd993798d126eb75f50546dfa261ed54b"
           },
           {
             "url": "https://pawsitivebonds.com.au/contactus",
             "http_status": 200,
-            "sha256": "7629c172fbc9ef368e3020116e2515cd31bec8dab4d0cee0cd0df8602844f236"
+            "sha256": "8130372d78eb043e6daa8b70dd1cc845fe56f1b33b364cd23920397e743ca5ee"
           }
         ],
         "matched_name": "Pawsitive Bonds",
@@ -435,11 +435,11 @@
       ],
       "source_url": "https://www.melbournedogtrainers.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "80641447225",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:57.031720+00:00",
+        "retrieved_at": "2026-10-31T11:21:45.335956+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "80641447225",
@@ -457,7 +457,7 @@
           "address_postcode": "3204",
           "gst_status": "2021-01-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:57.031720+00:00"
+          "retrieved_at": "2026-10-31T11:21:45.335956+00:00"
         }
       },
       "raw_evidence": {
@@ -466,7 +466,7 @@
           {
             "url": "https://melbournedogtrainers.com.au/",
             "http_status": 200,
-            "sha256": "df0e3ab8e88054dc316ea3593b9fd30e7014715545218b3a9b298e4c7f5a41d7"
+            "sha256": "42ed12479e19a65a23caa55c39dca9c3c4ea4e525a8d9d5cc84fcfc26c92b28e"
           }
         ],
         "matched_name": "Melbourne Dog Trainers",
@@ -503,11 +503,11 @@
       ],
       "source_url": "https://www.fromadogsview.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "45825357433",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:57.226503+00:00",
+        "retrieved_at": "2026-10-31T11:21:46.485092+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "45825357433",
@@ -525,7 +525,7 @@
           "address_postcode": "3023",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:57.226503+00:00"
+          "retrieved_at": "2026-10-31T11:21:46.485092+00:00"
         }
       },
       "raw_evidence": {
@@ -534,7 +534,7 @@
           {
             "url": "https://www.fromadogsview.com.au/",
             "http_status": 200,
-            "sha256": "9cbee58856ff5352bdbb19116c741e1768b1262300e1263bf933309866b8c157"
+            "sha256": "32a054f3507e78ee4c724975922646b2e61d1d481ca3dc71834d8f438e1d82dc"
           }
         ],
         "matched_name": "From A Dog's View",
@@ -570,11 +570,11 @@
       ],
       "source_url": "https://www.mindmylead.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "93691440052",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:57.465032+00:00",
+        "retrieved_at": "2026-10-31T11:21:47.534478+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "93691440052",
@@ -592,7 +592,7 @@
           "address_postcode": "3190",
           "gst_status": "2025-10-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:57.465032+00:00"
+          "retrieved_at": "2026-10-31T11:21:47.534478+00:00"
         }
       },
       "raw_evidence": {
@@ -601,7 +601,7 @@
           {
             "url": "https://www.mindmylead.com.au/",
             "http_status": 200,
-            "sha256": "f07663f83bed824c20d7a7339a8ab24aecb8a529046d735ba5252de46ec052d6"
+            "sha256": "f9d7545a37be817e7f13c6757ab5598c2a036149a004804d3786b0c68a773a0a"
           }
         ],
         "matched_name": "Mind My Lead",
@@ -636,11 +636,11 @@
       ],
       "source_url": "https://www.thrivecanine.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "92654676221",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:57.719665+00:00",
+        "retrieved_at": "2026-10-31T11:21:49.230836+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "92654676221",
@@ -656,7 +656,7 @@
           "address_postcode": "3137",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:57.719665+00:00"
+          "retrieved_at": "2026-10-31T11:21:49.230836+00:00"
         }
       },
       "raw_evidence": {
@@ -665,7 +665,7 @@
           {
             "url": "https://www.thrivecanine.com.au/",
             "http_status": 200,
-            "sha256": "89b30c2ca0af92dbeb701fda33924b986e5c41e173b760cacf8f5df49e9c59a7"
+            "sha256": "d5640594eb93626f72aeda48bb3114ae6fdcfbf0239c76e01e7080e71461d6f7"
           }
         ],
         "matched_name": "Thrive Canine",
@@ -702,11 +702,11 @@
       ],
       "source_url": "https://dogtraining.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "42050693868",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:58.007049+00:00",
+        "retrieved_at": "2026-10-31T11:21:50.344523+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "42050693868",
@@ -725,7 +725,7 @@
           "address_postcode": "3130",
           "gst_status": "2000-07-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:58.007049+00:00"
+          "retrieved_at": "2026-10-31T11:21:50.344523+00:00"
         }
       },
       "raw_evidence": {
@@ -734,7 +734,7 @@
           {
             "url": "https://dogtraining.com.au/",
             "http_status": 200,
-            "sha256": "0f8a7e10c1b405c0bf26b5203ba1116d7c5d5f888fa16c73b5da63d0aeb8dc81"
+            "sha256": "668a8061d44e7018774e12d0ff502e83364119377a0dd68c2bce06a3d256e462"
           }
         ],
         "matched_name": "Command Dog Training School",
@@ -771,11 +771,11 @@
       ],
       "source_url": "https://www.urbandogshq.com/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "23753862079",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:58.256477+00:00",
+        "retrieved_at": "2026-10-31T11:21:51.384755+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "23753862079",
@@ -794,7 +794,7 @@
           "address_postcode": "3056",
           "gst_status": "2024-01-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:58.256477+00:00"
+          "retrieved_at": "2026-10-31T11:21:51.384755+00:00"
         }
       },
       "raw_evidence": {
@@ -803,7 +803,7 @@
           {
             "url": "https://www.urbandogshq.com/",
             "http_status": 200,
-            "sha256": "ac261caa236afc960e850800f57a372cfea78b1e3a1422ef1cf7cebb890c582a"
+            "sha256": "add96c31f746c824d7ce32ecaf875f88900f151b128b9d83819533b073625238"
           }
         ],
         "matched_name": "Urban Dogs HQ",
@@ -840,11 +840,11 @@
       ],
       "source_url": "https://www.baysidedogbehaviour.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "46306880859",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:58.502954+00:00",
+        "retrieved_at": "2026-10-31T11:21:52.446942+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "46306880859",
@@ -860,7 +860,7 @@
           "address_postcode": "3192",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:58.502954+00:00"
+          "retrieved_at": "2026-10-31T11:21:52.446942+00:00"
         }
       },
       "raw_evidence": {
@@ -869,7 +869,7 @@
           {
             "url": "https://www.baysidedogbehaviour.com.au/",
             "http_status": 200,
-            "sha256": "2994c739a54897670b098c2ae33ac118c1da6c0794bb8a5c3d7ca8c3d666b660"
+            "sha256": "606d87b778e3af788704c5ecfe89ea4b1e6f9311dffa712f5ee1ea736d9adc75"
           }
         ],
         "matched_name": "Bayside Dog Behaviour",
@@ -883,8 +883,8 @@
         "source_terms": [
           "Bayside Dog Behaviour",
           "Sandringham",
-          "Puppy Training",
-          "Group Training",
+          "Puppy",
+          "Group",
           "Renee Philp"
         ],
         "abr_identity_terms": [
@@ -908,11 +908,11 @@
       ],
       "source_url": "https://positivek9training.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "68396185219",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:58.698481+00:00",
+        "retrieved_at": "2026-10-31T11:21:53.481912+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "68396185219",
@@ -930,7 +930,7 @@
           "address_postcode": "3106",
           "gst_status": "2015-07-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:58.698481+00:00"
+          "retrieved_at": "2026-10-31T11:21:53.481912+00:00"
         }
       },
       "raw_evidence": {
@@ -939,7 +939,7 @@
           {
             "url": "https://positivek9training.com.au/",
             "http_status": 200,
-            "sha256": "f406f377eb42a71c1c531f43a98d40ea51ebb67a4c21d0335acfedb948d5756b"
+            "sha256": "ae9d93447e540da9a6d7094fc0730902b6d8f770bea35751e9017eecddaeb0cf"
           }
         ],
         "matched_name": "Positive K9 Training",
@@ -976,11 +976,11 @@
       ],
       "source_url": "https://www.whytewhispers.com/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "12924006580",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:58.895476+00:00",
+        "retrieved_at": "2026-10-31T11:21:54.585180+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "12924006580",
@@ -998,7 +998,7 @@
           "address_postcode": "3184",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:58.895476+00:00"
+          "retrieved_at": "2026-10-31T11:21:54.585180+00:00"
         }
       },
       "raw_evidence": {
@@ -1007,7 +1007,7 @@
           {
             "url": "https://www.whytewhispers.com/",
             "http_status": 200,
-            "sha256": "56e1c0d8dedbc4d1d0d43bdf1f2917913a2da59cf36b0668b5e1cc00b31b917e"
+            "sha256": "6fcc7ff1cbd867e8c23ab8a0d594470ea0078205db5bb927b1aac7f27b996a09"
           }
         ],
         "matched_name": "Whyte Whispers",
@@ -1045,11 +1045,11 @@
       ],
       "source_url": "https://www.westsidepaws.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "70659044452",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:59.163923+00:00",
+        "retrieved_at": "2026-10-31T11:21:55.633223+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "70659044452",
@@ -1068,7 +1068,7 @@
           "address_postcode": "3025",
           "gst_status": "2022-04-28",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:59.163923+00:00"
+          "retrieved_at": "2026-10-31T11:21:55.633223+00:00"
         }
       },
       "raw_evidence": {
@@ -1077,7 +1077,7 @@
           {
             "url": "https://www.westsidepaws.com.au/",
             "http_status": 200,
-            "sha256": "95e7590bf39dc463be9513cc901605b1db3708797494e80893d04ad6e0ff7cc3"
+            "sha256": "055e5134ac5ffc66ed6e49e3cfe7dab39799ca9eb93462c3340bd585dfc6e142"
           }
         ],
         "matched_name": "Westside Paws",
@@ -1114,11 +1114,11 @@
       ],
       "source_url": "https://www.refineyourcanine.com.au/about",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "37661206177",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:59.450800+00:00",
+        "retrieved_at": "2026-10-31T11:21:56.745877+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "37661206177",
@@ -1134,7 +1134,7 @@
           "address_postcode": "3758",
           "gst_status": "2022-07-25",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:59.450800+00:00"
+          "retrieved_at": "2026-10-31T11:21:56.745877+00:00"
         }
       },
       "raw_evidence": {
@@ -1143,7 +1143,7 @@
           {
             "url": "https://www.refineyourcanine.com.au/about",
             "http_status": 200,
-            "sha256": "28f5c9ed05c396f465084c1c05f00486ba5337df0e939ffb97bf6d5f5f891b01"
+            "sha256": "103b3a77c65958c3ca05d63b7c0ef9970b391b26e3a3b110d963b705d8026691"
           }
         ],
         "matched_name": "Refine Your Canine",
@@ -1181,11 +1181,11 @@
       ],
       "source_url": "https://kip.com.au/dog-training/vic/melbourne/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "19635110262",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:59.678912+00:00",
+        "retrieved_at": "2026-10-31T11:21:59.575415+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "19635110262",
@@ -1201,7 +1201,7 @@
           "address_postcode": "4000",
           "gst_status": "2019-07-01",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:59.678912+00:00"
+          "retrieved_at": "2026-10-31T11:21:59.575415+00:00"
         }
       },
       "raw_evidence": {
@@ -1210,7 +1210,7 @@
           {
             "url": "https://kip.com.au/dog-training/vic/melbourne/",
             "http_status": 200,
-            "sha256": "b3f3e5b3b08ef6f3620f9a5e064708e5d4fb4fda2bc583e7582164ae155a1f42"
+            "sha256": "c5db4509e3d62b5c02353d0cb5d96a02df4e7b5bf947c7df66d746d69adfcc17"
           }
         ],
         "matched_name": "Kip Melbourne Dog Training",
@@ -1247,11 +1247,11 @@
       ],
       "source_url": "https://www.hellopuppy.com.au/",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "87452240636",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:11:59.891339+00:00",
+        "retrieved_at": "2026-10-31T11:22:00.811702+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "87452240636",
@@ -1269,7 +1269,7 @@
           "address_postcode": "3191",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:11:59.891339+00:00"
+          "retrieved_at": "2026-10-31T11:22:00.811702+00:00"
         }
       },
       "raw_evidence": {
@@ -1278,7 +1278,7 @@
           {
             "url": "https://www.hellopuppy.com.au/",
             "http_status": 200,
-            "sha256": "d8e31382b60063a7673fc2d644be02064745f33b9bbb25700f70663178422301"
+            "sha256": "580334218f98bafc4703165bf656e9f9528a8a1eaa06f09a0fdff3fef6aed022"
           }
         ],
         "matched_name": "HelloPuppy Dog Training",
@@ -1316,11 +1316,11 @@
       ],
       "source_url": "https://www.thepawsitivecanine.com.au/about",
       "source_type": "business_website",
-      "retrieved_at": "2026-09-10T16:12:00.153726+00:00",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
       "abn": "96112987361",
       "abr_evidence": {
         "status": "active",
-        "retrieved_at": "2026-09-10T16:12:00.153681+00:00",
+        "retrieved_at": "2026-10-31T11:22:01.931877+00:00",
         "source_url": "https://abr.business.gov.au/",
         "record": {
           "abn": "96112987361",
@@ -1336,7 +1336,7 @@
           "address_postcode": "3160",
           "gst_status": "",
           "is_active": true,
-          "retrieved_at": "2026-09-10T16:12:00.153681+00:00"
+          "retrieved_at": "2026-10-31T11:22:01.931877+00:00"
         }
       },
       "raw_evidence": {
@@ -1345,7 +1345,7 @@
           {
             "url": "https://www.thepawsitivecanine.com.au/about",
             "http_status": 200,
-            "sha256": "339013c7c0eda19c79901ac8fb24bf23aade3d9e5ccf58c1e81b5ab4c8aa1a75"
+            "sha256": "bc7b3b65984c9e8e682efe47f7f24b79561cd8693e0cad4c39e2870501e47aa1"
           }
         ],
         "matched_name": "The Pawsitive Canine",
@@ -1366,6 +1366,1335 @@
         "abr_identity_terms": [
           "MCNEILL",
           "RUBY"
+        ]
+      }
+    },
+    {
+      "id": "good-dog-behaviour",
+      "name": "Good Dog Behaviour & Training",
+      "suburb": "Glen Waverley",
+      "region": "Greater Melbourne",
+      "website": "https://gooddogbehaviour.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Dog Training",
+        "Behaviour Modification"
+      ],
+      "source_url": "https://gooddogbehaviour.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "89828166133",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:02.953627+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "89828166133",
+          "abn_formatted": "89 828 166 133",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2013-12-08",
+          "entity_name": "WATSON, TIMOTHY JAMES",
+          "trading_name": "GOOD DOG BEHAVIOUR & TRAINING",
+          "business_names": [
+            "GOOD DOG BEHAVIOUR & TRAINING"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3054",
+          "gst_status": "2016-07-01",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:02.953627+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://gooddogbehaviour.com.au/",
+        "source_pages": [
+          {
+            "url": "https://gooddogbehaviour.com.au/",
+            "http_status": 200,
+            "sha256": "86e64c01c258a627460cf5e41795f8117e81cdc8c2cfcb46142d5f833d67e847"
+          }
+        ],
+        "matched_name": "Good Dog Behaviour & Training",
+        "matched_website": "https://gooddogbehaviour.com.au/",
+        "matched_suburb": "Glen Waverley",
+        "matched_services": [
+          "Dog Training",
+          "Behaviour Modification"
+        ],
+        "matched_abn": "89828166133",
+        "source_terms": [
+          "Good Dog",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "WATSON",
+          "TIMOTHY"
+        ]
+      }
+    },
+    {
+      "id": "four-paws-k9",
+      "name": "Four Paws K9 Training",
+      "suburb": "Footscray",
+      "region": "Greater Melbourne",
+      "website": "https://fourpawsk9training.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Puppy School",
+        "Group Dog Training"
+      ],
+      "source_url": "https://fourpawsk9training.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "68936964358",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:04.004612+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "68936964358",
+          "abn_formatted": "68 936 964 358",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2013-09-20",
+          "entity_name": "CAVARRA, PATRIZIA",
+          "trading_name": "Noble Canine Training, Behaviour & Consultancy",
+          "business_names": [
+            "Noble Canine Training, Behaviour & Consultancy",
+            "Four Paws K9 Training"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3429",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:04.004612+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://fourpawsk9training.com.au/",
+        "source_pages": [
+          {
+            "url": "https://fourpawsk9training.com.au/",
+            "http_status": 200,
+            "sha256": "0beb8b0cf5f6e5efdce310cd8b9e292b95b00aa874bdd791a89877d0abd565ba"
+          }
+        ],
+        "matched_name": "Four Paws K9 Training",
+        "matched_website": "https://fourpawsk9training.com.au/",
+        "matched_suburb": "Footscray",
+        "matched_services": [
+          "Puppy School",
+          "Group Dog Training"
+        ],
+        "matched_abn": "68936964358",
+        "source_terms": [
+          "Four Paws",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "CAVARRA",
+          "PATRIZIA"
+        ]
+      }
+    },
+    {
+      "id": "the-k9-company",
+      "name": "The K9 Company",
+      "suburb": "Eltham",
+      "region": "Greater Melbourne",
+      "website": "https://thek9company.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "In-Home Dog Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://thek9company.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "53798112757",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:05.164767+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "53798112757",
+          "abn_formatted": "53 798 112 757",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2010-01-01",
+          "entity_name": "B.R DRY & C.A SAUNDERS",
+          "trading_name": "B.R DRY & C.A SAUNDERS",
+          "business_names": [],
+          "entity_type_name": "Family Partnership",
+          "business_type": "Family Partnership",
+          "address_state": "VIC",
+          "address_postcode": "3095",
+          "gst_status": "2010-01-01",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:05.164767+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://thek9company.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.thek9company.com.au/",
+            "http_status": 200,
+            "sha256": "6cbb5272acac0b896e12a45917368fe63ffbc3b1faef98acd5f54a6d5193ec4a"
+          }
+        ],
+        "matched_name": "The K9 Company",
+        "matched_website": "https://thek9company.com.au/",
+        "matched_suburb": "Eltham",
+        "matched_services": [
+          "In-Home Dog Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "53798112757",
+        "source_terms": [
+          "K9 Company",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "DRY",
+          "SAUNDERS"
+        ]
+      }
+    },
+    {
+      "id": "vdta",
+      "name": "Victorian Dog Training Academy",
+      "suburb": "Richmond",
+      "region": "Greater Melbourne",
+      "website": "https://www.vdta.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Private Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://www.vdta.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "49715447325",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:06.239453+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "49715447325",
+          "abn_formatted": "49 715 447 325",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2010-03-15",
+          "entity_name": "MANNIX, DANIEL",
+          "trading_name": "Victorian Dog Training Academy",
+          "business_names": [
+            "Victorian Dog Training Academy"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3020",
+          "gst_status": "2015-09-01",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:06.239453+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.vdta.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.vdta.com.au/",
+            "http_status": 200,
+            "sha256": "5bbbc28bafb95b9e3ea5ef57c5b269083101852af5fd0c69cc49d4403cc1cc63"
+          }
+        ],
+        "matched_name": "Victorian Dog Training Academy",
+        "matched_website": "https://www.vdta.com.au/",
+        "matched_suburb": "Richmond",
+        "matched_services": [
+          "Private Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "49715447325",
+        "source_terms": [
+          "Victorian Dog Training Academy",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "MANNIX",
+          "DANIEL"
+        ]
+      }
+    },
+    {
+      "id": "how-to-train-a-dog",
+      "name": "How To Train A Dog",
+      "suburb": "Hawthorn",
+      "region": "Greater Melbourne",
+      "website": "https://howtotrainadog.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Puppy School",
+        "Private Dog Training"
+      ],
+      "source_url": "https://howtotrainadog.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "40546798248",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:07.388353+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "40546798248",
+          "abn_formatted": "40 546 798 248",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2000-04-06",
+          "entity_name": "BARKER, CHARLOTTE",
+          "trading_name": "How to train a dog",
+          "business_names": [
+            "How to train a dog",
+            "TIKI TIME",
+            "SURF-O-RAMA"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3188",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:07.388353+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://howtotrainadog.com.au/",
+        "source_pages": [
+          {
+            "url": "https://howtotrainadog.com.au/",
+            "http_status": 200,
+            "sha256": "89547e33ad0cbda58a79c47366efb0536e92ef69e829ad26199689bf08a955ee"
+          }
+        ],
+        "matched_name": "How To Train A Dog",
+        "matched_website": "https://howtotrainadog.com.au/",
+        "matched_suburb": "Hawthorn",
+        "matched_services": [
+          "Puppy School",
+          "Private Dog Training"
+        ],
+        "matched_abn": "40546798248",
+        "source_terms": [
+          "How To Train A Dog",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "BARKER",
+          "CHARLOTTE"
+        ]
+      }
+    },
+    {
+      "id": "k9-coach",
+      "name": "K9 Coach",
+      "suburb": "Prahran",
+      "region": "Greater Melbourne",
+      "website": "https://k9coach.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Private Consultations",
+        "Puppy Training"
+      ],
+      "source_url": "https://k9coach.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "57516537961",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:09.072492+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "57516537961",
+          "abn_formatted": "57 516 537 961",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2018-07-11",
+          "entity_name": "BACKHOUSE, NATASHA NICOLE",
+          "trading_name": "BACKHOUSE, NATASHA NICOLE",
+          "business_names": [],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "NSW",
+          "address_postcode": "2539",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:09.072492+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://k9coach.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.k9coach.com.au/",
+            "http_status": 200,
+            "sha256": "7b44b20d69c6f00ec85322a92f2bfb6abb969cb934280c2945986ea9492df0e8"
+          }
+        ],
+        "matched_name": "K9 Coach",
+        "matched_website": "https://k9coach.com.au/",
+        "matched_suburb": "Prahran",
+        "matched_services": [
+          "Private Consultations",
+          "Puppy Training"
+        ],
+        "matched_abn": "57516537961",
+        "source_terms": [
+          "K9 Coach",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "BACKHOUSE",
+          "NATASHA"
+        ]
+      }
+    },
+    {
+      "id": "companion-dog-training",
+      "name": "Companion Dog Training",
+      "suburb": "Ringwood",
+      "region": "Greater Melbourne",
+      "website": "https://www.companiondogtraining.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "In Home Training",
+        "Puppy Classes"
+      ],
+      "source_url": "https://www.companiondogtraining.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "96391501180",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:10.733362+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "96391501180",
+          "abn_formatted": "96 391 501 180",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2014-07-01",
+          "entity_name": "BRIGGS, MADELINE PAIGE",
+          "trading_name": "Companion Dog Training",
+          "business_names": [
+            "Companion Dog Training"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3820",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:10.733362+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.companiondogtraining.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.companiondogtraining.com.au/",
+            "http_status": 200,
+            "sha256": "372f7e6c1e390f4c3f9fa1ec5cdee4d890da340f30213d49c62f35fab4754f58"
+          }
+        ],
+        "matched_name": "Companion Dog Training",
+        "matched_website": "https://www.companiondogtraining.com.au/",
+        "matched_suburb": "Ringwood",
+        "matched_services": [
+          "In Home Training",
+          "Puppy Classes"
+        ],
+        "matched_abn": "96391501180",
+        "source_terms": [
+          "Companion Dog Training",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "BRIGGS",
+          "MADELINE"
+        ]
+      }
+    },
+    {
+      "id": "k9-connect",
+      "name": "K9 Connect",
+      "suburb": "Lilydale",
+      "region": "Greater Melbourne",
+      "website": "https://www.k9connect.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Puppy School",
+        "Behaviour Consultations"
+      ],
+      "source_url": "https://www.k9connect.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "74727705772",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:11.759749+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "74727705772",
+          "abn_formatted": "74 727 705 772",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2019-03-07",
+          "entity_name": "The Trustee for The Pawsitively Great Pets Trust & The Trustee for The Southern Cross Animal Stars Trust",
+          "trading_name": "Southern Cross Animal Stars",
+          "business_names": [
+            "Southern Cross Animal Stars",
+            "K9 Connect"
+          ],
+          "entity_type_name": "Other Partnership",
+          "business_type": "Other Partnership",
+          "address_state": "VIC",
+          "address_postcode": "3156",
+          "gst_status": "2019-03-07",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:11.759749+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.k9connect.com.au/",
+        "source_pages": [
+          {
+            "url": "https://k9connect.com.au/",
+            "http_status": 200,
+            "sha256": "e79e4530c5a9aebdf907d2c46d43d0468e9a6cf2a55b6888bede7c186035fe0a"
+          }
+        ],
+        "matched_name": "K9 Connect",
+        "matched_website": "https://www.k9connect.com.au/",
+        "matched_suburb": "Lilydale",
+        "matched_services": [
+          "Puppy School",
+          "Behaviour Consultations"
+        ],
+        "matched_abn": "74727705772",
+        "source_terms": [
+          "K9 Connect",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "Southern Cross Animal Stars"
+        ]
+      }
+    },
+    {
+      "id": "balanced-k9",
+      "name": "Balanced K9 Training",
+      "suburb": "Lilydale",
+      "region": "Greater Melbourne",
+      "website": "https://www.balancedk9training.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Private Training",
+        "Behaviour Modification"
+      ],
+      "source_url": "https://www.balancedk9training.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "54269669690",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:12.857891+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "54269669690",
+          "abn_formatted": "54 269 669 690",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2015-07-01",
+          "entity_name": "BONFADINI, DIAMOND JADE",
+          "trading_name": "THE DOGGY GROOMING BARN",
+          "business_names": [
+            "THE DOGGY GROOMING BARN",
+            "BALANCED K9 TRAINING"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3139",
+          "gst_status": "2019-07-08",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:12.857891+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.balancedk9training.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.balancedk9training.com.au/",
+            "http_status": 200,
+            "sha256": "0973292600a7b4fdd5e46cca4a8afbe3ecf76d6672ad5e06767567dffa7eb9c0"
+          }
+        ],
+        "matched_name": "Balanced K9 Training",
+        "matched_website": "https://www.balancedk9training.com.au/",
+        "matched_suburb": "Lilydale",
+        "matched_services": [
+          "Private Training",
+          "Behaviour Modification"
+        ],
+        "matched_abn": "54269669690",
+        "source_terms": [
+          "Balanced K9",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "BONFADINI",
+          "DIAMOND"
+        ]
+      }
+    },
+    {
+      "id": "team-k9",
+      "name": "Team K9 Dog Training",
+      "suburb": "Epping",
+      "region": "Greater Melbourne",
+      "website": "https://teamk9.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Obedience Training",
+        "Puppy School"
+      ],
+      "source_url": "https://teamk9.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "96635131716",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:13.890585+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "96635131716",
+          "abn_formatted": "96 635 131 716",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2019-07-26",
+          "entity_name": "TEAM K9 TRAINING PTY LTD",
+          "trading_name": "TEAM K9 TRAINING PTY LTD",
+          "business_names": [],
+          "entity_type_name": "Australian Private Company",
+          "business_type": "Australian Private Company",
+          "address_state": "VIC",
+          "address_postcode": "3752",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:13.890585+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://teamk9.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.teamk9.com.au/",
+            "http_status": 200,
+            "sha256": "78cc2150cf582890e12006fdfb124538e50cb6bce1138a0eb601e6b5fc4d6cdd"
+          }
+        ],
+        "matched_name": "Team K9 Dog Training",
+        "matched_website": "https://teamk9.com.au/",
+        "matched_suburb": "Epping",
+        "matched_services": [
+          "Obedience Training",
+          "Puppy School"
+        ],
+        "matched_abn": "96635131716",
+        "source_terms": [
+          "Team K9",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "TEAM K9 TRAINING PTY LTD"
+        ]
+      }
+    },
+    {
+      "id": "ian-the-dog-trainer",
+      "name": "Ian The Dog Trainer",
+      "suburb": "Camberwell",
+      "region": "Greater Melbourne",
+      "website": "https://www.ianthedogtrainer.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "In-Home Dog Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://www.ianthedogtrainer.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "27145648433",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:14.943305+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "27145648433",
+          "abn_formatted": "27 145 648 433",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2010-08-31",
+          "entity_name": "IAN THE DOG TRAINER PTY LTD",
+          "trading_name": "IAN THE DOG TRAINER PTY LTD",
+          "business_names": [],
+          "entity_type_name": "Australian Private Company",
+          "business_type": "Australian Private Company",
+          "address_state": "VIC",
+          "address_postcode": "3941",
+          "gst_status": "2010-08-31",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:14.943305+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.ianthedogtrainer.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.ianthedogtrainer.com.au/",
+            "http_status": 200,
+            "sha256": "7b79aa5e85f85e540d159cd99c51ce4fab1637cff24c96c696a8aa8951903c18"
+          }
+        ],
+        "matched_name": "Ian The Dog Trainer",
+        "matched_website": "https://www.ianthedogtrainer.com.au/",
+        "matched_suburb": "Camberwell",
+        "matched_services": [
+          "In-Home Dog Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "27145648433",
+        "source_terms": [
+          "Ian",
+          "Dog Trainer"
+        ],
+        "abr_identity_terms": [
+          "IAN THE DOG TRAINER PTY LTD"
+        ]
+      }
+    },
+    {
+      "id": "ibex-canine",
+      "name": "Ibex Canine Training & Behaviour",
+      "suburb": "Yarraville",
+      "region": "Greater Melbourne",
+      "website": "https://ibexcanine.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Behaviour Consultations",
+        "Puppy Classes"
+      ],
+      "source_url": "https://ibexcanine.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "90808451687",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:15.989835+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "90808451687",
+          "abn_formatted": "90 808 451 687",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2019-10-28",
+          "entity_name": "RANADIVE, KALPAK BHUSHAN",
+          "trading_name": "IBEX CANINE TRAINING AND BEHAVIOUR",
+          "business_names": [
+            "IBEX CANINE TRAINING AND BEHAVIOUR"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3030",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:15.989835+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://ibexcanine.com.au/",
+        "source_pages": [
+          {
+            "url": "https://ibexcanine.com.au/",
+            "http_status": 200,
+            "sha256": "18c976f0b1bb0804abee3a2479494ac73e6a166f1756dbc1440cd29522e15a3f"
+          }
+        ],
+        "matched_name": "Ibex Canine Training & Behaviour",
+        "matched_website": "https://ibexcanine.com.au/",
+        "matched_suburb": "Yarraville",
+        "matched_services": [
+          "Behaviour Consultations",
+          "Puppy Classes"
+        ],
+        "matched_abn": "90808451687",
+        "source_terms": [
+          "Ibex Canine",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "RANADIVE",
+          "KALPAK"
+        ]
+      }
+    },
+    {
+      "id": "dogs-with-attitude",
+      "name": "Dogs With Attitude",
+      "suburb": "Preston",
+      "region": "Greater Melbourne",
+      "website": "https://dogswithattitude.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Private Training",
+        "Puppy School"
+      ],
+      "source_url": "https://dogswithattitude.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "35978606569",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:17.101127+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "35978606569",
+          "abn_formatted": "35 978 606 569",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2020-03-02",
+          "entity_name": "VRABIE, CRISTIAN",
+          "trading_name": "DOGS WITH ATTITUDE",
+          "business_names": [
+            "DOGS WITH ATTITUDE"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3064",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:17.101127+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://dogswithattitude.com.au/",
+        "source_pages": [
+          {
+            "url": "https://dogswithattitude.com.au/",
+            "http_status": 200,
+            "sha256": "38ea9230d81fd00b3f9e93a39d36fdce79b67c9e7b74d6064af0f34cb59c1ab4"
+          }
+        ],
+        "matched_name": "Dogs With Attitude",
+        "matched_website": "https://dogswithattitude.com.au/",
+        "matched_suburb": "Preston",
+        "matched_services": [
+          "Private Training",
+          "Puppy School"
+        ],
+        "matched_abn": "35978606569",
+        "source_terms": [
+          "Dogs With Attitude",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "VRABIE",
+          "CRISTIAN"
+        ]
+      }
+    },
+    {
+      "id": "modc",
+      "name": "Moorabbin Obedience Dog Club",
+      "suburb": "Moorabbin",
+      "region": "Greater Melbourne",
+      "website": "https://www.modc.org.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Obedience Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://www.modc.org.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "23564496067",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:18.142135+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "23564496067",
+          "abn_formatted": "23 564 496 067",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2013-07-03",
+          "entity_name": "MOORABBIN OBEDIENCE DOG CLUB INC",
+          "trading_name": "MOORABBIN OBEDIENCE DOG CLUB INC",
+          "business_names": [],
+          "entity_type_name": "Other Incorporated Entity",
+          "business_type": "Other Incorporated Entity",
+          "address_state": "VIC",
+          "address_postcode": "3189",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:18.142135+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.modc.org.au/",
+        "source_pages": [
+          {
+            "url": "https://www.modc.org.au/",
+            "http_status": 200,
+            "sha256": "10168da3b81e5fa4cc3ff5c4355543b8c7d599a15ef771e6dcb7587ea512bf38"
+          }
+        ],
+        "matched_name": "Moorabbin Obedience Dog Club",
+        "matched_website": "https://www.modc.org.au/",
+        "matched_suburb": "Moorabbin",
+        "matched_services": [
+          "Obedience Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "23564496067",
+        "source_terms": [
+          "Moorabbin",
+          "Dog Club"
+        ],
+        "abr_identity_terms": [
+          "MOORABBIN OBEDIENCE DOG CLUB INC"
+        ]
+      }
+    },
+    {
+      "id": "the-dog-training-co",
+      "name": "The Dog Training Co",
+      "suburb": "Coburg",
+      "region": "Greater Melbourne",
+      "website": "https://www.thedogtrainingco.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "In-Home Training",
+        "Behaviour Modification"
+      ],
+      "source_url": "https://www.thedogtrainingco.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "12239764307",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:19.162730+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "12239764307",
+          "abn_formatted": "12 239 764 307",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2018-07-01",
+          "entity_name": "NICHOLLS, JENNIFER",
+          "trading_name": "THE DOG TRAINING CO",
+          "business_names": [
+            "THE DOG TRAINING CO"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3053",
+          "gst_status": "2025-04-28",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:19.162730+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.thedogtrainingco.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.thedogtrainingco.com.au/",
+            "http_status": 200,
+            "sha256": "9350e2932308bf4991d5a1063717b0b00c1c21390713e099045f912806e18bf2"
+          }
+        ],
+        "matched_name": "The Dog Training Co",
+        "matched_website": "https://www.thedogtrainingco.com.au/",
+        "matched_suburb": "Coburg",
+        "matched_services": [
+          "In-Home Training",
+          "Behaviour Modification"
+        ],
+        "matched_abn": "12239764307",
+        "source_terms": [
+          "The Dog Training Co",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "NICHOLLS",
+          "JENNIFER"
+        ]
+      }
+    },
+    {
+      "id": "deltadogz",
+      "name": "DeltaDogz",
+      "suburb": "Eltham",
+      "region": "Greater Melbourne",
+      "website": "https://www.deltadogz.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "In-Home Dog Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://www.deltadogz.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "31679639277",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:20.212470+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "31679639277",
+          "abn_formatted": "31 679 639 277",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2026-02-27",
+          "entity_name": "PELGRIM, DANIELA",
+          "trading_name": "DELTA DOGZ",
+          "business_names": [
+            "DELTA DOGZ"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3095",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:20.212470+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.deltadogz.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.deltadogz.com.au/",
+            "http_status": 200,
+            "sha256": "28e57edfbdf97af197dc3a1454c46c4417c746a30c39377d8acee478c3772ba9"
+          }
+        ],
+        "matched_name": "DeltaDogz",
+        "matched_website": "https://www.deltadogz.com.au/",
+        "matched_suburb": "Eltham",
+        "matched_services": [
+          "In-Home Dog Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "31679639277",
+        "source_terms": [
+          "DeltaDogz",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "PELGRIM",
+          "DANIELA"
+        ]
+      }
+    },
+    {
+      "id": "four-legs-k9",
+      "name": "Four Legs K9 Training Academy",
+      "suburb": "South Melbourne",
+      "region": "Greater Melbourne",
+      "website": "https://www.fourlegsk9trainingacademy.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Puppy Behaviour",
+        "Dog Behaviourist"
+      ],
+      "source_url": "https://www.fourlegsk9trainingacademy.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "92441898346",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:21.265223+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "92441898346",
+          "abn_formatted": "92 441 898 346",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2020-07-08",
+          "entity_name": "JONES, MATTHEW S",
+          "trading_name": "FLYING FOOTAGE FILM PRODUCTIONS",
+          "business_names": [
+            "FLYING FOOTAGE FILM PRODUCTIONS"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3182",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:21.265223+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://www.fourlegsk9trainingacademy.com.au/",
+        "source_pages": [
+          {
+            "url": "https://www.fourlegsk9trainingacademy.com.au/",
+            "http_status": 200,
+            "sha256": "c1c9f7a53d011c3ed00ab2016cd53705d2dce0f060ce4f464d810db6a0c33440"
+          }
+        ],
+        "matched_name": "Four Legs K9 Training Academy",
+        "matched_website": "https://www.fourlegsk9trainingacademy.com.au/",
+        "matched_suburb": "South Melbourne",
+        "matched_services": [
+          "Puppy Behaviour",
+          "Dog Behaviourist"
+        ],
+        "matched_abn": "92441898346",
+        "source_terms": [
+          "Four Legs",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "JONES",
+          "MATTHEW"
+        ]
+      }
+    },
+    {
+      "id": "paws-and-praise",
+      "name": "Paws & Praise",
+      "suburb": "Camberwell",
+      "region": "Greater Melbourne",
+      "website": "https://pawsandpraise.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "1-to-1 Dog Training",
+        "Puppy Training"
+      ],
+      "source_url": "https://pawsandpraise.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "82150918270",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:22.935645+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "82150918270",
+          "abn_formatted": "82 150 918 270",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2021-05-09",
+          "entity_name": "ROBINSON, MELISSA",
+          "trading_name": "PAWSANDPRAISE",
+          "business_names": [
+            "PAWSANDPRAISE"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3183",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:22.935645+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://pawsandpraise.com.au/",
+        "source_pages": [
+          {
+            "url": "https://pawsandpraise.com.au/",
+            "http_status": 200,
+            "sha256": "8557c89b42bc3598e4d7b90f1360243c124f853139993248649a2b9d54577d62"
+          }
+        ],
+        "matched_name": "Paws & Praise",
+        "matched_website": "https://pawsandpraise.com.au/",
+        "matched_suburb": "Camberwell",
+        "matched_services": [
+          "1-to-1 Dog Training",
+          "Puppy Training"
+        ],
+        "matched_abn": "82150918270",
+        "source_terms": [
+          "Paws & Praise",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "ROBINSON",
+          "MELISSA"
+        ]
+      }
+    },
+    {
+      "id": "hairy-hounds",
+      "name": "Hairy Hounds Playground",
+      "suburb": "Williamstown North",
+      "region": "Greater Melbourne",
+      "website": "https://hairyhounds.com.au/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Dog Training",
+        "Daycare & Training"
+      ],
+      "source_url": "https://hairyhounds.com.au/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "82652449539",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:24.799284+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "82652449539",
+          "abn_formatted": "82 652 449 539",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2021-08-02",
+          "entity_name": "THE PAWLISTIC APPROACH PTY LTD",
+          "trading_name": "THE PAWLISTIC APPROACH PTY LTD",
+          "business_names": [],
+          "entity_type_name": "Australian Private Company",
+          "business_type": "Australian Private Company",
+          "address_state": "VIC",
+          "address_postcode": "3016",
+          "gst_status": "2021-08-02",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:24.799284+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://hairyhounds.com.au/",
+        "source_pages": [
+          {
+            "url": "https://hairyhounds.com.au/",
+            "http_status": 200,
+            "sha256": "6bcaa3b54f4399d3ecab9da95cfc499f0146e1834bc90e356ba4fe727b6cf459"
+          }
+        ],
+        "matched_name": "Hairy Hounds Playground",
+        "matched_website": "https://hairyhounds.com.au/",
+        "matched_suburb": "Williamstown North",
+        "matched_services": [
+          "Dog Training",
+          "Daycare & Training"
+        ],
+        "matched_abn": "82652449539",
+        "source_terms": [
+          "Hairy Hounds",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "THE PAWLISTIC APPROACH PTY LTD"
+        ]
+      }
+    },
+    {
+      "id": "trick-and-treat",
+      "name": "Trick & Treat Training",
+      "suburb": "Hawthorn",
+      "region": "Greater Melbourne",
+      "website": "https://trickandtreattraining.com/",
+      "categories": [
+        "Dog training"
+      ],
+      "services": [
+        "Private Training",
+        "Puppy School"
+      ],
+      "source_url": "https://trickandtreattraining.com/",
+      "source_type": "business_website",
+      "retrieved_at": "2026-10-31T11:22:25.862579+00:00",
+      "abn": "32817656834",
+      "abr_evidence": {
+        "status": "active",
+        "retrieved_at": "2026-10-31T11:22:25.862541+00:00",
+        "source_url": "https://abr.business.gov.au/",
+        "record": {
+          "abn": "32817656834",
+          "abn_formatted": "32 817 656 834",
+          "abn_status": "Active",
+          "abn_status_effective_from": "2021-06-20",
+          "entity_name": "MASEL, AARON BEN",
+          "trading_name": "TRICK AND TREAT TRAINING",
+          "business_names": [
+            "TRICK AND TREAT TRAINING"
+          ],
+          "entity_type_name": "Individual/Sole Trader",
+          "business_type": "Individual/Sole Trader",
+          "address_state": "VIC",
+          "address_postcode": "3123",
+          "gst_status": "",
+          "is_active": true,
+          "retrieved_at": "2026-10-31T11:22:25.862541+00:00"
+        }
+      },
+      "raw_evidence": {
+        "source_url": "https://trickandtreattraining.com/",
+        "source_pages": [
+          {
+            "url": "https://trickandtreattraining.com/",
+            "http_status": 200,
+            "sha256": "271e00dcf20d587d8bd34ebb7d1e97eabb36b87a524c54a588b0fa020f0073a5"
+          }
+        ],
+        "matched_name": "Trick & Treat Training",
+        "matched_website": "https://trickandtreattraining.com/",
+        "matched_suburb": "Hawthorn",
+        "matched_services": [
+          "Private Training",
+          "Puppy School"
+        ],
+        "matched_abn": "32817656834",
+        "source_terms": [
+          "Trick",
+          "Treat",
+          "Training"
+        ],
+        "abr_identity_terms": [
+          "MASEL",
+          "AARON"
         ]
       }
     }

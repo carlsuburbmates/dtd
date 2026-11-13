@@ -129,6 +129,10 @@ def test_create_engagement_records_event_and_infers_conversion(monkeypatch):
         "match_id": "m_1",
         "campaign": "seo_richmond",
         "source": "seo",
+        # DF-058: engagement collection requires the owner's affirmative
+        # outcome-tracking consent, so a legitimate fixture declares it.
+        "consent_contact_release": True,
+        "consent_outcome_tracking": True,
     }
     fake_db = SimpleNamespace(
         intros=_Collection(find_one_result=intro),

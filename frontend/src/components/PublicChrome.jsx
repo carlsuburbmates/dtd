@@ -160,7 +160,7 @@ export function PublicFooter() {
                         <p className="mt-2 text-sm text-[#4A615A]">
                             Dog Trainers Directory
                         </p>
-                        <p className="mt-1 text-sm text-[#6A7973]">
+                        <p className="mt-1 text-sm text-[#5F6E67]">
                             Melbourne dog trainer directory
                         </p>
                         <Link to="/submit" className="btn-primary btn-primary-sm mt-5 inline-flex">
@@ -194,7 +194,7 @@ export function PublicFooter() {
                     </div>
                 </div>
                 <div className="luxe-divider mt-8" />
-                <div className="text-xs text-[#6A7973] mt-4">
+                <div className="text-xs text-[#5F6E67] mt-4">
                     © {new Date().getFullYear()} DTD
                 </div>
             </div>

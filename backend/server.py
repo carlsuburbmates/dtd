@@ -459,6 +459,10 @@ class MatchFollowUpIn(BaseModel):
     user_phone: Optional[str] = None
     notes: Optional[str] = Field(default="", max_length=800)
     consent_contact_release: bool = False
+    # DF-058: outcome tracking is a separate, optional consent. It must be
+    # carried end to end and never assumed, so the declared value is persisted
+    # verbatim and downstream outreach is gated on it.
+    consent_outcome_tracking: bool = False
 
 
 class ConversionIn(BaseModel):
@@ -4414,15 +4418,35 @@ async def create_match_follow_up(
         else {"composite_idempotency_key": composite_idem}
     )
 
-    existing = await db.intros.find_one(query_filter, {"_id": 0})
-    if existing:
+    def _idempotent_follow_up_response(existing_rec: Dict[str, Any]) -> Dict[str, Any]:
+        """DF-059: an idempotent replay may only describe the same enquiry.
+
+        A stored key is reusable only for the same match context, trainer and
+        normalised email. A conflicting payload is rejected instead of being
+        answered with another trainer's record, and the response always reports
+        the identity stored on the record rather than the incoming request.
+        """
+        same_enquiry = (
+            str(existing_rec.get("trainer_id") or "") == str(payload.trainer_id)
+            and str(existing_rec.get("match_id") or "") == match_id
+            and str(existing_rec.get("user_email") or "").strip().lower() == email_clean
+        )
+        if not same_enquiry:
+            raise HTTPException(
+                status_code=409,
+                detail="Idempotency key already used for a different enquiry.",
+            )
         return {
-            "intro_id": str(existing.get("id")),
+            "intro_id": str(existing_rec.get("id")),
             "match_id": match_id,
-            "trainer_id": str(payload.trainer_id),
-            "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
+            "trainer_id": str(existing_rec.get("trainer_id")),
+            "delivery_state": str(existing_rec.get("delivery_state") or existing_rec.get("delivery_status") or "retryable_failure"),
             "idempotent": True,
         }
+
+    existing = await db.intros.find_one(query_filter, {"_id": 0})
+    if existing:
+        return _idempotent_follow_up_response(existing)
 
     ip = (request.client.host if request.client else "") or ""
     intro_id_val = new_id()
@@ -4458,8 +4482,8 @@ async def create_match_follow_up(
         "user_email": payload.user_email,
         "user_phone": payload.user_phone or "",
         "notes": payload.notes or "",
-        "consent_contact_release": True,
-        "consent_outcome_tracking": True,
+        "consent_contact_release": payload.consent_contact_release,
+        "consent_outcome_tracking": payload.consent_outcome_tracking,
         "delivery_status": initial_delivery_state,
         "delivery_state": initial_delivery_state,
         "status": initial_delivery_state,
@@ -4477,13 +4501,9 @@ async def create_match_follow_up(
     except DuplicateKeyError:
         existing = await db.intros.find_one(query_filter, {"_id": 0})
         if existing:
-            return {
-                "intro_id": str(existing.get("id")),
-                "match_id": match_id,
-                "trainer_id": str(payload.trainer_id),
-                "delivery_state": str(existing.get("delivery_state") or existing.get("delivery_status") or "retryable_failure"),
-                "idempotent": True,
-            }
+            # DF-059: concurrent recovery must apply the same identity binding
+            # as the pre-insert check, not answer with an unrelated record.
+            return _idempotent_follow_up_response(existing)
         raise
 
     final_delivery_state = initial_delivery_state
@@ -4666,7 +4686,11 @@ async def create_intro(
     request: Request,
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ) -> Dict[str, Any]:
-    if not payload.consent_contact_release or not payload.consent_outcome_tracking:
+    # DF-058: contact release is the mandatory consent for delivering an enquiry.
+    # Outcome tracking is optional and anonymous per its own control copy, so it
+    # must not be a precondition for an enquiry. The declared value is persisted
+    # verbatim and only gates follow-up outreach.
+    if not payload.consent_contact_release:
         raise HTTPException(status_code=400, detail="Consent required before contact release.")
     trainer = await db.trainers.find_one({"id": payload.trainer_id, "published": True}, {"_id": 0})
     if not trainer:
@@ -4720,8 +4744,8 @@ async def create_intro(
         "user_email": payload.user_email or "",
         "user_phone": payload.user_phone or "",
         "suburb": trainer.get("suburb"),
-        "consent_contact_release": True,
-        "consent_outcome_tracking": True,
+        "consent_contact_release": payload.consent_contact_release,
+        "consent_outcome_tracking": payload.consent_outcome_tracking,
         "delivery_state": initial_delivery_state,
         "delivery_status": initial_delivery_state,
         "status": initial_delivery_state,
@@ -4796,6 +4820,21 @@ async def create_engagement(payload: EngagementIn) -> Dict[str, Any]:
     intro = await db.intros.find_one({"id": payload.intro_id}, {"_id": 0})
     if not intro:
         raise HTTPException(status_code=404, detail="intro not found")
+
+    # DF-058: outcome tracking is a separate, optional consent. When the owner
+    # declined it, engagement signals must not be recorded and no inferred
+    # conversion may be derived from them. Return a non-error no-op so the
+    # client's fire-and-forget signal cannot become a consent bypass, an
+    # inferred conversion, or a user-visible failure.
+    if not intro.get("consent_outcome_tracking"):
+        return {
+            "ok": True,
+            "tracked": False,
+            "reason": "no_outcome_tracking_consent",
+            "intro_id": payload.intro_id,
+            "kind": payload.kind,
+        }
+
     ev = {
         "id": new_id(),
         "intro_id": payload.intro_id,

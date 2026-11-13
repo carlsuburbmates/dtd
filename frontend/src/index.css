@@ -781,6 +781,13 @@
         font-weight: 500;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
+
+    /* DF-061: the skip target is focused on activation so the next Tab
+       continues inside the main content. A ring around the entire landmark
+       would be noise, so it is suppressed; the scroll jump is the feedback. */
+    #main-content:focus {
+        outline: none;
+    }
 }
 
 @media (max-width: 768px) {

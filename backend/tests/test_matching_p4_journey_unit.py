@@ -362,6 +362,257 @@ class TestP4LegacyRejectionAndFollowUp:
         assert out2["idempotent"] is True
         assert out1["intro_id"] == out2["intro_id"]
 
+    # ------------------------------------------------------------------
+    # DF-059 — enquiry idempotency must not answer with another trainer's outcome
+    # ------------------------------------------------------------------
+
+    def test_follow_up_idempotency_rejects_same_key_for_different_trainer(self, monkeypatch):
+        """DF-059: a reused key for a different trainer conflicts instead of
+        returning the first trainer's record, and a same-enquiry replay always
+        reports the identity stored on the record."""
+        raw_token, token_hash = generate_match_context_token()
+        ctx_doc = {
+            "token_hash": token_hash,
+            "match_id": "match_p4_df059",
+            "suburb_or_postcode": "Richmond",
+            "dog_age_months": 18,
+            "primary_concerns": ["basic_manners"],
+            "service_format": "in_home",
+        }
+        trainer_a = make_test_trainer_doc(
+            trainer_id="t_richmond",
+            name="Richmond Dog Academy",
+            serviced_suburbs=["Richmond"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
+        )
+        trainer_b = make_test_trainer_doc(
+            trainer_id="t_fitzroy",
+            name="Fitzroy Dog Academy",
+            serviced_suburbs=["Fitzroy"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
+        )
+        fake_db = SimpleNamespace(
+            match_contexts=_MockCollection([ctx_doc]),
+            trainers=_MockCollection([trainer_a, trainer_b]),
+            intros=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        req = _make_dummy_request(
+            method="POST",
+            path="/api/match/follow-up",
+            headers={
+                "X-Match-Context-Token": raw_token,
+                "Idempotency-Key": "shared_client_key_df059",
+            },
+        )
+
+        first = server.MatchFollowUpIn(
+            trainer_id="t_richmond",
+            user_name="Jane Doe",
+            user_email="jane@example.com",
+            consent_contact_release=True,
+        )
+        out1 = asyncio.run(
+            server.create_match_follow_up(
+                payload=first, request=req, idempotency_key="shared_client_key_df059"
+            )
+        )
+        assert out1["idempotent"] is False
+        assert out1["trainer_id"] == "t_richmond"
+        assert len(fake_db.intros.inserted) == 1
+
+        # Same client key, different trainer: conflict, do not answer with trainer A.
+        second = server.MatchFollowUpIn(
+            trainer_id="t_fitzroy",
+            user_name="Jane Doe",
+            user_email="jane@example.com",
+            consent_contact_release=True,
+        )
+        with pytest.raises(HTTPException) as conflict:
+            asyncio.run(
+                server.create_match_follow_up(
+                    payload=second, request=req, idempotency_key="shared_client_key_df059"
+                )
+            )
+        assert conflict.value.status_code == 409
+        assert len(fake_db.intros.inserted) == 1
+
+        # A genuine same-enquiry replay still succeeds and reports the record's trainer.
+        out2 = asyncio.run(
+            server.create_match_follow_up(
+                payload=first, request=req, idempotency_key="shared_client_key_df059"
+            )
+        )
+        assert out2["idempotent"] is True
+        assert out2["trainer_id"] == "t_richmond"
+        assert out2["intro_id"] == out1["intro_id"]
+        assert len(fake_db.intros.inserted) == 1
+
+    # ------------------------------------------------------------------
+    # DF-058 — outcome-tracking consent is carried, never assumed
+    # ------------------------------------------------------------------
+
+    @pytest.mark.parametrize("declared", [False, True])
+    def test_follow_up_persists_declared_outcome_tracking_consent(self, monkeypatch, declared):
+        """DF-058: the follow-up enquiry persists the outcome-tracking consent the
+        owner actually declared, instead of fabricating it as enabled."""
+        raw_token, token_hash = generate_match_context_token()
+        ctx_doc = {
+            "token_hash": token_hash,
+            "match_id": "match_p4_df058",
+            "suburb_or_postcode": "Richmond",
+            "dog_age_months": 18,
+            "primary_concerns": ["basic_manners"],
+            "service_format": "in_home",
+        }
+        trainer = make_test_trainer_doc(
+            trainer_id="t_richmond",
+            name="Richmond Dog Academy",
+            serviced_suburbs=["Richmond"],
+            specialties=["basic_manners"],
+            service_formats=["in_home"],
+            life_stages=["puppy", "adolescent", "adult"],
+        )
+        fake_db = SimpleNamespace(
+            match_contexts=_MockCollection([ctx_doc]),
+            trainers=_MockCollection([trainer]),
+            intros=_MockCollection([]),
+        )
+        monkeypatch.setattr(server, "db", fake_db)
+
+        req = _make_dummy_request(
+            method="POST",
+            path="/api/match/follow-up",
+            headers={
+                "X-Match-Context-Token": raw_token,
+                "Idempotency-Key": f"df058_declared_{declared}",
+            },
+        )
+        payload = server.MatchFollowUpIn(
+            trainer_id="t_richmond",
+            user_name="Jane Doe",
+            user_email="jane@example.com",
+            consent_contact_release=True,
+            consent_outcome_tracking=declared,
+        )
+        out = asyncio.run(
+            server.create_match_follow_up(
+                payload=payload, request=req, idempotency_key=f"df058_declared_{declared}"
+            )
+        )
+        assert out["idempotent"] is False
+        assert len(fake_db.intros.inserted) == 1
+        inserted = fake_db.intros.inserted[0]
+        assert inserted["consent_contact_release"] is True
+        assert inserted["consent_outcome_tracking"] is declared
+
+    # ------------------------------------------------------------------
+    # DF-058 — downstream tracking must honour the persisted consent
+    # ------------------------------------------------------------------
+
+    def test_engagement_suppressed_without_outcome_tracking_consent(self, monkeypatch):
+        """DF-058: a declined outcome-tracking consent suppresses engagement
+        collection and any conversion that would be inferred from it."""
+
+        class _TrackCollection:
+            def __init__(self, rows=None):
+                self.rows = [dict(r) for r in (rows or [])]
+                self.inserted = []
+
+            async def find_one(self, query, *_a, **_k):
+                for r in self.rows:
+                    if all(
+                        r.get(k) == v
+                        for k, v in (query or {}).items()
+                        if not isinstance(v, dict)
+                    ):
+                        return dict(r)
+                return None
+
+            async def insert_one(self, doc):
+                d = dict(doc)
+                self.inserted.append(d)
+                self.rows.append(d)
+
+            async def distinct(self, field, _query=None):
+                return sorted({r.get(field) for r in self.rows})
+
+        declined = {
+            "id": "intro_declined",
+            "trainer_id": "t_richmond",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": False,
+        }
+        # Two distinct signals would normally infer a conversion (>=2 kinds).
+        for kind in ("website_click", "phone_click"):
+            db = SimpleNamespace(
+                intros=_TrackCollection([declined]),
+                engagements=_TrackCollection([]),
+                conversions=_TrackCollection([]),
+            )
+            monkeypatch.setattr(server, "db", db)
+            out = asyncio.run(
+                server.create_engagement(
+                    server.EngagementIn(intro_id="intro_declined", kind=kind)
+                )
+            )
+            assert out["tracked"] is False
+            assert out["reason"] == "no_outcome_tracking_consent"
+            assert db.engagements.inserted == []
+            assert db.conversions.inserted == []
+
+    def test_engagement_recorded_with_outcome_tracking_consent(self, monkeypatch):
+        """DF-058: a consenting owner's engagement signal is still recorded."""
+
+        class _TrackCollection:
+            def __init__(self, rows=None):
+                self.rows = [dict(r) for r in (rows or [])]
+                self.inserted = []
+
+            async def find_one(self, query, *_a, **_k):
+                for r in self.rows:
+                    if all(
+                        r.get(k) == v
+                        for k, v in (query or {}).items()
+                        if not isinstance(v, dict)
+                    ):
+                        return dict(r)
+                return None
+
+            async def insert_one(self, doc):
+                d = dict(doc)
+                self.inserted.append(d)
+                self.rows.append(d)
+
+            async def distinct(self, field, _query=None):
+                return sorted({r.get(field) for r in self.rows})
+
+        consented = {
+            "id": "intro_consented",
+            "trainer_id": "t_richmond",
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
+        }
+        db = SimpleNamespace(
+            intros=_TrackCollection([consented]),
+            engagements=_TrackCollection([]),
+            conversions=_TrackCollection([]),
+            audits=_TrackCollection([]),
+        )
+        monkeypatch.setattr(server, "db", db)
+        out = asyncio.run(
+            server.create_engagement(
+                server.EngagementIn(intro_id="intro_consented", kind="website_click")
+            )
+        )
+        assert len(db.engagements.inserted) == 1
+        assert out["kind"] == "website_click"
+
     def test_follow_up_rejects_candidate_not_in_match_results(self, monkeypatch):
         """Follow-up enquiry fails with 400 if trainer_id is not in match event result_ids."""
         raw_token, token_hash = generate_match_context_token()

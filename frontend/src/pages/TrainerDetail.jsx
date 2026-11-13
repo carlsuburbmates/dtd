@@ -265,7 +265,11 @@ export default function TrainerDetail() {
             toast.error("Add your name and email so the trainer can reach you.");
             return;
         }
-        if (!form.consent_contact_release || !form.consent_outcome_tracking) {
+        // DF-058: contact release is the mandatory consent. Outcome tracking is
+        // optional and anonymous per its own control copy, so it must not be a
+        // precondition for sending an enquiry. The declared value is transmitted
+        // and persisted verbatim, and only gates follow-up outreach.
+        if (!form.consent_contact_release) {
             toast.error("Consent is required before contact is revealed.");
             return;
         }
@@ -282,6 +286,7 @@ export default function TrainerDetail() {
                     user_phone: form.user_phone || "",
                     notes: form.description || "",
                     consent_contact_release: form.consent_contact_release,
+                    consent_outcome_tracking: form.consent_outcome_tracking,
                 }, {
                     headers: {
                         "X-Match-Context-Token": matchContextToken,
@@ -348,7 +353,8 @@ export default function TrainerDetail() {
     };
 
     const trackEngagement = (kind) => {
-        if (!introId) return;
+        // DF-058: never send engagement signals when outcome tracking was declined.
+        if (!introId || !form.consent_outcome_tracking) return;
         api.post("/engagements", { intro_id: introId, kind }).catch(() => {
             setTimeout(() => {
                 api.post("/engagements", { intro_id: introId, kind }).catch(() => {});
@@ -604,7 +610,7 @@ export default function TrainerDetail() {
         <div className="App min-h-screen">
             <PublicHeader />
 
-            <main id="main-content" className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-10 pb-20">
+            <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-10 pb-20">
                 <section className="rounded-[2rem] border border-[#E5DFD3] bg-white/70 p-6 sm:p-9 shadow-[0_28px_80px_-48px_rgba(26,58,50,0.5)]">
                 <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-5">

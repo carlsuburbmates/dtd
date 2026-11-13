@@ -7,7 +7,7 @@ export default function Trust() {
     return (
         <div className="App min-h-screen flex flex-col">
             <PublicHeader />
-            <main className="flex-1 relative overflow-hidden bg-background">
+            <main id="main-content" tabIndex={-1} className="flex-1 relative overflow-hidden bg-background">
                 {/* Hero Section */}
                 <section className="max-w-6xl mx-auto px-4 sm:px-6 md:px-10 pt-20 md:pt-32 pb-16 relative">
                     <div className="text-center max-w-4xl mx-auto">

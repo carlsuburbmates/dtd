@@ -23,6 +23,10 @@ pandas>=2.2.0
 numpy>=1.26.0
 python-multipart>=0.0.9
 typer>=0.9.0
+# FastAPI's TestClient requires httpx. It used to arrive transitively via
+# sentry-sdk[fastapi], which now resolves to the unrelated httpx2 package, so
+# the test client failed to import on a clean install. Declare it explicitly.
+httpx>=0.27.0
 sentry-sdk[fastapi]>=2.16.0
 stripe>=11.1.0
 google-genai>=2.0.0

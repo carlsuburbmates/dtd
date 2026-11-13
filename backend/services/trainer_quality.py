@@ -615,6 +615,12 @@ CANONICAL_SPECIALTIES: Dict[str, Dict[str, Any]] = {
             "behavior support", "behaviour & training", "behaviour problems",
             "problem behaviours", "behaviour consults", "behavioural consultations",
             "behavioural support", "challenging behaviours",
+            # Practitioner-facing labels used verbatim on trainer websites.
+            # Added so attested services such as "Dog Behaviourist" and
+            # "Puppy Behaviour" map to the behaviour specialty instead of being
+            # dropped as unmappable during seed validation.
+            "behaviourist", "behaviorist", "dog behaviourist", "dog behaviorist",
+            "puppy behaviour", "puppy behavior", "dog behaviour", "dog behavior",
         },
     },
     "leash_reactivity": {

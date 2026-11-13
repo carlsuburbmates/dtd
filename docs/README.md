@@ -25,6 +25,7 @@ Each document has a distinct role. Specifications define requirements; current s
 | [Current state](DTD_CURRENT_STATE.md) | Source/runtime evidence and unresolved DF/TD findings |
 | [Invariants](DTD_INVARIANTS_AND_CONSTRAINTS.md) | Cross-project rules that every change preserves |
 | [Decision register](DTD_CONFLICT_AND_DECISION_REGISTER.md) | Owner decisions, rationale and supersession |
+| [Naming conventions](DTD_NAMING_CONVENTIONS.md) | Canonical role-to-project-ID map, immutable identifiers and the accepted Option A decision |
 | [Targeted matching state](DTD_TARGETED_MATCHING_PIPELINE_STATE.md) | CDR-023 cross-workflow matching target |
 | [Matching completion roadmap](DTD_MATCHING_PIPELINE_COMPLETION_ROADMAP.md) | M0–M10 work packages and dependencies |
 | [Matching remaining criteria](MATCHING_PIPELINE_REMAINING_COMPLETION_CRITERIA.md) | Detailed M-package acceptance checklist |
@@ -39,6 +40,7 @@ Each document has a distinct role. Specifications define requirements; current s
 | [Ops](specs/OPS_AND_OBSERVABILITY.md) | Exception-led operation, bounded actions, provider registry and recovery requirements |
 | [Commercial strategy](DTD_COMMERCIAL_SCALING_AND_FUNDING_STRATEGY.md) | Business workflow integration, measured hypotheses and optional R13 concepts |
 | [Google program baseline](GOOGLE_FOR_STARTUPS_PROGRAM_BASELINE.md) | Dated official program reference and explicit eligibility uncertainty |
+| [Google Cloud local authentication](GOOGLE_CLOUD_LOCAL_AUTH.md) | Supported local CLI credential reuse, scoped recovery, and separate SDK ADC setup |
 
 ## Historical evidence and restoration
 

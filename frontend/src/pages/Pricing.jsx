@@ -79,7 +79,7 @@ export default function Pricing() {
     return (
         <div className="App public-page min-h-screen">
             <PublicHeader />
-            <main className="max-w-6xl mx-auto px-6 md:px-10 pt-14 pb-16">
+            <main id="main-content" tabIndex={-1} className="max-w-6xl mx-auto px-6 md:px-10 pt-14 pb-16">
                 <section className="hero-shell p-6 sm:p-8 md:p-10 mb-12">
                     <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-8 items-center">
                         <div>

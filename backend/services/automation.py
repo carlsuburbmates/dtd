@@ -272,13 +272,29 @@ async def send_t7_outreach(db) -> Dict[str, Any]:
         return {"ok": True, "skipped": True, "reason": "no_resend_api_key", "checked": 0, "sent": 0}
 
     cutoff = _now() - timedelta(days=7)
-    cursor = db.intros.find({"user_email": {"$ne": ""}}, {"_id": 0}).limit(5000)
+    # DF-058: the T+7 message asks the owner to confirm an outcome, so it is an
+    # outcome-tracking message. It requires the owner's affirmative
+    # contact-release AND outcome-tracking consent. The filter is applied in the
+    # query and re-checked per record so a malformed document can never be
+    # contacted.
+    cursor = db.intros.find(
+        {
+            "user_email": {"$ne": ""},
+            "consent_contact_release": True,
+            "consent_outcome_tracking": True,
+        },
+        {"_id": 0},
+    ).limit(5000)
 
     checked = 0
     sent = 0
     failed = 0
+    skipped_no_consent = 0
     async for intro in cursor:
         checked += 1
+        if not intro.get("consent_contact_release") or not intro.get("consent_outcome_tracking"):
+            skipped_no_consent += 1
+            continue
         created = _parse_iso(intro.get("created_at", ""))
         if not created or created > cutoff:
             continue
@@ -355,4 +371,12 @@ async def send_t7_outreach(db) -> Dict[str, Any]:
                 }
             )
 
-    return {"ok": True, "skipped": False, "reason": "", "checked": checked, "sent": sent, "failed": failed}
+    return {
+        "ok": True,
+        "skipped": False,
+        "reason": "",
+        "checked": checked,
+        "sent": sent,
+        "failed": failed,
+        "skipped_no_consent": skipped_no_consent,
+    }

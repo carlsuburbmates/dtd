@@ -174,6 +174,10 @@ def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
                     "trainer_name": "Header Verify Intro Trainer",
                     "user_email": "owner@example.com",
                     "created_at": intro_created_at,
+                    # DF-058: outreach requires affirmative contact-release and
+                    # outcome-tracking consent, so a legitimate send declares both.
+                    "consent_contact_release": True,
+                    "consent_outcome_tracking": True,
                 }
             ]
         ),
@@ -199,3 +203,44 @@ def test_outreach_payload_sets_reply_to_and_header(monkeypatch):
     token = urlparse(follow_link).path.rsplit("/", 1)[-1]
     payload = follow_up_tokens.verify_follow_up_token(token)
     assert payload["intro_id"] == "intro_1"
+
+
+def test_outreach_skips_intro_without_affirmative_consent(monkeypatch):
+    """DF-058: no outreach without affirmative contact-release and outcome-tracking consent."""
+    posted = {"count": 0}
+
+    def fake_post(_url, *, json, headers, timeout):
+        posted["count"] += 1
+        return SimpleNamespace(status_code=200, json=lambda: {"id": "re_out_should_not_happen"})
+
+    intro_created_at = (datetime.now(timezone.utc) - timedelta(days=8)).isoformat()
+    no_consent = {
+        "id": "intro_no_consent",
+        "trainer_name": "Declined Tracking Trainer",
+        "user_email": "declined@example.com",
+        "created_at": intro_created_at,
+    }
+    fake_db = SimpleNamespace(
+        intros=_IntrosCollection([dict(no_consent)]),
+        outreach_events=_EventsCollection(),
+        conversions=_EventsCollection(),
+    )
+
+    monkeypatch.setenv("RESEND_API_KEY", "rk_test")
+    monkeypatch.setenv("FRONTEND_BASE_URL", "https://dogtrainersdirectory.com.au")
+    monkeypatch.setattr(automation.requests, "post", fake_post)
+
+    out = asyncio.run(automation.send_t7_outreach(fake_db))
+    assert out["sent"] == 0
+    assert posted["count"] == 0
+    assert out.get("skipped_no_consent") == 1
+
+    # Declining only outcome tracking is also sufficient to suppress outreach.
+    tracking_declined = dict(no_consent)
+    tracking_declined["id"] = "intro_tracking_declined"
+    tracking_declined["consent_contact_release"] = True
+    tracking_declined["consent_outcome_tracking"] = False
+    fake_db.intros = _IntrosCollection([tracking_declined])
+    out2 = asyncio.run(automation.send_t7_outreach(fake_db))
+    assert out2["sent"] == 0
+    assert posted["count"] == 0
